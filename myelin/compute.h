@@ -115,6 +115,8 @@ class Runtime {
  public:
   typedef void (*TaskFunc)(Task *);
 
+  virtual ~Runtime() = default;
+
   // Allocate and initialize instance data.
   virtual void AllocateInstance(Instance *instance) = 0;
 

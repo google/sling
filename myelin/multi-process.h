@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MYELIN_RUNTIMES_H_
-#define MYELIN_RUNTIMES_H_
+#ifndef MYELIN_MULTI_PROCESS_H_
+#define MYELIN_MULTI_PROCESS_H_
 
 #include "myelin/compute.h"
 
@@ -52,5 +52,5 @@ class MultiProcessorRuntime : public Runtime {
 }  // namespace myelin
 }  // namespace sling
 
-#endif  // MYELIN_RUNTIMES_H_
+#endif  // MYELIN_MULTI_PROCESS_H_
 
