@@ -35,7 +35,6 @@
 
 #include "third_party/jit/assembler.h"
 
-#include "base/bitcast.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "third_party/jit/cpu.h"
@@ -44,6 +43,18 @@
 
 namespace sling {
 namespace jit {
+
+// bit_cast<Dest,Source> is a template function that implements the
+// equivalent of "*reinterpret_cast<Dest*>(&source)".
+template <class Dest, class Source>
+inline Dest bit_cast(const Source& source) {
+  static_assert(sizeof(Dest) == sizeof(Source),
+                "Source and destination types should have equal sizes.");
+
+  Dest dest;
+  memcpy(&dest, &source, sizeof(dest));
+  return dest;
+}
 
 // Returns true iff value is a power of 2.
 static bool IsPowerOfTwo32(uint32_t value) {

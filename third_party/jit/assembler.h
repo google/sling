@@ -37,7 +37,6 @@
 #define JIT_ASSEMBLER_H_
 
 #include "base/logging.h"
-#include "base/types.h"
 #include "third_party/jit/code.h"
 #include "third_party/jit/cpu.h"
 #include "third_party/jit/instructions.h"

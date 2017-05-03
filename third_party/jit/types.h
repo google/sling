@@ -28,8 +28,9 @@
 #ifndef JIT_TYPES_H_
 #define JIT_TYPES_H_
 
+#include <stdint.h>
+
 #include "base/logging.h"
-#include "base/types.h"
 
 namespace sling {
 namespace jit {

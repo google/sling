@@ -28,7 +28,7 @@
 #ifndef JIT_MEMORY_H_
 #define JIT_MEMORY_H_
 
-#include "base/types.h"
+#include "third_party/jit/types.h"
 
 namespace sling {
 namespace jit {

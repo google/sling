@@ -1,21 +1,24 @@
+# x64 jit assembler.
+
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
+licenses(["notice"]) # BSD
 
 exports_files(["LICENSE"])
 
 cc_library(
-  name = "memory",
-  hdrs = ["memory.h"],
+  name = "types",
+  hdrs = ["types.h"],
   deps = [
     "//base",
   ],
 )
 
 cc_library(
-  name = "types",
-  hdrs = ["types.h"],
+  name = "memory",
+  hdrs = ["memory.h"],
   deps = [
+    ":types",
     "//base",
   ],
 )
