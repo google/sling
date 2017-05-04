@@ -88,7 +88,11 @@ inline std::ostream &operator<<(std::ostream &out, const Status &status) {
   return out;
 }
 
-#define CHECK_OK(status) CHECK((status).ok()) << (status).ToString()
+#define CHECK_OK(op) \
+  do { \
+    sling::Status st = (op); \
+    if (!st.ok()) LOG(FATAL) << st.ToString(); \
+  } while (0) \
 
 }  // namespace sling
 

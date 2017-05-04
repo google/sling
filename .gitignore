@@ -1,0 +1,9 @@
+bazel-bin
+bazel-genfiles
+bazel-sling
+bazel-google3
+bazel-out
+bazel-testlogs
+examples
+local
+
