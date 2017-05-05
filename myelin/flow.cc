@@ -136,6 +136,9 @@ string TypeTraits::str(void *data) const {
     case DT_DOUBLE:
       return std::to_string(*reinterpret_cast<double *>(data));
 
+    case DT_BOOL:
+      return (*reinterpret_cast<bool *>(data)) ? "true" : "false";
+
     default:
       return "???";
   }
@@ -323,8 +326,7 @@ Status Flow::Load(const string &filename) {
       string input = parser.GetString();
       Variable *var = Var(input);
       CHECK(var != nullptr) << "Unknown input: " << input;
-      op->inputs.push_back(var);
-      var->consumers.push_back(op);
+      op->AddInput(var);
     }
 
     // Get outputs.
@@ -333,10 +335,8 @@ Status Flow::Load(const string &filename) {
       string output = parser.GetString();
       Variable *var = Var(output);
       CHECK(var != nullptr) << "Unknown " << op->name << " output: " << output;
-      op->outputs.push_back(var);
+      op->AddOutput(var);
       var->AddAlias(op->name);
-      CHECK(var->producer == nullptr) << "Multiple producers for " << var->name;
-      var->producer = op;
     }
 
     // Get attributes.
@@ -407,12 +407,12 @@ void Flow::InferInputsAndOutputs() {
     if (var->producer != nullptr) {
       const string &input = var->producer->GetAttr("input");
       if (!input.empty()) {
-        if (input == "1" || input == "true") var->function_input = true;
+        if (input == "1" || input == "true") var->in = true;
         input_set = true;
       }
       const string &output = var->producer->GetAttr("output");
       if (!output.empty()) {
-        if (output == "1" || output == "true") var->function_output = true;
+        if (output == "1" || output == "true") var->out = true;
         output_set = true;
       }
     }
@@ -421,7 +421,7 @@ void Flow::InferInputsAndOutputs() {
     // is considered an input to the function.
     if (!input_set) {
       if (var->producer == nullptr || var->producer->inputs.empty()) {
-        var->function_input = true;
+        var->in = true;
       }
     }
 
@@ -429,7 +429,7 @@ void Flow::InferInputsAndOutputs() {
     // function.
     if (!output_set) {
       if (var->consumers.empty()) {
-        var->function_output = true;
+        var->out = true;
       }
     }
   }
@@ -521,8 +521,10 @@ void Flow::Eliminate(Operation *op) {
     CHECK_EQ(op->outputs.size(), 1);
     Variable *input = op->inputs[0];
     Variable *output = op->outputs[0];
-    if (output->function_input) input->function_input = true;
-    if (output->function_output) input->function_output = true;
+    CHECK_EQ(input->type, output->type);
+    CHECK(input->shape == output->shape);
+    if (output->in) input->in = true;
+    if (output->out) input->out = true;
     for (Operation *target : ops_) {
       for (int i = 0; i < target->inputs.size(); ++i) {
         if (target->inputs[i] == output) {
@@ -545,6 +547,13 @@ void Flow::Eliminate(Operation *op) {
     input->AddAlias(output->name);
     for (const string &alias : output->aliases) {
       input->AddAlias(alias);
+    }
+
+    // Update connectors replacing the output with the input.
+    for (Connector *cnx : cnxs_) {
+      for (int i = 0; i < cnx->links.size(); ++i) {
+        if (cnx->links[i] == output) cnx->links[i] = input;
+      }
     }
 
     // Delete output variable.
@@ -578,7 +587,7 @@ void Flow::Sort() {
   // late in other to allow for as much parallelism as possible.
   // The operations are assigned the following priorities:
   //   4: operations that parallel operations depend on.
-  //   3: operations with no dependencies to parallel operations.
+  //   3: operations with no dependencies on parallel operations.
   //   2: parallel operation.
   //   1: operations that depend on parallel operations.
   std::unordered_set<Operation *> pre;
@@ -700,7 +709,7 @@ void Flow::Sort() {
 }
 
 bool Flow::InferTypes(const Transformations &transformations) {
-  // Assume that operations has been topologically ordered so the inputs for
+  // Assume that operations have been topologically ordered so the inputs for
   // an operation come before the operation itself.
   int num_unresolved = 0;
   int num_skipped = 0;
@@ -838,8 +847,8 @@ string Flow::ToString() const {
     for (const Operation *op : var->consumers) {
       StringAppendF(&str, "  to %s\n", op->name.c_str());
     }
-    if (var->function_input) StringAppendF(&str, "  function input\n");
-    if (var->function_output) StringAppendF(&str, "  function output\n");
+    if (var->in) StringAppendF(&str, "  in\n");
+    if (var->out) StringAppendF(&str, "  out\n");
     for (const string &alias : var->aliases) {
       if (alias != var->name) {
         StringAppendF(&str, "  aka %s\n", alias.c_str());
