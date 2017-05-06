@@ -71,9 +71,9 @@ class TypeTraits {
   static const TypeTraits &of(string &name);
 
  private:
-  Type type_;
-  string name_;
-  int size_;
+  Type type_;    // basic type
+  string name_;  // type name
+  int size_;     // size in bytes
 };
 
 // Look up traits from type.
@@ -120,9 +120,9 @@ class Transformations {
                 const string &second,
                 const string &replacement)
         : first(first), second(second), replacement(replacement) {}
-    string first;
-    string second;
-    string replacement;
+    string first;        // first operation
+    string second;       // second operation
+    string replacement;  // replacement operation
   };
 
   // Register identity operation.
@@ -216,9 +216,10 @@ class Shape {
   bool undefined() const { return elements() == 0; }
 
   // Check for partial shape, i.e. some dimensions have unspecifed (-1) size.
-  bool partial() const { return elements() == 0; }
+  bool partial() const { return elements() == -1; }
 
-  // Check if shape is the same as another shape.
+  // Check if shape is the same as another shape. Undefined dimensions are
+  // not compared.
   bool IsSameSize(const Shape &other) const;
   bool operator==(const Shape &other) const { return IsSameSize(other); }
   bool operator!=(const Shape &other) const { return !IsSameSize(other); }
@@ -260,26 +261,26 @@ class Flow {
       size = len;
     }
 
-    string name;
-    std::vector<string> aliases;
+    string name;                         // variable name
+    std::vector<string> aliases;         // additional aliases for variable
 
-    Type type = DT_INVALID;
-    bool ref = false;
-    Shape shape;
-    char *data = nullptr;
-    uint64_t size = 0;
-    bool function_input = false;
-    bool function_output = false;
+    Type type = DT_INVALID;              // element type for variable
+    bool ref = false;                    // is variable a reference?
+    Shape shape;                         // variable shape
+    char *data = nullptr;                // data for constants (owned by flow)
+    uint64_t size = 0;                   // size of data in bytes
+    bool in = false;                     // is variable a function input?
+    bool out = false;                    // is variable a function output?
 
-    Operation *producer = nullptr;
-    std::vector<Operation *> consumers;
+    Operation *producer = nullptr;       // operation producing variable
+    std::vector<Operation *> consumers;  // list of consumers of variable
   };
 
   // Operation attribute.
   struct Attribute {
     Attribute(const string &n, const string &v) : name(n), value(v) {}
-    string name;
-    string value;
+    string name;   // attribute name
+    string value;  // attribute value
   };
 
   // Flow operation.
@@ -298,17 +299,17 @@ class Flow {
     int indegree() const { return inputs.size(); }
     int outdegree() const { return outputs.size(); }
 
-    string name;
-    string type;
-    std::vector<Variable *> inputs;
-    std::vector<Variable *> outputs;
-    std::vector<Attribute> attrs;
-    Function *func = nullptr;
+    string name;                      // operation name
+    string type;                      // operation type
+    std::vector<Variable *> inputs;   // input variables
+    std::vector<Variable *> outputs;  // output variables
+    std::vector<Attribute> attrs;     // operation attributes
+    Function *func = nullptr;         // function that operation belongs to
 
-    int task = 0;
-    int priority = 3;
-    int order = -1;
-    int missing = 0;
+    int task = 0;                     // task id for operation for parallel op
+    int priority = 3;                 // task priority for op compute ordering
+    int order = -1;                   // placement in computation order
+    int missing = 0;                  // number of inputs that are not yet ready
   };
 
   // Flow function.
@@ -316,17 +317,25 @@ class Flow {
     // Add operation to function.
     void AddOperation(Operation *op);
 
-    string name;
-    std::vector<Operation *> ops;
+    string name;                      // function name
+    std::vector<Operation *> ops;     // ops for function in compute order
   };
 
   // Flow connector.
   struct Connector {
-    // Add operation to function.
+    // Add linked variable to connector.
     void AddLink(Variable *var);
 
-    string name;
-    std::vector<Variable *> links;
+    // Remove linked variable from connector. Return false if link was not
+    // found.
+    bool RemoveLink(Variable *var);
+
+    // Replace linked variable with another variable. Return false if link was
+    // not found.
+    bool ReplaceLink(Variable *old, Variable *var);
+
+    string name;                      // connector name
+    std::vector<Variable *> links;    // variables linked to connector
   };
 
   Flow();
@@ -337,31 +346,6 @@ class Flow {
 
   // Analyze flow.
   void Analyze(const Transformations &transformations);
-
-  // Infer which variables are inputs and outputs to functions.
-  void InferInputsAndOutputs();
-
-  // Apply transformations to flow graph.
-  void Transform(const Transformations &transformations);
-
-  // Combine two op types to a single combined op type.
-  void Combine(const string &first,
-               const string &second,
-               const string &combined);
-
-  // Remove operation from flow.
-  void Eliminate(Operation *op);
-
-  // Merge two operations into a combined op.
-  Operation *Merge(Operation *first,
-                   Operation *second,
-                   const string &combined);
-
-  // Sort operations in topological order of computation.
-  void Sort();
-
-  // Infer types of variables. Return false if some variables are unresolved.
-  bool InferTypes(const Transformations &transformations);
 
   // Add variable.
   Variable *AddVariable(const string &name,
@@ -417,6 +401,31 @@ class Flow {
   void set_batch_size(int batch_size) { batch_size_ = batch_size; }
 
  private:
+  // Infer which variables are inputs and outputs to functions.
+  void InferInputsAndOutputs();
+
+  // Apply transformations to flow graph.
+  void Transform(const Transformations &transformations);
+
+  // Combine two op types to a single combined op type.
+  void Combine(const string &first,
+               const string &second,
+               const string &combined);
+
+  // Remove operation from flow.
+  void Eliminate(Operation *op);
+
+  // Merge two operations into a combined op.
+  Operation *Merge(Operation *first,
+                   Operation *second,
+                   const string &combined);
+
+  // Sort operations in topological order of computation.
+  void Sort();
+
+  // Infer types of variables. Return false if some variables are unresolved.
+  bool InferTypes(const Transformations &transformations);
+
   // Variables.
   std::vector<Variable *> vars_;
 
