@@ -235,7 +235,25 @@ void Flow::Function::AddOperation(Operation *op) {
 }
 
 void Flow::Connector::AddLink(Variable *var) {
-  links.push_back(var);
+  if (std::find(links.begin(), links.end(), var) != links.end()) {
+    links.push_back(var);
+  }
+}
+
+bool Flow::Connector::RemoveLink(Variable *var) {
+  auto it = std::find(links.begin(), links.end(), var);
+  if (it == links.end()) return false;
+  links.erase(it);
+  return true;
+}
+
+bool Flow::Connector::ReplaceLink(Variable *old, Variable *var) {
+  if (RemoveLink(old)) {
+    AddLink(var);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 Flow::Flow() {}
@@ -502,6 +520,9 @@ Flow::Operation *Flow::Merge(Operation *first,
     v->producer = first;
   }
 
+  // Update connectors removing the intermediate variable.
+  for (Connector *cnx : cnxs_) cnx->RemoveLink(var);
+
   // Set operation type for the first to the combined type.
   first->type = combined;
 
@@ -551,9 +572,7 @@ void Flow::Eliminate(Operation *op) {
 
     // Update connectors replacing the output with the input.
     for (Connector *cnx : cnxs_) {
-      for (int i = 0; i < cnx->links.size(); ++i) {
-        if (cnx->links[i] == output) cnx->links[i] = input;
-      }
+      cnx->ReplaceLink(output, input);
     }
 
     // Delete output variable.

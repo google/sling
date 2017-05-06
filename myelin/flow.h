@@ -273,7 +273,7 @@ class Flow {
     bool out = false;                    // is variable a function output?
 
     Operation *producer = nullptr;       // operation producing variable
-    std::vector<Operation *> consumers;  // list of comsumers of variable
+    std::vector<Operation *> consumers;  // list of consumers of variable
   };
 
   // Operation attribute.
@@ -309,7 +309,7 @@ class Flow {
     int task = 0;                     // task id for operation for parallel op
     int priority = 3;                 // task priority for op compute ordering
     int order = -1;                   // placement in computation order
-    int missing = 0;                  // number inputs that are not yet ready
+    int missing = 0;                  // number of inputs that are not yet ready
   };
 
   // Flow function.
@@ -325,6 +325,14 @@ class Flow {
   struct Connector {
     // Add linked variable to connector.
     void AddLink(Variable *var);
+
+    // Remove linked variable from connector. Return false if link was not
+    // found.
+    bool RemoveLink(Variable *var);
+
+    // Replace linked variable with another variable. Return false if link was
+    // not found.
+    bool ReplaceLink(Variable *old, Variable *var);
 
     string name;                      // connector name
     std::vector<Variable *> links;    // variables linked to connector
