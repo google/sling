@@ -16,7 +16,7 @@ graph where the frames are the (typed) nodes and the slots are the labeled
 edges. The frames can also be viewed as a [feature structure](https://en.wikipedia.org/wiki/Feature_structure)
 and unification can be used for induction of new frames from existing frames.
 Frames can also be used for representing more basic data structures like a
-C struct with fields, like a protocol buffer,  or a record in a database.
+C struct with fields, a protocol buffer,  or a record in a database.
 
 This guide will use a [simple schema](#toy-schema) with persons, locations, and
 organization as a toy example for modelling modelling [frames](#toy-frames) for
