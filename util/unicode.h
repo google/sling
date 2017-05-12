@@ -108,7 +108,7 @@ class Unicode {
 
 class UTF8 {
  public:
-  // Maximum lenght of UTF8 encoded code point
+  // Maximum lenght of UTF8 encoded code point.
   static const int MAXLEN = 4;
 
   // Return the length of the UTF8 string in characters.

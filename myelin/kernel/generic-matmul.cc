@@ -134,6 +134,13 @@ class GenericFltVecMatMulBase : public Kernel {
     __ j(not_equal, &l1);
   }
 
+  int Complexity(const Step *step) override {
+    int ops = step->input(1)->elements() * 2;
+    if (bias_) ops += step->input(2)->elements();
+    if (relu_) ops += step->output(0)->elements();
+    return ops;
+  }
+
  private:
   bool bias_;  // add bias vector to result, y=Wx+b
   bool relu_;  // apply rectified linear unit, y=max(0,Wx+b)
@@ -289,6 +296,10 @@ class GenericFltMatMatMul : public Kernel {
     __ cmpq(c, c_end);
     __ j(not_equal, &l1);
   }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->dim(0) * step->input(1)->elements() * 2;
+  }
 };
 
 // Generic interger vector matrix multiplication, y = Relu(x * W + b).
@@ -440,6 +451,13 @@ class GenericIntVecMatMulBase : public Kernel {
     __ addq(matrix, Immediate(row_size));
     __ cmpq(col, Immediate(cols));
     __ j(not_equal, &l1);
+  }
+
+  int Complexity(const Step *step) override {
+    int ops = step->input(1)->elements() * 2;
+    if (bias_) ops += step->input(2)->elements();
+    if (relu_) ops += step->output(0)->elements();
+    return ops;
   }
 
  private:

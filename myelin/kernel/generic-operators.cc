@@ -113,6 +113,10 @@ class GenericFltBinaryOperator : public Kernel {
     __ j(less, &l);
   }
 
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements();
+  }
+
  private:
   BinOp op_;
 };
@@ -226,6 +230,10 @@ class GenericIntBinaryOperator : public Kernel {
     __ j(less, &l);
   }
 
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements();
+  }
+
  private:
   BinOp op_;
 };
@@ -328,6 +336,10 @@ class GenericFltConstSub : public Kernel {
     __ cmpq(ofs, Immediate(x->size()));
     __ j(less, &l);
   }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements();
+  }
 };
 
 // Compute z = x0 * x1 + x2 * x3.
@@ -402,6 +414,10 @@ class GenericFltMulTwoAdd : public Kernel {
     __ addq(ofs, Immediate(sizeof(float)));
     __ cmpq(ofs, Immediate(y->size()));
     __ j(less, &l);
+  }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements() * 3;
   }
 };
 

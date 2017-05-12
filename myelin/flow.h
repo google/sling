@@ -55,13 +55,14 @@ enum Type {
 // Type properties.
 class TypeTraits {
  public:
-  TypeTraits(Type type, const char *name, int size)
-      : type_(type), name_(name), size_(size) {}
+  TypeTraits(Type type, const char *name, int size, const char *ptx)
+      : type_(type), name_(name), size_(size), ptx_(ptx) {}
 
   Type type() const { return type_; }
   const string &name() const { return name_; }
   int size() const { return size_; }
   bool valid() const { return type_ != DT_INVALID; }
+  const char *ptx() const { return ptx_; }
   string str(void *data) const;
 
   // Look up traits from type code.
@@ -71,9 +72,10 @@ class TypeTraits {
   static const TypeTraits &of(string &name);
 
  private:
-  Type type_;    // basic type
-  string name_;  // type name
-  int size_;     // size in bytes
+  Type type_;        // basic type
+  string name_;      // type name
+  int size_;         // size in bytes
+  const char *ptx_;  // ptx type
 };
 
 // Look up traits from type.
@@ -359,6 +361,11 @@ class Flow {
   Operation *AddOperation(Function *func,
                           const string &name,
                           const string &type);
+  Operation *AddOperation(Function *func,
+                          const string &name,
+                          const string &type,
+                          const std::vector<Variable *> &inputs,
+                          const std::vector<Variable *> &outputs);
 
   // Add function.
   Function *AddFunction(const string &name);

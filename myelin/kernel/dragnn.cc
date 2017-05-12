@@ -141,6 +141,10 @@ class DragnnCollect : public Kernel {
       __ j(not_equal, &l1);
     }
   }
+
+  int Complexity(const Step *step) override {
+    return 0;
+  }
 };
 
 // Dragnn feature lookup operation for fixed features mapped through an
@@ -239,6 +243,10 @@ class DragnnLookup : public Kernel {
     __ cmpq(col, Immediate(num_features));
     __ j(not_equal, &l1);
   }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements() * step->output(0)->elements();
+  }
 };
 
 // Dragnn feature lookup operation for single fixed features mapped through an
@@ -306,6 +314,10 @@ class DragnnLookupSingle : public Kernel {
 
     // Save reference to embedding vector.
     __ movq(Operand(masm->instance(), v->offset()), acc);
+  }
+
+  int Complexity(const Step *step) override {
+    return 0;
   }
 };
 
@@ -432,6 +444,10 @@ class DragnnLookupUnrolled : public Kernel {
       __ vmovaps(Operand(output, i * kBlockSize * sizeof(float)), sum[i]);
     }
   }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements() * step->output(0)->elements();
+  }
 };
 
 // Output concatenation of input tensors.
@@ -476,6 +492,10 @@ class DragnnConcat : public Kernel {
     }
     CHECK_EQ(offset, step->output(0)->size());
   }
+
+  int Complexity(const Step *step) override {
+    return 0;
+  }
 };
 
 // Reshape operation that can be used when the output has the same memory
@@ -493,7 +513,7 @@ class NoOpReshape : public Kernel {
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
     if (x->shape().elements() != y->shape().elements()) return false;
-    if (x->consumers() != 1) return false;
+    if (x->consumers().size() != 1) return false;
     return true;
   }
 
@@ -505,6 +525,10 @@ class NoOpReshape : public Kernel {
   void Generate(Step *step, MacroAssembler *masm) override {
     // Operation is a no-op.
     CHECK(step->input(0)->SharedWith(step->output(0)));
+  }
+
+  int Complexity(const Step *step) override {
+    return 0;
   }
 };
 

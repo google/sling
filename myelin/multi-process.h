@@ -30,6 +30,7 @@ class Worker;
 class MultiProcessorRuntime : public Runtime {
  public:
   ~MultiProcessorRuntime();
+  string Description() override { return "Multi-processor"; }
 
   // Instance data allocation.
   void AllocateInstance(Instance *instance) override;

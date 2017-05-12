@@ -104,7 +104,7 @@ class Worker {
   std::mutex mu_;
   std::condition_variable cv_;
 
-  // Worker state.  
+  // Worker state.
   volatile State state_ = IDLE;
 
   // Current task for worker.
