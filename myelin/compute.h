@@ -309,7 +309,7 @@ class Tensor {
     placement_ = static_cast<Placement>(placement_ | place);
   }
 
-  // Add new location for curent placement.
+  // Add new location for current placement.
   void AddNewPlace(Placement place) {
     current_placement_ = static_cast<Placement>(current_placement_ | place);
   }
