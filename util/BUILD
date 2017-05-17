@@ -47,3 +47,17 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "table-writer",
+  srcs = ["table-writer.cc"],
+  hdrs = ["table-writer.h"],
+  deps = [
+    "//base",
+    "//file",
+    "//string:numbers",
+    "//string:printf",
+    "//string:strcat",
+  ],
+)
+
+
