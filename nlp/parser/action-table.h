@@ -24,6 +24,7 @@
 #include "frame/store.h"
 #include "nlp/parser/parser-action.h"
 #include "nlp/parser/parser-state.h"
+#include "util/table-writer.h"
 
 namespace sling {
 namespace nlp {
@@ -109,6 +110,12 @@ class ActionTable {
   // Returns the serialization of the table as per 'percentile'.
   string Serialize(const Store *global, int percentile) const;
 
+  // Outputs summary to 'file'
+  void OutputSummary(const string &file) const;
+
+  // Outputs summary to 'writer'
+  void OutputSummary(TableWriter *writer) const;
+
   // Initialize the action table from 'store'.
   void Init(Store *store);
 
@@ -168,6 +175,9 @@ class ActionTable {
     // Returns the index of the smallest bin whose cumulative count equals or
     // exceeds the percentile 'p'.
     int PercentileBin(int p) const;
+
+    // Outputs histogram to 'writer'.
+    void ToTable(TableWriter *writer) const;
 
    private:
     // X-axis title.
