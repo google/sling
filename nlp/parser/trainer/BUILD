@@ -32,24 +32,9 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "frame-evaluation",
-    srcs = ["frame-evaluation.cc"],
-    hdrs = [],
-    deps = [
-        "//base",
-        "//nlp/document",
-        "//frame:object",
-        "//frame:store",
-        "//frame:serialization",
-        "//util/hash",
-    ],
-    alwayslink = 1,
-)
-
 cc_binary(
-  name = "action-table-generator-main",
-  srcs = ["action-table-generator-main.cc"],
+  name = "generate-action-table",
+  srcs = ["generate-action-table.cc"],
   deps = [
     ":action-table-generator",
     "//base",

@@ -26,16 +26,16 @@
 namespace sling {
 namespace nlp {
 
-ActionTableGenerator::ActionTableGenerator(
-    const ActionTableGenerator::Options &options) : options_(options) {
-  options_.global->Freeze();
-  generator_.Init(options_.global);
+void ActionTableGenerator::set_global_store(Store *global) {
+  global_ = global;
+  global_->Freeze();
+  generator_.Init(global_);
 }
 
 void ActionTableGenerator::Add(const Document &document) {
   ActionTable table;
   GetUnknownSymbols(document);
-  if (!options_.per_sentence) {
+  if (!per_sentence_) {
     Process(document, 0, document.num_tokens());
   } else {
     for (SentenceIterator s(&document); s.more(); s.next()) {
@@ -48,7 +48,7 @@ void ActionTableGenerator::Save(const string &table_file,
                                 const string &summary_file,
                                 const string &unknown_symbols_file) const {
   CHECK(!table_file.empty());
-  table_.Save(options_.global, options_.coverage_percentile, table_file);
+  table_.Save(global_, coverage_percentile_, table_file);
 
   if (!summary_file.empty()) table_.OutputSummary(summary_file);
   if (!unknown_symbols_file.empty()) {
@@ -101,7 +101,7 @@ void ActionTableGenerator::Process(
   generator_.Generate(
       document, start, end, &gold_sequence, &report);
 
-  Store store(options_.global);
+  Store store(global_);
   ParserState state(&store, start, end);
   int actions = 0;
   int shift_action = 0;

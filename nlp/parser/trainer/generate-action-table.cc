@@ -14,10 +14,10 @@
 
 // Utility tool for generating an action table.
 // Sample usage:
-//   bazel-bin/nlp/parser/trainer/action-table-generator-main \
-//       '/tmp/documents.*' \
-//       /tmp/common_store.encoded \
-//       '/tmp/out.'
+//   bazel-bin/nlp/parser/trainer/generate-action-table
+//       --documents='/tmp/documents.*'
+//       --commons=/tmp/common_store.encoded
+//       --output_prefix='/tmp/out'
 //
 // This will create the table at /tmp/out.table, its summary at /tmp/out.summary
 // and a list of unknown symbols at /tmp/out.unknown.
@@ -25,6 +25,8 @@
 #include <string>
 #include <vector>
 
+#include "base/flags.h"
+#include "base/init.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "file/file.h"
@@ -35,38 +37,41 @@
 #include "string/strcat.h"
 
 using sling::File;
+using sling::FileDecoder;
 using sling::Object;
 using sling::Store;
 using sling::nlp::ActionTableGenerator;
 using sling::nlp::Document;
 
-int main(int argc, char **argv) {
-  File::Init();
-  CHECK_GE(argc, 3)
-      << "Usage: " << argv[0]
-      << " <file pattern of documents> <common store> "
-      << "[output prefix, e.g. /tmp/out.";
+DEFINE_string(documents, "", "File pattern of documents.");
+DEFINE_string(commons, "", "Path to common store.");
+DEFINE_string(output_prefix,
+              "/tmp/out",
+              "Output prefix for action table, summary etc.");
 
-  string filepattern = argv[1];
+int main(int argc, char **argv) {
+  sling::InitProgram(&argc, &argv);
+
+  CHECK(!FLAGS_documents.empty()) << "No documents specified.";
+  CHECK(!FLAGS_commons.empty()) << "No commons specified.";
+  CHECK(!FLAGS_output_prefix.empty()) << "No output_prefix specified.";
 
   Store *global = new Store();
-  sling::LoadStore(argv[2], global);
+  sling::LoadStore(FLAGS_commons, global);
 
-  ActionTableGenerator::Options options;
-  options.per_sentence = true;
-  options.coverage_percentile = 99;
-  options.global = global;
+  ActionTableGenerator generator;
+  generator.set_global_store(global);
+  generator.set_coverage_percentile(99);
+  generator.set_per_sentence(true);
 
-  ActionTableGenerator generator(options);
   std::vector<string> files;
-  CHECK_OK(File::Match(filepattern, &files));
+  CHECK_OK(File::Match(FLAGS_documents, &files));
   LOG(INFO) << "Processing " << files.size() << " documents..";
   int count = 0;
   for (const string &file : files) {
     Store local(global);
-    string encoded_frame;
-    CHECK_OK(File::ReadContents(file, &encoded_frame));
-    Object top = sling::Decode(&local, encoded_frame);
+    FileDecoder decoder(&local, file);
+    Object top = decoder.Decode();
     if (top.invalid()) continue;
 
     count++;
@@ -76,11 +81,9 @@ int main(int argc, char **argv) {
   }
   LOG(INFO) << "Processed " << count << " documents.";
 
-  string output_prefix = argv[3];
-  if (output_prefix.empty()) output_prefix = "out";
-  string table_file = sling::StrCat(output_prefix, ".table");
-  string summary_file = sling::StrCat(output_prefix, ".summary");
-  string unknown_file = sling::StrCat(output_prefix, ".unknown");
+  string table_file = sling::StrCat(FLAGS_output_prefix, ".table");
+  string summary_file = sling::StrCat(FLAGS_output_prefix, ".summary");
+  string unknown_file = sling::StrCat(FLAGS_output_prefix, ".unknown");
   generator.Save(table_file, summary_file, unknown_file);
 
   LOG(INFO) << "Wrote action table to " << table_file

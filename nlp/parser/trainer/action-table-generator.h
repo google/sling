@@ -29,18 +29,15 @@ namespace nlp {
 // Generates an ActionTable from supplied list of documents.
 class ActionTableGenerator {
  public:
-  struct Options {
-    // Global store. Not owned.
-    Store *global = nullptr;
+  // Accessors / mutators.
+  Store *global() const { return global_; }
+  void set_global_store(Store *global);
 
-    // Whether or not to generate per sentence gold sequences.
-    bool per_sentence = true;
+  int coverage_percentile() const { return coverage_percentile_; }
+  void set_coverage_percentile(int c) { coverage_percentile_ = c; }
 
-    // Coverage percentile used to prune actions.
-    int coverage_percentile = 100;
-  };
-
-  ActionTableGenerator(const Options &options);
+  bool per_sentence() const { return per_sentence_; }
+  void set_per_sentence(bool p) { per_sentence_ = p; }
 
   // Adds golden actions from 'document' to the action table.
   void Add(const Document &document);
@@ -61,8 +58,14 @@ class ActionTableGenerator {
   // Generates and uses the gold sub-sequence for [begin, end).
   void Process(const Document &document, int start, int end);
 
-  // Generation options.
-  Options options_;
+  // Global store. Not owned.
+  Store *global_ = nullptr;
+
+  // Whether or not to generate per sentence gold sequences.
+  bool per_sentence_ = true;
+
+  // Coverage percentile used to prune actions.
+  int coverage_percentile_ = 100;
 
   // Gold sequence generator.
   GoldTransitionGenerator generator_;
