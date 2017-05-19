@@ -42,6 +42,7 @@ cc_library(
     "//string:numbers",
     "//string:strcat",
     "//string:text",
+    "//util:table-writer",
   ],
 )
 

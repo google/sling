@@ -610,6 +610,69 @@ string ActionTable::Serialize(const Store *global, int percentile) const {
   return encoder.buffer();
 }
 
+void ActionTable::OutputSummary(const string &file) const {
+  TableWriter writer;
+  OutputSummary(&writer);
+  writer.Write(file);
+}
+
+void ActionTable::OutputSummary(TableWriter *writer) const {
+  writer->StartTable("Actions Summary");
+  writer->SetColumns({"Action Type", "Unique Arg Combinations", "Raw Count"});
+
+  // Action type -> unique, raw count.
+  std::unordered_map<string, std::pair<int64, int64>> counts;
+  static const string kOverall = "OVERALL";
+  for (const ParserAction &action : actions_) {
+    auto &c = counts[action.TypeName()];
+    c.first++;
+    counts[kOverall].first++;
+    const auto &it = index_.find(action);
+    c.second += it->second.second;
+    counts[kOverall].second += it->second.second;
+  }
+  writer->AddNamedRow(kOverall);
+  for (const auto &kv : counts) {
+    if (kv.first != kOverall) writer->AddNamedRow(kv.first);
+    writer->SetCell(kv.first, 0, kv.first);
+    writer->SetCell(kv.first, 1, kv.second.first);
+    writer->SetCell(kv.first, 2, kv.second.second);
+  }
+
+  // Display histograms.
+  overall_index_.ToTable(writer);
+  span_length_.ToTable(writer);
+  refer_target_.ToTable(writer);
+  embed_target_.ToTable(writer);
+  elaborate_source_.ToTable(writer);
+  connect_source_.ToTable(writer);
+  connect_target_.ToTable(writer);
+  assign_source_.ToTable(writer);
+
+  // Arguments summary.
+  writer->StartTable("Action Arguments Summary");
+  writer->SetColumns({"Metric", "Value"});
+  writer->AddRow("Num unique phrase fp", static_cast<int>(fingerprint_.size()));
+  writer->AddRow("Fingerprint map load factor (as %)",
+                 fingerprint_.load_factor() * 100);
+  int max_evoke_size = 0;
+  HandleSet evoke_types;
+  for (const auto &kv : fingerprint_) {
+    if (kv.second.evoke.size() > max_evoke_size) {
+      max_evoke_size = kv.second.evoke.size();
+    }
+    for (int index : kv.second.evoke) {
+      evoke_types.insert(Action(index).label);
+    }
+  }
+  writer->AddRow("Maximum EVOKE actions for a fingerprint", max_evoke_size);
+  writer->AddRow("Total types involved in EVOKE actions",
+                 static_cast<int64>(evoke_types.size()));
+  writer->AddRow("Num types used as keys in constraints map",
+                 static_cast<int64>(type_.size()));
+  writer->AddRow("Maximum actions per token", max_actions_per_token_);
+}
+
 void ActionTable::Histogram::Add(int bin, int count) {
   if (counts_.size() < bin + 1) counts_.resize(bin + 1);
   counts_[bin] += count;
@@ -625,6 +688,39 @@ int ActionTable::Histogram::PercentileBin(int p) const {
   }
 
   return counts_.size() - 1;
+}
+
+void ActionTable::Histogram::ToTable(TableWriter *writer) const {
+  if (counts_.empty()) return;
+
+  writer->StartTable(xaxis_);
+  writer->SetColumns(
+      {"Bin", "Count", "Cumulative Count", "Percentile (rounded down)"});
+
+  int cumulative = 0;
+  std::vector<int> special_percentiles = {99, 98, 95, 90};
+  for (int i = 0; i < counts_.size(); ++i) {
+    if (counts_[i] > 0) {
+      cumulative += counts_[i];
+      string row_name = StrCat(i);
+      writer->AddNamedRow(row_name);
+      writer->SetCell(row_name, 0, row_name);
+      writer->SetCell(row_name, 1, counts_[i]);
+      writer->SetCell(row_name, 2, cumulative);
+
+      int percentile = (cumulative * 100) / total_;
+      writer->SetCell(row_name, 3, percentile);
+
+      // Display the special percentile rows in a special color.
+      for (int j = 0; j < special_percentiles.size(); ++j) {
+        if (special_percentiles[j] <= percentile) {
+          writer->Annotate(row_name, 3, "--> ");
+          special_percentiles.resize(j);
+          break;
+        }
+      }
+    }
+  }
 }
 
 }  // namespace nlp
