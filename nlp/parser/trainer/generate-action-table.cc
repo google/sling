@@ -59,8 +59,7 @@ int main(int argc, char **argv) {
   Store *global = new Store();
   sling::LoadStore(FLAGS_commons, global);
 
-  ActionTableGenerator generator;
-  generator.set_global_store(global);
+  ActionTableGenerator generator(global);
   generator.set_coverage_percentile(99);
   generator.set_per_sentence(true);
 

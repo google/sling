@@ -29,10 +29,9 @@ namespace nlp {
 // Generates an ActionTable from supplied list of documents.
 class ActionTableGenerator {
  public:
-  // Accessors / mutators.
-  Store *global() const { return global_; }
-  void set_global_store(Store *global);
+  ActionTableGenerator(Store *global);
 
+  // Accessors / mutators.
   int coverage_percentile() const { return coverage_percentile_; }
   void set_coverage_percentile(int c) { coverage_percentile_ = c; }
 

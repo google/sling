@@ -26,7 +26,7 @@
 namespace sling {
 namespace nlp {
 
-void ActionTableGenerator::set_global_store(Store *global) {
+ActionTableGenerator::ActionTableGenerator(Store *global) {
   global_ = global;
   global_->Freeze();
   generator_.Init(global_);
