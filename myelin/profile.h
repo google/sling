@@ -75,6 +75,24 @@ class Profile {
     return invocations_ ? time(idx) / time() * 100 : 0;
   }
 
+  // Estimated number of operations per invocation of step.
+  int64 complexity(int idx) const { return Complexity(step(idx)); }
+
+  // Estimated number of operations per computation.
+  int64 complexity() const { return total_complexity_; }
+
+  // Estimated number of operations per second for step.
+  double gigaflops(int idx) const {
+    int64 ops = complexity(idx);
+    double t = time(idx);
+    return ops == 0 || t == 0 ? 0 : ops / t / 1e3;
+  }
+
+  // Estimated number of operations per second for computation.
+  double gigaflops() const {
+    return complexity() == 0 || time() == 0 ? 0 : complexity() / time() / 1e3;
+  }
+
   // Number of CPU cycles for starting task.
   int64 start_cycles(int tidx) const {
     return invocations_ ? tasks_[tidx].start / invocations_ : 0;
@@ -100,6 +118,9 @@ class Profile {
   // Timing profile report in ASCII format.
   string ASCIIReport() const;
 
+  // Estimate the number of operations performed by step.
+  static int64 Complexity(const Step *step);
+
  private:
   // Tasks have start and wait cycle counts.
   struct TaskTiming {
@@ -115,6 +136,9 @@ class Profile {
 
   // Total number of cycles for computation.
   int64 total_;
+
+  // Total number of operations for computation.
+  int64 total_complexity_;
 
   // Array of clock cycle counts for each step or null if profiling is not
   // enabled.

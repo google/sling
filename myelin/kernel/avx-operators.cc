@@ -123,6 +123,10 @@ class AVXFltBinaryOperator : public Kernel {
     __ j(less, &l);
   }
 
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements();
+  }
+
  private:
   BinOp op_;
 };
@@ -271,6 +275,10 @@ class AVXIntBinaryOperator : public Kernel {
     __ j(less, &l);
   }
 
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements();
+  }
+
  private:
   BinOp op_;
 };
@@ -381,6 +389,10 @@ class AVXFltConstSub : public Kernel {
 
     // TODO: set padding elements to zero.
   }
+
+  int Complexity(const Step *step) override {
+    return step->input(1)->elements();
+  }
 };
 
 // Compute z = x0 * x1 + x2 * x3 using AVX.
@@ -463,6 +475,10 @@ class AVXFltMulTwoAdd : public Kernel {
     __ addq(ofs, Immediate(8 * sizeof(float)));
     __ cmpq(ofs, Immediate(y->size()));
     __ j(less, &l);
+  }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements() * 3;
   }
 };
 

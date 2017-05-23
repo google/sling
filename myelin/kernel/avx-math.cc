@@ -227,6 +227,10 @@ class AVXFltTanh : public Kernel {
     __ cmpq(ofs, Immediate(step->input(0)->size()));
     __ j(less, &l);
   }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements() * (5 + 6 * 3 + 3 * 3);
+  }
 };
 
 // Compute element-wise exponential function for a tensor using AVX.
@@ -419,6 +423,10 @@ class AVXFltExpBase : public Kernel {
     __ j(less, &l);
 
     // TODO: set padding elements to zero because sigmoid(0)=0.5 and exp(0)=1.
+  }
+
+  int Complexity(const Step *step) override {
+    return step->input(0)->elements() * (16 + 5 * 2 + (sigmoid_ ? 3 : 0));
   }
 
  private:

@@ -54,27 +54,27 @@ std::unordered_map<string, Type> typemap = {
 };
 
 std::vector<TypeTraits> typetraits = {
-  {DT_INVALID, "void", 0},
-  {DT_FLOAT, "float32", sizeof(float)},
-  {DT_DOUBLE, "float64", sizeof(double)},
-  {DT_INT32, "int32", sizeof(int32_t)},
-  {DT_UINT8, "uint8", sizeof(uint8_t)},
-  {DT_INT16, "int16", sizeof(int16_t)},
-  {DT_INT8, "int8", sizeof(int8_t)},
-  {DT_STRING, "string", sizeof(char *)},
-  {DT_COMPLEX64, "complex64", 2 * sizeof(double)},
-  {DT_INT64, "int64", sizeof(int64_t)},
-  {DT_BOOL, "bool", sizeof(bool)},
-  {DT_QINT8, "qint8", sizeof(int8_t)},
-  {DT_QUINT8, "quint8", sizeof(uint8_t)},
-  {DT_QINT32, "qint32", sizeof(int32_t)},
-  {DT_BFLOAT16, "bfloat16", 16},
-  {DT_QINT16, "qint16", sizeof(int16_t)},
-  {DT_UINT16, "uint16", sizeof(uint16_t)},
-  {DT_QUINT16, "quint16", sizeof(uint16_t)},
-  {DT_COMPLEX128, "complex128", 2 * sizeof(float)},
-  {DT_HALF, "float16", 2},
-  {DT_RESOURCE, "resource", 1},
+  {DT_INVALID, "void", 0, nullptr},
+  {DT_FLOAT, "float32", sizeof(float), "f32"},
+  {DT_DOUBLE, "float64", sizeof(double), "f64"},
+  {DT_INT32, "int32", sizeof(int32_t), "s32"},
+  {DT_UINT8, "uint8", sizeof(uint8_t), "u8"},
+  {DT_INT16, "int16", sizeof(int16_t), "s16"},
+  {DT_INT8, "int8", sizeof(int8_t), "s8"},
+  {DT_STRING, "string", sizeof(char *), "b64"},
+  {DT_COMPLEX64, "complex64", 2 * sizeof(double), nullptr},
+  {DT_INT64, "int64", sizeof(int64_t), "s64"},
+  {DT_BOOL, "bool", sizeof(bool), "b8"},
+  {DT_QINT8, "qint8", sizeof(int8_t), nullptr},
+  {DT_QUINT8, "quint8", sizeof(uint8_t), nullptr},
+  {DT_QINT32, "qint32", sizeof(int32_t), nullptr},
+  {DT_BFLOAT16, "bfloat16", 2, nullptr},
+  {DT_QINT16, "qint16", sizeof(int16_t), nullptr},
+  {DT_UINT16, "uint16", sizeof(uint16_t), nullptr},
+  {DT_QUINT16, "quint16", sizeof(uint16_t), nullptr},
+  {DT_COMPLEX128, "complex128", 2 * sizeof(float), nullptr},
+  {DT_HALF, "float16", 2, nullptr},
+  {DT_RESOURCE, "resource", 1, nullptr},
 };
 
 bool Shape::IsSameSize(const Shape &other) const {
@@ -819,6 +819,18 @@ Flow::Operation *Flow::AddOperation(Function *func,
   return op;
 }
 
+Flow::Operation *Flow::AddOperation(Function *func,
+                                    const string &name,
+                                    const string &type,
+                                    const std::vector<Variable *> &inputs,
+                                    const std::vector<Variable *> &outputs) {
+  Operation *op = AddOperation(name, type);
+  func->AddOperation(op);
+  for (auto *input : inputs) op->AddInput(input);
+  for (auto *output : outputs) op->AddOutput(output);
+  return op;
+}
+
 Flow::Function *Flow::AddFunction(const string &name) {
   Function *func = new Function;
   funcs_.push_back(func);
@@ -856,6 +868,8 @@ string Flow::ToString() const {
     StringAppendF(&str, "var %s : %s",
                   var->name.c_str(),
                   var->TypeString().c_str());
+    if (var->in) StringAppendF(&str, " in");
+    if (var->out) StringAppendF(&str, " out");
     if (var->data != nullptr) {
       StringAppendF(&str, ", %lu bytes", var->size);
     }
@@ -866,8 +880,6 @@ string Flow::ToString() const {
     for (const Operation *op : var->consumers) {
       StringAppendF(&str, "  to %s\n", op->name.c_str());
     }
-    if (var->in) StringAppendF(&str, "  in\n");
-    if (var->out) StringAppendF(&str, "  out\n");
     for (const string &alias : var->aliases) {
       if (alias != var->name) {
         StringAppendF(&str, "  aka %s\n", alias.c_str());

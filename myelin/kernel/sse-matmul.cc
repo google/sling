@@ -204,6 +204,13 @@ class SSEFltVecMatMulBase : public Kernel {
     __ j(less, &l1);
   }
 
+  int Complexity(const Step *step) override {
+    int ops = step->input(1)->elements() * 2;
+    if (bias_) ops += step->input(2)->elements();
+    if (relu_) ops += step->output(0)->elements();
+    return ops;
+  }
+
  protected:
   bool bias_;    // add bias vector to result, y=Wx+b
   bool relu_;    // apply rectified linear unit, y=max(0,Wx+b)

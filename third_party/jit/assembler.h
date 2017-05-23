@@ -204,7 +204,6 @@ class Assembler : public CodeGenerator {
   // - Instructions on 16-bit (word) operands/registers have a trailing 'w'.
   // - Instructions on 32-bit (doubleword) operands/registers use 'l'.
   // - Instructions on 64-bit (quadword) operands/registers use 'q'.
-  // - Instructions on operands/registers with pointer size use 'p'.
 
   static_assert(kPointerSize == kInt64Size || kPointerSize == kInt32Size,
                 "unsupported pointer size");
@@ -223,11 +222,6 @@ class Assembler : public CodeGenerator {
   template<class P1>                                    \
   void instruction##q(P1 p1) {                          \
     emit_##instruction(p1, kInt64Size);                 \
-  }                                                     \
-                                                        \
-  template<class P1, class P2>                          \
-  void instruction##p(P1 p1, P2 p2) {                   \
-    emit_##instruction(p1, p2, kPointerSize);           \
   }                                                     \
                                                         \
   template<class P1, class P2>                          \

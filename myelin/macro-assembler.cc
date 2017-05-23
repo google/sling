@@ -173,7 +173,7 @@ void MacroAssembler::LoopStart(jit::Label *label) {
 
 void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor) {
   if (tensor->IsConstant()) {
-    movp(dst, static_cast<void *>(tensor->data()));
+    movp(dst, tensor->data());
     if (tensor->ref()) {
       movq(dst, Operand(dst));
     }
@@ -351,6 +351,16 @@ void MacroAssembler::WaitForTask(int offset) {
   movp(acc, reinterpret_cast<void *>(runtime_->WaitTaskFunc()));
   call(acc);
   rr_.release(acc);
+}
+
+void MacroAssembler::CallInstanceFunction(void (*func)(void *)) {
+  if (func != nullptr) {
+    Register acc = rr_.alloc();
+    movq(arg_reg_1, datareg);
+    movp(acc, reinterpret_cast<void *>(func));
+    call(acc);
+    rr_.release(acc);
+  }
 }
 
 void MacroAssembler::IncrementInvocations(int offset) {

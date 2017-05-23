@@ -41,12 +41,17 @@ class Status {
   // Copy the specified status.
   Status(const Status &s) : state_(CopyState(s.state_)) {}
 
-  void operator =(const Status &s) {
+  void operator=(const Status &s) {
     if (state_ != s.state_) {
       free(state_);
       state_ = CopyState(s.state_);
     }
   }
+
+  // Status comparison. This only compares success vs failure and ignores
+  // the error code.
+  bool operator==(const Status &s) const { return s.state_ == state_; }
+  bool operator!=(const Status &s) const { return s.state_ != state_; }
 
   // Returns true iff the status indicates success.
   bool ok() const { return state_ == nullptr; }
@@ -88,11 +93,7 @@ inline std::ostream &operator<<(std::ostream &out, const Status &status) {
   return out;
 }
 
-#define CHECK_OK(op) \
-  do { \
-    sling::Status st = (op); \
-    if (!st.ok()) LOG(FATAL) << st.ToString(); \
-  } while (0) \
+#define CHECK_OK(op) CHECK_EQ(sling::Status::OK, (op))
 
 }  // namespace sling
 
