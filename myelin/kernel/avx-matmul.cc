@@ -81,29 +81,29 @@ class AVXVecMatMulBase : public Kernel {
     int input_batch = byte_alignment / TypeTraits::of(itype_).size();
     int output_batch = byte_alignment / TypeTraits::of(otype_).size();
 
-    x->Align({1, input_batch});
+    x->MinAlign({1, input_batch});
     x->SetMiniumAlignment(byte_alignment);
 
     if (order_ == ROW_MAJOR) {
-      W->Align({output_batch, input_batch});
+      W->MinAlign({output_batch, input_batch});
     } else {
-      W->Align({input_batch, 1});
+      W->MinAlign({input_batch, 1});
     }
     W->SetMiniumAlignment(byte_alignment);
     W->SetRequiredOrder(order_);
 
     if (order_ == ROW_MAJOR) {
       if (bias_) {
-        b->Align({input_batch});
+        b->MinAlign({input_batch});
         b->SetMiniumAlignment(byte_alignment);
       }
-      y->Align({1, output_batch});
+      y->MinAlign({1, output_batch});
       y->SetMiniumAlignment(byte_alignment);
     }
   }
 
-  int Complexity(const Step *step) override {
-    int ops = step->input(1)->elements() * 2;
+  int64 Complexity(const Step *step) override {
+    int64 ops = step->input(1)->elements() * 2;
     if (bias_) ops += step->input(2)->elements();
     if (relu_) ops += step->output(0)->elements();
     return ops;
@@ -617,9 +617,9 @@ class AVXFltMatMatMul : public Kernel {
     Tensor *C = step->output(0);
 
     // Set alignment requirements.
-    A->Align({1, 8});
+    A->MinAlign({1, 8});
     A->SetMiniumAlignment(32);
-    B->Align({8, 1});
+    B->MinAlign({8, 1});
     B->SetMiniumAlignment(32);
 
     // Set order requirements.
@@ -750,7 +750,7 @@ class AVXFltMatMatMul : public Kernel {
     __ j(less, &l1);
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(0)->dim(0) * step->input(1)->elements() * 2;
   }
 };

@@ -61,15 +61,15 @@ class AVXFltBinaryOperator : public Kernel {
     Tensor *b = step->input(1);
     Tensor *c = step->output(0);
 
-    a->AlignLast(8);
+    a->MinAlignLast(8);
     a->SetMiniumAlignment(8 * sizeof(float));
-    b->AlignLast(8);
+    b->MinAlignLast(8);
     b->SetMiniumAlignment(8 * sizeof(float));
-    c->AlignLast(8);
+    c->MinAlignLast(8);
     c->SetMiniumAlignment(8 * sizeof(float));
     a->CompatibleAlign(c);
     b->CompatibleAlign(c);
-    step->AllowInPlace(0, 0);
+    if (!step->AllowInPlace(0, 0)) step->AllowInPlace(1, 0);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -92,6 +92,8 @@ class AVXFltBinaryOperator : public Kernel {
     __ LoadTensorAddress(input2, b);
     if (a->SharedWith(c)) {
       output = input1;
+    } else if (b->SharedWith(c)) {
+      output = input2;
     } else {
       __ LoadTensorAddress(output, c);
     }
@@ -123,7 +125,7 @@ class AVXFltBinaryOperator : public Kernel {
     __ j(less, &l);
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(0)->elements();
   }
 
@@ -198,11 +200,11 @@ class AVXIntBinaryOperator : public Kernel {
 
     int regsize = 32;
     int align = regsize / a->element_size();
-    a->AlignLast(align);
+    a->MinAlignLast(align);
     a->SetMiniumAlignment(regsize);
-    b->AlignLast(align);
+    b->MinAlignLast(align);
     b->SetMiniumAlignment(regsize);
-    c->AlignLast(align);
+    c->MinAlignLast(align);
     c->SetMiniumAlignment(regsize);
     a->CompatibleAlign(c);
     b->CompatibleAlign(c);
@@ -275,7 +277,7 @@ class AVXIntBinaryOperator : public Kernel {
     __ j(less, &l);
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(0)->elements();
   }
 
@@ -332,9 +334,9 @@ class AVXFltConstSub : public Kernel {
     Tensor *x = step->input(1);
     Tensor *y = step->output(0);
 
-    x->AlignLast(8);
+    x->MinAlignLast(8);
     x->SetMiniumAlignment(8 * sizeof(float));
-    y->AlignLast(8);
+    y->MinAlignLast(8);
     y->SetMiniumAlignment(8 * sizeof(float));
     x->CompatibleAlign(y);
     step->AllowInPlace(1, 0);
@@ -390,7 +392,7 @@ class AVXFltConstSub : public Kernel {
     // TODO: set padding elements to zero.
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(1)->elements();
   }
 };
@@ -427,10 +429,10 @@ class AVXFltMulTwoAdd : public Kernel {
   }
 
   void Adjust(Step *step) override {
-    step->output(0)->AlignLast(8);
+    step->output(0)->MinAlignLast(8);
     step->output(0)->SetMiniumAlignment(8 * sizeof(float));
     for (int i = 0; i < 4; ++i) {
-      step->input(i)->AlignLast(8);
+      step->input(i)->MinAlignLast(8);
       step->input(i)->SetMiniumAlignment(8 * sizeof(float));
       step->input(i)->SameAlign(step->output(0));
     }
@@ -477,7 +479,7 @@ class AVXFltMulTwoAdd : public Kernel {
     __ j(less, &l);
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(0)->elements() * 3;
   }
 };

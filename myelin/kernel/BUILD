@@ -3,6 +3,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
   name = "generic",
   srcs = [
+    "array.cc",
     "generic.cc",
     "generic-math.cc",
     "generic-matmul.cc",

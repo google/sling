@@ -96,16 +96,23 @@ string Profile::ASCIIReport() const {
 
   // Output profile for each step.
   for (int i = 0; i < steps(); ++i) {
+    if (step(i)->noop()) continue;
     string tid;
     if (step(i)->task_index() != -1) {
       tid = StringPrintf("%2d", step(i)->cell()->task(step(i)->task_index()));
+    }
+    string name = step(i)->name();
+    if (!step(i)->variant().empty()) {
+      name.push_back('[');
+      name.append(step(i)->variant());
+      name.push_back(']');
     }
     StringAppendF(&report,
                   "| %6.2f%% | %8.3f μs | %10lld |%8.3f | %-27s|%-2s | %s\n",
                   percent(i), time(i), cycles(i), gigaflops(i),
                   step(i)->kernel()->Name().c_str(),
                   tid.c_str(),
-                  step(i)->name().c_str());
+                  name.c_str());
   }
 
   // Output totals.
