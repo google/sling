@@ -45,6 +45,8 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
     }
   };
 
+  virtual ~SemparFeature() {}
+
   // Accessors/mutators used while constructing the feature function.
   void SetParam(const string &name, const string &val) { params_[name] = val; }
 
@@ -124,6 +126,8 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
 // Manager for feature functions. It groups features into channels.
 class SemparFeatureExtractor {
  public:
+  ~SemparFeatureExtractor();
+
   // Methods for adding a channel of features.
   void AddChannel(const string &name,
                   const string &fml,

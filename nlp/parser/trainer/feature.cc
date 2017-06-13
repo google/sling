@@ -66,6 +66,14 @@ string SemparFeature::GetResource(const syntaxnet::dragnn::ComponentSpec &spec,
   return "";
 }
 
+SemparFeatureExtractor::~SemparFeatureExtractor() {
+  for (auto &channel : channels_) {
+    for (auto *feature : channel.features) {
+      delete feature;
+    }
+  }
+}
+
 void SemparFeatureExtractor::AddChannel(const string &name,
                                         const string &fml,
                                         int embedding_dim) {
