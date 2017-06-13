@@ -25,7 +25,7 @@
 #include "base/types.h"
 
 // Registry for file systems.
-REGISTER_INSTANCE_REGISTRY("file system", sling::FileSystem);
+REGISTER_SINGLETON_REGISTRY("file system", sling::FileSystem);
 
 namespace sling {
 namespace {
