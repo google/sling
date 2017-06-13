@@ -34,14 +34,13 @@ SemparState::SemparState(SemparInstance *instance,
   current_beam_index_ = -1;
   parent_beam_index_ = 0;
 
-  int size = instance->document->num_tokens();
   if (!shift_only()) {
     allowed_.assign(action_table()->NumActions(), false);
-    parser_state_ = new ParserState(instance->store, 0, size);
+    parser_state_ = new ParserState(instance->store, 0, num_tokens());
     ComputeAllowed();
   } else {
     shift_only_state_.current = 0;
-    shift_only_state_.size = size;
+    shift_only_state_.size = num_tokens();
   }
 }
 
@@ -50,7 +49,7 @@ SemparState::SemparState(const SemparState *other) {
     parser_state_ = new ParserState(*other->parser_state_);
   }
   instance_ = other->instance_;
-  resources_ = other->resources;
+  resources_ = other->resources_;
   system_type_ = other->system_type_;
   shift_only_state_ = other->shift_only_state_;
   allowed_ = other->allowed_;
@@ -132,6 +131,7 @@ bool SemparState::IsFinal() const {
 }
 
 bool SemparState::Allowed(int action) const {
+  if (IsFinal()) return false;
   return shift_only() ? (action == 0) : allowed_.at(action);
 }
 
@@ -196,21 +196,21 @@ void SemparState::ComputeAllowed() {
 
   // If we are at the end, then STOP is the only allowed action.
   if (IsFinal()) {
-    allowed_[action_table_->StopIndex()] = true;
+    allowed_[action_table()->StopIndex()] = true;
     return;
   }
 
   // If we have taken too many actions at this token, then just advance.
   // We use a small padding on the action limit to allow for variations not
   // seen in the training corpus.
-  int max_wait_till_shift = 4 + action_table_->max_actions_per_token();
+  int max_wait_till_shift = 4 + action_table()->max_actions_per_token();
   if (step_info_.NumStepsSinceShift() > max_wait_till_shift) {
-    allowed_[action_table_->ShiftIndex()] = true;
+    allowed_[action_table()->ShiftIndex()] = true;
     return;
   }
 
   // Compute the rest of the allowed actions as per the action table.
-  action_table_->Allowed(*parser_state_, {} /* fingerprints */, &allowed_);
+  action_table()->Allowed(*parser_state_, {} /* fingerprints */, &allowed_);
 }
 
 void SemparState::StepInformation::Update(const ParserAction &action,

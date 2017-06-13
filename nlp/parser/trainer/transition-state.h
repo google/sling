@@ -92,6 +92,7 @@ class SemparState
   SemparInstance *instance() { return instance_; }
   Document *document() { return instance_->document; }
   Store *store() { return instance_->store; }
+  int num_tokens() const { return instance_->document->num_tokens(); }
 
   syntaxnet::dragnn::ComponentTrace *mutable_trace() {
     CHECK(trace_ != nullptr) << "Trace is not initialized";
@@ -112,7 +113,7 @@ class SemparState
   }
 
   // Accessors.
-  const ActionTable *action_table() const { return &resources_->table_; }
+  const ActionTable *action_table() const { return &resources_->table; }
 
   Store *store() const {
     return parser_state_ == nullptr ? nullptr : parser_state_->store();
@@ -142,8 +143,24 @@ class SemparState
   // Returns the number of steps taken by the state so far.
   int NumSteps() const { return step_info_.NumSteps(); }
 
+  // Whether the state is for a shift-only instance.
+  bool shift_only() const { return system_type_ == SHIFT_ONLY; }
+
   // Current position (only valid if the state is SHIFT_ONLY).
   int shift_only_current() const { return shift_only_state_.current; }
+
+  // Number of total tokens (only valid if the state is SHIFT_ONLY).
+  int shift_only_size() const { return shift_only_state_.size; }
+
+  // Current position (works for both SHIFT_ONLY and SEMPAR cases).
+  int current() const {
+    return shift_only() ? shift_only_current() : parser_state()->current();
+  }
+
+  // End position (works for both SHIFT_ONLY and SEMPAR cases).
+  int end() const {
+    return shift_only() ? shift_only_size() : parser_state()->end();
+  }
 
  private:
   // Holds frame -> step information, i.e. at which step was a frame created or
@@ -181,9 +198,6 @@ class SemparState
 
   // Computes the set of allowed actions for the current ParserState.
   void ComputeAllowed();
-
-  // Whether the state is for a shift-only instance.
-  bool shift_only() const { return system_type_ == SHIFT_ONLY; }
 
   // Shared resources. Not owned.
   const SharedResources *resources_ = nullptr;
