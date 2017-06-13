@@ -157,7 +157,7 @@ class File {
 };
 
 // Abstract file system interface.
-class FileSystem : public RegisterableInstance<FileSystem> {
+class FileSystem : public Singleton<FileSystem> {
  public:
   virtual ~FileSystem() = default;
 
@@ -202,7 +202,7 @@ class FileSystem : public RegisterableInstance<FileSystem> {
 }  // namespace sling
 
 #define REGISTER_FILE_SYSTEM(name, component) \
-  REGISTER_INSTANCE_COMPONENT(sling::FileSystem, name, component)
+  REGISTER_SINGLETON_TYPE(sling::FileSystem, name, component)
 
 #endif  // FILE_FILE_H_
 

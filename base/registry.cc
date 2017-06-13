@@ -14,11 +14,54 @@
 
 #include "base/registry.h"
 
+namespace sling {
+
 // Global list of all component registries.
-RegistryMetadata *global_registry_list = nullptr;
+RegistryMetadata *RegistryMetadata::global_registry_list = nullptr;
+
+void RegistryMetadata::GetComponents(
+    std::vector<const ComponentMetadata *> *components) const {
+  components->clear();
+  ComponentMetadata *meta = *components_;
+  while (meta != nullptr) {
+    components->push_back(meta);
+    meta = meta->link();
+  }
+}
+
+const ComponentMetadata *RegistryMetadata::GetComponent(
+    const string &name) const {
+  ComponentMetadata *meta = *components_;
+  while (meta != nullptr) {
+    if (name == meta->name()) return meta;
+    meta = meta->link();
+  }
+  return nullptr;
+}
 
 void RegistryMetadata::Register(RegistryMetadata *registry) {
   registry->set_link(global_registry_list);
   global_registry_list = registry;
 }
+
+void RegistryMetadata::GetRegistries(
+    std::vector<const RegistryMetadata *> *registries) {
+  registries->clear();
+  RegistryMetadata *meta = global_registry_list;
+  while (meta != nullptr) {
+    registries->push_back(meta);
+    meta = meta->next();
+  }
+}
+
+const RegistryMetadata *RegistryMetadata::GetRegistry(const string &name) {
+  RegistryMetadata *meta = global_registry_list;
+  while (meta != nullptr) {
+    if (name == meta->name()) return meta;
+    meta = meta->next();
+  }
+  return nullptr;
+}
+
+}  // namespace sling
 
