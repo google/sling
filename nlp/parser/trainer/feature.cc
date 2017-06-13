@@ -78,7 +78,7 @@ void SemparFeatureExtractor::AddChannel(const string &name,
   channel.name = name;
   channel.embedding_dim = embedding_dim;
 
-  // Pared down FML parser.
+  // Pared down FML parser. It doesn't support nested functions.
   std::vector<string> features = Split(fml, ' ');
   for (const string &feature : features) {
     if (feature.empty()) continue;

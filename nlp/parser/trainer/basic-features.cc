@@ -10,9 +10,11 @@ namespace nlp {
 using syntaxnet::VectorIntWorkspace;
 using syntaxnet::dragnn::ComponentSpec;
 
+// Feature that returns the id of the current word (offset via argument()).
 class WordFeature : public SemparFeature {
  public:
   void TrainInit(SharedResources *resources, const string &output_folder) {
+    // Add an unknown word to the dictionary for representing OOV words.
     dictionary_file_ = StrCat(output_folder, "/word-vocab");
     Add(kUnknown);
   }
@@ -28,12 +30,14 @@ class WordFeature : public SemparFeature {
 
   int TrainFinish(ComponentSpec *spec) override {
     // Write dictionary to file.
-    AddResourceToSpec("word-vocab", dictionary_file_, spec);
     string contents;
     for (const string &w : id_to_word_) {
       StrAppend(&contents, !contents.empty() ? "\n" : "", w);
     }
     CHECK_OK(File::WriteContents(dictionary_file_, contents));
+
+    // Add path to the dictionary to the spec.
+    AddResourceToSpec("word-vocab", dictionary_file_, spec);
 
     return id_to_word_.size();
   }
@@ -107,11 +111,22 @@ class WordFeature : public SemparFeature {
     return false;
   }
 
+  // Unknown word.
   static constexpr char kUnknown[] = "<UNKNOWN>";
+
+  // Path of dictionary under construction.
   string dictionary_file_;
+
+  // Word -> Id.
   std::unordered_map<string, int64> words_;
+
+  // Id -> Word.
   std::vector<string> id_to_word_;
+
+  // Id of the unknown word.
   int64 oov_ = 0;
+
+  // Workspace index.
   int workspace_id_ = -1;
 };
 
