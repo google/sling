@@ -32,7 +32,7 @@ void Parser::Load(Store *store, const string &model) {
 
   // Load and analyze parser flow file.
   myelin::Flow flow;
-  CHECK_OK(flow.Load(model));
+  CHECK(flow.Load(model));
   flow.Analyze(library_);
 
   // Compile parser flow.

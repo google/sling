@@ -1160,7 +1160,7 @@ Tensor *Cell::GetParameter(const string &name) const {
 }
 
 void Cell::WriteCodeToFile(const string &filename) const {
-  CHECK_OK(File::WriteContents(filename, code_.begin(), code_.size()));
+  CHECK(File::WriteContents(filename, code_.begin(), code_.size()));
 }
 
 static bool CompareOffset(Tensor *t1, Tensor *t2) {
