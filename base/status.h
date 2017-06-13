@@ -58,7 +58,7 @@ class Status {
 
   // This bool operator returns true if status is ok. If status is not ok,
   // it will also log an error message. This can be used for checking for
-  // errors with the CHECK macro, e.g. CHECK(File::Open(...));
+  // errors with the CHECK macro, e.g. CHECK(File::MkDir(...));
   operator bool() const {
     if (!ok()) LOG(ERROR) << ToString();
     return ok();
