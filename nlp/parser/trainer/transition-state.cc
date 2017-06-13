@@ -21,25 +21,38 @@
 namespace sling {
 namespace nlp {
 
-SemparState::SemparState(SemparInstance *instance, const ActionTable *table) {
+SemparState::SemparState(SemparInstance *instance,
+                         const SharedResources &resources,
+                         TransitionSystemType type) {
   instance_ = instance;
-  action_table_ = table;
-  CHECK(!table->action_checks())
+  resources_ = &resources;
+  system_type_ = type;
+  CHECK(!action_table()->action_checks())
       << "Fingerprint-based checks not currently supported in "
       << "SemparTransitiontate.";
   score_ = 0;
   current_beam_index_ = -1;
   parent_beam_index_ = 0;
-  allowed_.assign(table->NumActions(), false);
-  parser_state_ =
-      new ParserState(instance->store, 0, instance->document->num_tokens());
-  ComputeAllowed();
+
+  int size = instance->document->num_tokens();
+  if (!shift_only()) {
+    allowed_.assign(action_table()->NumActions(), false);
+    parser_state_ = new ParserState(instance->store, 0, size);
+    ComputeAllowed();
+  } else {
+    shift_only_state_.current = 0;
+    shift_only_state_.size = size;
+  }
 }
 
 SemparState::SemparState(const SemparState *other) {
-  parser_state_ = new ParserState(*other->parser_state_);
+  if (other->parser_state_ != nullptr) {
+    parser_state_ = new ParserState(*other->parser_state_);
+  }
   instance_ = other->instance_;
-  action_table_ = other->action_table_;
+  resources_ = other->resources;
+  system_type_ = other->system_type_;
+  shift_only_state_ = other->shift_only_state_;
   allowed_ = other->allowed_;
   step_info_ = other->step_info_;
   score_ = other->score_;
@@ -87,10 +100,13 @@ const float SemparState::GetScore() const { return score_; }
 void SemparState::SetScore(const float score) { score_ = score; }
 
 string SemparState::HTMLRepresentation() const {
-  return parser_state_->DebugString();
+  return shift_only() ? StrCat("current=", shift_only_state_.current) :
+      parser_state_->DebugString();
 }
 
 int SemparState::NextGoldAction() {
+  if (shift_only()) return 0;  // only one action
+
   if (gold_sequence_.actions().empty()) {
     CHECK(gold_transition_generator_ != nullptr);
     gold_transition_generator_->Generate(
@@ -103,7 +119,7 @@ int SemparState::NextGoldAction() {
   }
 
   const ParserAction &action = gold_sequence_.action(next_gold_index_);
-  int index = action_table_->Index(action);
+  int index = action_table()->Index(action);
   LOG_IF(FATAL, index == -1) << action.ToString(store());
   gold_transitions_required_ = true;
 
@@ -111,15 +127,22 @@ int SemparState::NextGoldAction() {
 }
 
 bool SemparState::IsFinal() const {
-  return parser_state_->done();
+  return shift_only() ? (shift_only_current() == shift_only_state_.size) :
+      parser_state_->done();
 }
 
 bool SemparState::Allowed(int action) const {
-  return allowed_.at(action);
+  return shift_only() ? (action == 0) : allowed_.at(action);
 }
 
 void SemparState::PerformAction(int action_index) {
-  const ParserAction &action = action_table_->Action(action_index);
+  if (shift_only()) {
+    CHECK_EQ(action_index, 0);
+    ++shift_only_state_.current;
+    return;
+  }
+
+  const ParserAction &action = action_table()->Action(action_index);
 
   if (gold_transitions_required_) {
     // If we are truly in training mode, then only gold actions are applicable.
@@ -166,7 +189,9 @@ void SemparState::PerformAction(int action_index) {
 }
 
 void SemparState::ComputeAllowed() {
- // Disable all actions by default.
+  CHECK(!shift_only());
+
+  // Disable all actions by default.
   allowed_.assign(allowed_.size(), false);
 
   // If we are at the end, then STOP is the only allowed action.

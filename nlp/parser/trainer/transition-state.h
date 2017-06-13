@@ -1,3 +1,18 @@
+// Copyright 2017 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// =============================================================================
+
 #ifndef NLP_PARSER_TRAINER_TRANSITION_STATE_H_
 #define NLP_PARSER_TRAINER_TRANSITION_STATE_H_
 
@@ -15,6 +30,8 @@
 #include "nlp/parser/parser-state.h"
 #include "nlp/parser/trainer/gold-transition-generator.h"
 #include "nlp/parser/trainer/sempar-instance.h"
+#include "nlp/parser/trainer/shared-resources.h"
+#include "nlp/parser/trainer/transition-system-type.h"
 
 namespace sling {
 namespace nlp {
@@ -23,7 +40,10 @@ namespace nlp {
 class SemparState
     : public syntaxnet::dragnn::CloneableTransitionState<SemparState> {
  public:
-  SemparState(SemparInstance *instance, const ActionTable *table);
+  SemparState(SemparInstance *instance,
+              const SharedResources &resources,
+              TransitionSystemType type);
+
   SemparState(const SemparState *other);
   ~SemparState();
 
@@ -91,7 +111,8 @@ class SemparState
     return history_[history_.size() - 1 - offset];
   }
 
-  const ActionTable *action_table() const { return action_table_; }
+  // Accessors.
+  const ActionTable *action_table() const { return &resources_->table_; }
 
   Store *store() const {
     return parser_state_ == nullptr ? nullptr : parser_state_->store();
@@ -121,6 +142,9 @@ class SemparState
   // Returns the number of steps taken by the state so far.
   int NumSteps() const { return step_info_.NumSteps(); }
 
+  // Current position (only valid if the state is SHIFT_ONLY).
+  int shift_only_current() const { return shift_only_state_.current; }
+
  private:
   // Holds frame -> step information, i.e. at which step was a frame created or
   // brought to focus.
@@ -149,10 +173,28 @@ class SemparState
     int FocusStep(int index) const { return focus_step[index]; }
   };
 
+  // State information for shift-only cases.
+  struct ShiftOnlyState {
+    int current = 0;
+    int size = 0;
+  };
+
   // Computes the set of allowed actions for the current ParserState.
   void ComputeAllowed();
 
-  // Underlying ParserState. Owned.
+  // Whether the state is for a shift-only instance.
+  bool shift_only() const { return system_type_ == SHIFT_ONLY; }
+
+  // Shared resources. Not owned.
+  const SharedResources *resources_ = nullptr;
+
+  // Type of transition system.
+  TransitionSystemType system_type_;
+
+  // State information in case system_type_ is SHIFT_ONLY.
+  ShiftOnlyState shift_only_state_;
+
+  // Underlying ParserState if system_type is SEMPAR. Owned.
   ParserState *parser_state_ = nullptr;
 
   // Instance that is being examined with this state. Not owned.
@@ -178,9 +220,6 @@ class SemparState
 
   // Maximum size of the history.
   static const int kMaxHistory = 10;
-
-  // Action Table. Not owned.
-  const ActionTable *action_table_ = nullptr;
 
   // Trace of the history to produce this state.
   syntaxnet::dragnn::ComponentTrace *trace_ = nullptr;
