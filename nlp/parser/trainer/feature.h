@@ -94,7 +94,7 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
   virtual void Extract(Args *args) = 0;
 
   // Returns the string representation of feature id 'id' (used in debugging).
-  virtual const string &FeatureToString(int64 id) const = 0;
+  virtual string FeatureToString(int64 id) const = 0;
 
  protected:
   // Gets the file path of the resource named 'name' in 'spec'.
