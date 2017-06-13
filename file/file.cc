@@ -25,7 +25,7 @@
 #include "base/types.h"
 
 // Registry for file systems.
-REGISTER_INSTANCE_REGISTRY("file system", sling::FileSystem);
+REGISTER_SINGLETON_REGISTRY("file system", sling::FileSystem);
 
 namespace sling {
 namespace {
@@ -100,14 +100,14 @@ File *File::Open(const string &name, const char *mode) {
 
 File *File::OpenOrDie(const string &name, const char *mode) {
   File *f;
-  CHECK_OK(Open(name, mode, &f));
+  CHECK(Open(name, mode, &f));
   return f;
 }
 
 File *File::TempFile() {
   CHECK(default_file_system != nullptr) << "No filesystems";
   File *f;
-  CHECK_OK(default_file_system->CreateTempFile(&f));
+  CHECK(default_file_system->CreateTempFile(&f));
   return f;
 }
 
@@ -263,12 +263,12 @@ Status File::WriteContents(const string &filename,
 
 size_t File::ReadOrDie(void *buffer, size_t size) {
   uint64 read;
-  CHECK_OK(Read(buffer, size, &read));
+  CHECK(Read(buffer, size, &read));
   return read;
 }
 
 void File::WriteOrDie(const void *buffer, size_t size) {
-  CHECK_OK(Write(buffer, size));
+  CHECK(Write(buffer, size));
 }
 
 Status File::ReadToString(string *contents) {

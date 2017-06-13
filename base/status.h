@@ -56,6 +56,14 @@ class Status {
   // Returns true iff the status indicates success.
   bool ok() const { return state_ == nullptr; }
 
+  // This bool operator returns true if status is ok. If status is not ok,
+  // it will also log an error message. This can be used for checking for
+  // errors with the CHECK macro, e.g. CHECK(File::MkDir(...));
+  operator bool() const {
+    if (!ok()) LOG(ERROR) << ToString();
+    return ok();
+  }
+
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
   string ToString() const;
@@ -92,8 +100,6 @@ inline std::ostream &operator<<(std::ostream &out, const Status &status) {
   out << status.ToString();
   return out;
 }
-
-#define CHECK_OK(op) CHECK_EQ(sling::Status::OK, (op))
 
 }  // namespace sling
 

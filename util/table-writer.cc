@@ -438,7 +438,7 @@ void TableWriter::Write(string *contents) const {
 void TableWriter::Write(const string &file) const {
   string contents;
   Write(&contents);
-  CHECK_OK(File::WriteContents(file, contents));
+  CHECK(File::WriteContents(file, contents));
 }
 
 }  // namespace sling

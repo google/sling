@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
   generator.set_per_sentence(true);
 
   std::vector<string> files;
-  CHECK_OK(File::Match(FLAGS_documents, &files));
+  CHECK(File::Match(FLAGS_documents, &files));
   LOG(INFO) << "Processing " << files.size() << " documents..";
   int count = 0;
   for (const string &file : files) {

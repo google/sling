@@ -448,10 +448,10 @@ Status Flow::Load(const string &filename) {
   Status st = File::Open(filename, "r", &file);
   if (!st.ok()) return st;
   uint64 size;
-  CHECK_OK(file->GetSize(&size));
+  CHECK(file->GetSize(&size));
   char *data = AllocateMemory(size);
   file->ReadOrDie(data, size);
-  CHECK_OK(file->Close());
+  CHECK(file->Close());
 
   // Read header.
   Parser parser(data, data + size);
