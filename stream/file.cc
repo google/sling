@@ -21,7 +21,7 @@
 namespace sling {
 
 FileInputStream::FileInputStream(const string &filename, int block_size) {
-  CHECK_OK(File::Open(filename, "r", &file_));
+  CHECK(File::Open(filename, "r", &file_));
   size_ = block_size;
   buffer_ = new uint8[size_];
   used_ = 0;
@@ -39,7 +39,7 @@ FileInputStream::FileInputStream(File *file, int block_size) {
 }
 
 FileInputStream::~FileInputStream() {
-  if (file_ != nullptr) CHECK_OK(file_->Close());
+  if (file_ != nullptr) CHECK(file_->Close());
   delete [] buffer_;
 }
 
@@ -100,7 +100,7 @@ int64 FileInputStream::ByteCount() const {
 }
 
 FileOutputStream::FileOutputStream(const string &filename, int block_size) {
-  CHECK_OK(File::Open(filename, "w", &file_));
+  CHECK(File::Open(filename, "w", &file_));
   size_ = block_size;
   buffer_ = new uint8[size_];
   used_ = 0;
