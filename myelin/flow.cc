@@ -235,7 +235,7 @@ void Flow::Function::AddOperation(Operation *op) {
 }
 
 void Flow::Connector::AddLink(Variable *var) {
-  if (std::find(links.begin(), links.end(), var) != links.end()) {
+  if (std::find(links.begin(), links.end(), var) == links.end()) {
     links.push_back(var);
   }
 }
@@ -543,7 +543,9 @@ void Flow::Eliminate(Operation *op) {
     Variable *input = op->inputs[0];
     Variable *output = op->outputs[0];
     CHECK_EQ(input->type, output->type);
-    CHECK(input->shape == output->shape);
+    CHECK(input->shape == output->shape ||
+          input->shape.undefined() ||
+          output->shape.undefined());
     if (output->in) input->in = true;
     if (output->out) input->out = true;
     for (Operation *target : ops_) {
