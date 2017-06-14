@@ -23,7 +23,8 @@ namespace nlp {
 
 SemparState::SemparState(SemparInstance *instance,
                          const SharedResources &resources,
-                         TransitionSystemType type) {
+                         TransitionSystemType type,
+                         bool shift_only_left_to_right) {
   instance_ = instance;
   resources_ = &resources;
   system_type_ = type;
@@ -39,8 +40,9 @@ SemparState::SemparState(SemparInstance *instance,
     parser_state_ = new ParserState(instance->store, 0, num_tokens());
     ComputeAllowed();
   } else {
-    shift_only_state_.current = 0;
+    shift_only_state_.steps_taken = 0;
     shift_only_state_.size = num_tokens();
+    shift_only_state_.left_to_right = shift_only_left_to_right;
   }
 }
 
@@ -99,7 +101,7 @@ const float SemparState::GetScore() const { return score_; }
 void SemparState::SetScore(const float score) { score_ = score; }
 
 string SemparState::HTMLRepresentation() const {
-  return shift_only() ? StrCat("current=", shift_only_state_.current) :
+  return shift_only() ? StrCat("steps_taken=", shift_only_state_.steps_taken) :
       parser_state_->DebugString();
 }
 
@@ -126,7 +128,8 @@ int SemparState::NextGoldAction() {
 }
 
 bool SemparState::IsFinal() const {
-  return shift_only() ? (shift_only_current() == shift_only_state_.size) :
+  return shift_only() ?
+      (shift_only_state_.steps_taken >= shift_only_state_.size) :
       parser_state_->done();
 }
 
@@ -138,7 +141,7 @@ bool SemparState::Allowed(int action) const {
 void SemparState::PerformAction(int action_index) {
   if (shift_only()) {
     CHECK_EQ(action_index, 0);
-    ++shift_only_state_.current;
+    ++shift_only_state_.steps_taken;
     return;
   }
 

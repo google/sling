@@ -43,6 +43,9 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
     ParserState *parser_state() {
       return state->parser_state();
     }
+    void Output(int64 id) {
+      output_ids.emplace_back(id);
+    }
   };
 
   virtual ~SemparFeature() {}
@@ -96,7 +99,6 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
   // Returns the string representation of feature id 'id' (used in debugging).
   virtual string FeatureToString(int64 id) const = 0;
 
- protected:
   // Gets the file path of the resource named 'name' in 'spec'.
   static string GetResource(const syntaxnet::dragnn::ComponentSpec &spec,
                             const string &name);

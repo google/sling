@@ -51,6 +51,7 @@ void SemparFeature::AddResourceToSpec(const string &name,
     }
   }
   auto *resource = spec->add_resource();
+  resource->set_name(name);
   auto *part = resource->add_part();
   part->set_file_pattern(file);
 }

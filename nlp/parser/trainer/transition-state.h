@@ -42,7 +42,8 @@ class SemparState
  public:
   SemparState(SemparInstance *instance,
               const SharedResources &resources,
-              TransitionSystemType type);
+              TransitionSystemType type,
+              bool shift_only_left_to_right);
 
   SemparState(const SemparState *other);
   ~SemparState();
@@ -146,20 +147,16 @@ class SemparState
   // Whether the state is for a shift-only instance.
   bool shift_only() const { return system_type_ == SHIFT_ONLY; }
 
-  // Current position (only valid if the state is SHIFT_ONLY).
-  int shift_only_current() const { return shift_only_state_.current; }
-
-  // Number of total tokens (only valid if the state is SHIFT_ONLY).
-  int shift_only_size() const { return shift_only_state_.size; }
-
   // Current position (works for both SHIFT_ONLY and SEMPAR cases).
   int current() const {
-    return shift_only() ? shift_only_current() : parser_state()->current();
+    if (!shift_only()) return parser_state()->current();
+    return shift_only_state_.left_to_right ? shift_only_state_.steps_taken :
+        (shift_only_state_.size - 1 - shift_only_state_.steps_taken);
   }
 
   // End position (works for both SHIFT_ONLY and SEMPAR cases).
   int end() const {
-    return shift_only() ? shift_only_size() : parser_state()->end();
+    return shift_only() ? shift_only_state_.size : parser_state()->end();
   }
 
  private:
@@ -192,8 +189,9 @@ class SemparState
 
   // State information for shift-only cases.
   struct ShiftOnlyState {
-    int current = 0;
+    int steps_taken = 0;
     int size = 0;
+    bool left_to_right = true;
   };
 
   // Computes the set of allowed actions for the current ParserState.
