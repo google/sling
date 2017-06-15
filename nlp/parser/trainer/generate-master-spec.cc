@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Utility tool for generating an action table, word & affix lexicons,
-// and a fully fleshed-out master spec.
+// Utility tool for generating a fully populated master spec.
+// In particular, it creates the action table, all resources needed by the
+// features, computes the feature domain sizes and uses all this to output
+// a full MasterSpec.
+//
 // Input arguments:
 // - Path to a commons store.
 // - File pattern of training documents.
 // - Name of output directory.
 //
-// The action table, all the lexicons, and the master spec are dumped in the
-// output directory.
-//
 // Sample usage:
-//   bazel-bin/nlp/parser/trainer/generate-action-table
+//   bazel-bin/nlp/parser/trainer/generate-master-spec
 //       --documents='/tmp/documents.*'
 //       --commons=/tmp/common_store.encoded
 //       --output_dir='/tmp/out'
