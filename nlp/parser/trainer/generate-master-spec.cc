@@ -268,7 +268,6 @@ void TrainFeatures(Artifacts *artifacts, ComponentSpec *spec) {
   for (auto &linked_feature_channel : *spec->mutable_linked_feature()) {
      linked_feature_channel.set_size(size_and_vocab[i++].first);
   }
-
 }
 
 void OutputMasterSpec(Artifacts *artifacts) {
@@ -315,7 +314,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
       ff, "action-table", artifacts->action_table_filename, "store", "encoded");
 
   // Fill vocabulary sizes and feature sizes. Recall that this will also
-  // add any lexicons as resources (e.g. needed by input.word, input.suffix).
+  // add any lexicons as resources (e.g. needed by "word" and "suffix").
   TrainFeatures(artifacts, lr_lstm);
   TrainFeatures(artifacts, rl_lstm);
   TrainFeatures(artifacts, ff);
