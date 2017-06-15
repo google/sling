@@ -138,13 +138,12 @@ class SemparFeatureExtractor {
   void AddChannel(const syntaxnet::dragnn::LinkedFeatureChannel &channel);
 
   // Trains the current set of channels using training data in 'train_files'.
-  // If 'fill_vocabulary_size' is true then final domain sizes of features are
-  // dumped into 'spec'.
-  void Train(const std::vector<string> &train_files,
-             const string &output_folder,
-             bool fill_vocabulary_size,
-             SharedResources *resources,
-             syntaxnet::dragnn::ComponentSpec *spec);
+  // Returns one pair per channel, of (#features, #max domain size).
+  std::vector<std::pair<int, int>> Train(
+      const std::vector<string> &train_files,
+      const string &output_folder,
+      SharedResources *resources,
+      syntaxnet::dragnn::ComponentSpec *spec);
 
   // Methods for feature extraction.
   void Init(

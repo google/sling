@@ -123,11 +123,11 @@ void SemparFeatureExtractor::AddChannel(const string &name,
   }
 }
 
-void SemparFeatureExtractor::Train(const std::vector<string> &train_files,
-                                   const string &output_folder,
-                                   bool fill_vocabulary_size,
-                                   SharedResources *resources,
-                                   ComponentSpec *spec) {
+std::vector<std::pair<int, int>> SemparFeatureExtractor::Train(
+    const std::vector<string> &train_files,
+    const string &output_folder,
+    SharedResources *resources,
+    ComponentSpec *spec) {
   for (auto &channel : channels_) {
     for (auto *feature : channel.features) {
       feature->TrainInit(resources, output_folder);
@@ -155,6 +155,7 @@ void SemparFeatureExtractor::Train(const std::vector<string> &train_files,
   }
   LOG(INFO) << "SemparFeatureExtractor: " << count << " docs seen.";
 
+  std::vector<std::pair<int, int>> output;
   for (auto &channel : channels_) {
     for (auto *feature : channel.features) {
       int count = feature->TrainFinish(spec);
@@ -164,21 +165,10 @@ void SemparFeatureExtractor::Train(const std::vector<string> &train_files,
     }
     LOG(INFO) << "Channel vocabulary size for " << channel.name << " = "
               << channel.vocabulary;
+    output.emplace_back(channel.features.size(), channel.vocabulary);
   }
 
-  if (fill_vocabulary_size) {
-    for (const auto &channel : channels_) {
-      for (auto &fixed_feature_channel : *spec->mutable_fixed_feature()) {
-        if (channel.name == fixed_feature_channel.name()) {
-          fixed_feature_channel.set_vocabulary_size(channel.vocabulary);
-          fixed_feature_channel.set_size(channel.features.size());
-          LOG(INFO) << "Set vocabulary size of fixed feature channel '"
-                    << channel.name << "' in spec to " << channel.vocabulary;
-          break;
-        }
-      }
-    }
-  }
+  return output;
 }
 
 void SemparFeatureExtractor::AddChannel(

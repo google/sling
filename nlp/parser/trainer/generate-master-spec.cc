@@ -85,9 +85,6 @@ struct Artifacts {
   MasterSpec spec;                  // generated master spec
   string spec_file;                 // path to the master spec
 
-  // Lexicon name -> Full path to the generated lexicon.
-  std::unordered_map<string, string> lexicon_paths;
-
   Store *global() { return resources.global; }
   const ActionTable &table() { return resources.table; }
 };
@@ -136,72 +133,6 @@ void WriteAffixTable(const syntaxnet::AffixTable &affixes,
   syntaxnet::ProtoRecordWriter writer(output_file);
   affixes.Write(&writer);
 }
-
-/*
-void OutputLexicons(Artifacts *artifacts) {
-  using syntaxnet::TermFrequencyMap;
-  using syntaxnet::AffixTable;
-
-  // Term frequency maps to be populated by the corpus.
-  TermFrequencyMap words;
-  TermFrequencyMap lcwords;
-
-  // Affix tables to be populated by the corpus.
-  AffixTable prefixes(AffixTable::PREFIX, kLexiconMaxPrefixLength);
-  AffixTable suffixes(AffixTable::SUFFIX, kLexiconMaxSuffixLength);
-
-  // Make a pass over the corpus.
-  int64 num_tokens = 0;
-  int64 num_documents = 0;
-  for (const string &file : artifacts->train_files) {
-    Store local(artifacts->global());
-    FileDecoder decoder(&local, file);
-    Object top = decoder.Decode();
-    if (top.invalid()) continue;
-
-    num_documents++;
-    Document document(top.AsFrame());
-
-    // Gather token information.
-    for (int t = 0; t < document.num_tokens(); ++t) {
-      // Get token and lowercased word.
-      const auto &token = document.token(t);
-      string word = token.text();
-      syntaxnet::utils::NormalizeDigits(&word);
-      string lcword = tensorflow::str_util::Lowercase(word);
-
-      // Make sure the token does not contain a newline.
-      CHECK(lcword.find('\n') == string::npos);
-
-      // Increment frequencies (only for terms that exist).
-      if (!word.empty() && !HasSpaces(word)) words.Increment(word);
-      if (!lcword.empty() && !HasSpaces(lcword)) lcwords.Increment(lcword);
-
-      // Add prefixes/suffixes for the current word.
-      prefixes.AddAffixesForWord(word.c_str(), word.size());
-      suffixes.AddAffixesForWord(word.c_str(), word.size());
-
-      // Update the number of processed tokens.
-      ++num_tokens;
-    }
-  }
-  LOG(INFO) << "Term maps collected over " << num_tokens << " tokens from "
-            << num_documents << " documents";
-
-  // Write mappings to disk.
-  words.Save(FullName("word-map"));
-  lcwords.Save(FullName("lcword-map"));
-
-  // Write affixes to disk.
-  WriteAffixTable(prefixes, FullName("prefix-table"));
-  WriteAffixTable(suffixes, FullName("suffix-table"));
-
-  artifacts->lexicon_paths["word-map"] = FullName("word-map");
-  artifacts->lexicon_paths["lcword-map"] = FullName("lcword-map");
-  artifacts->lexicon_paths["prefix-table"] = FullName("prefix-table");
-  artifacts->lexicon_paths["suffix-table"] = FullName("suffix-table");
-  LOG(INFO) << "Wrote term maps and affix tables.";
-} */
 
 syntaxnet::dragnn::ComponentSpec *AddComponent(
     const string &name,
@@ -306,23 +237,38 @@ void TrainFeatures(Artifacts *artifacts, ComponentSpec *spec) {
   // the features. Therefore any parameters for the features should be
   // specified in the FML itself.
 
-  fixed_feature_extractor.Train(artifacts->train_files,
-                                FLAGS_output_dir,
-                                true /* fill vocabulary sizes */,
-                                &artifacts->resources,
-                                spec);
+  auto size_and_vocab = fixed_feature_extractor.Train(
+      artifacts->train_files,
+      FLAGS_output_dir,
+      &artifacts->resources,
+      spec);
+  CHECK_EQ(size_and_vocab.size(), spec->fixed_feature_size());
+  int i = 0;
+  for (auto &fixed_feature_channel : *spec->mutable_fixed_feature()) {
+     fixed_feature_channel.set_size(size_and_vocab[i].first);
+     fixed_feature_channel.set_vocabulary_size(size_and_vocab[i].second);
+     LOG(INFO) << "Set vocabulary size of fixed feature channel '"
+               << fixed_feature_channel.name() << "' in spec to "
+               << size_and_vocab[i].second;
+     ++i;
+  }
 
   SemparFeatureExtractor linked_feature_extractor;
   for (const auto &linked_channel : spec->linked_feature()) {
     linked_feature_extractor.AddChannel(linked_channel);
   }
 
-  linked_feature_extractor.Train(
+  size_and_vocab = linked_feature_extractor.Train(
       artifacts->train_files,
       FLAGS_output_dir,
-      false /* linked features don't need vocab sizes */,
       &artifacts->resources,
       spec);
+  CHECK_EQ(size_and_vocab.size(), spec->linked_feature_size());
+  i = 0;
+  for (auto &linked_feature_channel : *spec->mutable_linked_feature()) {
+     linked_feature_channel.set_size(size_and_vocab[i++].first);
+  }
+
 }
 
 void OutputMasterSpec(Artifacts *artifacts) {
@@ -401,9 +347,6 @@ int main(int argc, char **argv) {
 
   // Dump action table.
   OutputActionTable(&artifacts);
-
-  // Make feature lexicons.
-  //OutputLexicons(&artifacts);
 
   // Make master spec.
   OutputMasterSpec(&artifacts);
