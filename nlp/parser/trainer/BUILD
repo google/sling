@@ -186,3 +186,22 @@ cc_library(
   ],
   alwayslink = 1,
 )
+
+cc_library(
+  name = "sempar-component",
+  hdrs = ["sempar-component.h"],
+  srcs = ["sempar-component.cc"],
+  deps = [
+      ":document-batch",
+      ":feature",
+      ":sempar-instance",
+      ":transition-state",
+      "//frame:store",
+      "//nlp/document:document",
+      "//nlp/parser:action-table",
+      "//nlp/parser:parser-action",
+      "//nlp/parser:parser-state",
+      "//third_party/sempar_dragnn:sempar_dragnn",
+  ],
+  alwayslink = 1,
+)
