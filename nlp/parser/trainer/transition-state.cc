@@ -103,8 +103,12 @@ void SemparState::SetScore(const float score) { score_ = score; }
 
 string SemparState::HTMLRepresentation() const {
   if (shift_only()) {
+    int size = document()->num_tokens();
     return StrCat("steps_taken=", shift_only_state_.steps_taken,
-                  ",current_token:" , document()->token(current()).text());
+                  ",current_token:",
+                  size <= current() ? " <EOS>" :
+                  (current() < 0 ? "<BOS>" :
+                  document()->token(current()).text()));
   } else {
     return parser_state_->DebugString();
   }
