@@ -215,7 +215,7 @@ void SemparComponent::AdvanceFromPrediction(const float scores[],
   VLOG(2) << "Advancing from prediction.";
   int offset = 0;
   int num_actions = 1;
-  if (system_type_ == SEMPAR) num_actions = resources_.table.NumActions();
+  if (!shift_only()) num_actions = resources_.table.NumActions();
   for (int i = 0; i < batch_.size(); ++i) {
     CHECK_LE(offset + num_actions, transition_matrix_length) << offset;
     SemparState *state = batch_.at(i);
@@ -228,7 +228,7 @@ void SemparComponent::AdvanceFromPrediction(const float scores[],
         }
       }
       CHECK_NE(best, -1) << state->HTMLRepresentation();
-      state->PerformAction(best);
+      Advance(state, best);
       state->SetScore(state->GetScore() + scores[offset + best]);
       state->SetBeamIndex(0);
     }
@@ -239,7 +239,7 @@ void SemparComponent::AdvanceFromPrediction(const float scores[],
 void SemparComponent::AdvanceFromOracle() {
   for (SemparState *state : batch_) {
     if (state->IsFinal()) continue;
-    state->PerformAction(GetOracleLabel(state));
+    Advance(state, GetOracleLabel(state));
     state->SetScore(0.0f);
     state->SetBeamIndex(0);
   }
@@ -405,12 +405,16 @@ int SemparComponent::GetOracleLabel(SemparState *state) const {
 
 void SemparComponent::Advance(SemparState *state, int action) {
   if (do_tracing_) {
-    const ParserAction &a = resources_.table.Action(action);
     auto *trace = state->mutable_trace();
     auto *last_step = GetLastStepInTrace(trace);
 
     // Add action to the prior step.
-    last_step->set_caption(a.ToString(resources_.global));
+    if (!shift_only()) {
+      const ParserAction &a = resources_.table.Action(action);
+      last_step->set_caption(a.ToString(resources_.global));
+    } else {
+      last_step->set_caption("SHIFT");
+    }
     last_step->set_step_finished(true);
   }
   state->PerformAction(action);

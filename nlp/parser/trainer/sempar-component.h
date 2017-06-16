@@ -143,6 +143,10 @@ class SemparComponent : public syntaxnet::dragnn::Component {
   // Returns the underlying component spec.
   syntaxnet::dragnn::ComponentSpec *spec() { return &spec_; }
 
+  TransitionSystemType system_type() const { return system_type_; }
+  bool left_to_right() const { return left_to_right_; }
+  bool shift_only() const { return system_type_ == SHIFT_ONLY; }
+
  private:
   // Permission function for this component.
   bool IsAllowed(SemparState *state, int action) const;
