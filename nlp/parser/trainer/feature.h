@@ -29,12 +29,20 @@ namespace nlp {
 // as well as a map of parameter names/values.
 class SemparFeature : public RegisterableClass<SemparFeature> {
  public:
+  struct Value {
+    int64 id;           // id output by the feature function
+    int feature_index;  // index of the feature function in the channel
+    string debug;       // debug string for 'id'
+
+    Value() {}
+    Value(int64 i) : id(i) {}
+  };
+
   // Container for holding the input and outputs of feature extraction.
   struct Args {
     SemparState *state = nullptr;         // input state; not owned
     bool debug = false;                   // whether we are in debug mode
-    std::vector<int64> output_ids;        // output feature ids
-    std::vector<string> output_strings;   // corresponding feature debug strings
+    std::vector<Value> output;            // output of feature extraction
 
     // Short-cut accessors.
     syntaxnet::WorkspaceSet *workspaces() {
@@ -44,7 +52,10 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
       return state->parser_state();
     }
     void Output(int64 id) {
-      output_ids.emplace_back(id);
+      output.emplace_back(id);
+    }
+    void Clear() {
+      output.clear();
     }
   };
 
@@ -150,7 +161,12 @@ class SemparFeatureExtractor {
       const syntaxnet::dragnn::ComponentSpec &spec, SharedResources *resources);
   void RequestWorkspaces(syntaxnet::WorkspaceRegistry *registry);
   void Preprocess(SemparState *state);
-  void Extract(SemparFeature::Args *args);
+  void Extract(SemparFeature::Args *args, int channel) const;
+
+  int NumChannels() const { return channels_.size(); }
+  int ChannelSize(int channel_id) const {
+    return channels_[channel_id].features.size();
+  }
 
  private:
   // Represents one channel of features.

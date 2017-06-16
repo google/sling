@@ -207,19 +207,21 @@ void SemparFeatureExtractor::Preprocess(SemparState *state) {
   }
 }
 
-void SemparFeatureExtractor::Extract(SemparFeature::Args *args) {
-  for (auto &channel : channels_) {
-    for (auto *feature : channel.features) {
-      std::vector<int64> &ids = args->output_ids;
-      int old_size = ids.size();
-      feature->Extract(args);
-      if (args->debug && args->output_strings.size() == old_size) {
-        for (int i = old_size; i < ids.size(); ++i) {
-          args->output_strings.emplace_back(feature->FeatureToString(ids[i]));
-        }
-        CHECK_EQ(ids.size(), args->output_strings.size());
+void SemparFeatureExtractor::Extract(SemparFeature::Args *args, int channel)
+  const {
+  CHECK_LT(channel, channels_.size());
+  int index = 0;
+  for (auto *feature : channels_[channel].features) {
+    int old_size = args->output.size();
+    feature->Extract(args);
+    for (int i = old_size; i < args->output.size(); ++i) {
+      auto &output = args->output[i];
+      output.feature_index = index;
+      if (args->debug) {
+        output.debug = feature->FeatureToString(output.id);
       }
     }
+    ++index;
   }
 }
 

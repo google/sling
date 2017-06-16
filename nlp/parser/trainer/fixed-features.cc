@@ -60,7 +60,7 @@ class PrecomputedFeature : public SemparFeature {
     }
     int64 id = args->workspaces()->Get<VectorIntWorkspace>(
         workspace_id_).element(index);
-    args->output_ids.emplace_back(id);
+    args->Output(id);
   }
 
  protected:
