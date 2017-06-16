@@ -65,6 +65,7 @@ SemparState::SemparState(const SemparState *other) {
 
   // Copy trace if it exists.
   if (other->trace_ != nullptr) {
+    delete trace_;
     trace_ = new syntaxnet::dragnn::ComponentTrace(*other->trace_);
   }
 }
@@ -101,11 +102,16 @@ const float SemparState::GetScore() const { return score_; }
 void SemparState::SetScore(const float score) { score_ = score; }
 
 string SemparState::HTMLRepresentation() const {
-  return shift_only() ? StrCat("steps_taken=", shift_only_state_.steps_taken) :
-      parser_state_->DebugString();
+  if (shift_only()) {
+    return StrCat("steps_taken=", shift_only_state_.steps_taken,
+                  ",current_token:" , document()->token(current()).text());
+  } else {
+    return parser_state_->DebugString();
+  }
 }
 
 int SemparState::NextGoldAction() {
+  if (IsFinal()) return -1;
   if (shift_only()) return 0;  // only one action
 
   if (gold_sequence_.actions().empty()) {

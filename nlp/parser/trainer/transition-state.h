@@ -91,7 +91,9 @@ class SemparState
   // Accessors.
   ParserState *parser_state() { return parser_state_; }
   SemparInstance *instance() { return instance_; }
+  const SemparInstance *instance() const { return instance_; }
   Document *document() { return instance_->document; }
+  const Document *document() const { return instance_->document; }
   Store *store() { return instance_->store; }
   int num_tokens() const { return instance_->document->num_tokens(); }
 
