@@ -278,7 +278,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
   SetParam(lr_lstm->mutable_network_unit(), "hidden_layer_sizes", "256");
   lr_lstm->set_num_actions(1);
   AddFixedFeature(lr_lstm, "words", "word", 32);
-  AddFixedFeature(lr_lstm, "suffix", "suffix(length=2)", 16);
+  AddFixedFeature(lr_lstm, "suffix", "suffix(length=3)", 16);
   AddFixedFeature(
       lr_lstm, "shape",
       "digit hyphen punctuation quote capitalization", 8);
@@ -293,7 +293,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
   auto *ff = AddComponent(
       "ff", "SemparComponent", "FeedForwardNetwork", "sempar", artifacts);
   ff->set_num_actions(artifacts->table().NumActions());
-  //AddFixedFeature(ff, "roles", "roles", 16);
+  AddFixedFeature(ff, "roles", "roles(frame-limit=5)", 16);
   AddLinkedFeature(
       ff, "frame-creation-steps", "frame-creation(XX)", 5, 64, "ff");
   AddLinkedFeature(

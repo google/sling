@@ -527,5 +527,140 @@ class DigitFeature : public WordFeature {
 
 REGISTER_SEMPAR_FEATURE("digit", DigitFeature);
 
+// Returns the roles of the top few frames as: (i, r), (r, j), (i, r, j), (i, j)
+// where i, j are attention indices and r is a role that connects those frames.
+class FrameRolesFeature : public SemparFeature {
+ public:
+  void TrainInit(SharedResources *resources, const string &output_folder) {
+    Store *global = resources->global;
+    for (int i = 0; i < resources->table.NumActions(); ++i) {
+      const auto &action = resources->table.Action(i);
+      if (action.type == ParserAction::CONNECT ||
+          action.type == ParserAction::EMBED ||
+          action.type == ParserAction::ELABORATE) {
+        if (roles_.find(action.role) == roles_.end()) {
+          int index = roles_.size();
+          roles_[action.role] = index;
+          role_ids_.emplace_back(Frame(global, action.role).Id());
+        }
+      }
+    }
+
+    // Compute the offsets for the four types of features. These are laid out
+    // in this order: all (i, r) features, all (r, j) features, all (i, j)
+    // features, all (i, r, j) features.
+    // We restrict i, j to be < frame-limit, a feature parameter.
+    frame_limit_ = GetIntParam("frame-limit", 5);
+    int combinations = frame_limit_ * roles_.size();
+    outlink_offset_ = 0;
+    inlink_offset_ = outlink_offset_ + combinations;
+    unlabeled_link_offset_ = inlink_offset_ + combinations;
+    labeled_link_offset_ = unlabeled_link_offset_ + frame_limit_ * frame_limit_;
+    domain_size_ = labeled_link_offset_ + frame_limit_ * combinations + 1;
+  }
+
+  int TrainFinish(ComponentSpec *spec) override {
+    return domain_size_;
+  }
+
+  void Init(const ComponentSpec &spec, SharedResources *resources) override {
+    TrainInit(resources, "" /* output_folder; unused */);
+  }
+
+  // Returns the four types of features.
+  void Extract(SemparFeature::Args *args) override {
+    CHECK(!args->state->shift_only());
+    const ParserState *s = args->parser_state();
+
+    // Construct a mapping from absolute frame index -> attention index.
+    std::unordered_map<int, int> frame_to_attention;
+    for (int i = 0; i < frame_limit_; ++i) {
+      if (i < s->AttentionSize()) {
+        frame_to_attention[s->Attention(i)] = i;
+      } else {
+        break;
+      }
+    }
+
+    // Output features.
+    for (const auto &kv : frame_to_attention) {
+      // Attention index of the source frame.
+      int source = kv.second;
+      int outlink_base = outlink_offset_ + source * roles_.size();
+
+      // Go over each slot of the source frame.
+      Handle handle = s->frame(kv.first);
+      const sling::FrameDatum *frame = s->store()->GetFrame(handle);
+      for (const Slot *slot = frame->begin(); slot < frame->end(); ++slot) {
+        const auto &it = roles_.find(slot->name);
+        if (it == roles_.end()) continue;
+
+        int role = it->second;
+        args->Output(outlink_base + role);
+        if (slot->value.IsIndex()) {
+          const auto &it2 = frame_to_attention.find(slot->value.AsIndex());
+          if (it2 != frame_to_attention.end()) {
+            // Attention index of the target frame.
+            int target = it2->second;
+            args->Output(inlink_offset_ + target * roles_.size() + role);
+            args->Output(
+                unlabeled_link_offset_ + source * frame_limit_ + target);
+            args->Output(labeled_link_offset_ +
+                         source * frame_limit_ * roles_.size() +
+                         target * roles_.size() + role);
+          }
+        }
+      }
+    }
+  }
+
+  string FeatureToString(int64 id) const override {
+    CHECK_GE(id, outlink_offset_);
+
+    int r = roles_.size();
+    int fr = frame_limit_ * roles_.size();
+
+    if (id < inlink_offset_) {
+      id -= outlink_offset_;
+      return StrCat("(S=", id / r,  " -> R=", role_ids_[id % r], ")");
+    } else if (id < unlabeled_link_offset_) {
+      id -= inlink_offset_;
+      return StrCat("(T=", id / r, " <- R=", role_ids_[id % r], ")");
+    } else if (id < labeled_link_offset_) {
+      id -= unlabeled_link_offset_;
+      return StrCat("(S=", id / frame_limit_, " -> T=", id % frame_limit_, ")");
+    } else {
+      id -= labeled_link_offset_;
+      return StrCat("(S=", id / fr, " -> R=", role_ids_[(id % fr) % r],
+                    " -> T=", (id % fr) / r, ")");
+    }
+  }
+
+ private:
+  // Domain size of the feature.
+  int domain_size_;
+
+  // Maximum attention index considered (exclusive).
+  int frame_limit_;
+
+  // Starting offset for (source, role) features.
+  int outlink_offset_;
+
+  // Starting offset for (role, target) features.
+  int inlink_offset_;
+
+  // Starting offset for (source, target) features.
+  int unlabeled_link_offset_;
+
+  // Starting offset for (source, role, target) features.
+  int labeled_link_offset_;
+
+  // Set of roles considered.
+  HandleMap<int> roles_;
+  std::vector<string> role_ids_;
+};
+
+REGISTER_SEMPAR_FEATURE("roles", FrameRolesFeature);
+
 }  // namespace nlp
 }  // namespace sling
