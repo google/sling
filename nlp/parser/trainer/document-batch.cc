@@ -29,7 +29,7 @@ void DocumentBatch::SetData(const std::vector<string> &data) {
     auto &item = items_[i];
     item.encoded = data[i];
     item.document = nullptr;
-    item.workspace = new syntaxnet::WorkspaceSet();
+    item.workspaces = new syntaxnet::WorkspaceSet();
   }
 }
 
