@@ -24,6 +24,7 @@ namespace sling {
 namespace nlp {
 
 void DocumentBatch::SetData(const std::vector<string> &data) {
+  items_.clear();  // deallocate any existing items
   items_.resize(data.size());
   for (int i = 0; i < data.size(); ++i) {
     auto &item = items_[i];
@@ -45,12 +46,13 @@ const std::vector<string> DocumentBatch::GetSerializedData() const {
 
 void DocumentBatch::Decode(Store *global) {
   for (int i = 0; i < size(); ++i) {
+    if (items_[i].store != nullptr) continue;
+
     items_[i].store = new Store(global);
     StringDecoder decoder(items_[i].store, items_[i].encoded);
     Object top = decoder.Decode();
     CHECK(!top.invalid());
     items_[i].document = new Document(top.AsFrame());
-    items_[i].encoded.clear();
   }
 }
 
