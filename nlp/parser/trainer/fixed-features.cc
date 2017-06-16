@@ -73,7 +73,8 @@ class PrecomputedFeature : public SemparFeature {
 // Feature that returns the id of the current word (offset via argument()).
 class WordFeature : public PrecomputedFeature {
  public:
-  void TrainInit(SharedResources *resources, const string &output_folder) {
+  void TrainInit(SharedResources *resources, const string &output_folder)
+      override {
     // Add an unknown word to the dictionary for representing OOV words.
     dictionary_file_ = StrCat(output_folder, "/", DictionaryName());
     Add(kUnknown);
@@ -108,9 +109,12 @@ class WordFeature : public PrecomputedFeature {
     FileInput input(file);
     string word;
     while (input.ReadLine(&word)) {
+      if (!word.empty() && word.back() == '\n') word.pop_back();
       Add(word);
       if (word == kUnknown) oov_ = id_to_word_.size() - 1;
     }
+    LOG(INFO) << "WordFeature: " << id_to_word_.size() << " words read, "
+              << " OOV feature id: " << oov_;
   }
 
   string FeatureToString(int64 id) const override {
@@ -173,7 +177,8 @@ class PrefixFeature : public WordFeature {
     delete affixes_;
   }
 
-  void TrainInit(SharedResources *resources, const string &output_folder) {
+  void TrainInit(SharedResources *resources, const string &output_folder)
+      override {
     dictionary_file_ = StrCat(output_folder, "/", DictionaryName());
     length_ = GetIntParam("length", 3);
     affixes_ = new AffixTable(AffixType(), length_);
@@ -361,7 +366,7 @@ int UTF8FirstLetterNumBytes(const char *utf8_str) {
 
 // A feature for computing whether the focus token contains any punctuation
 // for ternary features.
-class PunctuationAmountFeature : public WordFeature {
+class PunctuationAmountFeature : public PrecomputedFeature {
  public:
   // Enumeration of values.
   enum Category {
@@ -412,7 +417,7 @@ REGISTER_SEMPAR_FEATURE("punctuation", PunctuationAmountFeature);
 // A feature for a feature that returns whether the word is an open or
 // close quotation mark, based on its relative position to other quotation marks
 // in the sentence.
-class QuoteFeature : public WordFeature {
+class QuoteFeature : public PrecomputedFeature {
  public:
   // Enumeration of values.
   enum Category {
@@ -485,7 +490,7 @@ class QuoteFeature : public WordFeature {
 REGISTER_SEMPAR_FEATURE("quote", QuoteFeature);
 
 // Feature that computes whether a word has digits or not.
-class DigitFeature : public WordFeature {
+class DigitFeature : public PrecomputedFeature {
  public:
   // Enumeration of values.
   enum Category {

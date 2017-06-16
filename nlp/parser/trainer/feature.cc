@@ -149,7 +149,7 @@ std::vector<std::pair<int, int>> SemparFeatureExtractor::Train(
         feature->TrainProcess(document);
       }
     }
-    if (count % 100 == 1) {
+    if (count % 200 == 1) {
       LOG(INFO) << "SemparFeatureExtractor: " << count << " docs seen.";
     }
   }
