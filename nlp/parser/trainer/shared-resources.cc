@@ -11,12 +11,14 @@ void SharedResources::LoadActionTable(const string &file) {
   Store temp(global);
   sling::LoadStore(file, &temp);
   table.Init(&temp);
+  table.set_action_checks(false);
 }
 
 void SharedResources::LoadGlobalStore(const string &file) {
   delete global;
   global = new Store();
   sling::LoadStore(file, global);
+  global->Freeze();
 }
 
 }  // namespace nlp
