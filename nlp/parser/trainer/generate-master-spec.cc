@@ -282,6 +282,8 @@ void OutputMasterSpec(Artifacts *artifacts) {
   AddFixedFeature(
       lr_lstm, "shape",
       "digit hyphen punctuation quote capitalization", 8);
+  AddResource(
+      lr_lstm, "commons", artifacts->commons_filename, "store", "encoded");
 
   // Right to left LSTM.
   auto *rl_lstm = artifacts->spec.add_component();
