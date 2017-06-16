@@ -96,8 +96,8 @@ void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
     LOG(FATAL) << "Unknown/unsupported transition system: " << system;
   }
 
+  resources_.LoadGlobalStore(SemparFeature::GetResource(spec_, "commons"));
   if (system_type_ == SEMPAR) {
-    resources_.LoadGlobalStore(SemparFeature::GetResource(spec_, "commons"));
     resources_.LoadActionTable(
         SemparFeature::GetResource(spec_, "action-table"));
   } else {
@@ -123,6 +123,9 @@ void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
   }
   link_feature_extractor_.Init(spec_, &resources_);
   link_feature_extractor_.RequestWorkspaces(&workspace_registry_);
+
+  // Initialize gold transition generator.
+  gold_transition_generator_.Init(resources_.global);
 }
 
 void SemparComponent::InitializeData(
