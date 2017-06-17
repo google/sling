@@ -99,15 +99,10 @@ int main(int argc, char **argv) {
   auto session = pool.GetSession();
   session->SetTracing(true);
 
-  std::vector<Component *> components;
   string global_store_path;
   string action_table_path;
   for (const auto &component_spec : spec.component()) {
     LOG(INFO) << "Making/initializing " << component_spec.name();
-    //auto *component =
-        Component::Create(component_spec.backend().registered_name());
-    //component->InitializeComponent(component_spec);
-    //components.emplace_back(component);
     if (global_store_path.empty()) {
       global_store_path = SemparFeature::GetResource(component_spec, "commons");
     }
@@ -116,7 +111,6 @@ int main(int argc, char **argv) {
           SemparFeature::GetResource(component_spec, "action-table");
     }
   }
-  //LOG(INFO) << "Made & initialized " << components.size() << " components";
 
   CHECK(!global_store_path.empty());
   CHECK(!action_table_path.empty());
@@ -172,8 +166,6 @@ int main(int argc, char **argv) {
     CHECK_EQ(trace_protos.size(), 1);
     LOG(INFO) << "Trace proto: " << trace_protos[0].DebugString();
   }
-
-  for (Component *c : components) delete c;
 
   return 0;
 }
