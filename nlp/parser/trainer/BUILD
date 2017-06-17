@@ -205,3 +205,26 @@ cc_library(
   ],
   alwayslink = 1,
 )
+
+cc_binary(
+  name = "sempar-component-test",
+  srcs = ["sempar-component-test.cc"],
+  deps = [
+    ":fixed-features",
+    ":feature",
+    ":link-features",
+    ":sempar-component",
+    ":shared-resources",
+    "//base",
+    "//file:file",
+    "//file:posix",
+    "//frame:object",
+    "//frame:serialization",
+    "//frame:store",
+    "//nlp/parser:parser-action",
+    "//string:strcat",
+    "//third_party/sempar_dragnn:sempar_dragnn",
+  ],
+)
+
+
