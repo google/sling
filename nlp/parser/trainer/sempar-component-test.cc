@@ -19,6 +19,8 @@
 #include "base/init.h"
 #include "base/logging.h"
 #include "base/macros.h"
+#include "dragnn/core/compute_session.h"
+#include "dragnn/core/compute_session_pool.h"
 #include "dragnn/core/interfaces/component.h"
 #include "dragnn/protos/spec.pb.h"
 #include "file/file.h"
@@ -46,6 +48,9 @@ using sling::nlp::SharedResources;
 
 using syntaxnet::dragnn::Component;
 using syntaxnet::dragnn::ComponentSpec;
+using syntaxnet::dragnn::ComputeSession;
+using syntaxnet::dragnn::ComputeSessionPool;
+using syntaxnet::dragnn::GridPoint;
 using syntaxnet::dragnn::InputBatchCache;
 using syntaxnet::dragnn::MasterSpec;
 
@@ -89,15 +94,20 @@ int main(int argc, char **argv) {
   MasterSpec spec;
   CHECK(TextFormat::ParseFromString(contents, &spec));
 
+  GridPoint empty_grid_point;
+  ComputeSessionPool pool(spec, empty_grid_point);
+  auto session = pool.GetSession();
+  session->SetTracing(true);
+
   std::vector<Component *> components;
   string global_store_path;
   string action_table_path;
   for (const auto &component_spec : spec.component()) {
     LOG(INFO) << "Making/initializing " << component_spec.name();
-    auto *component =
+    //auto *component =
         Component::Create(component_spec.backend().registered_name());
-    component->InitializeComponent(component_spec);
-    components.emplace_back(component);
+    //component->InitializeComponent(component_spec);
+    //components.emplace_back(component);
     if (global_store_path.empty()) {
       global_store_path = SemparFeature::GetResource(component_spec, "commons");
     }
@@ -106,7 +116,7 @@ int main(int argc, char **argv) {
           SemparFeature::GetResource(component_spec, "action-table");
     }
   }
-  LOG(INFO) << "Made & initialized " << components.size() << " components";
+  //LOG(INFO) << "Made & initialized " << components.size() << " components";
 
   CHECK(!global_store_path.empty());
   CHECK(!action_table_path.empty());
@@ -140,63 +150,27 @@ int main(int argc, char **argv) {
 
     std::vector<string> input;
     input.push_back(contents);
-    InputBatchCache input_data(input);
 
-    int cidx = 0;
-    for (Component *c : components) {
-      SemparComponent *sc = static_cast<SemparComponent *>(c);
-      CHECK(sc != nullptr);
-      sc->InitializeData({} /* parent states */,
-                         1 /* beam size */,
-                         &input_data);
-      CHECK(sc->IsReady());
-      sc->InitializeTracing();
+    session->SetInputData(input);
 
-      const auto &cproto = spec.component(cidx);
-      string name = StrCat(cproto.name(), " (shift_only=",
-                           sc->shift_only(), ", left_to_right=",
-                           sc->left_to_right(), ")");
-
-      LOG(INFO) << "Component: " << name;
-      while (!sc->IsTerminal()) {
-        for (int channel = 0;
-             channel < cproto.fixed_feature_size();
-             ++channel) {
-          int fixed_features = sc->GetFixedFeatures(AllocateIndices,
-                                                    AllocateIds,
-                                                    AllocateWeights,
-                                                    channel);
-          LOG(INFO) << fixed_features << " fixed features for channel "
-                    << cproto.fixed_feature(channel).fml();
+    for (int cidx = 0; cidx < spec.component_size(); ++cidx) {
+      const string &name = spec.component(cidx).name();
+      session->InitializeComponentData(name, 1 /* max beam size */);
+      while (!session->IsTerminal(name)) {
+        for (int c = 0; c < spec.component(cidx).linked_feature_size(); ++c) {
+          session->GetTranslatedLinkFeatures(name, c);
         }
-        for (int channel = 0;
-             channel < cproto.linked_feature_size();
-             ++channel) {
-          auto linked_features = sc->GetRawLinkFeatures(channel);
-          LOG(INFO) << linked_features.size() << " linked features for channel "
-                    << cproto.linked_feature(channel).fml();
-          sc->AddTranslatedLinkFeaturesToTrace(linked_features, channel);
+        for (int c = 0; c < spec.component(cidx).fixed_feature_size(); ++c) {
+          session->GetInputFeatures(
+              name, AllocateIndices, AllocateIds, AllocateWeights, c);
         }
-
-        std::vector<std::vector<int>> oracles = c->GetOracleLabels();
-        CHECK_EQ(oracles.size(), 1);
-        CHECK_EQ(oracles[0].size(), 1);
-
-        if (!sc->shift_only()) {
-          const ParserAction &action = resources.table.Action(oracles[0][0]);
-          LOG(INFO) << "Next gold : " << action.ToString(resources.global);
-        } else {
-          CHECK_EQ(oracles[0][0], 0);
-          LOG(INFO) << "Next gold : SHIFT (shift-only system)";
-        }
-        c->AdvanceFromOracle();
+        session->AdvanceFromOracle(name);
       }
-      const auto trace_protos = sc->GetTraceProtos();
-      CHECK_EQ(trace_protos.size(), 1);
-      CHECK_EQ(trace_protos[0].size(), 1);
-      LOG(INFO) << "Trace proto: " << trace_protos[0][0].DebugString();
-      cidx++;
     }
+
+    const auto trace_protos = session->GetTraceProtos();
+    CHECK_EQ(trace_protos.size(), 1);
+    LOG(INFO) << "Trace proto: " << trace_protos[0].DebugString();
   }
 
   for (Component *c : components) delete c;
