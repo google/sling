@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// =============================================================================
 
 #ifndef NLP_PARSER_TRAINER_SEMPAR_COMPONENT_H_
 #define NLP_PARSER_TRAINER_SEMPAR_COMPONENT_H_
@@ -35,6 +34,10 @@
 namespace sling {
 namespace nlp {
 
+// DRAGNN component for Sempar. It can encapsulate shift-only and sempar
+// transition systems (using the corresponding SemparStates).
+// - Only supports a beamsize of 1 and assumes it everywhere.
+// - Doesn't support bulk feature extraction.
 class SemparComponent : public syntaxnet::dragnn::Component {
  public:
   SemparComponent();
@@ -140,9 +143,8 @@ class SemparComponent : public syntaxnet::dragnn::Component {
       const std::vector<syntaxnet::dragnn::LinkFeatures> &features,
       int channel_id) override;
 
-  // Returns the underlying component spec.
+  // Accessors.
   syntaxnet::dragnn::ComponentSpec *spec() { return &spec_; }
-
   TransitionSystemType system_type() const { return system_type_; }
   bool left_to_right() const { return left_to_right_; }
   bool shift_only() const { return system_type_ == SHIFT_ONLY; }

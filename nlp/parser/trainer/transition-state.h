@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// =============================================================================
 
 #ifndef NLP_PARSER_TRAINER_TRANSITION_STATE_H_
 #define NLP_PARSER_TRAINER_TRANSITION_STATE_H_
@@ -37,6 +36,10 @@ namespace sling {
 namespace nlp {
 
 // TransitionState implementation for Sempar.
+// It supports two transition systems:
+// - The normal mode using the full set of actions using a ParserState.
+// - A shift-only mode where the only action allowed is shift. In this
+//   mode, it further supports left-to-right and right-to-left sub-modes.
 class SemparState
     : public syntaxnet::dragnn::CloneableTransitionState<SemparState> {
  public:
