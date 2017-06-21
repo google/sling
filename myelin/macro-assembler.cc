@@ -31,26 +31,36 @@ static Register tsreg = r15;
 // Use base register for data instance.
 static Register datareg = rbp;
 
-Register Registers::alloc() {
+Register Registers::try_alloc() {
   for (int r = 0; r < kNumRegisters; ++r) {
     if (!used(r)) {
       use(r);
       return Register::from_code(r);
     }
   }
-  LOG(FATAL) << "Register overflow";
   return no_reg;
 }
 
-Register Registers::alloc_preserved() {
+Register Registers::alloc() {
+  Register r = try_alloc();
+  CHECK(r.is_valid()) << "Register overflow";
+  return r;
+}
+
+Register Registers::try_alloc_preserved() {
   for (int r = 0; r < kNumRegisters; ++r) {
     if (!used(r) && preserved(r)) {
       use(r);
       return Register::from_code(r);
     }
   }
-  LOG(FATAL) << "Preserved register overflow";
   return no_reg;
+}
+
+Register Registers::alloc_preserved() {
+  Register r = try_alloc_preserved();
+  CHECK(r.is_valid()) << "Register overflow";
+  return r;
 }
 
 Register Registers::alloc_preferred(Register r) {
@@ -66,6 +76,28 @@ Register Registers::alloc_fixed(Register r) {
   CHECK(!used(r)) << "Register already used";
   use(r);
   return r;
+}
+
+Register Registers::alloc_temp() {
+  if (!used(r10)) return alloc_fixed(r10);
+  if (!used(r11)) return alloc_fixed(r11);
+  LOG(FATAL) << "Temp register overflow";
+  return no_reg;
+}
+
+Register Registers::arg(int n) {
+  Register r;
+  switch (n) {
+    case 0: r = rax; break;
+    case 1: r = arg_reg_1; break;
+    case 2: r = arg_reg_2; break;
+    case 3: r = arg_reg_3; break;
+    case 4: r = arg_reg_4; break;
+    case 5: r = arg_reg_5; break;
+    case 6: r = arg_reg_6; break;
+    default: LOG(FATAL) << "Only six argument registers";
+  }
+  return alloc_fixed(r);
 }
 
 void Registers::reserve(int r) {
@@ -95,19 +127,62 @@ bool Registers::usage(int n) {
   return false;
 }
 
-int SIMDRegisters::alloc() {
+int Registers::num_free() const {
+  int n = 0;
+  for (int r = 0; r < kNumRegisters; ++r) {
+    if (!used(r)) n++;
+  }
+  return n;
+}
+
+int SIMDRegisters::try_alloc() {
   for (int r = 0; r < kNumRegisters; ++r) {
     if ((used_regs_ & (1 << r)) == 0) {
       use(r);
       return r;
     }
   }
-  LOG(FATAL) << "SIMD register overflow";
   return -1;
+}
+
+int SIMDRegisters::alloc() {
+  int r = try_alloc();
+  CHECK(r != -1) << "SIMD register overflow";
+  return r;
+}
+
+void StaticData::AddData(void *buffer, int size) {
+  uint8 *ptr = static_cast<uint8 *>(buffer);
+  data_.insert(data_.end(), ptr, ptr + size);
+}
+
+bool StaticData::Equals(void *data, int size, int repeat) const {
+  if (size * repeat != data_.size()) return false;
+  uint8 *ptr = static_cast<uint8 *>(data);
+  for (int n = 0; n < repeat; ++n) {
+    if (memcmp(ptr, &data_.at(n * repeat), size) != 0) return false;
+    ptr += size;
+  }
+  return true;
+}
+
+void StaticData::Generate(MacroAssembler *masm) {
+  // Align output.
+  masm->DataAlign(alignment_);
+
+  // Bind label to the address of the generated data block.
+  masm->bind(&location_);
+
+  // Emit data block.
+  for (uint8 byte : data_) masm->db(byte);
 }
 
 MacroAssembler::MacroAssembler(void *buffer, int buffer_size)
     : Assembler(buffer, buffer_size) {}
+
+MacroAssembler::~MacroAssembler() {
+  for (auto *d : data_blocks_) delete d;
+}
 
 Register MacroAssembler::instance() const {
   return datareg;
@@ -166,6 +241,25 @@ void MacroAssembler::Epilog() {
   }
 }
 
+StaticData *MacroAssembler::CreateDataBlock(int alignment) {
+  StaticData *data = new StaticData(alignment);
+  data_blocks_.push_back(data);
+  return data;
+}
+
+StaticData *MacroAssembler::FindDataBlock(void *data, int size, int repeat) {
+  for (StaticData *data : data_blocks_) {
+    if (data->Equals(data, size, repeat)) return data;
+  }
+  return nullptr;
+}
+
+void MacroAssembler::GenerateDataBlocks() {
+  for (StaticData *data : data_blocks_) {
+    data->Generate(this);
+  }
+}
+
 void MacroAssembler::LoopStart(jit::Label *label) {
   //CodeTargetAlign();
   bind(label);
@@ -184,6 +278,7 @@ void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor) {
       movq(dst, datareg);
     }
   } else {
+    DCHECK(tensor->offset() != -1) << tensor->name();
     if (tensor->ref()) {
       movq(dst, Operand(datareg, tensor->offset()));
     } else {

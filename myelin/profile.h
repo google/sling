@@ -52,27 +52,27 @@ class Profile {
 
   // Number of CPU cycles used per invocation.
   int64 cycles() const {
-    return invocations_ ? total_ / invocations_ : 0;
+    return invocations_ > 0 ? total_ / invocations_ : 0;
   }
 
   // Time in microseconds per invocation.
   double time() const {
-    return invocations_ ? total_ / (Clock::mhz() * invocations_) : 0;
+    return invocations_ > 0 ? total_ / (Clock::mhz() * invocations_) : 0;
   }
 
   // Number of CPU cycles per invocation used by step in cell computation.
   int64 cycles(int idx) const {
-    return invocations_ ? timing_[idx] / invocations_ : 0;
+    return invocations_ > 0 ? timing_[idx] / invocations_ : 0;
   }
 
   // Time per invocation in microseconds used by step in cell computation.
   double time(int idx) const {
-    return invocations_ ? timing_[idx] / (Clock::mhz() * invocations_) : 0;
+    return invocations_ > 0 ? timing_[idx] / (Clock::mhz() * invocations_) : 0;
   }
 
   // Percentage of time used by step in cell computation.
   double percent(int idx) const {
-    return invocations_ ? time(idx) / time() * 100 : 0;
+    return invocations_ > 0 && total_ > 0 ? time(idx) / time() * 100 : 0;
   }
 
   // Estimated number of operations per invocation of step.

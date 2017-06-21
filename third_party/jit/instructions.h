@@ -114,6 +114,8 @@ namespace jit {
   V(psubusb, 66, 0F, D8)         \
   V(psubusw, 66, 0F, D9)         \
   V(pxor, 66, 0F, EF)            \
+  V(pand, 66, 0F, DB)            \
+  V(por, 66, 0F, EB)             \
   V(cvtps2dq, 66, 0F, 5B)
 
 #define SSSE3_INSTRUCTION_LIST(V) \

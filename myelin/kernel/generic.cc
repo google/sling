@@ -17,6 +17,9 @@
 namespace sling {
 namespace myelin {
 
+// array.cc
+void RegisterArrayKernels(Library *library);
+
 // generic-math.cc
 void RegisterGenericMath(Library *library);
 
@@ -25,6 +28,23 @@ void RegisterGenericMatMul(Library *library);
 
 // generic-operators.cc
 void RegisterGenericOperators(Library *library);
+
+// Rename operations with aliases.
+class RenameTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    // Rename BiasAdd to Add.
+    int renames = 0;
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type == "BiasAdd") {
+        op->type = "Add";
+        renames++;
+      }
+    }
+
+    return renames > 0;
+  }
+};
 
 // Type inference for standard ops.
 class StandardTyper : public Typer {
@@ -75,32 +95,6 @@ class StandardTyper : public Typer {
           }
         }
         return true;
-      }
-    }
-
-    // Infer shape for lookup operation.
-    if (op->type == "Lookup") {
-      if (op->indegree() == 2 && op->outdegree() == 1) {
-        Flow::Variable *embeddings = op->inputs[1];
-        Flow::Variable *result = op->outputs[0];
-        if (embeddings->rank() == 2) {
-          result->shape.assign(1, embeddings->dim(1));
-          return true;
-        }
-      }
-    }
-
-    // Infer shape for collect operation.
-    if (op->type == "Collect") {
-      if (op->indegree() == 2 && op->outdegree() == 1) {
-        Flow::Variable *features = op->inputs[0];
-        Flow::Variable *embeddings = op->inputs[1];
-        Flow::Variable *result = op->outputs[0];
-        if (features->rank() == 2 && embeddings->rank() == 2) {
-          // Add extra element for OOV indicator.
-          result->shape.assign(features->dim(1), embeddings->dim(1) + 1);
-          return true;
-        }
       }
     }
 
@@ -163,6 +157,9 @@ class StandardTyper : public Typer {
 
 // Register generic transformations.
 void RegisterGenericTransformations(Library *library) {
+  // Register transformations.
+  library->RegisterTransformer(new RenameTransformer());
+
   // Register identity ops.
   library->RegisterIdentityOp("Identity");
   library->RegisterIdentityOp("Const");
@@ -170,7 +167,6 @@ void RegisterGenericTransformations(Library *library) {
   library->RegisterIdentityOp("VariableV2");
   library->RegisterIdentityOp("Placeholder");
   library->RegisterIdentityOp("Enter");
-  library->RegisterIdentityOp("FeatureVector");
 
   // Register combined ops.
   library->RegisterCombinedOp("MatMul", "Add", "MatMulAdd");
@@ -184,6 +180,7 @@ void RegisterGenericTransformations(Library *library) {
 
 // Register generic kernels.
 void RegisterGenericKernels(Library *library) {
+  RegisterArrayKernels(library);
   RegisterGenericMath(library);
   RegisterGenericMatMul(library);
   RegisterGenericOperators(library);

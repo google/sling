@@ -138,9 +138,9 @@ class AVXFltTanh : public Kernel {
   void Adjust(Step *step) override {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
-    x->AlignLast(8);
+    x->MinAlignLast(8);
     x->SetMiniumAlignment(8 * sizeof(float));
-    y->AlignLast(8);
+    y->MinAlignLast(8);
     y->SetMiniumAlignment(8 * sizeof(float));
     x->SameAlign(y);
     step->AllowInPlace(0, 0);
@@ -228,7 +228,7 @@ class AVXFltTanh : public Kernel {
     __ j(less, &l);
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(0)->elements() * (5 + 6 * 3 + 3 * 3);
   }
 };
@@ -268,9 +268,9 @@ class AVXFltExpBase : public Kernel {
   void Adjust(Step *step) override {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
-    x->AlignLast(8);
+    x->MinAlignLast(8);
     x->SetMiniumAlignment(8 * sizeof(float));
-    y->AlignLast(8);
+    y->MinAlignLast(8);
     y->SetMiniumAlignment(8 * sizeof(float));
     step->AllowInPlace(0, 0);
   }
@@ -425,7 +425,7 @@ class AVXFltExpBase : public Kernel {
     // TODO: set padding elements to zero because sigmoid(0)=0.5 and exp(0)=1.
   }
 
-  int Complexity(const Step *step) override {
+  int64 Complexity(const Step *step) override {
     return step->input(0)->elements() * (16 + 5 * 2 + (sigmoid_ ? 3 : 0));
   }
 
