@@ -227,4 +227,9 @@ cc_binary(
   ],
 )
 
-
+py_binary(
+    name = "graph_builder_main",
+    srcs = ["graph_builder_main.py"],
+    data = [],
+    deps = [],
+)
