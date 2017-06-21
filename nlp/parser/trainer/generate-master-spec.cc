@@ -294,6 +294,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
   // Feed forward unit.
   auto *ff = AddComponent(
       "ff", "SemparComponent", "FeedForwardNetwork", "sempar", artifacts);
+  SetParam(ff->mutable_network_unit(), "hidden_layer_sizes", "128");
   ff->set_num_actions(artifacts->table().NumActions());
   AddFixedFeature(ff, "roles", "roles(frame-limit=5)", 16);
   AddLinkedFeature(
