@@ -108,7 +108,7 @@ class BasicRuntime : public Runtime {
 static BasicRuntime default_runtime;
 
 // An instance allocator allocates space for variables in an instance data
-// block. It keeps track of which parts of the block is in use and tries to
+// block. It keeps track of which parts of the block are in use and tries to
 // allocate space by reusing free parts of the instance block that is no longer
 // in use.
 class InstanceAllocator {
@@ -126,7 +126,7 @@ class InstanceAllocator {
 
   // Allocate space for variable in instance data block.
   void Allocate(Tensor *var) {
-    // Shared variables shares offset.
+    // Shared variables share offset.
     if (var->shared_ != nullptr) {
       if (placement_ == HOST) {
         DCHECK(var->shared_->offset_ != -1) << var->name();
@@ -218,7 +218,7 @@ class InstanceAllocator {
     bool first = true;
     for (auto &e : freelist_) {
       const char *error = nullptr;
-      if (e.second <= e.first) {
+      if (e.second < e.first) {
         error = "Invalid free list entry";
       } else if (e.first == e.second) {
         error = "Zero-sized free list entry";

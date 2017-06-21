@@ -564,7 +564,7 @@ class Step {
 
   // Allow in-place operation between input and output. Return true if in-place
   // operation is supported, i.e. the operation must be the only consumer of
-  // a non-preserved the input.
+  // a non-preserved input.
   bool AllowInPlace(int input, int output, bool preserved = false);
 
   // A step in the main task that runs on the host but depends on inputs
@@ -687,7 +687,7 @@ class Channel {
   const Connector *connector_;
 };
 
-// A tensor data objects is a reference to a tensor value. It does not own the
+// A tensor data object is a reference to a tensor value. It does not own the
 // underlying storage for the tensor.
 class TensorData {
  public:
