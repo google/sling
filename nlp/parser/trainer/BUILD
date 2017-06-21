@@ -228,8 +228,8 @@ cc_binary(
 )
 
 py_binary(
-    name = "graph_builder_main",
-    srcs = ["graph_builder_main.py"],
+    name = "graph-builder-main",
+    srcs = ["graph-builder-main.py"],
     data = [],
     deps = [],
 )

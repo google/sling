@@ -27,8 +27,9 @@ import dragnn.python.load_dragnn_cc_impl
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string('master_spec', '', 'Path to a dragnn master spec proto.')
-flags.DEFINE_string('hyperparams', '', 'Path to a training grid spec proto.')
+flags.DEFINE_string(
+    'master_spec', '', 'Path to a complete dragnn master spec text proto.')
+flags.DEFINE_string('hyperparams', '', 'Training grid spec text proto.')
 flags.DEFINE_string('output_folder', '', 'Full path of the output folder.')
 
 def create_graph(master_spec, hyperparam_config):
