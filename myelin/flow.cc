@@ -405,7 +405,7 @@ void Flow::Function::AddOperation(Operation *op) {
 }
 
 void Flow::Connector::AddLink(Variable *var) {
-  if (std::find(links.begin(), links.end(), var) != links.end()) {
+  if (std::find(links.begin(), links.end(), var) == links.end()) {
     links.push_back(var);
   }
 }
