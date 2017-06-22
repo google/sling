@@ -32,18 +32,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "frame-evaluation",
-    srcs = ["frame-evaluation.cc"],
-    hdrs = ["frame-evaluation.h"],
-    deps = [
-        "//base",
-        "//frame:object",
-        "//frame:store",
-        "//nlp/document",
-    ],
-)
-
 cc_binary(
   name = "generate-master-spec",
   srcs = ["generate-master-spec.cc"],
@@ -232,4 +220,20 @@ py_binary(
     srcs = ["graph-builder-main.py"],
     data = [],
     deps = [],
+)
+
+cc_library(
+  name = "frame-evaluation",
+  hdrs = ["frame-evaluation.h"],
+  srcs = ["frame-evaluation.cc"],
+  deps = [
+    "//base",
+    "//file:file",
+    "//file:posix",
+    "//frame:object",
+    "//frame:serialization",
+    "//frame:store",
+    "//nlp/document:document",
+    "//string:strcat",
+  ],
 )
