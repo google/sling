@@ -492,15 +492,29 @@ class DragnnTyper : public Typer {
   }
 };
 
-// Register Dragnn kernels.
-void RegisterDragnnKernels(Library *library) {
-  library->Register(new DragnnInitializer());
-  library->Register(new DragnnLookupSingle());
-  library->Register(new DragnnLookupUnrolled());
-  library->Register(new DragnnLookup());
-  library->Register(new DragnnCollect());
+// Flow transformations for Dragnn ops.
+class DragnnTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type == "FeatureVector") {
+        flow->Eliminate(op);
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
+// Register Dragnn library.
+void RegisterDragnnLibrary(Library *library) {
   library->RegisterTyper(new DragnnTyper());
-  library->RegisterIdentityOp("FeatureVector");
+  library->RegisterTransformer(new DragnnTransformer());
+  library->Register(new DragnnInitializer());
+  library->Register(new DragnnLookup());
+  library->Register(new DragnnLookupUnrolled());
+  library->Register(new DragnnLookupSingle());
+  library->Register(new DragnnCollect());
 }
 
 }  // namespace myelin

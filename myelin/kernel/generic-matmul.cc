@@ -237,16 +237,6 @@ class GenericFltMatMatMul : public Kernel {
     XMMRegister elem = mm.allocx();
     XMMRegister sum = mm.allocx();
 
-    //  for (int i = 0; i < R1; ++i) {
-    //    for (int j = 0; j < C2; ++j) {
-    //      float sum = 0.0;
-    //      for (int k = 0; k < C1; ++k) {
-    //        sum += A[i][k] * B[k][j];
-    //      }
-    //      C[i][j] = sum;
-    //    }
-    //  }
-
     // Load tensor addresses.
     __ LoadTensorAddress(a, A);
     __ LoadTensorAddress(b, B);
@@ -498,6 +488,12 @@ class GenericIntVecMatMulAddRelu : public GenericIntVecMatMulBase {
 };
 
 void RegisterGenericMatMul(Library *library) {
+  // Computes  : C = A * B
+  // Input     : A: float32[k,n] row-major
+  //             B: float32[n,m] column-major
+  // Output    : C: float32[k,m] row-major
+  library->Register(new GenericFltMatMatMul());
+
   // Computes  : y = x * W
   // Input     : x: float32[1,n]
   //             W: float32[n,m] column-major
@@ -523,12 +519,6 @@ void RegisterGenericMatMul(Library *library) {
   //             b: float32[1,n]
   // Output    : y: float32[1,m]
   library->Register(new GenericFltVecMatMulAddRelu());
-
-  // Computes  : C = A * B
-  // Input     : A: float32[k,n] row-major
-  //             B: float32[n,m] column-major
-  // Output    : C: float32[k,m] row-major
-  library->Register(new GenericFltMatMatMul());
 
   // Computes  : y = x * W
   // Input     : x: int8/16/32/64[1,n]

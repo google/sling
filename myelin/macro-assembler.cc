@@ -151,17 +151,21 @@ int SIMDRegisters::alloc() {
   return r;
 }
 
-void StaticData::AddData(void *buffer, int size) {
-  uint8 *ptr = static_cast<uint8 *>(buffer);
-  data_.insert(data_.end(), ptr, ptr + size);
+void StaticData::AddData(const void *buffer, int size, int repeat) {
+  const uint8 *ptr = static_cast<const uint8 *>(buffer);
+  for (int n = 0; n < repeat; ++n) {
+    data_.insert(data_.end(), ptr, ptr + size);
+  }
 }
 
-bool StaticData::Equals(void *data, int size, int repeat) const {
+bool StaticData::Equals(const void *data, int size, int repeat) const {
   if (size * repeat != data_.size()) return false;
-  uint8 *ptr = static_cast<uint8 *>(data);
-  for (int n = 0; n < repeat; ++n) {
-    if (memcmp(ptr, &data_.at(n * repeat), size) != 0) return false;
-    ptr += size;
+  const uint8 *p1 = data_.data();
+  for (int i = 0; i < repeat; ++i) {
+    const uint8 *p2 = static_cast<const uint8 *>(data);
+    for (int j = 0; j < size; ++j) {
+      if (*p1++ != *p2++) return false;
+    }
   }
   return true;
 }
@@ -188,7 +192,13 @@ Register MacroAssembler::instance() const {
   return datareg;
 }
 
-void MacroAssembler::Prolog() {
+void MacroAssembler::Prologue() {
+  // Zero upper part of YMM register if CPU needs it to avoid AVX-SSE transition
+  // penalties.
+  if (CPU::VZeroNeeded()) {
+    vzeroupper();
+  }
+
   // Reserve timestamp register.
   if (timing_) {
     rr_.reserve(tsreg);
@@ -206,11 +216,6 @@ void MacroAssembler::Prolog() {
   if (rr_.saved(r14)) pushq(r14);
   if (rr_.saved(r15)) pushq(r15);
 
-  // Zero upper part of YMM register if CPU needs it.
-  if (CPU::VZeroNeeded()) {
-    vzeroupper();
-  }
-
   // Get initial timestamp counter if timing instrumentation is active.
   if (timing_) {
     rdtsc();
@@ -220,7 +225,7 @@ void MacroAssembler::Prolog() {
   }
 }
 
-void MacroAssembler::Epilog() {
+void MacroAssembler::Epilogue() {
   // Restore preserved registers from stack.
   if (rr_.saved(r15)) popq(r15);
   if (rr_.saved(r14)) popq(r14);
@@ -230,6 +235,12 @@ void MacroAssembler::Epilog() {
 
   // Restore instance data register.
   popq(datareg);
+
+  // Zero upper part of YMM register if CPU needs it to avoid AVX-SSE transition
+  // penalties.
+  if (CPU::VZeroNeeded()) {
+    vzeroupper();
+  }
 
   // Generate return instruction.
   ret(0);
@@ -247,16 +258,17 @@ StaticData *MacroAssembler::CreateDataBlock(int alignment) {
   return data;
 }
 
-StaticData *MacroAssembler::FindDataBlock(void *data, int size, int repeat) {
-  for (StaticData *data : data_blocks_) {
-    if (data->Equals(data, size, repeat)) return data;
+StaticData *MacroAssembler::FindDataBlock(
+    const void *data, int size, int repeat) {
+  for (StaticData *sd : data_blocks_) {
+    if (sd->Equals(data, size, repeat)) return sd;
   }
   return nullptr;
 }
 
 void MacroAssembler::GenerateDataBlocks() {
-  for (StaticData *data : data_blocks_) {
-    data->Generate(this);
+  for (StaticData *sd : data_blocks_) {
+    sd->Generate(this);
   }
 }
 
@@ -482,6 +494,12 @@ void MacroAssembler::TimeStep(int offset) {
 
   // Store new timestamp.
   movq(tsreg, rax);
+}
+
+void MacroAssembler::ResetRegisterUsage() {
+  rr_.reset();
+  mm_.reset();
+  if (timing_) rr_.use(tsreg);
 }
 
 }  // namespace myelin

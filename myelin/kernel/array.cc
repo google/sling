@@ -243,9 +243,9 @@ class Unpack : public Kernel {
 };
 
 // Output concatenation of input tensors.
-class SimpleConcat : public Kernel {
+class BasicConcat : public Kernel {
  public:
-  string Name() override { return "SimpleConcat"; }
+  string Name() override { return "BasicConcat"; }
   string Operation() override { return "ConcatV2"; }
 
   bool Supports(Step *step) override {
@@ -300,7 +300,7 @@ void RegisterArrayKernels(Library *library) {
   library->Register(new BatchToSpace());
   library->Register(new Pack());
   library->Register(new Unpack());
-  library->Register(new SimpleConcat());
+  library->Register(new BasicConcat());
 }
 
 }  // namespace myelin

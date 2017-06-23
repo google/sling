@@ -72,6 +72,9 @@ class SSEFltVecMatMulBase : public Kernel {
       }
     }
 
+    // Horizontal summation is not strict math compatible.
+    if (step->GetAttr("strict", false)) return false;
+
     return true;
   }
 
@@ -268,7 +271,7 @@ void RegisterSSEMatMul(Library *library) {
   // Input     : x: float32[1,n]
   //             W: float32[n,m] column-major
   // Output    : y: float32[1,m]
-  // Requires  : AVX
+  // Requires  : SSE3
   library->Register(new SSEFltVecMatMulRelu());
 
   // Computes  : y = max(0, x * W + b)

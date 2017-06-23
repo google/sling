@@ -678,6 +678,22 @@ Tensor *Network::GetParameter(const string &name) const {
   return f == names_.end() ? nullptr : f->second;
 }
 
+static bool CompareUsage(const std::pair<int, Tensor *> &a,
+                         const std::pair<int, Tensor *> &b) {
+  if (a.first == b.first) {
+    // Inputs are sorted before outputs.
+    Tensor *va = a.second;
+    Tensor *vb = b.second;
+    for (auto *op : va->consumers()) {
+      if (op == vb->producer()) return true;
+    }
+    for (auto *op : vb->consumers()) {
+      if (op == va->producer()) return false;
+    }
+  }
+  return a.first < b.first;
+}
+
 bool Network::Compile(const Flow &flow, const Library &library) {
   // Fetch information about the CPU we are running on.
   jit::CPU::Probe();
@@ -835,7 +851,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Find kernel for implementing the operation.
-    for (Kernel *kernel : library.Lookup(step->type())) {
+    auto &kernels = library.Lookup(step->type());
+    for (int k = kernels.size() - 1; k >= 0; --k) {
+      Kernel *kernel = kernels[k];
       if (kernel->Supports(step)) {
         // Check that kernel location is compatible with task placement.
         bool compatible = true;
@@ -888,7 +906,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       profile->aligned_ = profile->shape_;
       profile->minalign_.assign(sizeof(int64));
       profile->maxalign_.assign(0);
-      profile->stride_.fill(sizeof(int64));
+      profile->stride_.assign(sizeof(int64));
       profile->placement_ = HOST;
       profile->current_placement_ = HOST;
       profile->in_ = false;
@@ -1088,7 +1106,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     Tensor *t = *it;
     if (t->shared_ != nullptr && t->shared_->IsConstant()) {
       // Move variable to constant pool.
-      LOG(INFO) << "Convert " << t->name() << " to constant";
+      VLOG(5) << "Convert " << t->name() << " to constant";
       it = parameters_.erase(it);
       constants_.push_back(t);
     } else {
@@ -1104,8 +1122,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     if (var->first_ != -1) enter.emplace_back(var->first_, var);
     if (var->last_ != -1) leave.emplace_back(var->last_, var);
   }
-  std::sort(enter.begin(), enter.end());
-  std::sort(leave.begin(), leave.end());
+  std::sort(enter.begin(), enter.end(), CompareUsage);
+  std::sort(leave.begin(), leave.end(), CompareUsage);
 
   // Compute cell instance size and offset of each parameter.
   for (Cell *cell : cells_) {
@@ -1124,6 +1142,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Allocate space for variables in instance data blocks.
+    cell->data_start_ = cell->instance_size_;
     InstanceAllocator host_allocator(cell, HOST);
     InstanceAllocator device_allocator(cell, DEVICE);
     int e = 0;
@@ -1195,8 +1214,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // Insert break point in the beginning of the generated code in debug mode.
     if (debug_) masm.Breakpoint();
 
-    // Generate prolog for main cell computation.
-    masm.Prolog();
+    // Generate prologue for main cell computation.
+    masm.Prologue();
+    runtime_->GeneratePrologue(cell, &masm);
 
     // Increment the invocation counter.
     if (profiling_) {
@@ -1262,14 +1282,14 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         }
 
         // Generate code for step.
-        auto pc = masm.pc();
+        auto pc = masm.pc_offset();
+        VLOG(8) << step->name() << " @ " << reinterpret_cast<uint64 *>(pc);
         step->kernel_->Generate(step, &masm);
-        if (masm.pc() == pc) step->noop_ = true;
+        if (masm.pc_offset() == pc) step->noop_ = true;
 
         // No registers are preserved between steps, so reset register
         // allocation.
-        masm.rr().reset();
-        masm.mm().reset();
+        masm.ResetRegisterUsage();
 
         // Copy outputs that do not have the placement required by the
         // consumers.
@@ -1354,8 +1374,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       masm.CallInstanceFunction(runtime_->StopProfilerFunc());
     }
 
-    // Generate epilog for main cell computation.
-    masm.Epilog();
+    // Generate epilogue for main cell computation.
+    runtime_->GenerateEpilogue(cell, &masm);
+    masm.Epilogue();
 
     // Generate code for parallel tasks.
     int task_index = 0;
@@ -1363,22 +1384,22 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       // Set entry for task function.
       masm.bind(&task.entry);
 
-      // Generate parallel task prolog.
-      masm.Prolog();
+      // Generate parallel task prologue.
+      masm.Prologue();
 
       // Let kernels generate code for each step.
       int stepnum = 0;
       for (Step *step : cell->steps_) {
         if (step->task_index_ == task_index) {
           // Generate code for step.
-          auto pc = masm.pc();
+          auto pc = masm.pc_offset();
+          VLOG(8) << step->name() << " @ " << reinterpret_cast<uint64 *>(pc);
           step->kernel_->Generate(step, &masm);
-          if (masm.pc() == pc) step->noop_ = true;
+          if (masm.pc_offset() == pc) step->noop_ = true;
 
           // No registers are preserved between steps, so reset register
           // allocation.
-          masm.rr().reset();
-          masm.mm().reset();
+          masm.ResetRegisterUsage();
 
           // Copy outputs that do not have the placement required by the
           // consumers.
@@ -1403,8 +1424,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         stepnum++;
       }
 
-      // Generate parallel task epilog.
-      masm.Epilog();
+      // Generate parallel task epilogue.
+      masm.Epilogue();
 
       task_index++;
     }

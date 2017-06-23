@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "myelin/kernel/avx.h"
+
 #include "myelin/compute.h"
 
 namespace sling {
@@ -26,8 +28,8 @@ void RegisterAVXMatMul(Library *library);
 // avx-operators.cc
 void RegisterAVXOperators(Library *library);
 
-// Register AVX kernels.
-void RegisterAVXKernels(Library *library) {
+// Register AVX library.
+void RegisterAVXLibrary(Library *library) {
   RegisterAVXMath(library);
   RegisterAVXMatMul(library);
   RegisterAVXOperators(library);

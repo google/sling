@@ -117,29 +117,6 @@ class Transformations {
  public:
   ~Transformations();
 
-  // Combination of operations that can be replaced with a combined operation.
-  struct Combination {
-    Combination(const string &first,
-                const string &second,
-                const string &replacement)
-        : first(first), second(second), replacement(replacement) {}
-    string first;        // first operation
-    string second;       // second operation
-    string replacement;  // replacement operation
-  };
-
-  // Register identity operation.
-  void RegisterIdentityOp(const string &noop) {
-    noops_.push_back(noop);
-  }
-
-  // Register operation combination.
-  void RegisterCombinedOp(const string &first,
-                          const string &second,
-                          const string &replacement) {
-    combinations_.emplace_back(first, second, replacement);
-  }
-
   // Register flow transformation component. Transfers ownership from caller.
   void RegisterTransformer(Transformer *transformer) {
     transformers_.emplace_back(transformer);
@@ -150,27 +127,17 @@ class Transformations {
     typers_.emplace_back(typer);
   }
 
-  // Identity operations.
-  const std::vector<string> &noops() const { return noops_; }
-
-  // Pairs of operations that can be combined.
-  const std::vector<Combination> &combinations() const { return combinations_; }
-
   // Flow transformation components.
-  const std::vector<Transformer *> transformers() const {
+  const std::vector<Transformer *> &transformers() const {
     return transformers_;
   }
 
   // Type inference components.
-  const std::vector<Typer *> typers() const { return typers_; }
+  const std::vector<Typer *> &typers() const {
+    return typers_;
+  }
 
  private:
-  // Identity operations.
-  std::vector<string> noops_;
-
-  // Pairs of operations that can be combined.
-  std::vector<Combination> combinations_;
-
   // Flow transformation components.
   std::vector<Transformer *> transformers_;
 
@@ -240,6 +207,10 @@ class Shape {
   bool operator==(const Shape &other) const { return IsSameSize(other); }
   bool operator!=(const Shape &other) const { return !IsSameSize(other); }
 
+  // Return the common size between this shape and another shape. The common
+  // size is the product of all the shared suffix dimensions.
+  int CommonSize(const Shape &other) const;
+
   // Return shape as string.
   string ToString() const;
 
@@ -262,12 +233,16 @@ class Attributes : public std::vector<Attribute> {
   // Get attribute value.
   const string &Get(const string &name) const;
   int Get(const string &name, int defval) const;
+  bool Get(const string &name, bool defval) const;
 
   // Check if attribute exists.
   bool Has(const string &name) const;
 
   // Set attribute.
   void Set(const string &name, const string &value);
+  void Set(const string &name, const char *value);
+  void Set(const string &name, int value);
+  void Set(const string &name, bool value);
 };
 
 // Flow graph for computation.
@@ -338,6 +313,9 @@ class Flow {
     int GetAttr(const string &name, int defval) const {
       return attrs.Get(name, defval);
     }
+    bool GetAttr(const string &name, bool defval) const {
+      return attrs.Get(name, defval);
+    }
 
     // Check if operation has attribute.
     bool HasAttr(const string &name) const {
@@ -346,6 +324,15 @@ class Flow {
 
     // Set attribute.
     void SetAttr(const string &name, const string &value) {
+      attrs.Set(name, value);
+    }
+    void SetAttr(const string &name, const char *value) {
+      attrs.Set(name, value);
+    }
+    void SetAttr(const string &name, int value) {
+      attrs.Set(name, value);
+    }
+    void SetAttr(const string &name, bool value) {
       attrs.Set(name, value);
     }
 
@@ -486,6 +473,9 @@ class Flow {
                   const string &combined,
                   bool merge_inputs = false);
 
+  // Remove operation from flow.
+  void Eliminate(Operation *op);
+
   // Find sequences of ops in flow graph. This only matches the first output
   // for each op in the sequence.
   std::vector<Operation *> Find(const std::vector<string> &ops);
@@ -508,19 +498,6 @@ class Flow {
 
   // Apply transformations to flow graph.
   void Transform(const Transformations &transformations);
-
-  // Combine two op types to a single combined op type.
-  bool Combine(const string &first,
-               const string &second,
-               const string &combined);
-
-  // Remove operation from flow.
-  void Eliminate(Operation *op);
-
-  // Merge two operations into a combined op.
-  Operation *Merge(Operation *first,
-                   Operation *second,
-                   const string &combined);
 
   // Sort operations in topological order of computation.
   void Sort();
