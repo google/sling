@@ -613,13 +613,23 @@ bool Step::AllowInPlace(int input, int output, bool preserved) {
   DCHECK_LT(output, outputs_.size());
   Tensor *in = inputs_[input];
   Tensor *out = outputs_[output];
-  while (in->shared() != nullptr) in = in->shared();
-  if (!preserved) {
-    if (in->IsConstant()) return false;
-    if (in->consumers().size() != 1) return false;
+
+  // Check if input can be shared.
+  Tensor *t = in;
+  while (t != nullptr) {
+    if (!preserved) {
+      if (t->IsConstant()) return false;
+      if (t->consumers().size() != 1) return false;
+    }
+    if (t->ref() != out->ref()) return false;
+    in = t;
+    t = t->shared();
   }
-  if (in->ref() != out->ref()) return false;
+
+  // Check if output can be shared.
   if (out->shared()) return false;
+
+  // Share input and output.
   out->set_shared(in);
   if (out->shape() == in->shape()) out->set_link(in);
   return true;
