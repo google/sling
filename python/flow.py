@@ -18,7 +18,6 @@
 Convert tensorflow graphs to myelin flow files.
 """
 
-import tensorflow as tf
 from struct import pack
 
 def attr_str(value):
