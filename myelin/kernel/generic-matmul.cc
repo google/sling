@@ -97,6 +97,9 @@ class GenericFltVecMatMulBase : public Kernel {
     XMMRegister sum = mm.allocx();
     XMMRegister zero = relu_ ? mm.allocx() : no_xmm_reg;
 
+    bool strict = step->GetAttr("strict", false);
+    if (strict) step->set_variant("strict");
+
     __ LoadTensorAddress(input, x);
     __ LoadTensorAddress(matrix, W);
     if (bias_) {
@@ -109,7 +112,7 @@ class GenericFltVecMatMulBase : public Kernel {
     }
 
     __ LoopStart(&l1);
-    if (bias_) {
+    if (bias_ && !strict) {
       __ movss(sum, Operand(vector, col, times_4));
     } else {
       __ xorps(sum, sum);
@@ -123,6 +126,10 @@ class GenericFltVecMatMulBase : public Kernel {
     __ cmpq(row, Immediate(rows));
     __ addss(sum, elem);
     __ j(not_equal, &l2);
+
+    if (bias_ && strict) {
+      __ addss(sum, Operand(vector, col, times_4));
+    }
 
     if (relu_) {
       __ maxss(sum, zero);

@@ -252,11 +252,13 @@ class BasicConcat : public Kernel {
     // Check inputs and outputs.
     if (step->indegree() < 2 || step->outdegree() != 1) return false;
 
-    // Only concatenation along first axis supported.
-    int n = step->indegree() - 1;
+    // Only concatenation along a singular prefix supported.
+    int n = step->GetAttr("N", step->indegree() - 1);
+    if (step->indegree() < n + 1) return false;
     Tensor *axis = step->input(n);
     if (!axis->IsConstant()) return false;
-    if (axis->value<int32>() != 1) return false;
+    int dim = axis->value<int32>();
+    if (step->output(0)->shape().outer(dim) != 1) return false;
 
     return true;
   }
@@ -265,8 +267,8 @@ class BasicConcat : public Kernel {
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
-    // The last input is the axis.
-    int n = step->indegree() - 1;
+    // Get the number of tensors to concatenate.
+    int n = step->GetAttr("N", step->indegree() - 1);
 
     // Allocate registers.
     Register src = masm->rr().alloc_preferred(r8);

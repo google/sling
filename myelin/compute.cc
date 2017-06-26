@@ -129,10 +129,12 @@ class InstanceAllocator {
     // Shared variables share offset.
     if (var->shared_ != nullptr) {
       if (placement_ == HOST) {
-        DCHECK(var->shared_->offset_ != -1) << var->name();
+        CHECK(var->shared_->offset_ != -1)
+            << var->name() << " " << var->shared_->name();
         var->offset_ = var->shared_->offset_;
       } else {
-        DCHECK(var->shared_->device_offset_ != -1) << var->name();
+        CHECK(var->shared_->device_offset_ != -1)
+            << var->name() << " " << var->shared_->name();
         var->device_offset_ = var->shared_->device_offset_;
       }
       return;
@@ -620,6 +622,7 @@ bool Step::AllowInPlace(int input, int output, bool preserved) {
     if (!preserved) {
       if (t->IsConstant()) return false;
       if (t->consumers().size() != 1) return false;
+      if (t->out()) return false;
     }
     if (t->ref() != out->ref()) return false;
     in = t;
@@ -909,9 +912,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       profile->stride_.assign(sizeof(int64));
       profile->placement_ = HOST;
       profile->current_placement_ = HOST;
-      profile->in_ = false;
+      profile->in_ = true;
       profile->out_ = true;
       parameters_.push_back(profile);
+      tensors[profile] = profile;
       cell->profile_ = profile;
     }
   }
@@ -1466,13 +1470,8 @@ void Network::ComputeLiveRanges() {
   // All inputs and outputs from the network must be alive before and after the
   // computation.
   for (Tensor *t : parameters_) {
-    if (t->in_ || t->out_) {
-      t->first_ = 0;
-      t->last_ = steps_.size() - 1;
-    } else {
-      t->first_ = -1;
-      t->last_ = -1;
-    }
+    t->first_ = t->in_ ? 0 : -1;
+    t->last_ = t->out_ ? steps_.size() - 1 : -1;
   }
 
   // Find first and last use of each variable.

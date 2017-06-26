@@ -30,10 +30,11 @@ struct GraphNodeOptions {
   const char *style = nullptr;
   const char *color = nullptr;
   const char *fillcolor = nullptr;
+  const char *fontname = nullptr;
   int penwidth = 0;
 
   // Append attributes to string.
-  void Append(string *str) const;
+  void Append(string *str, const char *delim = " ") const;
 };
 
 // Options for Graphviz DOT graph.
@@ -46,6 +47,7 @@ struct GraphOptions {
   bool op_type_as_label = true;
   bool types_in_labels = true;
   bool include_constants = true;
+  bool cluster_functions = true;
   int max_value_size = 16;
   float edge_thickness_scalar = 0.0;
 
@@ -54,6 +56,7 @@ struct GraphOptions {
   GraphNodeOptions inputs;
   GraphNodeOptions outputs;
   GraphNodeOptions consts;
+  GraphNodeOptions funcs;
 
   // Options for individual op nodes.
   std::map<string, GraphNodeOptions> custom_ops;
