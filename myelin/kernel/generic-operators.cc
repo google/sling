@@ -422,20 +422,6 @@ class GenericFltMulTwoAdd : public Kernel {
 };
 
 void RegisterGenericOperators(Library *library) {
-  // Computes  : y = c - x element-wise
-  // Input     : c: float32[1] const
-  //             x: float32[d1,...,dn]
-  // Output    : y: float32[d1,...,dn]
-  library->Register(new GenericFltConstSub());
-
-  // Computes  : y = x0 * x1 + x2 * x3 element-wise
-  // Input     : x0: float32[d1,...,dn]
-  //             x1: float32[d1,...,dn]
-  //             x2: float32[d1,...,dn]
-  //             x3: float32[d1,...,dn]
-  // Output    : y: float32[d1,...,dn]
-  library->Register(new GenericFltMulTwoAdd());
-
   // Computes  : c = a + b element-wise
   // Input     : a: float32[d1,...,dn]
   //             b: float32[d1,...,dn]
@@ -453,6 +439,20 @@ void RegisterGenericOperators(Library *library) {
   //             b: float32[d1,...,dn]
   // Output    : c: float32[d1,...,dn]
   library->Register(new GenericFltMul());
+
+  // Computes  : y = c - x element-wise
+  // Input     : c: float32[1] const
+  //             x: float32[d1,...,dn]
+  // Output    : y: float32[d1,...,dn]
+  library->Register(new GenericFltConstSub());
+
+  // Computes  : y = x0 * x1 + x2 * x3 element-wise
+  // Input     : x0: float32[d1,...,dn]
+  //             x1: float32[d1,...,dn]
+  //             x2: float32[d1,...,dn]
+  //             x3: float32[d1,...,dn]
+  // Output    : y: float32[d1,...,dn]
+  library->Register(new GenericFltMulTwoAdd());
 
   // Computes  : c = a + b element-wise
   // Input     : a: int8/16/32/64[d1,...,dn]

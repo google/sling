@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "myelin/kernel/generic.h"
+
+#include <vector>
+
 #include "myelin/compute.h"
 
 namespace sling {
@@ -46,6 +50,66 @@ class RenameTransformer : public Transformer {
   }
 };
 
+// Remove identity ops.
+class IdentityTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    // Eliminate no-ops.
+    std::vector<Flow::Operation *> noops;
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type == "Identity" ||
+          op->type == "Const" ||
+
+
+          op->type == "Variable" ||
+          op->type == "VariableV2" ||
+          op->type == "Placeholder" ||
+          op->type == "Enter") {
+        noops.push_back(op);
+      }
+    }
+
+    // Remove no-ops from the flow and eliminate the intermediate variables.
+    for (Flow::Operation *op : noops) {
+      flow->Eliminate(op);
+    }
+
+    return !noops.empty();
+  }
+};
+
+// Combine ops.
+class CombineTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    int combines = 0;
+    while (Combine(flow, "MatMul", "Add", "MatMulAdd") ||
+           Combine(flow, "MatMul", "Relu", "MatMulRelu") ||
+           Combine(flow, "MatMulAdd", "Relu", "MatMulAddRelu")) {
+      combines++;
+    }
+    return combines > 0;
+  }
+
+  // Try to find combinations and replace them with a combined op.
+  bool Combine(Flow *flow, const string &first, const string &second,
+               const string &combined) {
+    // Find operations that can be combined.
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type != first) continue;
+      if (op->outputs.size() != 1) continue;
+      Flow::Variable *var = op->outputs[0];
+      if (var->consumers.size() != 1) continue;
+      if (var->consumers[0]->type != second) continue;
+      if (var->consumers[0]->task != op->task) continue;
+
+      flow->Fuse(op, var->consumers[0], combined);
+      return true;
+    }
+    return false;
+  }
+};
+
 // Type inference for standard ops.
 class StandardTyper : public Typer {
  public:
@@ -76,23 +140,28 @@ class StandardTyper : public Typer {
         op->type == "Tanh" ||
         op->type == "Sigmoid" ||
         op->type == "Relu") {
-      if (op->indegree() > 0 && op->outdegree() == 1) {
+      if (op->indegree() > 0 && op->outdegree() > 0) {
         // Determine output rank.
-        Flow::Variable *out = op->outputs[0];
+        Shape shape;
         int rank = 0;
         for (Flow::Variable *in : op->inputs) {
           if (in->rank() > rank) rank = in->rank();
         }
-        out->shape.fill(rank, 1);
+        shape.fill(rank, 1);
 
         // Determine output shape based on broadcast semantics.
         for (Flow::Variable *in : op->inputs) {
           int depth = rank - in->rank();
           for (int d = 0; d < in->rank(); ++d) {
-            if (out->dim(d + depth) < in->dim(d)) {
-              out->shape.set(d + depth, in->dim(d));
+            if (shape.dim(d + depth) < in->dim(d)) {
+              shape.set(d + depth, in->dim(d));
             }
           }
+        }
+
+        // Set shape for outputs.
+        for (Flow::Variable *out : op->outputs) {
+          out->shape = shape;
         }
         return true;
       }
@@ -155,31 +224,17 @@ class StandardTyper : public Typer {
   }
 };
 
-// Register generic transformations.
-void RegisterGenericTransformations(Library *library) {
+// Register generic library.
+void RegisterGenericLibrary(Library *library) {
   // Register transformations.
   library->RegisterTransformer(new RenameTransformer());
-
-  // Register identity ops.
-  library->RegisterIdentityOp("Identity");
-  library->RegisterIdentityOp("Const");
-  library->RegisterIdentityOp("Variable");
-  library->RegisterIdentityOp("VariableV2");
-  library->RegisterIdentityOp("Placeholder");
-  library->RegisterIdentityOp("Enter");
-
-  // Register combined ops.
-  library->RegisterCombinedOp("MatMul", "Add", "MatMulAdd");
-  library->RegisterCombinedOp("MatMul", "BiasAdd", "MatMulAdd");
-  library->RegisterCombinedOp("MatMul", "Relu", "MatMulRelu");
-  library->RegisterCombinedOp("MatMulAdd", "Relu", "MatMulAddRelu");
+  library->RegisterTransformer(new IdentityTransformer());
+  library->RegisterTransformer(new CombineTransformer());
 
   // Register type inference.
   library->RegisterTyper(new StandardTyper());
-}
 
-// Register generic kernels.
-void RegisterGenericKernels(Library *library) {
+  // Register kernels.
   RegisterArrayKernels(library);
   RegisterGenericMath(library);
   RegisterGenericMatMul(library);

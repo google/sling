@@ -173,6 +173,12 @@ class Runtime {
   // Clear instance data.
   virtual void ClearInstance(Instance *instance) = 0;
 
+  // Generate prologue for cell function.
+  virtual void GeneratePrologue(Cell *cell, MacroAssembler *masm) {}
+
+  // Generate epilogue for cell function.
+  virtual void GenerateEpilogue(Cell *cell, MacroAssembler *masm) {}
+
   // Check if runtime supports asynchronous execution of steps.
   virtual bool SupportsAsync() = 0;
 
@@ -523,6 +529,9 @@ class Step {
   int GetAttr(const string &name, int defval) const {
     return attributes_.Get(name, defval);
   }
+  bool GetAttr(const string &name, bool defval) const {
+    return attributes_.Get(name, defval);
+  }
 
   // Check if step has attribute.
   bool HasAttr(const string &name) const {
@@ -531,6 +540,15 @@ class Step {
 
   // Set attribute.
   void SetAttr(const string &name, const string &value) {
+    attributes_.Set(name, value);
+  }
+  void SetAttr(const string &name, const char *value) {
+    attributes_.Set(name, value);
+  }
+  void SetAttr(const string &name, int value) {
+    attributes_.Set(name, value);
+  }
+  void SetAttr(const string &name, bool value) {
     attributes_.Set(name, value);
   }
 
@@ -697,6 +715,14 @@ class TensorData {
       : data_(data), format_(format) {}
 
   // Tensor element access.
+  template<typename T> T &value() {
+    DCHECK_EQ(Traits<T>().type(), type());
+    return *reinterpret_cast<T *>(data_);
+  }
+  template<typename T> const T &value() const {
+    DCHECK_EQ(Traits<T>().type(), type());
+    return *reinterpret_cast<T *>(data_);
+  }
   template<typename T> T &at(int r) {
     DCHECK_EQ(Traits<T>().type(), type());
     return *reinterpret_cast<T *>(data_ + format_->offset(r));
@@ -886,6 +912,9 @@ class Cell {
   // Get offset of task structure in instance data block.
   size_t task_offset(int index) const { return tasks_[index].offset; }
 
+  // Start of data in instance block.
+  size_t data_start() const { return data_start_; }
+
   // Tensor with profiling information.
   Tensor *profile() const { return profile_; }
 
@@ -927,6 +956,9 @@ class Cell {
 
   // Size of device data instance for cell.
   size_t device_instance_size_ = 0;
+
+  // Start of data in instance block.
+  size_t data_start_ = 0;
 
   // Instance alignment.
   int instance_alignment_ = kMinDataAlignment;

@@ -176,13 +176,13 @@ class StaticData {
   StaticData(int alignment = 1) : alignment_(alignment), address_(&location_) {}
 
   // Add data to data block.
-  void AddData(void *buffer, int size);
+  void AddData(const void *buffer, int size, int repeat = 1);
   template<typename T> void Add(T value, int repeat = 1) {
-    for (int n = 0; n < repeat; ++n) AddData(&value, sizeof(T));
+    AddData(&value, sizeof(T), repeat);
   }
 
   // Check if data block is equal to (repeated) constant.
-  bool Equals(void *data, int size, int repeat) const;
+  bool Equals(const void *data, int size, int repeat) const;
 
   // Generate data blocks and fix up references to it.
   void Generate(MacroAssembler *masm);
@@ -206,17 +206,17 @@ class MacroAssembler : public jit::Assembler {
   MacroAssembler(void *buffer, int buffer_size);
   ~MacroAssembler();
 
-  // Generate function prolog.
-  void Prolog();
+  // Generate function prologue.
+  void Prologue();
 
-  // Generate function prolog.
-  void Epilog();
+  // Generate function epilogue.
+  void Epilogue();
 
   // Create new static data block.
   StaticData *CreateDataBlock(int alignment = 1);
 
   // Find existing static data block.
-  StaticData *FindDataBlock(void *data, int size, int repeat);
+  StaticData *FindDataBlock(const void *data, int size, int repeat);
 
   // Create new static data block with (repeated) constant.
   template<typename T> StaticData *Constant(T value, int repeat = 1) {
@@ -231,6 +231,16 @@ class MacroAssembler : public jit::Assembler {
     if (data == nullptr) {
       data = CreateDataBlock(repeat * sizeof(T));
       data->Add(value, repeat);
+    }
+    return data;
+  }
+
+  // Get static data block for value.
+  StaticData *GetData(const void *value, int size, int repeat = 1) {
+    StaticData *data = FindDataBlock(value, size, repeat);
+    if (data == nullptr) {
+      data = CreateDataBlock(size * repeat);
+      data->AddData(value, size, repeat);
     }
     return data;
   }
@@ -277,6 +287,9 @@ class MacroAssembler : public jit::Assembler {
 
   // Wait for task to complete.
   void WaitForTask(int offset);
+
+  // Reset register usage.
+  void ResetRegisterUsage();
 
   // General purpose register allocation.
   Registers &rr() { return rr_; }

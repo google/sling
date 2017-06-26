@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MYELIN_KERNEL_GENERIC_H_
-#define MYELIN_KERNEL_GENERIC_H_
+#include "myelin/kernel/tensorflow.h"
 
 #include "myelin/compute.h"
+#include "myelin/kernel/avx.h"
+#include "myelin/kernel/generic.h"
+#include "myelin/kernel/sse.h"
 
 namespace sling {
 namespace myelin {
 
-// Register generic library.
-void RegisterGenericLibrary(Library *library);
+// Register Tensorflow library.
+void RegisterTensorflowLibrary(Library *library) {
+  RegisterGenericLibrary(library);
+  RegisterSSELibrary(library);
+  RegisterAVXLibrary(library);
+}
 
 }  // namespace myelin
 }  // namespace sling
-
-#endif  // MYELIN_KERNEL_GENERIC_H_
 

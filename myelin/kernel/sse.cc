@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "myelin/kernel/sse.h"
+
 #include "myelin/compute.h"
 
 namespace sling {
@@ -20,8 +22,8 @@ namespace myelin {
 // sse-matmul.cc
 void RegisterSSEMatMul(Library *library);
 
-// Register SSE kernels.
-void RegisterSSEKernels(Library *library) {
+// Register SSE library.
+void RegisterSSELibrary(Library *library) {
   RegisterSSEMatMul(library);
 }
 

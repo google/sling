@@ -127,28 +127,32 @@ void MultiProcessorRuntime::AllocateInstance(Instance *instance) {
   instance->set_data(reinterpret_cast<char *>(data));
 
   // Allocate workers for instance.
-  std::lock_guard<std::mutex> lock(mu_);
   int n = instance->num_tasks();
-  for (int i = 0; i < n; ++i) {
-    Worker *worker;
-    if (workers_.empty()) {
-      worker = new Worker();
-    } else {
-      worker = workers_.back();
-      workers_.pop_back();
+  if (n > 0) {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (int i = 0; i < n; ++i) {
+      Worker *worker;
+      if (workers_.empty()) {
+        worker = new Worker();
+      } else {
+        worker = workers_.back();
+        workers_.pop_back();
+      }
+      worker->Attach(instance->task(i));
     }
-    worker->Attach(instance->task(i));
   }
 }
 
 void MultiProcessorRuntime::FreeInstance(Instance *instance) {
   // Detach instance from workers and return them to worker pool.
-  std::lock_guard<std::mutex> lock(mu_);
   int n = instance->num_tasks();
-  for (int i = n - 1; i >= 0; --i) {
-    Worker *worker = reinterpret_cast<Worker *>(instance->task(i)->state);
-    worker->Detach();
-    workers_.push_back(worker);
+  if (n > 0) {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (int i = n - 1; i >= 0; --i) {
+      Worker *worker = reinterpret_cast<Worker *>(instance->task(i)->state);
+      worker->Detach();
+      workers_.push_back(worker);
+    }
   }
 
   // Deallocate instance memory.
@@ -156,7 +160,9 @@ void MultiProcessorRuntime::FreeInstance(Instance *instance) {
 }
 
 void MultiProcessorRuntime::ClearInstance(Instance *instance) {
-  memset(instance->data(), 0, instance->size());
+  // Do not clear task data at the start of the instance block.
+  memset(instance->data() + instance->cell()->data_start(), 0,
+         instance->size() - instance->cell()->data_start());
 }
 
 Runtime::TaskFunc MultiProcessorRuntime::StartTaskFunc() {

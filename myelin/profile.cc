@@ -21,13 +21,15 @@
 namespace sling {
 namespace myelin {
 
-static const char *divider = "+---------+-------------+------------+---------"
+static const char *divider = "+---------+--------------+------------+---------"
                              "+----------------------------"
                              "+---+------------------------\n";
 
-static const char *header = "| percent |     time    |     cycles |  gflops |"
+static const char *header = "| percent |      time    |     cycles |  gflops |"
                             " kernel"
                             "                     | t | step\n";
+
+static float max_giga_flops = 10000;
 
 Profile::Profile(Instance *instance) : instance_(instance) {
   if (cell()->profile() != nullptr) {
@@ -101,25 +103,30 @@ string Profile::ASCIIReport() const {
     if (step(i)->task_index() != -1) {
       tid = StringPrintf("%2d", step(i)->cell()->task(step(i)->task_index()));
     }
-    string name = step(i)->name();
+    string name = step(i)->kernel()->Name();
     if (!step(i)->variant().empty()) {
       name.push_back('[');
       name.append(step(i)->variant());
       name.push_back(']');
     }
+    float gflops = gigaflops(i);
+    if (gflops >= max_giga_flops) gflops = 0;
     StringAppendF(&report,
-                  "| %6.2f%% | %8.3f μs | %10lld |%8.3f | %-27s|%-2s | %s\n",
-                  percent(i), time(i), cycles(i), gigaflops(i),
-                  step(i)->kernel()->Name().c_str(),
+                  "| %6.2f%% |%10.3f μs | %10lld |%8.3f | %-27s|%-2s | %s\n",
+                  percent(i), time(i), cycles(i), gflops,
+                  name.c_str(),
                   tid.c_str(),
-                  name.c_str());
+                  step(i)->name().c_str());
   }
 
   // Output totals.
+  float gflops = gigaflops();
+  if (gflops >= max_giga_flops) gflops = 0;
+
   report.append(divider);
   StringAppendF(&report,
-                "| 100.00%% | %8.3f μs | %10lld |%8.3f | %-27s|   |\n",
-                time(), cycles(), gigaflops(), "TOTAL");
+                "| 100.00%% |%10.3f μs | %10lld |%8.3f | %-27s|   |\n",
+                time(), cycles(), gflops, "TOTAL");
   report.append(divider);
 
   // Output task timing.
@@ -183,7 +190,7 @@ int64 Profile::Complexity(const Step *step) {
       int size = output->elements();
       if (size > ops) ops = size;
     }
-    LOG(WARNING) << "Estimated complexity for step " << step->name();
+    VLOG(8) << "Estimated complexity for step " << step->name();
   }
 
   return ops;

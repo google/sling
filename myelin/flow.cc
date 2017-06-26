@@ -88,6 +88,19 @@ bool Shape::IsSameSize(const Shape &other) const {
   return true;
 }
 
+int Shape::CommonSize(const Shape &other) const {
+  int n = 1;
+  int d1 = rank() - 1;
+  int d2 = other.rank() - 1;
+  while (d1 >= 0 && d2 >= 0) {
+    int n1 = dim(d1--);
+    int n2 = other.dim(d2--);
+    if (n1 != n2) break;
+    n *= n1;
+  }
+  return n;
+}
+
 string Shape::ToString() const {
   string str;
   for (int d = 0; d < rank(); ++d) {
@@ -201,6 +214,15 @@ int Attributes::Get(const string &name, int defval) const {
   return defval;
 }
 
+bool Attributes::Get(const string &name, bool defval) const {
+  for (auto &attr : *this) {
+    if (attr.name == name) {
+      return attr.value == "1" || attr.value == "T" || attr.value == "true";
+    }
+  }
+  return defval;
+}
+
 bool Attributes::Has(const string &name) const {
   for (auto &attr : *this) {
     if (attr.name == name) return true;
@@ -216,6 +238,18 @@ void Attributes::Set(const string &name, const string &value) {
     }
   }
   emplace_back(name, value);
+}
+
+void Attributes::Set(const string &name, const char *value) {
+  Set(name, string(value));
+}
+
+void Attributes::Set(const string &name, int value) {
+  Set(name, std::to_string(value));
+}
+
+void Attributes::Set(const string &name, bool value) {
+  Set(name, value ? "1" : "0");
 }
 
 void Flow::Variable::AddAlias(const string &alias) {
@@ -634,92 +668,13 @@ void Flow::Transform(const Transformations &transformations) {
   // Keep transforming flow until no more transformations can be applied.
   bool again = true;
   while (again) {
-    again = false;
-
-    // Eliminate Identity ops by moving the inputs to the output.
-    std::vector<Operation *> noops;
-    for (const string &identity : transformations.noops()) {
-      for (Operation *op : ops_) {
-        if (op->type == identity) noops.push_back(op);
-      }
-    }
-
-    // Remove no-ops from the flow and eliminate the intermediate variables.
-    for (Operation *op : noops) {
-      Eliminate(op);
-      again = true;
-    }
-
-    // Combine ops.
-    for (const auto &c : transformations.combinations()) {
-      if (Combine(c.first, c.second, c.replacement)) again = true;
-    }
-
     // Run flow transformers.
-    for (Transformer *transformer : transformations.transformers()) {
-      if (transformer->Transform(this)) again = true;
+    auto &transformers = transformations.transformers();
+    again = false;
+    for (int t = transformers.size() -1; t >= 0; --t) {
+      if (transformers[t]->Transform(this)) again = true;
     }
   }
-}
-
-bool Flow::Combine(const string &first,
-                   const string &second,
-                   const string &combined) {
-  // Find operations that can be combined.
-  bool again = false;
-  for (Operation *op : ops_) {
-    if (op->type != first) continue;
-    if (op->outputs.size() != 1) continue;
-    Variable *var = op->outputs[0];
-    if (var->consumers.size() != 1) continue;
-    if (var->consumers[0]->type != second) continue;
-    if (var->consumers[0]->task != op->task) continue;
-
-    Merge(op, var->consumers[0], combined);
-    again = true;
-  }
-  return again;
-}
-
-Flow::Operation *Flow::Merge(Operation *first,
-                             Operation *second,
-                             const string &combined) {
-  // Check that ops can be merged.
-  CHECK_EQ(first->outputs.size(), 1);
-  Variable *var = first->outputs[0];
-  CHECK_EQ(var->consumers.size(), 1);
-  CHECK(var->consumers[0] == second);
-
-  // Add inputs for second op to the first/combined op.
-  for (Variable *v : second->inputs) {
-    if (v != var) {
-      first->inputs.push_back(v);
-      for (Operation *&c : v->consumers) {
-        if (c == second) c = first;
-      }
-    }
-  }
-
-  // Add outputs from second op to the first/combined op.
-  first->outputs.clear();
-  for (Variable *v : second->outputs) {
-    first->outputs.push_back(v);
-    v->producer = first;
-  }
-
-  // Update connectors removing the intermediate variable.
-  for (Connector *cnx : cnxs_) cnx->RemoveLink(var);
-
-  // Set operation type for the first to the combined type.
-  first->type = combined;
-
-  // Delete second operation.
-  DeleteOperation(second);
-
-  // Delete intermediate variable.
-  DeleteVariable(var);
-
-  return first;
 }
 
 Flow::Operation *Flow::Fuse(Operation *first,
@@ -1124,7 +1079,9 @@ bool Flow::InferTypes(const Transformations &transformations) {
     if (!infer) continue;
 
     // Try to infer type and shape for operation outputs.
-    for (Typer *typer : transformations.typers()) {
+    auto &typers = transformations.typers();
+    for (int t = typers.size() -1; t >= 0; --t) {
+      Typer *typer = typers[t];
       bool done = typer->InferTypes(op);
       if (done) break;
     }
