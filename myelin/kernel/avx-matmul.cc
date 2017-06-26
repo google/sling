@@ -106,7 +106,7 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
     y->SetMiniumAlignment(byte_alignment);
     if (bias_) b->SetMiniumAlignment(byte_alignment);
 
-    // Rows must be aligned to ymm boundaries to support unaligned loads.
+    // Rows must be aligned to ymm boundaries to support aligned loads.
     W->MinAlign({8, 1});
     W->SetRequiredOrder(ROW_MAJOR);
   }

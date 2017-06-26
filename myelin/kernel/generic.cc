@@ -139,8 +139,7 @@ class StandardTyper : public Typer {
         op->type == "Sub" ||
         op->type == "Tanh" ||
         op->type == "Sigmoid" ||
-        op->type == "Relu" ||
-        op->type == "Calculate") {
+        op->type == "Relu") {
       if (op->indegree() > 0 && op->outdegree() > 0) {
         // Determine output rank.
         Shape shape;
