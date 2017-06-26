@@ -132,6 +132,9 @@ class AVXFltTanh : public Kernel {
     // Input and output must have same shape.
     if (!x->HasSameShape(y)) return false;
 
+    // Strict math not supported.
+    if (step->GetAttr("strict", false)) return false;
+
     return true;
   }
 
@@ -261,6 +264,9 @@ class AVXFltExpBase : public Kernel {
     for (int d = 0; d < x->rank(); ++d) {
       if (x->dim(d) != y->dim(d)) return false;
     }
+
+    // Strict math not supported.
+    if (step->GetAttr("strict", false)) return false;
 
     return true;
   }

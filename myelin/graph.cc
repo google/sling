@@ -15,6 +15,7 @@
 #include "myelin/graph.h"
 
 #include <math.h>
+#include <set>
 
 #include "base/types.h"
 #include "file/file.h"
@@ -46,12 +47,25 @@ static void AppendPenWidth(string *str,
   StringAppendF(str, "penwidth=%d", width);
 }
 
-void GraphNodeOptions::Append(string *str) const {
-  if (shape != nullptr) StringAppendF(str, "shape=%s ", shape);
-  if (style != nullptr) StringAppendF(str, "style=\"%s\" ", style);
-  if (color != nullptr) StringAppendF(str, "color=\"%s\" ", color);
-  if (fillcolor != nullptr) StringAppendF(str, "fillcolor=\"%s\" ", fillcolor);
-  if (penwidth != 0) StringAppendF(str, "penwidth=%d ", penwidth);
+void GraphNodeOptions::Append(string *str, const char *delim) const {
+  if (shape != nullptr) {
+    StringAppendF(str, "shape=%s%s", shape, delim);
+  }
+  if (style != nullptr) {
+    StringAppendF(str, "style=\"%s\"%s", style, delim);
+  }
+  if (color != nullptr) {
+    StringAppendF(str, "color=\"%s\"%s", color, delim);
+  }
+  if (fillcolor != nullptr) {
+    StringAppendF(str, "fillcolor=\"%s\"%s", fillcolor, delim);
+  }
+  if (fontname != nullptr) {
+    StringAppendF(str, "fontname=\"%s\"%s", fontname, delim);
+  }
+  if (penwidth != 0) {
+    StringAppendF(str, "penwidth=%d%s", penwidth, delim);
+  }
 }
 
 GraphOptions::GraphOptions() {
@@ -74,6 +88,113 @@ GraphOptions::GraphOptions() {
   consts.style = "filled";
   consts.color = "#A6A6A6";
   consts.fillcolor = "#EEEEEE";
+
+  funcs.shape = "box";
+  funcs.style = "rounded,filled";
+  funcs.fillcolor = "#FCFCFC";
+  funcs.fontname = fontname;
+}
+
+static void AppendOp(string *str,
+                     Flow::Operation *op,
+                     const GraphOptions &options) {
+  AppendOpId(str, op);
+  str->append(" [");
+
+  str->append("label=\"");
+  if (options.op_type_as_label) {
+    if (op->HasAttr("expr")) {
+      str->append(op->GetAttr("expr"));
+    } else {
+      str->append(op->type);
+    }
+  } else {
+    str->append(op->name);
+  }
+  if (options.types_in_labels && op->outdegree() >= 1) {
+    str->append("\\n");
+    str->append(op->outputs[0]->TypeString());
+  }
+  str->append("\" ");
+  auto f = options.custom_ops.find(op->name);
+  if (f != options.custom_ops.end()) {
+    f->second.Append(str);
+  } else {
+    options.ops.Append(str);
+  }
+  str->append("];\n");
+}
+
+static void AppendVar(string *str,
+                      Flow::Variable *var,
+                      const GraphOptions &options) {
+  if (var->in || var->out) {
+    AppendVarId(str, var);
+    str->append(" [");
+    str->append("label=\"");
+    size_t slash = var->name.rfind('/');
+    if (slash != string::npos) {
+      str->append(var->name.substr(slash + 1));
+    } else {
+      str->append(var->name);
+    }
+    if (options.types_in_labels) {
+      str->append("\\n");
+      str->append(var->TypeString());
+    }
+    if (options.max_value_size > 0 && var->data != nullptr) {
+      int elements = var->elements();
+      if (elements > 0 && elements <= options.max_value_size) {
+        str->append("\\n");
+        str->append(var->DataString());
+      }
+    }
+    str->append("\" ");
+
+    auto f = options.custom_vars.find(var->name);
+    if (f != options.custom_vars.end()) {
+      f->second.Append(str);
+    } else if (var->data != nullptr) {
+      options.consts.Append(str);
+    } else if (var->in) {
+      options.inputs.Append(str);
+    } else {
+      options.outputs.Append(str);
+    }
+    str->append("];\n");
+  }
+  if (var->in) {
+    for (Flow::Operation *consumer : var->consumers) {
+      AppendVarId(str, var);
+      str->append(" -> ");
+      AppendOpId(str, consumer);
+      str->append(" [");
+      str->append("tooltip=\"");
+      str->append(var->name);
+      str->append("\" ");
+      AppendPenWidth(str, var, options);
+      str->append("];\n");
+    }
+  }
+  if (var->out && var->producer != nullptr) {
+      AppendOpId(str, var->producer);
+      str->append(" -> ");
+      AppendVarId(str, var);
+      str->append(" [");
+      str->append("tooltip=\"");
+      str->append(var->name);
+      str->append("\" ");
+      AppendPenWidth(str, var, options);
+      str->append("];\n");
+  }
+}
+
+static bool Exclusive(Flow::Variable *var, Flow::Function *func) {
+  if (var->producer != nullptr && var->producer->func != func) return false;
+  for (auto *op : var->consumers) {
+    if (op->func != func) return false;
+  }
+  return true;
 }
 
 string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
@@ -85,32 +206,36 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
   StringAppendF(&str, "node [fontname=\"%s\"]\n", options.fontname);
 
   // Output DOT graph nodes for ops.
-  for (Flow::Operation *op : flow.ops()) {
-    AppendOpId(&str, op);
-    str.append(" [");
+  auto funcs = flow.ops();
+  funcs.push_back(nullptr);
+  int cluster_id = 0;
+  std::set<Flow::Variable *> exclusive;
+  for (Flow::Function *func : flow.funcs()) {
+    // Optionally make a cluster for each funciton.
+    if (options.cluster_functions && func != nullptr) {
+      StringAppendF(&str, "subgraph cluster_%d {\n", cluster_id++);
+      options.funcs.Append(&str, ";\n");
+      StringAppendF(&str, "label=\"%s\";\n", func->name.c_str());
+    }
 
-    str.append("label=\"");
-    if (options.op_type_as_label) {
-      if (op->HasAttr("expr")) {
-        str.append(op->GetAttr("expr"));
-      } else {
-        str.append(op->type);
+    // Output all ops in function.
+    for (Flow::Operation *op : flow.ops()) {
+      if (op->func == func) {
+        AppendOp(&str, op, options);
       }
-    } else {
-      str.append(op->name);
     }
-    if (options.types_in_labels && op->outdegree() >= 1) {
-      str.append("\\n");
-      str.append(op->outputs[0]->TypeString());
+
+    // Output variables that are only used by ops in the function.
+    for (Flow::Variable *var : flow.vars()) {
+      if (Exclusive(var, func)) {
+        if (options.include_constants || var->data == nullptr) {
+          AppendVar(&str, var, options);
+        }
+        exclusive.insert(var);
+      }
     }
-    str.append("\" ");
-    auto f = options.custom_ops.find(op->name);
-    if (f != options.custom_ops.end()) {
-      f->second.Append(&str);
-    } else {
-      options.ops.Append(&str);
-    }
-    str.append("];\n");
+
+    if (options.cluster_functions && func != nullptr) str.append("}\n");
   }
 
   // Output DOT graph edges between ops.
@@ -130,67 +255,12 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
     }
   }
 
-  // Output DOT graph nodes and edges for inputs, outputs, and constants.
+  // Output shared variable.
   for (Flow::Variable *var : flow.vars()) {
-    if (!options.include_constants && var->data != nullptr) continue;
-    if (var->in || var->out) {
-      AppendVarId(&str, var);
-      str.append(" [");
-      str.append("label=\"");
-      size_t slash = var->name.rfind('/');
-      if (slash != string::npos) {
-        str.append(var->name.substr(slash + 1));
-      } else {
-        str.append(var->name);
+    if (exclusive.count(var) == 0) {
+      if (options.include_constants || var->data == nullptr) {
+        AppendVar(&str, var, options);
       }
-      if (options.types_in_labels) {
-        str.append("\\n");
-        str.append(var->TypeString());
-      }
-      if (options.max_value_size > 0 && var->data != nullptr) {
-        int elements = var->elements();
-        if (elements > 0 && elements <= options.max_value_size) {
-          str.append("\\n");
-          str.append(var->DataString());
-        }
-      }
-      str.append("\" ");
-
-      auto f = options.custom_vars.find(var->name);
-      if (f != options.custom_vars.end()) {
-        f->second.Append(&str);
-      } else if (var->data != nullptr) {
-        options.consts.Append(&str);
-      } else if (var->in) {
-        options.inputs.Append(&str);
-      } else {
-        options.outputs.Append(&str);
-      }
-      str.append("];\n");
-    }
-    if (var->in) {
-      for (Flow::Operation *consumer : var->consumers) {
-        AppendVarId(&str, var);
-        str.append(" -> ");
-        AppendOpId(&str, consumer);
-        str.append(" [");
-        str.append("tooltip=\"");
-        str.append(var->name);
-        str.append("\" ");
-        AppendPenWidth(&str, var, options);
-        str.append("];\n");
-      }
-    }
-    if (var->out && var->producer != nullptr) {
-        AppendOpId(&str, var->producer);
-        str.append(" -> ");
-        AppendVarId(&str, var);
-        str.append(" [");
-        str.append("tooltip=\"");
-        str.append(var->name);
-        str.append("\" ");
-        AppendPenWidth(&str, var, options);
-        str.append("];\n");
     }
   }
 

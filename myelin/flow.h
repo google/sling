@@ -81,36 +81,27 @@ class TypeTraits {
 
 // Look up traits from type.
 template<typename T> inline const TypeTraits &Traits();
-template<> inline const TypeTraits &Traits<float>() {
-  return TypeTraits::of(DT_FLOAT);
-}
-template<> inline const TypeTraits &Traits<double>() {
-  return TypeTraits::of(DT_DOUBLE);
-}
-template<> inline const TypeTraits &Traits<int32_t>() {
-  return TypeTraits::of(DT_INT32);
-}
-template<> inline const TypeTraits &Traits<uint8_t>() {
-  return TypeTraits::of(DT_UINT8);
-}
-template<> inline const TypeTraits &Traits<int16_t>() {
-  return TypeTraits::of(DT_INT16);
-}
-template<> inline const TypeTraits &Traits<int8_t>() {
-  return TypeTraits::of(DT_INT8);
-}
-template<> inline const TypeTraits &Traits<int64_t>() {
-  return TypeTraits::of(DT_INT64);
-}
-template<> inline const TypeTraits &Traits<int64>() {
-  return TypeTraits::of(DT_INT64);
-}
-template<> inline const TypeTraits &Traits<bool>() {
-  return TypeTraits::of(DT_BOOL);
-}
-template<> inline const TypeTraits &Traits<uint16_t>() {
-  return TypeTraits::of(DT_UINT16);
-}
+
+#define TYPE_TRAIT(type, dt) \
+  template<> inline const TypeTraits &Traits<type>() { \
+    return TypeTraits::of(dt); \
+  } \
+  template<> inline const TypeTraits &Traits<type *>() { \
+    return TypeTraits::of(dt); \
+  } \
+
+TYPE_TRAIT(float, DT_FLOAT);
+TYPE_TRAIT(double, DT_DOUBLE);
+TYPE_TRAIT(uint8_t, DT_UINT8);
+TYPE_TRAIT(uint16_t, DT_UINT16);
+TYPE_TRAIT(int8_t, DT_INT8);
+TYPE_TRAIT(int16_t, DT_INT16);
+TYPE_TRAIT(int32_t, DT_INT32);
+TYPE_TRAIT(int64_t, DT_INT64);
+TYPE_TRAIT(int64, DT_INT64);
+TYPE_TRAIT(bool, DT_BOOL);
+
+#undef TYPE_TRAIT
 
 // Flow graph transformations.
 class Transformations {
@@ -201,6 +192,26 @@ class Shape {
   // Check for partial shape, i.e. some dimensions have unspecifed (-1) size.
   bool partial() const { return elements() == -1; }
 
+  // Return the number of outer elements relative to dimension.
+  int outer(int d) const {
+    int n = 1;
+    for (int i = 0; i < d; ++i) {
+      n *= dims_[i];
+      if (n < 0) return -1;
+    }
+    return n;
+  }
+
+  // Return the number of inner elements relative to dimension.
+  int inner(int d) const {
+    int n = 1;
+    for (int i = d; i < dims_.size(); ++i) {
+      n *= dims_[i];
+      if (n < 0) return -1;
+    }
+    return n;
+  }
+
   // Check if shape is the same as another shape. Undefined dimensions are
   // not compared.
   bool IsSameSize(const Shape &other) const;
@@ -250,6 +261,10 @@ class Flow {
  public:
   struct Operation;
   struct Function;
+
+  // Flow file version
+  static const int kVersion = 3;
+  static const int kMagic = 0x776f6c66;
 
   // Flow variable.
   struct Variable {
@@ -354,6 +369,12 @@ class Flow {
     // Move output variable to another operation.
     void MoveOutput(Variable *var, Operation *op);
 
+    // Replace input variable with another variable.
+    void ReplaceInput(Variable *var, Variable *replacement);
+
+    // Replace output variable with another variable.
+    void ReplaceOutput(Variable *var, Variable *replacement);
+
     // Return in and out degree.
     int indegree() const { return inputs.size(); }
     int outdegree() const { return outputs.size(); }
@@ -405,6 +426,9 @@ class Flow {
 
   // Load flow from file.
   Status Load(const string &filename);
+
+  // Save flow to file.
+  void Save(const string &filename, int version = kVersion) const;
 
   // Analyze flow.
   void Analyze(const Transformations &transformations);

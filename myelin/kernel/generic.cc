@@ -102,6 +102,7 @@ class CombineTransformer : public Transformer {
       if (var->consumers.size() != 1) continue;
       if (var->consumers[0]->type != second) continue;
       if (var->consumers[0]->task != op->task) continue;
+      if (var->out) continue;
 
       flow->Fuse(op, var->consumers[0], combined);
       return true;

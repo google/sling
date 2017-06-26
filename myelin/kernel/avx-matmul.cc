@@ -124,7 +124,8 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
 
     // FMA is not strict math compatible.
     bool fma = masm->Enabled(FMA3);
-    if (step->GetAttr("strict", false)) {
+    bool strict = step->GetAttr("strict", false);
+    if (strict) {
       fma = false;
       step->set_variant("strict");
     }
@@ -184,7 +185,7 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
 
       // Initialize block with bias or zero.
       for (int i = 0; i < unrolls; ++i) {
-        if (bias_) {
+        if (bias_ && !strict) {
           __ vmovaps(sum[i], Operand(vector, colofs, times_1, i * 32));
         } else {
           __ vxorps(sum[i], sum[i], sum[i]);
@@ -219,6 +220,11 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
 
       // Save to y[col:col+n].
       for (int i = 0; i < unrolls; ++i) {
+        // Add bias last in strict mode.
+        if (bias_ && strict) {
+          __ vaddps(sum[i], sum[i], Operand(vector, colofs, times_1, i * 32));
+        }
+
         // Compute relu.
         if (relu_) {
           __ vmaxps(sum[i], sum[i], zero);
@@ -243,7 +249,7 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
       // Initialize remaining columns with bias or zero.
       int coldisp = main_cols * sizeof(float);
       if (remaining_cols & 4) {
-        if (bias_) {
+        if (bias_ && !strict) {
           __ vmovaps(sum[0].xmm(), Operand(vector, coldisp));
         } else {
           __ vxorps(sum[0].xmm(), sum[0].xmm(), sum[0].xmm());
@@ -252,7 +258,7 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
       }
       for (int i = 0; i < (remaining_cols & 3); ++i) {
         int reg = i + 1;
-        if (bias_) {
+        if (bias_ && !strict) {
           __ vmovss(sum[reg].xmm(), Operand(vector, coldisp));
         } else {
           __ vxorps(sum[reg].xmm(), sum[reg].xmm(), sum[reg].xmm());
@@ -311,6 +317,9 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
       // Compute relu and save remaining columns.
       coldisp = main_cols * sizeof(float);
       if (remaining_cols & 4) {
+        if (bias_ && strict) {
+          __ vaddps(sum[0].xmm(), sum[0].xmm(), Operand(vector, coldisp));
+        }
         if (relu_) {
           __ vmaxps(sum[0].xmm(), sum[0].xmm(), zero.xmm());
         }
@@ -319,6 +328,9 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
       }
       for (int i = 0; i < (remaining_cols & 3); ++i) {
         int reg = i + 1;
+        if (bias_ && strict) {
+          __ vaddss(sum[reg].xmm(), sum[reg].xmm(), Operand(vector, coldisp));
+        }
         if (relu_) {
           __ vmaxss(sum[reg].xmm(), sum[reg].xmm(), zero.xmm());
         }
