@@ -19,7 +19,7 @@ Frames can also be used for representing more basic data structures like a
 C struct with fields, a protocol buffer,  or a record in a database.
 
 This guide will use a [simple schema](#toy-schema) with persons, locations, and
-organization as a toy example for modelling modelling [frames](#toy-frames) for
+organization as a toy example for modeling [frames](#toy-frames) for
 characters from The Simpsons, e.g.:
 
 ```sling
@@ -42,7 +42,7 @@ characters from The Simpsons, e.g.:
 SLING is inspired by [frame semantics](http://www.icsi.berkeley.edu/pubs/ai/framesemantics76.pdf),
 which is a theory of linguistic meaning developed by [Charles Fillmore](https://en.wikipedia.org/wiki/Charles_J._Fillmore)
 (1929 – 2014) of University of California, Berkeley. Frame semantics relates
-linguistic semantics to encyclopaedic knowledge and the basic idea is that one
+linguistic semantics to encyclopedic knowledge and the basic idea is that one
 cannot understand the meaning of a word without access to all the essential
 knowledge that relates to that word. For example, one would not be able to
 understand the word "sell" without knowing anything about the situation of a
@@ -243,7 +243,7 @@ frame.
 ## Global stores <a name="global-stores">
 
 A store can normally only be accessed from one thread at a time. Updating a
-store from multiple threads concurrently without serializing access, e.g. with 
+store from multiple threads concurrently without serializing access, e.g. with
 a mutex, can lead to corruption of the store.
 
 You can *freeze* a store by calling the `Freeze()` method on the store. This

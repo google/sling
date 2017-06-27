@@ -82,7 +82,7 @@ class Kernel {
   virtual int64 Complexity(const Step *step) { return -1; }
 };
 
-// Library of kernels for implemeting operations.
+// Library of kernels for implementing operations.
 class Library : public Transformations {
  public:
   typedef std::vector<Kernel *> Kernels;
@@ -126,7 +126,7 @@ class Library : public Transformations {
   CustomKernel &RegisterCustomKernel(const string &op, const string &name,
                                      void *func, int indegree, int outdegree);
 
-  // Map from op name to kernels implemeting the op.
+  // Map from op name to kernels implementing the op.
   std::unordered_map<string, Kernels> kernels_;
 
   // Whether kernels are owned by library.
@@ -282,11 +282,11 @@ class Tensor {
   int rank() const { return shape_.rank(); }
   int dim(int d) const { return shape_.dim(d); }
 
-  // Minumum alignment requirement for each dimension.
+  // Minimum alignment requirement for each dimension.
   const Shape &minalign() const { return minalign_; }
   int minalign(int d) const { return minalign_.dim(d); }
 
-  // Maimum alignment allowed for each dimension.
+  // Maximum alignment allowed for each dimension.
   const Shape &maxalign() const { return maxalign_; }
   int maxalign(int d) const { return maxalign_.dim(d); }
 

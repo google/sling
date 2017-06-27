@@ -189,7 +189,7 @@ class Shape {
   // Check for undefined shape, i.e. some dimensions have zero size.
   bool undefined() const { return elements() == 0; }
 
-  // Check for partial shape, i.e. some dimensions have unspecifed (-1) size.
+  // Check for partial shape, i.e. some dimensions have unspecified (-1) size.
   bool partial() const { return elements() == -1; }
 
   // Return the number of outer elements relative to dimension.

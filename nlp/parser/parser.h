@@ -35,7 +35,7 @@ namespace nlp {
 
 class ParserInstance;
 
-// Frame sematics parser model.
+// Frame semantics parser model.
 class Parser {
  public:
   // Load and initialize parser model.

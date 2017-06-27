@@ -18,6 +18,7 @@
 Convert tensorflow graphs to myelin flow files.
 """
 
+import tensorflow as tf
 from struct import pack
 
 def attr_str(value):
@@ -185,7 +186,7 @@ class Flow:
     return o
 
   def cnx(self, name):
-    """Add connectos to flow."""
+    """Add connectors to flow."""
     c = self.cnxs.get(name, None)
     if c == None:
       c = Connector(name)

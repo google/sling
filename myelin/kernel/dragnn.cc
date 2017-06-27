@@ -323,7 +323,7 @@ class DragnnLookupSingle : public Kernel {
 
 // Dragnn feature lookup operation for fixed features mapped through an
 // embedding matrix. This can be used when the size of the embedding is small
-// enough to fit into regisgters.
+// enough to fit into registers.
 class DragnnLookupUnrolled : public Kernel {
  public:
   string Name() override { return "DragnnLookupUnrolled"; }

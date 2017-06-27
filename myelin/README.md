@@ -20,7 +20,7 @@ Build system: Bazel<br>
 
 ## Creating flow files
 
-Melin uses [flow files](#flow-file-format) to store neural networks. A
+Myelin uses [flow files](#flow-file-format) to store neural networks. A
 Tensorflow graph can be stored as a flow file using the myelin Python module.
 After the network has been trained, the parts of the Tensorflow graph needed
 for inference can be exported to a flow file. The following is a simple example
@@ -62,7 +62,7 @@ flow.save("/tmp/model.flow")
 ```
 
 This will extract the parts of the TF graph needed for computing `y` from `x`.
-It will add a _function_ (`classifier`) to the flow and then add the `MatMul` 
+It will add a _function_ (`classifier`) to the flow and then add the `MatMul`
 and `Add` _operations_ to this function. It will also add `W` and `b` as
 constant _variables_ to the flow with the trained weights. The resulting flow
 is then saved to the file _/tmp/model.flow_.
@@ -133,7 +133,7 @@ Tensor *y = classifier->GetParameter("y");
 Myelin can load and compile a flow file into a `Network` object. This contains
 a _cell_ for for each function in the flow file. A `Cell` holds the generated
 code for computing the cell function as well as a description of the data layout
-for all the parameters used by the computation. The parameters can be input 
+for all the parameters used by the computation. The parameters can be input
 (e.g. `x`), output parameters (e.g. `y`), or intermediate values needed by the
 cell computation. Constant parameters (e.g. `W` and `b`) are stored in the
 `Network` object and can be shared between cells.
@@ -216,7 +216,7 @@ version = 3
 ```
 
 A flow file begins with the _magic_ string "flow" followed by a version number.
-Numbers are encoded as 32-bit integers stored in little-endian format (aka intel
+Numbers are encoded as 32-bit integers stored in little-endian format (aka Intel
 format). Strings are stored as length-prefixed strings where the length is
 encoded as a 32-bit integer. Constant data for variables are stored in numpy
 ndarray row-major format with a 64-bit little-endian length prefix. If a

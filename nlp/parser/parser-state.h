@@ -30,7 +30,7 @@ namespace nlp {
 // Parser state that represents the state of the transition-based parser.
 class ParserState {
  public:
-  // Inializes parse state.
+  // Initializes parse state.
   ParserState(Store *store, int begin, int end);
 
   // Clones parse state.

@@ -62,7 +62,7 @@ class BZip2Decompressor : public InputStream {
   int64 ByteCount() const override;
 
  private:
-  // Decompress next chunck.
+  // Decompress next chunk.
   bool NextChunk();
 
   // Source for compressed input.
