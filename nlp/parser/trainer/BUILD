@@ -237,3 +237,14 @@ cc_library(
     "//string:strcat",
   ],
 )
+
+cc_binary(
+  name = "frame-evaluation-main",
+  srcs = ["frame-evaluation-main.cc"],
+  deps = [
+    ":frame-evaluation",
+    "//base",
+    "//file:file",
+    "//file:posix",
+  ],
+)
