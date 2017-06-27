@@ -154,6 +154,13 @@ class FrameEvaluation {
                                const string &test_file_pattern,
                                const string &output_file);
 
+  // Same as above, but returns the summary lines instead of dumping them to a
+  // file. Each line is a tab-separated (metric name, metric value) pair.
+  static std::vector<string> EvaluateAndSummarize(
+      const string &commons_file,
+      const string &gold_file_pattern,
+      const string &test_file_pattern);
+
  private:
   // Constructs mention map from spans to mention frames.
   static void GetMentionMap(const Frame &frame, MentionMap *mentions);

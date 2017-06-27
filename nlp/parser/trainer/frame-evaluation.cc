@@ -14,6 +14,8 @@
 
 #include "nlp/parser/trainer/frame-evaluation.h"
 
+#include <algorithm>
+
 #include "base/logging.h"
 #include "frame/serialization.h"
 #include "string/strcat.h"
@@ -74,6 +76,11 @@ void FrameEvaluation::Evaluate(Store *commons,
   CHECK_OK(File::Match(gold_file_pattern, &gold_files));
   CHECK_OK(File::Match(test_file_pattern, &test_files));
   CHECK_EQ(gold_files.size(), test_files.size());
+
+  // Sort the list of filenames to rule out any non-determinism in File::Match.
+  // After this we will assume a 1-1 mapping between gold and test documents.
+  std::sort(gold_files.begin(), gold_files.end());
+  std::sort(test_files.begin(), test_files.end());
 
   for (int i = 0; i < gold_files.size(); ++i) {
     // Get the next document pair.
@@ -150,10 +157,10 @@ void FrameEvaluation::Evaluate(Store *commons,
   combined.add(label);
 }
 
-void FrameEvaluation::EvaluateAndWrite(const string &commons_file,
-                                       const string &gold_file_pattern,
-                                       const string &test_file_pattern,
-                                       const string &output_file) {
+std::vector<string> FrameEvaluation::EvaluateAndSummarize(
+    const string &commons_file,
+    const string &gold_file_pattern,
+    const string &test_file_pattern) {
   Store commons;
   FileDecoder decoder(&commons, commons_file);
   decoder.DecodeAll();
@@ -176,8 +183,17 @@ void FrameEvaluation::EvaluateAndWrite(const string &commons_file,
   lines.emplace_back(StrCat("#GOLDEN_FRAMES\t", eval.num_golden_frames));
   lines.emplace_back(StrCat("#PREDICTED_FRAMES\t", eval.num_predicted_frames));
 
+  return lines;
+}
+
+void FrameEvaluation::EvaluateAndWrite(const string &commons_file,
+                                       const string &gold_file_pattern,
+                                       const string &test_file_pattern,
+                                       const string &output_file) {
+  std::vector<string> summary =
+      EvaluateAndSummarize(commons_file, gold_file_pattern, test_file_pattern);
   File *f = File::Open(output_file, "w");
-  for (const string &line : lines) {
+  for (const string &line : summary) {
     f->WriteLine(line);
   }
   f->Close();
