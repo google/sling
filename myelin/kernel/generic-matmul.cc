@@ -299,7 +299,7 @@ class GenericFltMatMatMul : public Kernel {
   }
 };
 
-// Generic interger vector matrix multiplication, y = Relu(x * W + b).
+// Generic integer vector matrix multiplication, y = Relu(x * W + b).
 class GenericIntVecMatMulBase : public Kernel {
  public:
   GenericIntVecMatMulBase(bool bias, bool relu) : bias_(bias), relu_(relu) {}

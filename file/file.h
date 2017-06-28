@@ -102,7 +102,7 @@ class File {
   // Initialize file systems. This can be called multiple times.
   static void Init();
 
-  // Open file. Modes are "r", "r+", "w", "w+". "a", and "a+".
+  // Open file. Modes are "r", "r+", "w", "w+", "a", and "a+".
   static Status Open(const string &name, const char *mode, File **f);
 
   // Open file. Return null if the file cannot be opened.

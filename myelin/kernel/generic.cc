@@ -125,7 +125,7 @@ class StandardTyper : public Typer {
         Flow::Variable *b = op->inputs[1];
         Flow::Variable *c = op->outputs[0];
 
-        // Matrix multipled by matrix.
+        // Matrix multiplied by matrix.
         if (a->rank() == 2 && b->rank() == 2 && a->dim(1) == b->dim(0)) {
           c->shape.assign(a->dim(0), b->dim(1));
           return true;
@@ -140,7 +140,8 @@ class StandardTyper : public Typer {
         op->type == "Sub" ||
         op->type == "Tanh" ||
         op->type == "Sigmoid" ||
-        op->type == "Relu") {
+        op->type == "Relu" ||
+        op->type == "Calculate") {
       if (op->indegree() > 0 && op->outdegree() > 0) {
         // Determine output rank.
         Shape shape;

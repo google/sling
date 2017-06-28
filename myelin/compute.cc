@@ -188,7 +188,7 @@ class InstanceAllocator {
       *instance_size_ += size;
     }
 
-    // Ensure that instance has at least the same aligment as the tensor.
+    // Ensure that instance has at least the same alignment as the tensor.
     if (var->byte_alignment_ > *instance_alignment_) {
       *instance_alignment_ = var->byte_alignment_;
     }

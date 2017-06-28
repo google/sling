@@ -40,7 +40,7 @@ void InitProgram(int *argc, char ***argv) {
   // Initialize logging.
   google::InitGoogleLogging((*argv)[0]);
 
-  // Intialize command line flags.
+  // Initialize command line flags.
   string usage;
   usage.append((*argv)[0]);
   usage.append(" [OPTIONS]");

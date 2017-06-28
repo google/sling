@@ -211,7 +211,7 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
   int cluster_id = 0;
   std::set<Flow::Variable *> exclusive;
   for (Flow::Function *func : flow.funcs()) {
-    // Optionally make a cluster for each funciton.
+    // Optionally make a cluster for each function.
     if (options.cluster_functions && func != nullptr) {
       StringAppendF(&str, "subgraph cluster_%d {\n", cluster_id++);
       options.funcs.Append(&str, ";\n");

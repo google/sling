@@ -254,7 +254,7 @@ class GenericIntSub : public GenericIntBinaryOperator {
   string Operation() override { return "Sub"; }
 };
 
-// Element-wise interger multiply.
+// Element-wise integer multiply.
 class GenericIntMul : public GenericIntBinaryOperator {
  public:
   GenericIntMul() : GenericIntBinaryOperator(MUL) {}
