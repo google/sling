@@ -223,7 +223,7 @@ py_binary(
 )
 
 cc_library(
-  name = "frame-evaluation",
+  name = "frame-evaluation-lib",
   hdrs = ["frame-evaluation.h"],
   srcs = ["frame-evaluation.cc"],
   deps = [
@@ -239,10 +239,10 @@ cc_library(
 )
 
 cc_binary(
-  name = "frame-evaluation-main",
+  name = "frame-evaluation",
   srcs = ["frame-evaluation-main.cc"],
   deps = [
-    ":frame-evaluation",
+    ":frame-evaluation-lib",
     "//base",
     "//file:file",
     "//file:posix",
