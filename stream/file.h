@@ -32,6 +32,9 @@ class FileInputStream : public InputStream {
   // Takes ownership of an existing file.
   explicit FileInputStream(File *file, int block_size = 1 << 20);
 
+  // Use existing file.
+  FileInputStream(File *file, bool take_ownership, int block_size = 1 << 20);
+
   // Closes file.
   ~FileInputStream() override;
 
@@ -43,6 +46,7 @@ class FileInputStream : public InputStream {
 
  private:
   File *file_ = nullptr;  // underlying file to read from
+  bool owned_ = true;     // ownership of underlying file
   uint8 *buffer_;         // file buffer
   int size_;              // size of file buffer
   int used_;              // number of current used bytes in buffer

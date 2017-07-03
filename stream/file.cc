@@ -35,11 +35,23 @@ FileInputStream::FileInputStream(File *file, int block_size) {
   buffer_ = new uint8[size_];
   used_ = 0;
   backup_ = 0;
-  position_ = 0;
+  position_ = file->Tell();
+}
+
+FileInputStream::FileInputStream(File *file,
+                                 bool take_ownership,
+                                 int block_size) {
+  file_ = file;
+  owned_ = take_ownership;
+  size_ = block_size;
+  buffer_ = new uint8[size_];
+  used_ = 0;
+  backup_ = 0;
+  position_ = file->Tell();
 }
 
 FileInputStream::~FileInputStream() {
-  if (file_ != nullptr) CHECK(file_->Close());
+  if (owned_ && file_ != nullptr) CHECK(file_->Close());
   delete [] buffer_;
 }
 
@@ -53,7 +65,8 @@ bool FileInputStream::Next(const void **data, int *size) {
   }
 
   // Read data into buffer.
-  int64 bytes = file_->ReadOrDie(buffer_, size_);
+  uint64 bytes;
+  if (!file_->PRead(position_, buffer_, size_, &bytes).ok()) return false;
   if (bytes <= 0) {
     used_ = 0;
     return false;
