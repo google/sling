@@ -65,3 +65,12 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "express",
+  srcs = ["express.cc"],
+  hdrs = ["express.h"],
+  deps = [
+    "//base",
+  ],
+)
+
