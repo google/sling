@@ -33,6 +33,7 @@
 # - Builds resources needed by the features.
 # - Builds a complete MasterSpec proto.
 # - Builds a TF graph using the master spec and default hyperparameters.
+# - Trains a model using the graph above.
 
 # Tweaks:
 # - The features and component attributes (e.g. hidden layer size) are
@@ -42,9 +43,11 @@
 
 set -eux
 
-readonly TRAIN_FILEPATTERN=$1
-readonly COMMONS=$2
-readonly OUTPUT_FOLDER=$3
+readonly COMMONS=$1
+readonly OUTPUT_FOLDER=$2
+readonly TRAIN_FILEPATTERN=$3
+readonly DEV_GOLD_FILEPATTERN=$4
+readonly DEV_NOGOLD_FILEPATTERN=$5
 
 HYPERPARAMS="learning_rate:0.0005 decay_steps=800000 "
 HYPERPARAMS+="seed:1 learning_method:'adam' "
@@ -53,6 +56,7 @@ HYPERPARAMS+="gradient_clip_norm:1.0 adam_beta1:0.01 "
 HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.0001"
 
 bazel build -c opt nlp/parser/trainer:generate-master-spec
+bazel build -c opt nlp/parser/trainer:frame-evaluation
 
 bazel-bin/nlp/parser/trainer/generate-master-spec \
   --documents=${TRAIN_FILEPATTERN} \
@@ -61,6 +65,10 @@ bazel-bin/nlp/parser/trainer/generate-master-spec \
 python nlp/parser/trainer/graph-builder-main.py \
   --master_spec="${OUTPUT_FOLDER}/master_spec" \
   --hyperparams=${HYPERPARAMS} \
-  --output_folder=${OUTPUT_FOLDER}
+  --output_folder=${OUTPUT_FOLDER} \
+  --commons=${COMMONS} \
+  --train_corpus=${TRAIN_FILEPATTERN} \
+  --dev_corpus=${DEV_GOLD_FILEPATTERN} \
+  --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN}
 
 echo "Done."
