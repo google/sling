@@ -95,3 +95,17 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "zipfile",
+  srcs = ["zipfile.cc"],
+  hdrs = ["zipfile.h"],
+  deps = [
+    ":bounded",
+    ":file",
+    ":file-input",
+    ":gzip",
+    "//base",
+    "//file",
+  ],
+)
+

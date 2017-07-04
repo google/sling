@@ -56,7 +56,7 @@ class Clock {
   // Return time in milliseconds.
   double ms() const;
 
-  // Return time in microsoconds.
+  // Return time in microseconds.
   double us() const;
 
   // Return time in nanoseconds.

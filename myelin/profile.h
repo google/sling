@@ -52,27 +52,45 @@ class Profile {
 
   // Number of CPU cycles used per invocation.
   int64 cycles() const {
-    return invocations_ ? total_ / invocations_ : 0;
+    return invocations_ > 0 ? total_ / invocations_ : 0;
   }
 
   // Time in microseconds per invocation.
   double time() const {
-    return invocations_ ? total_ / (Clock::mhz() * invocations_) : 0;
+    return invocations_ > 0 ? total_ / (Clock::mhz() * invocations_) : 0;
   }
 
   // Number of CPU cycles per invocation used by step in cell computation.
   int64 cycles(int idx) const {
-    return invocations_ ? timing_[idx] / invocations_ : 0;
+    return invocations_ > 0 ? timing_[idx] / invocations_ : 0;
   }
 
   // Time per invocation in microseconds used by step in cell computation.
   double time(int idx) const {
-    return invocations_ ? timing_[idx] / (Clock::mhz() * invocations_) : 0;
+    return invocations_ > 0 ? timing_[idx] / (Clock::mhz() * invocations_) : 0;
   }
 
   // Percentage of time used by step in cell computation.
   double percent(int idx) const {
-    return invocations_ ? time(idx) / time() * 100 : 0;
+    return invocations_ > 0 && total_ > 0 ? time(idx) / time() * 100 : 0;
+  }
+
+  // Estimated number of operations per invocation of step.
+  int64 complexity(int idx) const { return Complexity(step(idx)); }
+
+  // Estimated number of operations per computation.
+  int64 complexity() const { return total_complexity_; }
+
+  // Estimated number of operations per second for step.
+  double gigaflops(int idx) const {
+    int64 ops = complexity(idx);
+    double t = time(idx);
+    return ops == 0 || t == 0 ? 0 : ops / t / 1e3;
+  }
+
+  // Estimated number of operations per second for computation.
+  double gigaflops() const {
+    return complexity() == 0 || time() == 0 ? 0 : complexity() / time() / 1e3;
   }
 
   // Number of CPU cycles for starting task.
@@ -100,6 +118,9 @@ class Profile {
   // Timing profile report in ASCII format.
   string ASCIIReport() const;
 
+  // Estimate the number of operations performed by step.
+  static int64 Complexity(const Step *step);
+
  private:
   // Tasks have start and wait cycle counts.
   struct TaskTiming {
@@ -115,6 +136,9 @@ class Profile {
 
   // Total number of cycles for computation.
   int64 total_;
+
+  // Total number of operations for computation.
+  int64 total_complexity_;
 
   // Array of clock cycle counts for each step or null if profiling is not
   // enabled.

@@ -52,7 +52,8 @@ class GZipDecompressor : public InputStream {
  public:
   // Initialize decompressor.
   GZipDecompressor(InputStream *source,
-                   int block_size = 1 << 20);
+                   int block_size = 1 << 20,
+                   int window_bits = 15 + 16);
   ~GZipDecompressor() override;
 
   // Implementation of InputStream interface.
@@ -62,7 +63,7 @@ class GZipDecompressor : public InputStream {
   int64 ByteCount() const override;
 
  private:
-  // Decompress next chunck.
+  // Decompress next chunk.
   bool NextChunk();
 
   // Source for compressed input.

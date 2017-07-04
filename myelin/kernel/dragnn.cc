@@ -141,6 +141,10 @@ class DragnnCollect : public Kernel {
       __ j(not_equal, &l1);
     }
   }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+  }
 };
 
 // Dragnn feature lookup operation for fixed features mapped through an
@@ -239,6 +243,10 @@ class DragnnLookup : public Kernel {
     __ cmpq(col, Immediate(num_features));
     __ j(not_equal, &l1);
   }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements() * step->output(0)->elements();
+  }
 };
 
 // Dragnn feature lookup operation for single fixed features mapped through an
@@ -307,11 +315,15 @@ class DragnnLookupSingle : public Kernel {
     // Save reference to embedding vector.
     __ movq(Operand(masm->instance(), v->offset()), acc);
   }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+  }
 };
 
 // Dragnn feature lookup operation for fixed features mapped through an
 // embedding matrix. This can be used when the size of the embedding is small
-// enough to fit into regisgters.
+// enough to fit into registers.
 class DragnnLookupUnrolled : public Kernel {
  public:
   string Name() override { return "DragnnLookupUnrolled"; }
@@ -347,9 +359,9 @@ class DragnnLookupUnrolled : public Kernel {
   void Adjust(Step *step) override {
     // Align embeddings and output.
     int align = kBlockSize * sizeof(float);
-    step->input(1)->Align({1, kBlockSize});
+    step->input(1)->MinAlign({1, kBlockSize});
     step->input(1)->SetMiniumAlignment(align);
-    step->output(0)->Align({1, kBlockSize});
+    step->output(0)->MinAlign({1, kBlockSize});
     step->output(0)->SetMiniumAlignment(align);
 
     // Embedding matrix must be row-major.
@@ -432,79 +444,9 @@ class DragnnLookupUnrolled : public Kernel {
       __ vmovaps(Operand(output, i * kBlockSize * sizeof(float)), sum[i]);
     }
   }
-};
 
-// Output concatenation of input tensors.
-class DragnnConcat : public Kernel {
- public:
-  string Name() override { return "DragnnConcat"; }
-  string Operation() override { return "ConcatV2"; }
-
-  bool Supports(Step *step) override {
-    // Check inputs and outputs.
-    if (step->indegree() < 2 || step->outdegree() != 1) return false;
-
-    // Only concatenation along first axis supported.
-    int n = step->indegree() - 1;
-    Tensor *axis = step->input(n);
-    if (axis->value<int32>() != 1) return false;
-
-    return true;
-  }
-
-  void Adjust(Step *step) override {
-  }
-
-  void Generate(Step *step, MacroAssembler *masm) override {
-    // The last inputs is the axis.
-    int n = step->indegree() - 1;
-
-    // Allocate registers.
-    Register src = masm->rr().alloc_preferred(r8);
-    Register dst = masm->rr().alloc_preferred(r9);
-
-    // Load output tensor.
-    __ LoadTensorAddress(dst, step->output(0));
-
-    // Copy input tensors to output.
-    int offset = 0;
-    for (int i = 0; i < n; ++i) {
-      int size = step->input(i)->size();
-      __ LoadTensorAddress(src, step->input(i));
-      __ Copy(dst, offset, src, 0, size);
-      offset += size;
-    }
-    CHECK_EQ(offset, step->output(0)->size());
-  }
-};
-
-// Reshape operation that can be used when the output has the same memory
-// layout as the input. This is a no-op and just alias the output and the
-// input.
-class NoOpReshape : public Kernel {
- public:
-  string Name() override { return "NoOpReshape"; }
-  string Operation() override { return "Reshape"; }
-
-  bool Supports(Step *step) override {
-    // Check inputs and outputs.
-    if (step->indegree() != 2 || step->outdegree() != 1) return false;
-    Tensor *x = step->input(0);
-    Tensor *y = step->output(0);
-    if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) return false;
-    if (x->consumers() != 1) return false;
-    return true;
-  }
-
-  void Adjust(Step *step) override {
-    step->output(0)->set_ref(step->input(0)->ref());
-    CHECK(step->AllowInPlace(0, 0));
-  }
-
-  void Generate(Step *step, MacroAssembler *masm) override {
-    // Operation is a no-op.
-    CHECK(step->input(0)->SharedWith(step->output(0)));
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements() * step->output(0)->elements();
   }
 };
 
@@ -512,6 +454,32 @@ class NoOpReshape : public Kernel {
 class DragnnTyper : public Typer {
  public:
   bool InferTypes(Flow::Operation *op) override {
+    // Infer shape for lookup operation.
+    if (op->type == "Lookup") {
+      if (op->indegree() == 2 && op->outdegree() == 1) {
+        Flow::Variable *embeddings = op->inputs[1];
+        Flow::Variable *result = op->outputs[0];
+        if (embeddings->rank() == 2) {
+          result->shape.assign(1, embeddings->dim(1));
+          return true;
+        }
+      }
+    }
+
+    // Infer shape for collect operation.
+    if (op->type == "Collect") {
+      if (op->indegree() == 2 && op->outdegree() == 1) {
+        Flow::Variable *features = op->inputs[0];
+        Flow::Variable *embeddings = op->inputs[1];
+        Flow::Variable *result = op->outputs[0];
+        if (features->rank() == 2 && embeddings->rank() == 2) {
+          // Add extra element for OOV indicator.
+          result->shape.assign(features->dim(1), embeddings->dim(1) + 1);
+          return true;
+        }
+      }
+    }
+
     if (op->type == "DragnnEmbeddingInitializer") {
       if (op->outdegree() == 1) {
         Flow::Variable *result = op->outputs[0];
@@ -524,16 +492,29 @@ class DragnnTyper : public Typer {
   }
 };
 
-// Register Dragnn kernels.
-void RegisterDragnnKernels(Library *library) {
-  library->Register(new DragnnInitializer());
-  library->Register(new DragnnLookupSingle());
-  library->Register(new DragnnLookupUnrolled());
-  library->Register(new DragnnLookup());
-  library->Register(new DragnnCollect());
-  library->Register(new DragnnConcat());
-  library->Register(new NoOpReshape());
+// Flow transformations for Dragnn ops.
+class DragnnTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type == "FeatureVector") {
+        flow->Eliminate(op);
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
+// Register Dragnn library.
+void RegisterDragnnLibrary(Library *library) {
   library->RegisterTyper(new DragnnTyper());
+  library->RegisterTransformer(new DragnnTransformer());
+  library->Register(new DragnnInitializer());
+  library->Register(new DragnnLookup());
+  library->Register(new DragnnLookupUnrolled());
+  library->Register(new DragnnLookupSingle());
+  library->Register(new DragnnCollect());
 }
 
 }  // namespace myelin

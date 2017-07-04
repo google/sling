@@ -14,25 +14,20 @@
 
 #include "nlp/parser/parser.h"
 
-#include "myelin/kernel/avx.h"
-#include "myelin/kernel/generic.h"
-#include "myelin/kernel/sse.h"
 #include "myelin/kernel/dragnn.h"
+#include "myelin/kernel/tensorflow.h"
 
 namespace sling {
 namespace nlp {
 
 void Parser::Load(Store *store, const string &model) {
   // Register kernels for implementing parser ops.
-  RegisterAVXKernels(&library_);
-  RegisterSSEKernels(&library_);
-  RegisterDragnnKernels(&library_);
-  RegisterGenericKernels(&library_);
-  RegisterGenericTransformations(&library_);
+  RegisterTensorflowLibrary(&library_);
+  RegisterDragnnLibrary(&library_);
 
   // Load and analyze parser flow file.
   myelin::Flow flow;
-  CHECK_OK(flow.Load(model));
+  CHECK(flow.Load(model));
   flow.Analyze(library_);
 
   // Compile parser flow.

@@ -31,26 +31,36 @@ static Register tsreg = r15;
 // Use base register for data instance.
 static Register datareg = rbp;
 
-Register Registers::alloc() {
+Register Registers::try_alloc() {
   for (int r = 0; r < kNumRegisters; ++r) {
     if (!used(r)) {
       use(r);
       return Register::from_code(r);
     }
   }
-  LOG(FATAL) << "Register overflow";
   return no_reg;
 }
 
-Register Registers::alloc_preserved() {
+Register Registers::alloc() {
+  Register r = try_alloc();
+  CHECK(r.is_valid()) << "Register overflow";
+  return r;
+}
+
+Register Registers::try_alloc_preserved() {
   for (int r = 0; r < kNumRegisters; ++r) {
     if (!used(r) && preserved(r)) {
       use(r);
       return Register::from_code(r);
     }
   }
-  LOG(FATAL) << "Preserved register overflow";
   return no_reg;
+}
+
+Register Registers::alloc_preserved() {
+  Register r = try_alloc_preserved();
+  CHECK(r.is_valid()) << "Register overflow";
+  return r;
 }
 
 Register Registers::alloc_preferred(Register r) {
@@ -66,6 +76,28 @@ Register Registers::alloc_fixed(Register r) {
   CHECK(!used(r)) << "Register already used";
   use(r);
   return r;
+}
+
+Register Registers::alloc_temp() {
+  if (!used(r10)) return alloc_fixed(r10);
+  if (!used(r11)) return alloc_fixed(r11);
+  LOG(FATAL) << "Temp register overflow";
+  return no_reg;
+}
+
+Register Registers::arg(int n) {
+  Register r;
+  switch (n) {
+    case 0: r = rax; break;
+    case 1: r = arg_reg_1; break;
+    case 2: r = arg_reg_2; break;
+    case 3: r = arg_reg_3; break;
+    case 4: r = arg_reg_4; break;
+    case 5: r = arg_reg_5; break;
+    case 6: r = arg_reg_6; break;
+    default: LOG(FATAL) << "Only six argument registers";
+  }
+  return alloc_fixed(r);
 }
 
 void Registers::reserve(int r) {
@@ -95,25 +127,78 @@ bool Registers::usage(int n) {
   return false;
 }
 
-int SIMDRegisters::alloc() {
+int Registers::num_free() const {
+  int n = 0;
+  for (int r = 0; r < kNumRegisters; ++r) {
+    if (!used(r)) n++;
+  }
+  return n;
+}
+
+int SIMDRegisters::try_alloc() {
   for (int r = 0; r < kNumRegisters; ++r) {
     if ((used_regs_ & (1 << r)) == 0) {
       use(r);
       return r;
     }
   }
-  LOG(FATAL) << "SIMD register overflow";
   return -1;
+}
+
+int SIMDRegisters::alloc() {
+  int r = try_alloc();
+  CHECK(r != -1) << "SIMD register overflow";
+  return r;
+}
+
+void StaticData::AddData(const void *buffer, int size, int repeat) {
+  const uint8 *ptr = static_cast<const uint8 *>(buffer);
+  for (int n = 0; n < repeat; ++n) {
+    data_.insert(data_.end(), ptr, ptr + size);
+  }
+}
+
+bool StaticData::Equals(const void *data, int size, int repeat) const {
+  if (size * repeat != data_.size()) return false;
+  const uint8 *p1 = data_.data();
+  for (int i = 0; i < repeat; ++i) {
+    const uint8 *p2 = static_cast<const uint8 *>(data);
+    for (int j = 0; j < size; ++j) {
+      if (*p1++ != *p2++) return false;
+    }
+  }
+  return true;
+}
+
+void StaticData::Generate(MacroAssembler *masm) {
+  // Align output.
+  masm->DataAlign(alignment_);
+
+  // Bind label to the address of the generated data block.
+  masm->bind(&location_);
+
+  // Emit data block.
+  for (uint8 byte : data_) masm->db(byte);
 }
 
 MacroAssembler::MacroAssembler(void *buffer, int buffer_size)
     : Assembler(buffer, buffer_size) {}
 
+MacroAssembler::~MacroAssembler() {
+  for (auto *d : data_blocks_) delete d;
+}
+
 Register MacroAssembler::instance() const {
   return datareg;
 }
 
-void MacroAssembler::Prolog() {
+void MacroAssembler::Prologue() {
+  // Zero upper part of YMM register if CPU needs it to avoid AVX-SSE transition
+  // penalties.
+  if (CPU::VZeroNeeded()) {
+    vzeroupper();
+  }
+
   // Reserve timestamp register.
   if (timing_) {
     rr_.reserve(tsreg);
@@ -131,11 +216,6 @@ void MacroAssembler::Prolog() {
   if (rr_.saved(r14)) pushq(r14);
   if (rr_.saved(r15)) pushq(r15);
 
-  // Zero upper part of YMM register if CPU needs it.
-  if (CPU::VZeroNeeded()) {
-    vzeroupper();
-  }
-
   // Get initial timestamp counter if timing instrumentation is active.
   if (timing_) {
     rdtsc();
@@ -145,7 +225,7 @@ void MacroAssembler::Prolog() {
   }
 }
 
-void MacroAssembler::Epilog() {
+void MacroAssembler::Epilogue() {
   // Restore preserved registers from stack.
   if (rr_.saved(r15)) popq(r15);
   if (rr_.saved(r14)) popq(r14);
@@ -155,6 +235,12 @@ void MacroAssembler::Epilog() {
 
   // Restore instance data register.
   popq(datareg);
+
+  // Zero upper part of YMM register if CPU needs it to avoid AVX-SSE transition
+  // penalties.
+  if (CPU::VZeroNeeded()) {
+    vzeroupper();
+  }
 
   // Generate return instruction.
   ret(0);
@@ -166,6 +252,26 @@ void MacroAssembler::Epilog() {
   }
 }
 
+StaticData *MacroAssembler::CreateDataBlock(int alignment) {
+  StaticData *data = new StaticData(alignment);
+  data_blocks_.push_back(data);
+  return data;
+}
+
+StaticData *MacroAssembler::FindDataBlock(
+    const void *data, int size, int repeat) {
+  for (StaticData *sd : data_blocks_) {
+    if (sd->Equals(data, size, repeat)) return sd;
+  }
+  return nullptr;
+}
+
+void MacroAssembler::GenerateDataBlocks() {
+  for (StaticData *sd : data_blocks_) {
+    sd->Generate(this);
+  }
+}
+
 void MacroAssembler::LoopStart(jit::Label *label) {
   //CodeTargetAlign();
   bind(label);
@@ -173,7 +279,7 @@ void MacroAssembler::LoopStart(jit::Label *label) {
 
 void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor) {
   if (tensor->IsConstant()) {
-    movp(dst, static_cast<void *>(tensor->data()));
+    movp(dst, tensor->data());
     if (tensor->ref()) {
       movq(dst, Operand(dst));
     }
@@ -184,6 +290,7 @@ void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor) {
       movq(dst, datareg);
     }
   } else {
+    DCHECK(tensor->offset() != -1) << tensor->name();
     if (tensor->ref()) {
       movq(dst, Operand(datareg, tensor->offset()));
     } else {
@@ -353,6 +460,16 @@ void MacroAssembler::WaitForTask(int offset) {
   rr_.release(acc);
 }
 
+void MacroAssembler::CallInstanceFunction(void (*func)(void *)) {
+  if (func != nullptr) {
+    Register acc = rr_.alloc();
+    movq(arg_reg_1, datareg);
+    movp(acc, reinterpret_cast<void *>(func));
+    call(acc);
+    rr_.release(acc);
+  }
+}
+
 void MacroAssembler::IncrementInvocations(int offset) {
   incq(Operand(datareg, offset));
 }
@@ -377,6 +494,12 @@ void MacroAssembler::TimeStep(int offset) {
 
   // Store new timestamp.
   movq(tsreg, rax);
+}
+
+void MacroAssembler::ResetRegisterUsage() {
+  rr_.reset();
+  mm_.reset();
+  if (timing_) rr_.use(tsreg);
 }
 
 }  // namespace myelin

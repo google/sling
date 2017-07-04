@@ -91,7 +91,7 @@ void ActionTableGenerator::OutputUnknownSymbols(const string &filename) const {
   for (const auto &u : unknown) {
     StrAppend(&store, "; Count = ", u.first, "\n{= ", u.second, "}\n\n");
   }
-  CHECK_OK(File::WriteContents(filename, store));
+  CHECK(File::WriteContents(filename, store));
 }
 
 void ActionTableGenerator::Process(

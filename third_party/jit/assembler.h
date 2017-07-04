@@ -204,7 +204,6 @@ class Assembler : public CodeGenerator {
   // - Instructions on 16-bit (word) operands/registers have a trailing 'w'.
   // - Instructions on 32-bit (doubleword) operands/registers use 'l'.
   // - Instructions on 64-bit (quadword) operands/registers use 'q'.
-  // - Instructions on operands/registers with pointer size use 'p'.
 
   static_assert(kPointerSize == kInt64Size || kPointerSize == kInt32Size,
                 "unsupported pointer size");
@@ -223,11 +222,6 @@ class Assembler : public CodeGenerator {
   template<class P1>                                    \
   void instruction##q(P1 p1) {                          \
     emit_##instruction(p1, kInt64Size);                 \
-  }                                                     \
-                                                        \
-  template<class P1, class P2>                          \
-  void instruction##p(P1 p1, P2 p2) {                   \
-    emit_##instruction(p1, p2, kPointerSize);           \
   }                                                     \
                                                         \
   template<class P1, class P2>                          \
@@ -346,15 +340,12 @@ class Assembler : public CodeGenerator {
   void cmpb(Register dst, Register src) {
     arithmetic_op_8(0x3A, dst, src);
   }
-
   void cmpb(Register dst, const Operand &src) {
     arithmetic_op_8(0x3A, dst, src);
   }
-
   void cmpb(const Operand &dst, Register src) {
     arithmetic_op_8(0x38, src, dst);
   }
-
   void cmpb(const Operand &dst, Immediate src) {
     immediate_arithmetic_op_8(0x7, dst, src);
   }
@@ -362,19 +353,15 @@ class Assembler : public CodeGenerator {
   void cmpw(const Operand &dst, Immediate src) {
     immediate_arithmetic_op_16(0x7, dst, src);
   }
-
   void cmpw(Register dst, Immediate src) {
     immediate_arithmetic_op_16(0x7, dst, src);
   }
-
   void cmpw(Register dst, const Operand &src) {
     arithmetic_op_16(0x3B, dst, src);
   }
-
   void cmpw(Register dst, Register src) {
     arithmetic_op_16(0x3B, dst, src);
   }
-
   void cmpw(const Operand &dst, Register src) {
     arithmetic_op_16(0x39, src, dst);
   }
@@ -459,9 +446,37 @@ class Assembler : public CodeGenerator {
 
   void store_rax(void *dst);
 
-  void subb(Register dst, Immediate src) {
-    immediate_arithmetic_op_8(0x5, dst, src);
-  }
+  void addb(Register dst, Register src) { emit_add(dst, src, 1); }
+  void addb(Register dst, const Operand &src) { emit_add(dst, src, 1); }
+  void addb(const Operand &dst, Register src) { emit_add(dst, src, 1); }
+  void addb(const Operand &dst, Immediate src) { emit_add(dst, src, 1); }
+
+  void addw(Register dst, Register src) { emit_add(dst, src, 2); }
+  void addw(Register dst, const Operand &src) { emit_add(dst, src, 2); }
+  void addw(const Operand &dst, Register src) { emit_add(dst, src, 2); }
+  void addw(const Operand &dst, Immediate src) { emit_add(dst, src, 2); }
+
+  void subb(Register dst, Register src) { emit_sub(dst, src, 1); }
+  void subb(Register dst, const Operand &src) { emit_sub(dst, src, 1); }
+  void subb(const Operand &dst, Register src) { emit_sub(dst, src, 1); }
+  void subb(const Operand &dst, Immediate src) { emit_sub(dst, src, 1); }
+
+  void subw(Register dst, Register src) { emit_sub(dst, src, 2); }
+  void subw(Register dst, const Operand &src) { emit_sub(dst, src, 2); }
+  void subw(const Operand &dst, Register src) { emit_sub(dst, src, 2); }
+  void subw(const Operand &dst, Immediate src) { emit_sub(dst, src, 2); }
+
+  void imulb(Register src) { emit_imul(src, 1); }
+  void imulb(const Operand &src) { emit_imul(src, 1); }
+  void imulw(Register src) { emit_imul(src, 2); }
+  void imulw(const Operand &src) { emit_imul(src, 2); }
+  void imulw(Register dst, Register src) { emit_imul(dst, src, 2); }
+  void imulw(Register dst, const Operand &src) { emit_imul(dst, src, 2); }
+
+  void idivb(Register src) { emit_idiv(src, 1); }
+  void idivb(const Operand &src) { emit_idiv(src, 1); }
+  void idivw(Register src) { emit_idiv(src, 2); }
+  void idivw(const Operand &src) { emit_idiv(src, 2); }
 
   void testb(Register dst, Register src);
   void testb(Register reg, Immediate mask);
@@ -666,6 +681,23 @@ class Assembler : public CodeGenerator {
   void mulps(XMMRegister dst, const Operand &src);
   void divps(XMMRegister dst, XMMRegister src);
   void divps(XMMRegister dst, const Operand &src);
+  void minps(XMMRegister dst, XMMRegister src);
+  void minps(XMMRegister dst, const Operand &src);
+  void maxps(XMMRegister dst, XMMRegister src);
+  void maxps(XMMRegister dst, const Operand &src);
+
+  void addpd(XMMRegister dst, XMMRegister src);
+  void addpd(XMMRegister dst, const Operand &src);
+  void subpd(XMMRegister dst, XMMRegister src);
+  void subpd(XMMRegister dst, const Operand &src);
+  void mulpd(XMMRegister dst, XMMRegister src);
+  void mulpd(XMMRegister dst, const Operand &src);
+  void divpd(XMMRegister dst, XMMRegister src);
+  void divpd(XMMRegister dst, const Operand &src);
+  void minpd(XMMRegister dst, XMMRegister src);
+  void minpd(XMMRegister dst, const Operand &src);
+  void maxpd(XMMRegister dst, XMMRegister src);
+  void maxpd(XMMRegister dst, const Operand &src);
 
   void movmskps(Register dst, XMMRegister src);
 
@@ -734,12 +766,16 @@ class Assembler : public CodeGenerator {
   void pextrw(const Operand &dst, XMMRegister src, int8_t imm8);
   void pextrd(Register dst, XMMRegister src, int8_t imm8);
   void pextrd(const Operand &dst, XMMRegister src, int8_t imm8);
+  void pextrq(Register dst, XMMRegister src, int8_t imm8);
+  void pextrq(const Operand &dst, XMMRegister src, int8_t imm8);
   void pinsrb(XMMRegister dst, Register src, int8_t imm8);
   void pinsrb(XMMRegister dst, const Operand &src, int8_t imm8);
   void pinsrw(XMMRegister dst, Register src, int8_t imm8);
   void pinsrw(XMMRegister dst, const Operand &src, int8_t imm8);
   void pinsrd(XMMRegister dst, Register src, int8_t imm8);
   void pinsrd(XMMRegister dst, const Operand &src, int8_t imm8);
+  void pinsrq(XMMRegister dst, Register src, int8_t imm8);
+  void pinsrq(XMMRegister dst, const Operand &src, int8_t imm8);
 
   void roundss(XMMRegister dst, XMMRegister src, RoundingMode mode);
   void roundsd(XMMRegister dst, XMMRegister src, RoundingMode mode);
@@ -776,10 +812,6 @@ class Assembler : public CodeGenerator {
 
 #undef SSE_CMP_P
 
-  void minps(XMMRegister dst, XMMRegister src);
-  void minps(XMMRegister dst, const Operand &src);
-  void maxps(XMMRegister dst, XMMRegister src);
-  void maxps(XMMRegister dst, const Operand &src);
   void rcpps(XMMRegister dst, XMMRegister src);
   void rcpps(XMMRegister dst, const Operand &src);
   void rsqrtps(XMMRegister dst, XMMRegister src);
@@ -861,13 +893,19 @@ class Assembler : public CodeGenerator {
   void movsd(const Operand &dst, XMMRegister src);
   void movsd(XMMRegister dst, const Operand &src);
 
+  void movdqa(XMMRegister dst, XMMRegister src);
   void movdqa(const Operand &dst, XMMRegister src);
   void movdqa(XMMRegister dst, const Operand &src);
 
+  void movdqu(XMMRegister dst, XMMRegister src);
   void movdqu(const Operand &dst, XMMRegister src);
   void movdqu(XMMRegister dst, const Operand &src);
 
   void movapd(XMMRegister dst, XMMRegister src);
+  void movapd(XMMRegister dst, const Operand &src);
+  void movapd(const Operand &dst, XMMRegister src);
+
+  void movupd(XMMRegister dst, XMMRegister src);
   void movupd(XMMRegister dst, const Operand &src);
   void movupd(const Operand &dst, XMMRegister src);
 
@@ -1467,15 +1505,6 @@ class Assembler : public CodeGenerator {
     vinstr(0x14, src, xmm0, dst, k66, k0F3A, kW0);
     emit(imm8);
   }
-  void vpextrb(Register dst, YMMRegister src, int8_t imm8) {
-    YMMRegister idst = {dst.code()};
-    vinstr(0x14, src, ymm0, idst, k66, k0F3A, kW0);
-    emit(imm8);
-  }
-  void vpextrb(const Operand &dst, YMMRegister src, int8_t imm8) {
-    vinstr(0x14, src, ymm0, dst, k66, k0F3A, kW0);
-    emit(imm8);
-  }
 
   void vpextrw(Register dst, XMMRegister src, int8_t imm8) {
     XMMRegister idst = {dst.code()};
@@ -1484,15 +1513,6 @@ class Assembler : public CodeGenerator {
   }
   void vpextrw(const Operand &dst, XMMRegister src, int8_t imm8) {
     vinstr(0x15, src, xmm0, dst, k66, k0F3A, kW0);
-    emit(imm8);
-  }
-  void vpextrw(Register dst, YMMRegister src, int8_t imm8) {
-    YMMRegister idst = {dst.code()};
-    vinstr(0xc5, idst, ymm0, src, k66, k0F, kW0);
-    emit(imm8);
-  }
-  void vpextrw(const Operand &dst, YMMRegister src, int8_t imm8) {
-    vinstr(0x15, src, ymm0, dst, k66, k0F3A, kW0);
     emit(imm8);
   }
 
@@ -1505,13 +1525,14 @@ class Assembler : public CodeGenerator {
     vinstr(0x16, src, xmm0, dst, k66, k0F3A, kW0);
     emit(imm8);
   }
-  void vpextrd(Register dst, YMMRegister src, int8_t imm8) {
-    YMMRegister idst = {dst.code()};
-    vinstr(0x16, src, ymm0, idst, k66, k0F3A, kW0);
+
+  void vpextrq(Register dst, XMMRegister src, int8_t imm8) {
+    XMMRegister idst = {dst.code()};
+    vinstr(0x16, src, xmm0, idst, k66, k0F3A, kW1);
     emit(imm8);
   }
-  void vpextrd(const Operand &dst, YMMRegister src, int8_t imm8) {
-    vinstr(0x16, src, ymm0, dst, k66, k0F3A, kW0);
+  void vpextrq(const Operand &dst, XMMRegister src, int8_t imm8) {
+    vinstr(0x16, src, xmm0, dst, k66, k0F3A, kW1);
     emit(imm8);
   }
 
@@ -1521,16 +1542,6 @@ class Assembler : public CodeGenerator {
     emit(imm8);
   }
   void vpinsrb(XMMRegister dst, XMMRegister src1, const Operand &src2,
-               int8_t imm8) {
-    vinstr(0x20, dst, src1, src2, k66, k0F3A, kW0);
-    emit(imm8);
-  }
-  void vpinsrb(YMMRegister dst, YMMRegister src1, Register src2, int8_t imm8) {
-    YMMRegister isrc = {src2.code()};
-    vinstr(0x20, dst, src1, isrc, k66, k0F3A, kW0);
-    emit(imm8);
-  }
-  void vpinsrb(YMMRegister dst, YMMRegister src1, const Operand &src2,
                int8_t imm8) {
     vinstr(0x20, dst, src1, src2, k66, k0F3A, kW0);
     emit(imm8);
@@ -1546,16 +1557,6 @@ class Assembler : public CodeGenerator {
     vinstr(0xc4, dst, src1, src2, k66, k0F, kW0);
     emit(imm8);
   }
-  void vpinsrw(YMMRegister dst, YMMRegister src1, Register src2, int8_t imm8) {
-    YMMRegister isrc = {src2.code()};
-    vinstr(0xc4, dst, src1, isrc, k66, k0F, kW0);
-    emit(imm8);
-  }
-  void vpinsrw(YMMRegister dst, YMMRegister src1, const Operand &src2,
-               int8_t imm8) {
-    vinstr(0xc4, dst, src1, src2, k66, k0F, kW0);
-    emit(imm8);
-  }
 
   void vpinsrd(XMMRegister dst, XMMRegister src1, Register src2, int8_t imm8) {
     XMMRegister isrc = {src2.code()};
@@ -1567,14 +1568,15 @@ class Assembler : public CodeGenerator {
     vinstr(0x22, dst, src1, src2, k66, k0F3A, kW0);
     emit(imm8);
   }
-  void vpinsrd(YMMRegister dst, YMMRegister src1, Register src2, int8_t imm8) {
-    YMMRegister isrc = {src2.code()};
-    vinstr(0x22, dst, src1, isrc, k66, k0F3A, kW0);
+
+  void vpinsrq(XMMRegister dst, XMMRegister src1, Register src2, int8_t imm8) {
+    XMMRegister isrc = {src2.code()};
+    vinstr(0x22, dst, src1, isrc, k66, k0F3A, kW1);
     emit(imm8);
   }
-  void vpinsrd(YMMRegister dst, YMMRegister src1, const Operand &src2,
+  void vpinsrq(XMMRegister dst, XMMRegister src1, const Operand &src2,
                int8_t imm8) {
-    vinstr(0x22, dst, src1, src2, k66, k0F3A, kW0);
+    vinstr(0x22, dst, src1, src2, k66, k0F3A, kW1);
     emit(imm8);
   }
 
@@ -1784,7 +1786,6 @@ class Assembler : public CodeGenerator {
     vinstr(0x7c, dst, src1, src2, k66, k0F38, kW0);
   }
 
-
   void vhaddps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
     vinstr(0x7c, dst, src1, src2, kF2, k0F, kW0);
   }
@@ -1824,178 +1825,315 @@ class Assembler : public CodeGenerator {
   void vpd(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
   void vpd(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
 
-  // FMA instructions.
-  void vfmadd132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0x99, dst, src1, src2);
-  }
-  void vfmadd213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xa9, dst, src1, src2);
-  }
-  void vfmadd231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xb9, dst, src1, src2);
-  }
-  void vfmadd132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0x99, dst, src1, src2);
-  }
-  void vfmadd213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xa9, dst, src1, src2);
-  }
-  void vfmadd231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xb9, dst, src1, src2);
-  }
-  void vfmsub132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0x9b, dst, src1, src2);
-  }
-  void vfmsub213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xab, dst, src1, src2);
-  }
-  void vfmsub231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xbb, dst, src1, src2);
-  }
-  void vfmsub132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0x9b, dst, src1, src2);
-  }
-  void vfmsub213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xab, dst, src1, src2);
-  }
-  void vfmsub231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xbb, dst, src1, src2);
-  }
-  void vfnmadd132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0x9d, dst, src1, src2);
-  }
-  void vfnmadd213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xad, dst, src1, src2);
-  }
-  void vfnmadd231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xbd, dst, src1, src2);
-  }
-  void vfnmadd132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0x9d, dst, src1, src2);
-  }
-  void vfnmadd213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xad, dst, src1, src2);
-  }
-  void vfnmadd231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xbd, dst, src1, src2);
-  }
-  void vfnmsub132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0x9f, dst, src1, src2);
-  }
-  void vfnmsub213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xaf, dst, src1, src2);
-  }
-  void vfnmsub231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmasd(0xbf, dst, src1, src2);
-  }
-  void vfnmsub132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0x9f, dst, src1, src2);
-  }
-  void vfnmsub213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xaf, dst, src1, src2);
-  }
-  void vfnmsub231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmasd(0xbf, dst, src1, src2);
-  }
-  void vfmasd(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vfmasd(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
-
+  // Scalar single XMM FMA instructions.
   void vfmadd132ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0x99, dst, src1, src2);
+    vfmas(0x99, dst, src1, src2);
   }
   void vfmadd213ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xa9, dst, src1, src2);
+    vfmas(0xa9, dst, src1, src2);
   }
   void vfmadd231ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xb9, dst, src1, src2);
+    vfmas(0xb9, dst, src1, src2);
   }
   void vfmadd132ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0x99, dst, src1, src2);
+    vfmas(0x99, dst, src1, src2);
   }
   void vfmadd213ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xa9, dst, src1, src2);
+    vfmas(0xa9, dst, src1, src2);
   }
   void vfmadd231ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xb9, dst, src1, src2);
+    vfmas(0xb9, dst, src1, src2);
   }
   void vfmsub132ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0x9b, dst, src1, src2);
+    vfmas(0x9b, dst, src1, src2);
   }
   void vfmsub213ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xab, dst, src1, src2);
+    vfmas(0xab, dst, src1, src2);
   }
   void vfmsub231ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xbb, dst, src1, src2);
+    vfmas(0xbb, dst, src1, src2);
   }
   void vfmsub132ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0x9b, dst, src1, src2);
+    vfmas(0x9b, dst, src1, src2);
   }
   void vfmsub213ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xab, dst, src1, src2);
+    vfmas(0xab, dst, src1, src2);
   }
   void vfmsub231ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xbb, dst, src1, src2);
+    vfmas(0xbb, dst, src1, src2);
   }
   void vfnmadd132ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0x9d, dst, src1, src2);
+    vfmas(0x9d, dst, src1, src2);
   }
   void vfnmadd213ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xad, dst, src1, src2);
+    vfmas(0xad, dst, src1, src2);
   }
   void vfnmadd231ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xbd, dst, src1, src2);
+    vfmas(0xbd, dst, src1, src2);
   }
   void vfnmadd132ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0x9d, dst, src1, src2);
+    vfmas(0x9d, dst, src1, src2);
   }
   void vfnmadd213ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xad, dst, src1, src2);
+    vfmas(0xad, dst, src1, src2);
   }
   void vfnmadd231ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xbd, dst, src1, src2);
+    vfmas(0xbd, dst, src1, src2);
   }
   void vfnmsub132ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0x9f, dst, src1, src2);
+    vfmas(0x9f, dst, src1, src2);
   }
   void vfnmsub213ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xaf, dst, src1, src2);
+    vfmas(0xaf, dst, src1, src2);
   }
   void vfnmsub231ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vfmass(0xbf, dst, src1, src2);
+    vfmas(0xbf, dst, src1, src2);
   }
   void vfnmsub132ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0x9f, dst, src1, src2);
+    vfmas(0x9f, dst, src1, src2);
   }
   void vfnmsub213ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xaf, dst, src1, src2);
+    vfmas(0xaf, dst, src1, src2);
   }
   void vfnmsub231ss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
-    vfmass(0xbf, dst, src1, src2);
+    vfmas(0xbf, dst, src1, src2);
   }
 
+  // Scalar double XMM FMA instructions.
+  void vfmadd132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0x99, dst, src1, src2);
+  }
+  void vfmadd213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xa9, dst, src1, src2);
+  }
+  void vfmadd231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xb9, dst, src1, src2);
+  }
+  void vfmadd132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0x99, dst, src1, src2);
+  }
+  void vfmadd213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xa9, dst, src1, src2);
+  }
+  void vfmadd231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xb9, dst, src1, src2);
+  }
+  void vfmsub132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0x9b, dst, src1, src2);
+  }
+  void vfmsub213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xab, dst, src1, src2);
+  }
+  void vfmsub231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xbb, dst, src1, src2);
+  }
+  void vfmsub132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0x9b, dst, src1, src2);
+  }
+  void vfmsub213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xab, dst, src1, src2);
+  }
+  void vfmsub231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xbb, dst, src1, src2);
+  }
+  void vfnmadd132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0x9d, dst, src1, src2);
+  }
+  void vfnmadd213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xad, dst, src1, src2);
+  }
+  void vfnmadd231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xbd, dst, src1, src2);
+  }
+  void vfnmadd132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0x9d, dst, src1, src2);
+  }
+  void vfnmadd213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xad, dst, src1, src2);
+  }
+  void vfnmadd231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xbd, dst, src1, src2);
+  }
+  void vfnmsub132sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0x9f, dst, src1, src2);
+  }
+  void vfnmsub213sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xaf, dst, src1, src2);
+  }
+  void vfnmsub231sd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xbf, dst, src1, src2);
+  }
+  void vfnmsub132sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0x9f, dst, src1, src2);
+  }
+  void vfnmsub213sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xaf, dst, src1, src2);
+  }
+  void vfnmsub231sd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xbf, dst, src1, src2);
+  }
+
+  // Vector single XMM FMA instructions.
+  void vfmadd132ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmas(0x98, dst, src1, src2);
+  }
+  void vfmadd132ps(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmas(0x98, dst, src1, src2);
+  }
+  void vfmadd213ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmas(0xa8, dst, src1, src2);
+  }
+  void vfmadd213ps(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmas(0xa8, dst, src1, src2);
+  }
+  void vfmadd231ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmas(0xb8, dst, src1, src2);
+  }
+  void vfmadd231ps(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmas(0xb8, dst, src1, src2);
+  }
+  void vfmsub132ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmas(0x9a, dst, src1, src2);
+  }
+  void vfmsub132ps(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmas(0x9a, dst, src1, src2);
+  }
+  void vfmsub213ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmas(0xaa, dst, src1, src2);
+  }
+  void vfmsub213ps(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmas(0xaa, dst, src1, src2);
+  }
+  void vfmsub231ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmas(0xba, dst, src1, src2);
+  }
+  void vfmsub231ps(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmas(0xba, dst, src1, src2);
+  }
+
+  // Vector double XMM FMA instructions.
+  void vfmadd132pd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0x98, dst, src1, src2);
+  }
+  void vfmadd132pd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0x98, dst, src1, src2);
+  }
+  void vfmadd213pd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xa8, dst, src1, src2);
+  }
+  void vfmadd213pd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xa8, dst, src1, src2);
+  }
+  void vfmadd231pd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xb8, dst, src1, src2);
+  }
+  void vfmadd231pd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xb8, dst, src1, src2);
+  }
+  void vfmsub132pd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0x9a, dst, src1, src2);
+  }
+  void vfmsub132pd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0x9a, dst, src1, src2);
+  }
+  void vfmsub213pd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xaa, dst, src1, src2);
+  }
+  void vfmsub213pd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xaa, dst, src1, src2);
+  }
+  void vfmsub231pd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vfmad(0xba, dst, src1, src2);
+  }
+  void vfmsub231pd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vfmad(0xba, dst, src1, src2);
+  }
+
+  // Vector single YMM FMA instructions.
   void vfmadd132ps(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
-    vfmass(0x98, dst, src1, src2);
+    vfmas(0x98, dst, src1, src2);
   }
   void vfmadd132ps(YMMRegister dst, YMMRegister src1, const Operand &src2) {
-    vfmass(0x98, dst, src1, src2);
+    vfmas(0x98, dst, src1, src2);
   }
   void vfmadd213ps(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
-    vfmass(0xa8, dst, src1, src2);
+    vfmas(0xa8, dst, src1, src2);
   }
   void vfmadd213ps(YMMRegister dst, YMMRegister src1, const Operand &src2) {
-    vfmass(0xa8, dst, src1, src2);
+    vfmas(0xa8, dst, src1, src2);
   }
   void vfmadd231ps(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
-    vfmass(0xb8, dst, src1, src2);
+    vfmas(0xb8, dst, src1, src2);
   }
   void vfmadd231ps(YMMRegister dst, YMMRegister src1, const Operand &src2) {
-    vfmass(0xb8, dst, src1, src2);
+    vfmas(0xb8, dst, src1, src2);
+  }
+  void vfmsub132ps(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmas(0x9a, dst, src1, src2);
+  }
+  void vfmsub132ps(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmas(0x9a, dst, src1, src2);
+  }
+  void vfmsub213ps(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmas(0xaa, dst, src1, src2);
+  }
+  void vfmsub213ps(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmas(0xaa, dst, src1, src2);
+  }
+  void vfmsub231ps(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmas(0xba, dst, src1, src2);
+  }
+  void vfmsub231ps(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmas(0xba, dst, src1, src2);
   }
 
-  void vfmass(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vfmass(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
-  void vfmass(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
-  void vfmass(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
+  // Vector double YMM FMA instructions.
+  void vfmadd132pd(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmad(0x98, dst, src1, src2);
+  }
+  void vfmadd132pd(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmad(0x98, dst, src1, src2);
+  }
+  void vfmadd213pd(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmad(0xa8, dst, src1, src2);
+  }
+  void vfmadd213pd(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmad(0xa8, dst, src1, src2);
+  }
+  void vfmadd231pd(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmad(0xb8, dst, src1, src2);
+  }
+  void vfmadd231pd(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmad(0xb8, dst, src1, src2);
+  }
+  void vfmsub132pd(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmad(0x9a, dst, src1, src2);
+  }
+  void vfmsub132pd(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmad(0x9a, dst, src1, src2);
+  }
+  void vfmsub213pd(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmad(0xaa, dst, src1, src2);
+  }
+  void vfmsub213pd(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmad(0xaa, dst, src1, src2);
+  }
+  void vfmsub231pd(YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vfmad(0xba, dst, src1, src2);
+  }
+  void vfmsub231pd(YMMRegister dst, YMMRegister src1, const Operand &src2) {
+    vfmad(0xba, dst, src1, src2);
+  }
+
+  void vfmas(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vfmas(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
+  void vfmas(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vfmas(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
+
+  void vfmad(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vfmad(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
+  void vfmad(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vfmad(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
 
   // BMI instructions.
   void andnq(Register dst, Register src1, Register src2) {
@@ -2348,8 +2486,6 @@ class Assembler : public CodeGenerator {
   void emit_rex(int size) {
     if (size == kInt64Size) {
       emit_rex_64();
-    } else {
-      DCHECK(size == kInt32Size);
     }
   }
 
@@ -2358,7 +2494,6 @@ class Assembler : public CodeGenerator {
     if (size == kInt64Size) {
       emit_rex_64(p1);
     } else {
-      DCHECK(size == kInt32Size);
       emit_optional_rex_32(p1);
     }
   }
@@ -2368,7 +2503,6 @@ class Assembler : public CodeGenerator {
     if (size == kInt64Size) {
       emit_rex_64(p1, p2);
     } else {
-      DCHECK(size == kInt32Size);
       emit_optional_rex_32(p1, p2);
     }
   }
@@ -2520,7 +2654,7 @@ class Assembler : public CodeGenerator {
 
   void emit_farith(int b1, int b2, int i);
 
-  // Arithmetics
+  // Arithmetics.
   void emit_add(Register dst, Register src, int size) {
     arithmetic_op(0x03, dst, src, size);
   }
@@ -2581,7 +2715,7 @@ class Assembler : public CodeGenerator {
     immediate_arithmetic_op(0x7, dst, src, size);
   }
 
-  // Compare {al,ax,eax,rax} with src.  If equal, set ZF and write dst into
+  // Compare {al,ax,eax,rax} with src. If equal, set ZF and write dst into
   // src. Otherwise clear ZF and write src into {al,ax,eax,rax}.  This
   // operation is only atomic if prefixed by the lock instruction.
   void emit_cmpxchg(const Operand &dst, Register src, int size);
@@ -2589,11 +2723,13 @@ class Assembler : public CodeGenerator {
   void emit_dec(Register dst, int size);
   void emit_dec(const Operand &dst, int size);
 
-  // Divide rdx:rax by src.  Quotient in rax, remainder in rdx when size is 64.
-  // Divide edx:eax by lower 32 bits of src.  Quotient in eax, remainder in edx
+  // Divide rdx:rax by src. Quotient in rax, remainder in rdx when size is 64.
+  // Divide edx:eax by lower 32 bits of src. Quotient in eax, remainder in edx
   // when size is 32.
   void emit_idiv(Register src, int size);
+  void emit_idiv(const Operand &src, int size);
   void emit_div(Register src, int size);
+  void emit_div(const Operand &src, int size);
 
   // Signed multiply instructions.
   // rdx:rax = rax * src when size is 64 or edx:eax = eax * src when size is 32.

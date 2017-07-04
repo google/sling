@@ -48,10 +48,12 @@ int64 GZipCompressor::ByteCount() const {
   return -1;
 }
 
-GZipDecompressor::GZipDecompressor(InputStream *source, int block_size)
+GZipDecompressor::GZipDecompressor(InputStream *source,
+                                   int block_size,
+                                   int window_bits)
     : source_(source), block_size_(block_size) {
   memset(&stream_, 0, sizeof(stream_));
-  CHECK(inflateInit2(&stream_, 15 + 16) == Z_OK);
+  CHECK(inflateInit2(&stream_, window_bits) == Z_OK);
   buffer_ = new char[block_size_];
   total_bytes_ = 0;
   reset_ = false;

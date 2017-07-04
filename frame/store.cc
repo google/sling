@@ -1179,7 +1179,7 @@ bool Store::IsValidReference(Handle handle) const {
   }
 
   // If the handle table entry contains a pointer into the handle table itself
-  // it is part of the freelist and therefore deleted.
+  // it is part of the free list and therefore deleted.
   if (ref->next >= table->base() && ref->next < table->end()) {
     LOG(ERROR) << "Handle to reclaimed object";
     return false;

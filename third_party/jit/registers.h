@@ -113,11 +113,13 @@ GENERAL_REGISTERS(DECLARE_REGISTER)
 #undef DECLARE_REGISTER
 const Register no_reg = {Register::kCode_no_reg};
 
-// Registers for first four arguments.
+// Registers for first six arguments.
 const Register arg_reg_1 = {Register::kCode_rdi};
 const Register arg_reg_2 = {Register::kCode_rsi};
 const Register arg_reg_3 = {Register::kCode_rdx};
 const Register arg_reg_4 = {Register::kCode_rcx};
+const Register arg_reg_5 = {Register::kCode_r8};
+const Register arg_reg_6 = {Register::kCode_r9};
 
 // SIMD registers.
 #define SIMD128_REGISTERS(V) \

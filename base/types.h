@@ -62,7 +62,7 @@ typedef signed int         char32;
 // unsigned int, but our 64-bit architectures use the LP64 model
 // (http://www.opengroup.org/public/tech/aspen/lp64_wp.htm), hence
 // their ints are only 32 bits. We want to use the same fundamental
-// type on all archs if possible to preserve *printf() compatability.
+// type on all archs if possible to preserve *printf() compatibility.
 typedef unsigned long      uword_t;
 
 // long long macros to be used because gcc and vc++ use different suffixes,

@@ -24,8 +24,8 @@ namespace myelin {
 typedef float FloatVec8[8] __attribute__ ((aligned (32)));
 #define CONST8(x) {x, x, x, x, x, x, x, x}
 
-// Register AVX kernels.
-void RegisterAVXKernels(Library *library);
+// Register AVX library.
+void RegisterAVXLibrary(Library *library);
 
 }  // namespace myelin
 }  // namespace sling

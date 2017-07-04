@@ -24,8 +24,8 @@ namespace myelin {
 typedef float FloatVec4[8] __attribute__ ((aligned (16)));
 #define CONST4(x) {x, x, x, x}
 
-// Register SSE kernels.
-void RegisterSSEKernels(Library *library);
+// Register SSE library.
+void RegisterSSELibrary(Library *library);
 
 }  // namespace myelin
 }  // namespace sling

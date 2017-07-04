@@ -20,8 +20,8 @@
 namespace sling {
 namespace myelin {
 
-// Register Dragnn kernels.
-void RegisterDragnnKernels(Library *library);
+// Register Dragnn library.
+void RegisterDragnnLibrary(Library *library);
 
 }  // namespace myelin
 }  // namespace sling

@@ -37,7 +37,7 @@ uint64 FingerprintCat(uint64 fp1, uint64 fp2) {
 // This should be better (collision-wise) than the default hash<string>,
 // without being much slower. It never returns 0 or 1.
 uint64 Fingerprint(const char *bytes, size_t len) {
-  // Some big prime numer.
+  // Some big prime number.
   uint64 fp = 0xA5B85C5E198ED849u;
 
   const char *end = bytes + len;

@@ -33,7 +33,8 @@ class Input {
   ~Input();
 
   // Reads 'size' bytes from the input. Returns false if not all data could be
-  // read, i.e. there is less data available from the input or an error occured.
+  // read, i.e. there is less data available from the input or an error
+  // occurred.
   bool Read(char *data, int size);
 
   // Skips a number of bytes in the input.

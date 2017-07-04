@@ -3,6 +3,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
   name = "generic",
   srcs = [
+    "array.cc",
     "generic.cc",
     "generic-math.cc",
     "generic-matmul.cc",
@@ -10,6 +11,7 @@ cc_library(
   ],
   hdrs = ["generic.h"],
   deps = [
+    "//base",
     "//myelin:compute",
   ],
 )
@@ -22,6 +24,7 @@ cc_library(
   ],
   hdrs = ["sse.h"],
   deps = [
+    "//base",
     "//myelin:compute",
   ],
 )
@@ -36,6 +39,19 @@ cc_library(
   ],
   hdrs = ["avx.h"],
   deps = [
+    "//base",
+    "//myelin:compute",
+  ],
+)
+
+cc_library(
+  name = "tensorflow",
+  srcs = ["tensorflow.cc"],
+  hdrs = ["tensorflow.h"],
+  deps = [
+    ":avx",
+    ":generic",
+    ":sse",
     "//myelin:compute",
   ],
 )
@@ -45,6 +61,7 @@ cc_library(
   srcs = ["dragnn.cc"],
   hdrs = ["dragnn.h"],
   deps = [
+    "//base",
     "//myelin:compute",
   ],
 )

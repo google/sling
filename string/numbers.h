@@ -80,7 +80,7 @@ bool safe_strtou64_base(const char *startptr, int buffer_size,
                         uint64 *value, int base);
 
 // u64tostr_base36()
-//    The inverse of safe_strtou64_base, converts the number agument to
+//    The inverse of safe_strtou64_base, converts the number argument to
 //    a string representation in base-36.
 //    Conversion fails if buffer is too small to to hold the string and
 //    terminating NUL.

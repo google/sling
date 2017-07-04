@@ -21,17 +21,17 @@
 // Example:
 //  function.h:
 //
-//   class Function : public RegisterableInstance<Function> {
+//   class Function : public Component<Function> {
 //    public:
 //     virtual double Evaluate(double x) = 0;
 //   };
 //
 //   #define REGISTER_FUNCTION(type, component)
-//     REGISTER_INSTANCE_COMPONENT(Function, type, component);
+//     REGISTER_COMPONENT_TYPE(Function, type, component);
 //
 //  function.cc:
 //
-//   REGISTER_INSTANCE_REGISTRY("function", Function);
+//   REGISTER_COMPONENT_REGISTRY("function", Function);
 //
 //   class Cos : public Function {
 //    public:
@@ -46,8 +46,9 @@
 //   REGISTER_FUNCTION("cos", Cos);
 //   REGISTER_FUNCTION("exp", Exp);
 //
-//   Function *f = Function::Lookup("cos");
+//   Function *f = Function::Create("cos");
 //   double result = f->Evaluate(arg);
+//   delete f;
 
 #ifndef BASE_REGISTRY_H_
 #define BASE_REGISTRY_H_
@@ -58,6 +59,8 @@
 
 #include "base/logging.h"
 #include "base/types.h"
+
+namespace sling {
 
 // Component metadata with information about name, class, and code location.
 class ComponentMetadata {
@@ -102,12 +105,32 @@ class RegistryMetadata : public ComponentMetadata {
       : ComponentMetadata(name, class_name, file, line),
         components_(components) {}
 
+  // Returns a list of components in the registry.
+  void GetComponents(std::vector<const ComponentMetadata *> *components) const;
+
+  // Returns meta data for component in registry. Returns null if not found.
+  const ComponentMetadata *GetComponent(const string &name) const;
+
+  // Returns the next registry in the registry list.
+  RegistryMetadata *next() const {
+    return static_cast<RegistryMetadata *>(link());
+  }
+
   // Registers a component registry in the master registry.
   static void Register(RegistryMetadata *registry);
+
+  // Returns list of all registries.
+  static void GetRegistries(std::vector<const RegistryMetadata *> *registries);
+
+  // Returns registry for component type or null if it is not found.
+  static const RegistryMetadata *GetRegistry(const string &name);
 
  private:
   // Location of list of components in registry.
   ComponentMetadata **components_;
+
+  // List of all component registries.
+  static RegistryMetadata *global_registry_list;
 };
 
 // Registry for components. An object can be registered with a type name in the
@@ -115,8 +138,7 @@ class RegistryMetadata : public ComponentMetadata {
 // Lookup() method. The components in the registry are put into a linked list
 // of components. It is important that the component registry can be statically
 // initialized in order not to depend on initialization order.
-template <class T>
-struct ComponentRegistry {
+template <class T> struct ComponentRegistry {
   typedef ComponentRegistry<T> Self;
 
   // Component registration class.
@@ -183,9 +205,8 @@ struct ComponentRegistry {
   Registrar *components;
 };
 
-// Base class for registerable class-based components.
-template <class T>
-class RegisterableClass {
+// Base class for registerable components.
+template <class T> class Component {
  public:
   // Factory function type.
   typedef T *(Factory)();
@@ -206,9 +227,8 @@ class RegisterableClass {
   static Registry registry_;
 };
 
-// Base class for registerable instance-based components.
-template <class T>
-class RegisterableInstance {
+// Base class for registerable singletons.
+template <class T> class Singleton {
  public:
   // Registry type.
   typedef ComponentRegistry<T> Registry;
@@ -221,24 +241,24 @@ class RegisterableInstance {
   static Registry registry_;
 };
 
-#define REGISTER_CLASS_COMPONENT(base, type, component)             \
+#define REGISTER_COMPONENT_TYPE(base, type, component) \
   static base *__##component##__factory() { return new component; } \
-  static base::Registry::Registrar __##component##__##registrar(    \
-      base::registry(), type, #component, __FILE__, __LINE__,       \
+  static base::Registry::Registrar __##component##__##registrar( \
+      base::registry(), type, #component, __FILE__, __LINE__, \
       __##component##__factory)
 
-#define REGISTER_CLASS_REGISTRY(type, classname)                  \
-  template <>                                                     \
-  classname::Registry RegisterableClass<classname>::registry_ = { \
+#define REGISTER_COMPONENT_REGISTRY(type, classname) \
+  template <> classname::Registry sling::Component<classname>::registry_ = { \
       type, #classname, __FILE__, __LINE__, nullptr}
 
-#define REGISTER_INSTANCE_COMPONENT(base, type, component)       \
+#define REGISTER_SINGLETON_TYPE(base, type, component) \
   static base::Registry::Registrar __##component##__##registrar( \
       base::registry(), type, #component, __FILE__, __LINE__, new component)
 
-#define REGISTER_INSTANCE_REGISTRY(type, classname)                  \
-  template <>                                                        \
-  classname::Registry RegisterableInstance<classname>::registry_ = { \
+#define REGISTER_SINGLETON_REGISTRY(type, classname) \
+  template <> classname::Registry sling::Singleton<classname>::registry_ = { \
       type, #classname, __FILE__, __LINE__, nullptr}
+
+}  // namespace sling
 
 #endif  // BASE_REGISTRY_H_

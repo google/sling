@@ -447,7 +447,7 @@ void ActionTable::Save(const Store *global,
                        int percentile,
                        const string &file) const {
   string s = Serialize(global, percentile);
-  CHECK_OK(File::WriteContents(file, s));
+  CHECK(File::WriteContents(file, s));
 }
 
 string ActionTable::Serialize(const Store *global, int percentile) const {

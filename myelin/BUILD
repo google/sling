@@ -44,11 +44,32 @@ cc_library(
 )
 
 cc_library(
+  name = "graph",
+  srcs = ["graph.cc"],
+  hdrs = ["graph.h"],
+  deps = [
+    ":flow",
+    "//base",
+    "//file",
+    "//string:printf",
+  ],
+)
+
+cc_library(
   name = "multi-process",
   srcs = ["multi-process.cc"],
   hdrs = ["multi-process.h"],
   deps = [
     ":compute",
+    "//base",
+  ],
+)
+
+cc_library(
+  name = "express",
+  srcs = ["express.cc"],
+  hdrs = ["express.h"],
+  deps = [
     "//base",
   ],
 )

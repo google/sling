@@ -132,15 +132,18 @@ class AVXFltTanh : public Kernel {
     // Input and output must have same shape.
     if (!x->HasSameShape(y)) return false;
 
+    // Strict math not supported.
+    if (step->GetAttr("strict", false)) return false;
+
     return true;
   }
 
   void Adjust(Step *step) override {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
-    x->AlignLast(8);
+    x->MinAlignLast(8);
     x->SetMiniumAlignment(8 * sizeof(float));
-    y->AlignLast(8);
+    y->MinAlignLast(8);
     y->SetMiniumAlignment(8 * sizeof(float));
     x->SameAlign(y);
     step->AllowInPlace(0, 0);
@@ -227,6 +230,10 @@ class AVXFltTanh : public Kernel {
     __ cmpq(ofs, Immediate(step->input(0)->size()));
     __ j(less, &l);
   }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements() * (5 + 6 * 3 + 3 * 3);
+  }
 };
 
 // Compute element-wise exponential function for a tensor using AVX.
@@ -258,15 +265,18 @@ class AVXFltExpBase : public Kernel {
       if (x->dim(d) != y->dim(d)) return false;
     }
 
+    // Strict math not supported.
+    if (step->GetAttr("strict", false)) return false;
+
     return true;
   }
 
   void Adjust(Step *step) override {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
-    x->AlignLast(8);
+    x->MinAlignLast(8);
     x->SetMiniumAlignment(8 * sizeof(float));
-    y->AlignLast(8);
+    y->MinAlignLast(8);
     y->SetMiniumAlignment(8 * sizeof(float));
     step->AllowInPlace(0, 0);
   }
@@ -419,6 +429,10 @@ class AVXFltExpBase : public Kernel {
     __ j(less, &l);
 
     // TODO: set padding elements to zero because sigmoid(0)=0.5 and exp(0)=1.
+  }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements() * (16 + 5 * 2 + (sigmoid_ ? 3 : 0));
   }
 
  private:

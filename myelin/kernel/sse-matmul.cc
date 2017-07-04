@@ -72,6 +72,9 @@ class SSEFltVecMatMulBase : public Kernel {
       }
     }
 
+    // Horizontal summation is not strict math compatible.
+    if (step->GetAttr("strict", false)) return false;
+
     return true;
   }
 
@@ -81,10 +84,10 @@ class SSEFltVecMatMulBase : public Kernel {
 
     int alignment = 4 * sizeof(float);
 
-    x->Align({1, 4});
+    x->MinAlign({1, 4});
     x->SetMiniumAlignment(alignment);
 
-    W->Align({4, 1});
+    W->MinAlign({4, 1});
     W->SetMiniumAlignment(alignment);
     W->SetRequiredOrder(COLUMN_MAJOR);
   }
@@ -191,7 +194,7 @@ class SSEFltVecMatMulBase : public Kernel {
 
     // Compute relu.
     if (relu_) {
-      __ maxss(sum[0], zero);
+      __ maxps(sum[0], zero);
     }
 
     // Save to y[col].
@@ -202,6 +205,13 @@ class SSEFltVecMatMulBase : public Kernel {
     __ addq(matrix, Immediate(row_size));
     __ cmpq(col, Immediate(cols));
     __ j(less, &l1);
+  }
+
+  int64 Complexity(const Step *step) override {
+    int64 ops = step->input(1)->elements() * 2;
+    if (bias_) ops += step->input(2)->elements();
+    if (relu_) ops += step->output(0)->elements();
+    return ops;
   }
 
  protected:
@@ -261,7 +271,7 @@ void RegisterSSEMatMul(Library *library) {
   // Input     : x: float32[1,n]
   //             W: float32[n,m] column-major
   // Output    : y: float32[1,m]
-  // Requires  : AVX
+  // Requires  : SSE3
   library->Register(new SSEFltVecMatMulRelu());
 
   // Computes  : y = max(0, x * W + b)

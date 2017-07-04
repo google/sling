@@ -97,6 +97,9 @@ class GenericFltVecMatMulBase : public Kernel {
     XMMRegister sum = mm.allocx();
     XMMRegister zero = relu_ ? mm.allocx() : no_xmm_reg;
 
+    bool strict = step->GetAttr("strict", false);
+    if (strict) step->set_variant("strict");
+
     __ LoadTensorAddress(input, x);
     __ LoadTensorAddress(matrix, W);
     if (bias_) {
@@ -109,7 +112,7 @@ class GenericFltVecMatMulBase : public Kernel {
     }
 
     __ LoopStart(&l1);
-    if (bias_) {
+    if (bias_ && !strict) {
       __ movss(sum, Operand(vector, col, times_4));
     } else {
       __ xorps(sum, sum);
@@ -124,6 +127,10 @@ class GenericFltVecMatMulBase : public Kernel {
     __ addss(sum, elem);
     __ j(not_equal, &l2);
 
+    if (bias_ && strict) {
+      __ addss(sum, Operand(vector, col, times_4));
+    }
+
     if (relu_) {
       __ maxss(sum, zero);
     }
@@ -132,6 +139,13 @@ class GenericFltVecMatMulBase : public Kernel {
     __ addq(matrix, Immediate(row_size));
     __ cmpq(col, Immediate(cols));
     __ j(not_equal, &l1);
+  }
+
+  int64 Complexity(const Step *step) override {
+    int64 ops = step->input(1)->elements() * 2;
+    if (bias_) ops += step->input(2)->elements();
+    if (relu_) ops += step->output(0)->elements();
+    return ops;
   }
 
  private:
@@ -230,16 +244,6 @@ class GenericFltMatMatMul : public Kernel {
     XMMRegister elem = mm.allocx();
     XMMRegister sum = mm.allocx();
 
-    //  for (int i = 0; i < R1; ++i) {
-    //    for (int j = 0; j < C2; ++j) {
-    //      float sum = 0.0;
-    //      for (int k = 0; k < C1; ++k) {
-    //        sum += A[i][k] * B[k][j];
-    //      }
-    //      C[i][j] = sum;
-    //    }
-    //  }
-
     // Load tensor addresses.
     __ LoadTensorAddress(a, A);
     __ LoadTensorAddress(b, B);
@@ -289,9 +293,13 @@ class GenericFltMatMatMul : public Kernel {
     __ cmpq(c, c_end);
     __ j(not_equal, &l1);
   }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->dim(0) * step->input(1)->elements() * 2;
+  }
 };
 
-// Generic interger vector matrix multiplication, y = Relu(x * W + b).
+// Generic integer vector matrix multiplication, y = Relu(x * W + b).
 class GenericIntVecMatMulBase : public Kernel {
  public:
   GenericIntVecMatMulBase(bool bias, bool relu) : bias_(bias), relu_(relu) {}
@@ -442,6 +450,13 @@ class GenericIntVecMatMulBase : public Kernel {
     __ j(not_equal, &l1);
   }
 
+  int64 Complexity(const Step *step) override {
+    int ops = step->input(1)->elements() * 2;
+    if (bias_) ops += step->input(2)->elements();
+    if (relu_) ops += step->output(0)->elements();
+    return ops;
+  }
+
  private:
   bool bias_;  // add bias vector to result, y=Wx+b
   bool relu_;  // apply rectified linear unit, y=max(0,Wx+b)
@@ -480,6 +495,12 @@ class GenericIntVecMatMulAddRelu : public GenericIntVecMatMulBase {
 };
 
 void RegisterGenericMatMul(Library *library) {
+  // Computes  : C = A * B
+  // Input     : A: float32[k,n] row-major
+  //             B: float32[n,m] column-major
+  // Output    : C: float32[k,m] row-major
+  library->Register(new GenericFltMatMatMul());
+
   // Computes  : y = x * W
   // Input     : x: float32[1,n]
   //             W: float32[n,m] column-major
@@ -505,12 +526,6 @@ void RegisterGenericMatMul(Library *library) {
   //             b: float32[1,n]
   // Output    : y: float32[1,m]
   library->Register(new GenericFltVecMatMulAddRelu());
-
-  // Computes  : C = A * B
-  // Input     : A: float32[k,n] row-major
-  //             B: float32[n,m] column-major
-  // Output    : C: float32[k,m] row-major
-  library->Register(new GenericFltMatMatMul());
 
   // Computes  : y = x * W
   // Input     : x: int8/16/32/64[1,n]
