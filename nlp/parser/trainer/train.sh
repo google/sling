@@ -43,11 +43,73 @@
 
 set -eux
 
-readonly COMMONS=$1
-readonly OUTPUT_FOLDER=$2
-readonly TRAIN_FILEPATTERN=$3
-readonly DEV_GOLD_FILEPATTERN=$4
-readonly DEV_NOGOLD_FILEPATTERN=$5
+MAKE_SPEC=1
+DO_TRAINING=1
+
+for i in "$@"
+do
+case $i in
+    --commons=*)
+    COMMONS="${i#*=}"
+    shift
+    ;;
+    --output_dir=*|--output=*|--output_folder=*)
+    OUTPUT_FOLDER="${i#*=}"
+    shift
+    ;;
+    --train=*|--train_corpus=*)
+    TRAIN_FILEPATTERN="${i#*=}"
+    shift
+    ;;
+    --dev=*|--dev_with_gold=*)
+    DEV_GOLD_FILEPATTERN="${i#*=}"
+    shift
+    ;;
+    --dev_without_gold=*)
+    DEV_NOGOLD_FILEPATTERN="${i#*=}"
+    shift
+    ;;
+    --spec_only|--only_spec)
+    DO_TRAINING=0
+    shift
+    ;;
+    --train_only|--only_train)
+    MAKE_SPEC=0
+    shift
+    ;;
+    *)
+    echo "Unknown option " $i
+    exit 1
+    ;;
+esac
+done
+
+if [ -z "$COMMONS" ];
+then
+  echo "Commons not specified. Use --commons to specify it."
+  exit 1
+fi
+if [ -z "$TRAIN_FILEPATTERN" ];
+then
+  echo "Train corpus not specified. Use --train or --train_corpus."
+  exit 1
+fi
+if [ -z "$DEV_GOLD_FILEPATTERN" ];
+then
+  echo "Dev gold corpus not specified. Use --dev or --dev_with_gold."
+  exit 1
+fi
+if [ -z "$DEV_NOGOLD_FILEPATTERN" ];
+then
+  echo "Dev corpus without gold not specified. Use --dev_without_gold."
+  exit 1
+fi
+
+if [[ "$MAKE_SPEC" -eq 0 ]] && [[ "$DO_TRAINING" -eq 0 ]];
+then
+  echo "Specify at most one of --only_spec and --only_train"
+  exit 1
+fi
 
 HYPERPARAMS="learning_rate:0.0005 decay_steps=800000 "
 HYPERPARAMS+="seed:1 learning_method:'adam' "
@@ -55,20 +117,26 @@ HYPERPARAMS+="use_moving_average:true dropout_rate:0.9 "
 HYPERPARAMS+="gradient_clip_norm:1.0 adam_beta1:0.01 "
 HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.0001"
 
-bazel build -c opt nlp/parser/trainer:generate-master-spec
-bazel build -c opt nlp/parser/trainer:frame-evaluation
+if [[ "$MAKE_SPEC" -eq 1 ]];
+then
+  bazel build -c opt nlp/parser/trainer:generate-master-spec
+  bazel-bin/nlp/parser/trainer/generate-master-spec \
+    --documents=${TRAIN_FILEPATTERN} \
+    --commons=${COMMONS} \
+    --output_dir=${OUTPUT_FOLDER}
+fi
 
-bazel-bin/nlp/parser/trainer/generate-master-spec \
-  --documents=${TRAIN_FILEPATTERN} \
-  --commons=${COMMONS}
-
-python nlp/parser/trainer/graph-builder-main.py \
-  --master_spec="${OUTPUT_FOLDER}/master_spec" \
-  --hyperparams=${HYPERPARAMS} \
-  --output_folder=${OUTPUT_FOLDER} \
-  --commons=${COMMONS} \
-  --train_corpus=${TRAIN_FILEPATTERN} \
-  --dev_corpus=${DEV_GOLD_FILEPATTERN} \
-  --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN}
+if [[ "$DO_TRAINING" -eq 1 ]];
+then
+  bazel build -c opt nlp/parser/trainer:frame-evaluation
+  python nlp/parser/trainer/graph-builder-main.py \
+    --master_spec="${OUTPUT_FOLDER}/master_spec" \
+    --hyperparams=${HYPERPARAMS} \
+    --output_folder=${OUTPUT_FOLDER} \
+    --commons=${COMMONS} \
+    --train_corpus=${TRAIN_FILEPATTERN} \
+    --dev_corpus=${DEV_GOLD_FILEPATTERN} \
+    --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN}
+fi
 
 echo "Done."
