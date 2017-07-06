@@ -60,4 +60,26 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "zip-iterator",
+  srcs = ["zip-iterator.cc"],
+  hdrs = ["zip-iterator.h"],
+  deps = [
+    "//base",
+    "//file:file",
+    "//file:posix",
+    "//third_party/zlib:miniunzip",
+  ],
+)
 
+cc_binary(
+  name = "zip-iterator-test",
+  srcs = ["zip-iterator-test.cc"],
+  deps = [
+    ":zip-iterator",
+    "//base",
+    "//file:file",
+    "//file:posix",
+    "//stream:zipfile",
+  ],
+)
