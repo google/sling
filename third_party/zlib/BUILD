@@ -42,3 +42,20 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "miniunzip",
+  srcs = [
+    "upstream/contrib/minizip/unzip.c",
+    "upstream/contrib/minizip/ioapi.c",
+  ],
+  hdrs = [
+    "upstream/contrib/minizip/unzip.h",
+    "upstream/contrib/minizip/ioapi.h",
+  ],
+  copts = [
+    "-O3",
+    "-Wno-unused-variable",
+    "-Wno-implicit-function-declaration",
+  ],
+)
+
