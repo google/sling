@@ -40,6 +40,8 @@
 #include "frame/object.h"
 #include "frame/serialization.h"
 #include "frame/store.h"
+#include "nlp/document/document.h"
+#include "nlp/document/document-source.h"
 #include "nlp/parser/trainer/action-table-generator.h"
 #include "nlp/parser/trainer/feature.h"
 #include "nlp/parser/trainer/shared-resources.h"
@@ -60,6 +62,7 @@ using sling::nlp::ActionTableGenerator;
 using sling::nlp::SemparFeatureExtractor;
 using sling::nlp::SharedResources;
 using sling::nlp::Document;
+using sling::nlp::DocumentSource;
 
 using syntaxnet::dragnn::ComponentSpec;
 using syntaxnet::dragnn::MasterSpec;
@@ -79,12 +82,13 @@ constexpr int kLexiconMaxSuffixLength = 3;
 struct Artifacts {
   SharedResources resources;
 
-  std::vector<string> train_files;  // all training documents
-  string commons_filename;          // full path to commons
-  string action_table_filename;     // full path of generated action table
-  MasterSpec spec;                  // generated master spec
-  string spec_file;                 // path to the master spec
+  DocumentSource *train_corpus = nullptr;  // training corpus
+  string commons_filename;                 // path to commons
+  string action_table_filename;            // path of generated action table
+  MasterSpec spec;                         // generated master spec
+  string spec_file;                        // path to the master spec
 
+  ~Artifacts() { delete train_corpus; }
   Store *global() { return resources.global; }
   const ActionTable &table() { return resources.table; }
 };
@@ -102,18 +106,16 @@ void OutputActionTable(Artifacts *artifacts) {
   generator.set_coverage_percentile(kActionTableCoveragePercentile);
   generator.set_per_sentence(kActionTableFromPerSentence);
 
-  LOG(INFO) << "Processing " << artifacts->train_files.size() << " documents..";
   int count = 0;
-  for (const string &file : artifacts->train_files) {
-    Store local(artifacts->global());
-    FileDecoder decoder(&local, file);
-    Object top = decoder.Decode();
-    if (top.invalid()) continue;
+  while (true) {
+    Store store(artifacts->global());
+    Document *document = artifacts->train_corpus->Next(&store);
+    if (document == nullptr) break;
 
     count++;
-    Document document(top.AsFrame());
-    generator.Add(document);
-    if (count % 100 == 1) LOG(INFO) << count << " documents processed.";
+    generator.Add(*document);
+    if (count % 10000 == 1) LOG(INFO) << count << " documents processed.";
+    delete document;
   }
   LOG(INFO) << "Processed " << count << " documents.";
 
@@ -126,12 +128,6 @@ void OutputActionTable(Artifacts *artifacts) {
   LOG(INFO) << "Wrote action table to " << table_file
             << ", " << summary_file << ", " << unknown_file;
   artifacts->resources.LoadActionTable(table_file);
-}
-
-void WriteAffixTable(const syntaxnet::AffixTable &affixes,
-                     const string &output_file) {
-  syntaxnet::ProtoRecordWriter writer(output_file);
-  affixes.Write(&writer);
 }
 
 syntaxnet::dragnn::ComponentSpec *AddComponent(
@@ -238,7 +234,7 @@ void TrainFeatures(Artifacts *artifacts, ComponentSpec *spec) {
   // specified in the FML itself.
 
   auto size_and_vocab = fixed_feature_extractor.Train(
-      artifacts->train_files,
+      artifacts->train_corpus,
       FLAGS_output_dir,
       &artifacts->resources,
       spec);
@@ -259,7 +255,7 @@ void TrainFeatures(Artifacts *artifacts, ComponentSpec *spec) {
   }
 
   size_and_vocab = linked_feature_extractor.Train(
-      artifacts->train_files,
+      artifacts->train_corpus,
       FLAGS_output_dir,
       &artifacts->resources,
       spec);
@@ -324,7 +320,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
 
   // Dump the master spec.
   string spec_file = FullName("master_spec");
-  CHECK_OK(File::WriteContents(spec_file, artifacts->spec.DebugString()));
+  CHECK(File::WriteContents(spec_file, artifacts->spec.DebugString()));
   artifacts->spec_file = spec_file;
   LOG(INFO) << "Wrote master spec to " << spec_file;
 }
@@ -337,15 +333,13 @@ int main(int argc, char **argv) {
   CHECK(!FLAGS_output_dir.empty()) << "No output_dir specified.";
 
   if (!File::Exists(FLAGS_output_dir)) {
-    CHECK_OK(File::Mkdir(FLAGS_output_dir));
+    CHECK(File::Mkdir(FLAGS_output_dir));
   }
 
   Artifacts artifacts;
   artifacts.commons_filename = FLAGS_commons;
   artifacts.resources.LoadGlobalStore(FLAGS_commons);
-
-  // Get a list of all training files.
-  CHECK_OK(File::Match(FLAGS_documents, &artifacts.train_files));
+  artifacts.train_corpus = DocumentSource::Create(FLAGS_documents);
 
   // Dump action table.
   OutputActionTable(&artifacts);

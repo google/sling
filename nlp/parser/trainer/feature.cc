@@ -17,7 +17,7 @@
 #include "string/numbers.h"
 #include "syntaxnet/utils.h"
 
-REGISTER_CLASS_REGISTRY("sempar feature", sling::nlp::SemparFeature);
+REGISTER_COMPONENT_REGISTRY("sempar feature", sling::nlp::SemparFeature);
 
 namespace sling {
 namespace nlp {
@@ -137,7 +137,7 @@ void SemparFeatureExtractor::AddChannel(const string &name,
 }
 
 std::vector<std::pair<int, int>> SemparFeatureExtractor::Train(
-    const std::vector<string> &train_files,
+    DocumentSource *corpus,
     const string &output_folder,
     SharedResources *resources,
     ComponentSpec *spec) {
@@ -148,23 +148,22 @@ std::vector<std::pair<int, int>> SemparFeatureExtractor::Train(
   }
 
   int count = 0;
-  for (const string &file : train_files) {
+  corpus->Rewind();
+  while (true) {
     Store local(resources->global);
-    FileDecoder decoder(&local, file);
-    Object top = decoder.Decode();
-    if (top.invalid()) continue;
+    Document *document = corpus->Next(&local);
+    if (document == nullptr) break;
 
     count++;
-    Document document(top.AsFrame());
-
     for (auto &channel : channels_) {
       for (auto *feature : channel.features) {
-        feature->TrainProcess(document);
+        feature->TrainProcess(*document);
       }
     }
-    if (count % 200 == 1) {
+    if (count % 10000 == 1) {
       LOG(INFO) << "SemparFeatureExtractor: " << count << " docs seen.";
     }
+    delete document;
   }
   LOG(INFO) << "SemparFeatureExtractor: " << count << " docs seen.";
 

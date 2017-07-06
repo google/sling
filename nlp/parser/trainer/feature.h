@@ -20,6 +20,7 @@
 
 #include "base/registry.h"
 #include "dragnn/protos/spec.pb.h"
+#include "nlp/document/document-source.h"
 #include "nlp/parser/trainer/shared-resources.h"
 #include "nlp/parser/trainer/transition-state.h"
 
@@ -40,7 +41,7 @@ namespace nlp {
 //
 // The feature function also has access to an integer argument (0 by default),
 // as well as a map of parameter names/values.
-class SemparFeature : public RegisterableClass<SemparFeature> {
+class SemparFeature : public Component<SemparFeature> {
  public:
   struct Value {
     int64 id;           // id output by the feature function
@@ -147,7 +148,7 @@ class SemparFeature : public RegisterableClass<SemparFeature> {
 };
 
 #define REGISTER_SEMPAR_FEATURE(name, component) \
-    REGISTER_CLASS_COMPONENT(SemparFeature, name, component);
+    REGISTER_COMPONENT_TYPE(SemparFeature, name, component);
 
 // Manager for feature functions. It groups features into channels.
 class SemparFeatureExtractor {
@@ -164,7 +165,7 @@ class SemparFeatureExtractor {
   // Trains the current set of channels using training data in 'train_files'.
   // Returns one pair per channel, of (#features, #max domain size).
   std::vector<std::pair<int, int>> Train(
-      const std::vector<string> &train_files,
+      DocumentSource *corpus,
       const string &output_folder,
       SharedResources *resources,
       syntaxnet::dragnn::ComponentSpec *spec);

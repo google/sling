@@ -47,6 +47,8 @@ cc_binary(
     "//frame:object",
     "//frame:serialization",
     "//frame:store",
+    "//nlp/document:document",
+    "//nlp/document:document-source",
     "//string:strcat",
     "//third_party/sempar_dragnn:sempar_dragnn",
   ],
@@ -142,6 +144,7 @@ cc_library(
       ":shared-resources",
       ":transition-state",
       "//frame:serialization",
+      "//nlp/document:document-source",
       "//string:numbers",
       "//third_party/sempar_dragnn:sempar_dragnn",
   ],
@@ -248,3 +251,4 @@ cc_binary(
     "//file:posix",
   ],
 )
+
