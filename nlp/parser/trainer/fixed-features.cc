@@ -94,7 +94,7 @@ class WordFeature : public PrecomputedFeature {
     for (const string &w : id_to_word_) {
       StrAppend(&contents, !contents.empty() ? "\n" : "", w);
     }
-    CHECK_OK(File::WriteContents(dictionary_file_, contents));
+    CHECK(File::WriteContents(dictionary_file_, contents));
 
     // Add path to the dictionary to the spec.
     AddResourceToSpec(DictionaryName(), dictionary_file_, spec);

@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
 
   LOG(INFO) << "Reading spec from " << FLAGS_spec;
   string contents;
-  CHECK_OK(File::ReadContents(FLAGS_spec, &contents));
+  CHECK(File::ReadContents(FLAGS_spec, &contents));
 
   MasterSpec spec;
   CHECK(TextFormat::ParseFromString(contents, &spec));
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
   resources.LoadActionTable(action_table_path);
 
   std::vector<string> document_files;
-  CHECK_OK(File::Match(FLAGS_documents, &document_files));
+  CHECK(File::Match(FLAGS_documents, &document_files));
 
   std::vector<string> kept_files;
   std::vector<string> kept_text;
@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
     LOG(INFO) << string(80, '*') << "\n";
     LOG(INFO) << "Processing doc: " << kept_text[i];
     string contents;
-    CHECK_OK(File::ReadContents(kept_files[i], &contents));
+    CHECK(File::ReadContents(kept_files[i], &contents));
 
     std::vector<string> input;
     input.push_back(contents);

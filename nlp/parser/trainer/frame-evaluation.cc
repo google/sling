@@ -73,8 +73,8 @@ void FrameEvaluation::Evaluate(Store *commons,
 
   // Compare predicted and golden documents.
   std::vector<string> gold_files, test_files;
-  CHECK_OK(File::Match(gold_file_pattern, &gold_files));
-  CHECK_OK(File::Match(test_file_pattern, &test_files));
+  CHECK(File::Match(gold_file_pattern, &gold_files));
+  CHECK(File::Match(test_file_pattern, &test_files));
   CHECK_EQ(gold_files.size(), test_files.size());
 
   // Sort the list of filenames to rule out any non-determinism in File::Match.
