@@ -16,6 +16,7 @@
 
 import glob
 import os
+import subprocess
 import tensorflow as tf
 import zipfile
 
@@ -26,7 +27,11 @@ from dragnn.python import trainer_lib
 from google.protobuf import text_format
 from syntaxnet.util import check
 
-import dragnn.python.load_dragnn_cc_impl
+#import dragnn.python.load_dragnn_cc_impl
+
+tf.load_op_library("/usr/local/google/home/grahul/oss/models/syntaxnet/bazel-bin/dragnn/python/dragnn_cc_impl.so")
+tf.load_op_library(
+    os.path.join('bazel-bin', tf.resource_loader.get_data_files_path(), 'sempar-component-dragnn.so'))
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -43,7 +48,7 @@ flags.DEFINE_string('dev_corpus_without_gold', '',
 flags.DEFINE_string('tf_master', '',
                     'TensorFlow execution engine to connect to.')
 flags.DEFINE_string('pretrain_steps', '100', 'Comma separated pretrained steps')
-flags.DEFINE_string('train_steps', '5000', 'Comma separated train steps')
+flags.DEFINE_string('train_steps', '50000', 'Comma separated train steps')
 flags.DEFINE_integer('report_every', 200, 'Checkpoint interval')
 flags.DEFINE_integer('batch_size', 8, 'Training batch size')
 
@@ -68,27 +73,38 @@ def evaluator(gold_docs, test_docs):
   check.Eq(len(gold_docs), len(test_docs), "Unequal #docs during evaluation")
 
   folder = os.path.join(FLAGS.output_folder, "tmp_docs")
-  if os.path.exists(folder):
-    # Empty the folder.
-    map(os.unlink, (os.path.join(folder, f) for f in os.listdir(folder)))
-  else:
-    os.makedirs(folder)
+  empty_dir(folder)
 
-  # Dump docs to individual files.
-  for i in xrange(len(gold_docs)):
-    fname = os.path.join(folder, "gold.", str(i))
-    with open(fname, 'w') as f:
-      f.write(gold_docs[i])
+  # Dump gold and test docs.
+  #for i in xrange(len(gold_docs)):
+  #  fname = os.path.join(folder, "gold." + str(i))
+  #  with open(fname, 'w') as f:
+  #    f.write(gold_docs[i])
+  #
+  # fname = os.path.join(folder, "test." + str(i))
+  #  with open(fname, 'w') as f:
+  #    f.write(test_docs[i])
 
-    fname = os.path.join(folder, "test.", str(i))
-    with open(fname, 'w') as f:
-      f.write(test_docs[i])
+  gold_zip_name = os.path.join(folder, "dev.gold.zip")
+  test_zip_name = os.path.join(folder, "dev.test.zip")
+
+  with zipfile.ZipFile(gold_zip_name,  'w') as gold:
+    for i in xrange(len(gold_docs)):
+      filename = "gold." + str(i)
+      gold.writestr(filename, gold_docs[i])
+    gold.close()
+
+  with zipfile.ZipFile(test_zip_name,  'w') as test:
+    for i in xrange(len(test_docs)):
+      filename = "test." + str(i)
+      test.writestr(filename, test_docs[i])
+    test.close()
 
   try:
     output = subprocess.check_output(
         ['bazel-bin/nlp/parser/trainer/frame-evaluation',
-         '--gold_documents=\'' + os.path.join(folder, 'gold.*') + '\'',
-         '--test_documents=\'' + os.path.join(folder, 'test.*') + '\'',
+         '--gold_documents=' + gold_zip_name,
+         '--test_documents=' + test_zip_name,
          '--commons=' + FLAGS.commons],
         stderr=subprocess.STDOUT)
   except subprocess.CalledProcessError as e:
@@ -109,31 +125,23 @@ def evaluator(gold_docs, test_docs):
   return eval_output
 
 
-  # TODO: Comment the code above and uncomment the block below once support
-  # for iterating over zip file contents has been added to C++.
-
-  # Dump gold and test documents to respective zip files.
-  #gold_zip_name = os.path.join(folder, "dev.gold.zip")
-  #test_zip_name = os.path.join(folder, "dev.test.zip")
-
-  #with zipfile.ZipFile(gold_zip_name,  'w') as gold:
-  #  for i in xrange(len(gold_docs)):
-  #    filename = os.path.join("gold.", str(i))
-  #    gold.writestr(filename, gold_docs[i])
-
-  #with zipfile.ZipFile(test_zip_name,  'w') as test:
-  #  for i in xrange(len(test_docs)):
-  #    filename = os.path.join("test.", str(i))
-  #    test.writestr(filename, test_docs[i])
-
-
+  
 #def main(unused_argv):
 #  train_corpus = read_corpus(FLAGS.train_corpus)
 #  dev_corpus_with_gold = read_corpus(FLAGS.dev_corpus)
 #  dev_corpus_without_gold = read_corpus(FLAGS.dev_corpus_without_gold)
 
 
+def empty_dir(folder):
+  if tf.gfile.IsDirectory(folder):
+    tf.gfile.DeleteRecursively(folder)
+  elif tf.gfile.Exists(folder):
+    tf.gfile.Remove(folder)
+  tf.gfile.MakeDirs(folder)
+
+
 def main(unused_argv):
+  tf.logging.set_verbosity(tf.logging.INFO)
   # Read hyperparams and master spec.
   hyperparam_config = spec_pb2.GridPoint()
   text_format.Parse(FLAGS.hyperparams, hyperparam_config)
@@ -146,8 +154,14 @@ def main(unused_argv):
   pretrain_steps = map(int, FLAGS.pretrain_steps.split(','))
   train_steps = map(int, FLAGS.train_steps.split(','))
 
+  # Make output folder
+  if not os.path.isdir(FLAGS.output_folder):
+    os.makedirs(FLAGS.output_folder)
+
   # Construct TF Graph.
+  graph_file = os.path.join(FLAGS.output_folder, "graph")
   graph = tf.Graph()
+
   with graph.as_default():
     builder = graph_builder.MasterBuilder(master_spec, hyperparam_config)
 
@@ -177,8 +191,8 @@ def main(unused_argv):
     for component in builder.components:
       summaries += component.get_summaries()
     summaries.append(
-        tf.contrib.deprecated.scalar_summary('Global step', builder.master_vars[
-            'step']))
+        tf.contrib.deprecated.scalar_summary(
+            'Global step', builder.master_vars['step']))
     summaries.append(
         tf.contrib.deprecated.scalar_summary(
             'Learning rate', builder.master_vars['learning_rate']))
@@ -191,15 +205,15 @@ def main(unused_argv):
 
   # Prepare tensorboard dir.
   events_dir = os.path.join(FLAGS.output_folder, "tensorboard")
+  empty_dir(events_dir)
   summary_writer = tf.summary.FileWriter(events_dir, graph)
   summary_writer.close()
   print "Wrote events (incl. graph) for Tensorboard to folder:", events_dir
   print "The graph can be viewed via"
-  print "  tensorboard --logs=" + events_dir
+  print "  tensorboard --logdir=" + events_dir
   print "  then navigating to http://localhost:6006 and clicking on 'GRAPHS'"
 
   # Also dump the graph separately.
-  graph_file = os.path.join(FLAGS.output_folder, "graph")
   with file(graph_file, 'w') as fout:
     fout.write(graph.as_graph_def().SerializeToString())
   fout.close()
@@ -209,6 +223,7 @@ def main(unused_argv):
     tf.set_random_seed(hyperparam_config.seed)
 
   # Read train and dev corpora.
+  print "Reading corpora..."
   train_corpus = read_corpus(FLAGS.train_corpus)
   dev_corpus_with_gold = read_corpus(FLAGS.dev_corpus)
   dev_corpus_without_gold = read_corpus(FLAGS.dev_corpus_without_gold)
@@ -216,11 +231,7 @@ def main(unused_argv):
   # Prepare checkpoint folder.
   checkpoint_path = os.path.join(FLAGS.output_folder, 'checkpoints/best')
   checkpoint_dir = os.path.dirname(checkpoint_path)
-  if tf.gfile.IsDirectory(checkpoint_dir):
-    tf.gfile.DeleteRecursively(checkpoint_dir)
-  elif tf.gfile.Exists(checkpoint_dir):
-    tf.gfile.Remove(checkpoint_dir)
-  tf.gfile.MakeDirs(checkpoint_dir)
+  empty_dir(checkpoint_dir)
 
   with tf.Session(FLAGS.tf_master, graph=graph) as sess:
     # Make sure to re-initialize all underlying state.
