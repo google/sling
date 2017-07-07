@@ -43,6 +43,12 @@
 
 set -eux
 
+SEM=$HOME/sempar_ontonotes
+COMMONS=${SEM}/commons
+OUTPUT_FOLDER=${SEM}/out
+TRAIN_FILEPATTERN=${SEM}/train.zip
+DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
+DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 MAKE_SPEC=1
 DO_TRAINING=1
 
