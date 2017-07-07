@@ -49,7 +49,7 @@ flags.DEFINE_string('tf_master', '',
                     'TensorFlow execution engine to connect to.')
 flags.DEFINE_string('pretrain_steps', '100', 'Comma separated pretrained steps')
 flags.DEFINE_string('train_steps', '50000', 'Comma separated train steps')
-flags.DEFINE_integer('report_every', 200, 'Checkpoint interval')
+flags.DEFINE_integer('report_every', 1000, 'Checkpoint interval')
 flags.DEFINE_integer('batch_size', 8, 'Training batch size')
 
 def read_corpus(file_pattern):
@@ -207,7 +207,6 @@ def main(unused_argv):
   events_dir = os.path.join(FLAGS.output_folder, "tensorboard")
   empty_dir(events_dir)
   summary_writer = tf.summary.FileWriter(events_dir, graph)
-  summary_writer.close()
   print "Wrote events (incl. graph) for Tensorboard to folder:", events_dir
   print "The graph can be viewed via"
   print "  tensorboard --logdir=" + events_dir
