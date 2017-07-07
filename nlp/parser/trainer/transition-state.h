@@ -146,11 +146,13 @@ class SemparState
     return step_info_.FocusStep(parser_state_->Attention(index));
   }
 
-  // Returns the number of steps taken by the state so far.
-  int NumSteps() const { return step_info_.NumSteps(); }
-
   // Whether the state is for a shift-only instance.
   bool shift_only() const { return system_type_ == SHIFT_ONLY; }
+
+  // Returns the number of steps taken by the state so far.
+  int NumSteps() const {
+    return shift_only() ? shift_only_state_.steps_taken : step_info_.NumSteps();
+  }
 
   // Current position (works for both SHIFT_ONLY and SEMPAR cases).
   int current() const {
