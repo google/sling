@@ -14,9 +14,11 @@
 
 #include "nlp/parser/trainer/sempar-component.h"
 
+#include <iostream>
 #include <memory>
 
 #include "base/logging.h"
+#include "file/file.h"
 #include "dragnn/components/util/bulk_feature_extractor.h"
 #include "dragnn/core/component_registry.h"
 #include "dragnn/core/input_batch_cache.h"
@@ -82,6 +84,8 @@ SemparComponent::~SemparComponent() {
 }
 
 void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
+  File::Init();
+
   // Save off the passed spec for future reference.
   spec_ = spec;
 
@@ -178,7 +182,6 @@ int SemparComponent::GetBeamIndexAtStep(int step,
                                         int current_index,
                                         int batch) const {
   CHECK_EQ(current_index, 0) << "Only BeamSize=1 supported: " << current_index;
-  if (step < 0 || step >= StepsTaken(batch)) return -1;
   return 0;  // since beam size is 1
 }
 
