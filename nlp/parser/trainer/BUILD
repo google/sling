@@ -187,6 +187,7 @@ cc_library(
       ":feature",
       ":sempar-instance",
       ":transition-state",
+      "//file:file",
       "//frame:store",
       "//nlp/document:document",
       "//nlp/parser:action-table",
@@ -195,6 +196,22 @@ cc_library(
       "//third_party/sempar_dragnn:sempar_dragnn",
   ],
   alwayslink = 1,
+)
+
+cc_binary(
+    name = "sempar-component-dragnn.so",
+    linkopts = select({
+        "//conditions:default": ["-lm"],
+    }),
+    linkshared = 1,
+    linkstatic = 1,
+    deps = [
+        ":fixed-features",
+        ":link-features",
+        ":sempar-component",
+        "//file:file",
+        "//file:posix",
+    ],
 )
 
 cc_binary(
@@ -209,9 +226,8 @@ cc_binary(
     "//base",
     "//file:file",
     "//file:posix",
-    "//frame:object",
-    "//frame:serialization",
-    "//frame:store",
+    "//nlp/document:document",
+    "//nlp/document:document-source",
     "//nlp/parser:parser-action",
     "//string:strcat",
     "//third_party/sempar_dragnn:sempar_dragnn",
@@ -237,6 +253,7 @@ cc_library(
     "//frame:serialization",
     "//frame:store",
     "//nlp/document:document",
+    "//nlp/document:document-source",
     "//string:strcat",
   ],
 )
@@ -249,6 +266,8 @@ cc_binary(
     "//base",
     "//file:file",
     "//file:posix",
+    "//third_party/zlib:miniunzip",
+    "//third_party/zlib:zlib",
   ],
 )
 

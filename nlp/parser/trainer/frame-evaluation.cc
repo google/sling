@@ -18,6 +18,7 @@
 
 #include "base/logging.h"
 #include "frame/serialization.h"
+#include "nlp/document/document-source.h"
 #include "string/strcat.h"
 
 namespace sling {
@@ -72,22 +73,21 @@ void FrameEvaluation::Evaluate(Store *commons,
   output->num_predicted_frames = 0;
 
   // Compare predicted and golden documents.
-  std::vector<string> gold_files, test_files;
-  CHECK(File::Match(gold_file_pattern, &gold_files));
-  CHECK(File::Match(test_file_pattern, &test_files));
-  CHECK_EQ(gold_files.size(), test_files.size());
+  DocumentSource *gold_corpus = DocumentSource::Create(gold_file_pattern);
+  DocumentSource *test_corpus = DocumentSource::Create(test_file_pattern);
 
-  // Sort the list of filenames to rule out any non-determinism in File::Match.
-  // After this we will assume a 1-1 mapping between gold and test documents.
-  std::sort(gold_files.begin(), gold_files.end());
-  std::sort(test_files.begin(), test_files.end());
-
-  for (int i = 0; i < gold_files.size(); ++i) {
+  while (true) {
     // Get the next document pair.
     Store store(commons);
-    Document *golden = ReadDocumentOrDie(&store, gold_files[i]);
-    Document *predicted = ReadDocumentOrDie(&store, test_files[i]);
-    CHECK_EQ(golden->num_tokens(), predicted->num_tokens()) << gold_files[i];
+    Document *golden = gold_corpus->Next(&store);
+    Document *predicted = test_corpus->Next(&store);
+
+    if (golden == nullptr) {
+      CHECK(predicted == nullptr);
+      break;
+    }
+    CHECK(predicted != nullptr);
+    CHECK_EQ(golden->num_tokens(), predicted->num_tokens());
 
     Frame golden_top = golden->top();
     Frame predicted_top = predicted->top();
@@ -141,6 +141,9 @@ void FrameEvaluation::Evaluate(Store *commons,
     delete golden;
     delete predicted;
   }
+
+  delete gold_corpus;
+  delete test_corpus;
 
   // Compute the slot score as the sum of the type, role, and label scores.
   auto &slot = output->slot;

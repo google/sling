@@ -24,10 +24,8 @@
 #include "dragnn/core/interfaces/component.h"
 #include "dragnn/protos/spec.pb.h"
 #include "file/file.h"
-#include "frame/object.h"
-#include "frame/serialization.h"
-#include "frame/store.h"
 #include "nlp/document/document.h"
+#include "nlp/document/document-source.h"
 #include "nlp/parser/parser-action.h"
 #include "nlp/parser/trainer/feature.h"
 #include "nlp/parser/trainer/sempar-component.h"
@@ -36,11 +34,9 @@
 #include "tensorflow/core/platform/protobuf.h"
 
 using sling::File;
-using sling::FileDecoder;
-using sling::Object;
-using sling::Store;
 using sling::StrCat;
 using sling::nlp::Document;
+using sling::nlp::DocumentSource;
 using sling::nlp::ParserAction;
 using sling::nlp::SemparComponent;
 using sling::nlp::SemparFeature;
@@ -58,6 +54,7 @@ using tensorflow::protobuf::TextFormat;
 
 DEFINE_string(spec, "/tmp/sempar_out/master_spec", "Path to master spec.");
 DEFINE_string(documents, "/tmp/foobar/doc.?", "Train documents file pattern.");
+DEFINE_int32(num_documents, 10, "Number of training documents to process.");
 
 std::vector<int32> indices;
 std::vector<int64> ids;
@@ -118,35 +115,15 @@ int main(int argc, char **argv) {
   resources.LoadGlobalStore(global_store_path);
   resources.LoadActionTable(action_table_path);
 
-  std::vector<string> document_files;
-  CHECK(File::Match(FLAGS_documents, &document_files));
-
-  std::vector<string> kept_files;
-  std::vector<string> kept_text;
-  for (const string &file : document_files) {
-    Store local(resources.global);
-    FileDecoder decoder(&local, file);
-    Object top = decoder.Decode();
-    if (!top.invalid()) {
-      kept_files.emplace_back(file);
-      Document doc(top.AsFrame());
-      kept_text.emplace_back(doc.PhraseText(0, doc.num_tokens()));
-    }
-  }
-  LOG(INFO) << "Will process " << kept_files.size() << " docs out of "
-            << document_files.size() << " input files";
-
-  for (int i = 0; i < kept_files.size(); ++i) {
-    LOG(INFO) << string(80, '*') << "\n";
-    LOG(INFO) << "Processing doc: " << kept_text[i];
-    string contents;
-    CHECK(File::ReadContents(kept_files[i], &contents));
-
+  DocumentSource *corpus = DocumentSource::Create(FLAGS_documents);
+  for (int i = 0; i < FLAGS_num_documents; ++i) {
     std::vector<string> input;
-    input.push_back(contents);
+    string name;
+    input.emplace_back();
+    if (!corpus->NextSerialized(&name, &input.back())) break;
 
+    LOG(INFO) << "Processing : " << name;
     session->SetInputData(input);
-
     for (int cidx = 0; cidx < spec.component_size(); ++cidx) {
       const string &name = spec.component(cidx).name();
       session->InitializeComponentData(name, 1 /* max beam size */);
@@ -166,6 +143,7 @@ int main(int argc, char **argv) {
     CHECK_EQ(trace_protos.size(), 1);
     LOG(INFO) << "Trace proto: " << trace_protos[0].DebugString();
   }
+  delete corpus;
 
   return 0;
 }
