@@ -302,7 +302,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
   AddLinkedFeature(
       ff, "frame-end-rl", "frame-end(XX)", 5, 32, "rl_lstm",
       "reverse-token");
-  AddLinkedFeature(ff, "history", "constant(XX)", 4, 64, "ff");
+  AddLinkedFeature(ff, "history", "constant(XX)", 4, 64, "ff", "history");
   AddLinkedFeature(ff, "lr", "current-token", -1, 32, "lr_lstm");
   AddLinkedFeature(
       ff, "rl", "current-token", -1, 32, "rl_lstm", "reverse-token");
