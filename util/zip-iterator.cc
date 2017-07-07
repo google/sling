@@ -14,8 +14,6 @@
 
 #include "util/zip-iterator.h"
 
-#include <iostream>
-
 #include "base/logging.h"
 #include "base/macros.h"
 
@@ -26,7 +24,6 @@ void ZipIterator::Init() {
   CHECK(file_ != NULL);
   CHECK_EQ(unzGetGlobalInfo64(file_, &global_info_), UNZ_OK) << zip_filename_;
   buffer_ = (char *)malloc(kBufferSize);
-  std::cout << global_info_.number_entry << " entries\n";
 }
 
 ZipIterator::~ZipIterator() {
