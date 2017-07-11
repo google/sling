@@ -5,6 +5,7 @@ bazel build -c opt \
   file:* \
   frame:* \
   myelin:* \
+  myelin/generator:* \
   myelin/kernel:* \
   nlp/document:* \
   nlp/parser:* \
