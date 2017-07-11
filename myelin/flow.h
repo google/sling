@@ -167,6 +167,11 @@ class Shape {
   // Add dimension to shape.
   void add(int size) { dims_.push_back(size); }
 
+  // Transpose shape.
+  void transpose() {
+    if (rank() >= 2) std::swap(dims_[0], dims_[1]);
+  }
+
   // Return the rank of the shape, i.e. the number of dimensions.
   int rank() const  { return dims_.size(); }
 
@@ -263,7 +268,7 @@ class Flow {
   struct Function;
 
   // Flow file version
-  static const int kVersion = 3;
+  static const int kVersion = 4;
   static const int kMagic = 0x776f6c66;
 
   // Flow variable.
@@ -418,6 +423,23 @@ class Flow {
     std::vector<Variable *> links;    // variables linked to connector
   };
 
+  // Blob for storing auxiliary data blocks in flow files.
+  struct Blob {
+    string name;                      // name of data block
+    string type;                      // data block type
+    Attributes attrs;                 // attributes for data block
+    char *data = nullptr;             // data for blob
+    uint64_t size = 0;                // size of data for blob
+  };
+
+  // Path in flow graph.
+  struct Node {
+    int input = 0;                    // operation input
+    string type;                      // operation type
+    int output = 0;                   // operation output
+  };
+  typedef std::vector<Node> Path;
+
   Flow();
   ~Flow();
 
@@ -457,6 +479,9 @@ class Flow {
   // Add connector.
   Connector *AddConnector(const string &name);
 
+  // Add data block.
+  Blob *AddBlob(const string &name);
+
   // Delete variable.
   void DeleteVariable(Variable *var);
 
@@ -487,6 +512,9 @@ class Flow {
   // Return all connectors.
   const std::vector<Connector *> &cnxs() const { return cnxs_; }
 
+  // Return all data blocks.
+  const std::vector<Blob *> &blobs() const { return blobs_; }
+
   // Batch size.
   int batch_size() const { return batch_size_; }
   void set_batch_size(int batch_size) { batch_size_ = batch_size; }
@@ -498,11 +526,19 @@ class Flow {
                   bool merge_inputs = false);
 
   // Remove operation from flow.
+  void RemoveOperation(Operation *op);
+
+  // Eliminate no-op from flow by moving input to output.
   void Eliminate(Operation *op);
 
-  // Find sequences of ops in flow graph. This only matches the first output
-  // for each op in the sequence.
-  std::vector<Operation *> Find(const std::vector<string> &ops);
+  // Find sequences of ops in flow graph matching a path expression. A path
+  // expression is a list of nodes separated by '|'. Each node is a node type
+  // with optional input and ouput numbers, i.e. {<input>:}<type>{:<output>}.
+  std::vector<Operation *> Find(const string &pathexpr);
+  std::vector<Operation *> Find(const std::vector<string> &nodes);
+  std::vector<Operation *> Find(std::initializer_list<string> nodes);
+  std::vector<Operation *> Find(const Path &path);
+  static void ParsePath(const string &pathexpr, Path *path);
 
   // Extract sub-flow from flow. A new function will be added to the subflow and
   // will contain all the dependencies of the outputs excluding the dependencies
@@ -540,6 +576,9 @@ class Flow {
 
   // Connectors.
   std::vector<Connector *> cnxs_;
+
+  // Blobs.
+  std::vector<Blob *> blobs_;
 
   // Data areas owned by flow.
   std::vector<char *> memory_;

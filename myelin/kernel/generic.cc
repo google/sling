@@ -103,6 +103,11 @@ class CombineTransformer : public Transformer {
       if (var->consumers[0]->type != second) continue;
       if (var->consumers[0]->task != op->task) continue;
       if (var->out) continue;
+      if (op->indegree() >= 1) {
+        // Only combine for vector inputs.
+        Flow::Variable *input = op->inputs[0];
+        if (input->rank() == 2 && input->dim(0) > 1) continue;
+      }
 
       flow->Fuse(op, var->consumers[0], combined);
       return true;
@@ -124,6 +129,8 @@ class StandardTyper : public Typer {
         Flow::Variable *a = op->inputs[0];
         Flow::Variable *b = op->inputs[1];
         Flow::Variable *c = op->outputs[0];
+
+        if (c->type == DT_INVALID) c->type = a->type;
 
         // Matrix multiplied by matrix.
         if (a->rank() == 2 && b->rank() == 2 && a->dim(1) == b->dim(0)) {
@@ -164,6 +171,10 @@ class StandardTyper : public Typer {
         // Set shape for outputs.
         for (Flow::Variable *out : op->outputs) {
           out->shape = shape;
+        }
+
+        if (op->outputs[0]->type == DT_INVALID) {
+          op->outputs[0]->type = op->inputs[0]->type;
         }
         return true;
       }
@@ -216,6 +227,9 @@ class StandardTyper : public Typer {
           result->shape.clear();
           for (int d = 0; d < shape->dim(0); ++d) {
             result->shape.add(dims[d] == -1 ? 1 : dims[d]);
+          }
+          if (op->outputs[0]->type == DT_INVALID) {
+            op->outputs[0]->type = op->inputs[0]->type;
           }
           return true;
         }

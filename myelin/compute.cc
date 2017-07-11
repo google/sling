@@ -54,7 +54,7 @@ static size_t Align(size_t n, int align) {
   return (n + align - 1) & ~(align - 1);
 }
 
-static char *AllocateMemory(size_t size, int alignment) {
+static char *MemAlloc(size_t size, int alignment) {
   DCHECK(IsPowerOfTwo32(alignment));
   DCHECK_GE(alignment, sizeof(void *));
   char *data;
@@ -64,7 +64,7 @@ static char *AllocateMemory(size_t size, int alignment) {
   return data;
 }
 
-static void FreeMemory(char *data) {
+static void MemFree(char *data) {
   free(data);
 }
 
@@ -72,13 +72,13 @@ static void FreeMemory(char *data) {
 class BasicRuntime : public Runtime {
  public:
   void AllocateInstance(Instance *instance) override {
-    char *data = AllocateMemory(instance->size(), instance->alignment());
+    char *data = MemAlloc(instance->size(), instance->alignment());
     memset(data, 0, instance->size());
     instance->set_data(data);
   }
 
   void FreeInstance(Instance *instance) override {
-    FreeMemory(instance->data());
+    MemFree(instance->data());
   }
 
   void ClearInstance(Instance *instance) override {
@@ -486,7 +486,7 @@ string Tensor::TypeString() const {
 }
 
 Channel::~Channel() {
-  FreeMemory(data_);
+  MemFree(data_);
 }
 
 void Channel::resize(int n) {
@@ -513,13 +513,12 @@ void Channel::reserve(int n) {
   if (n == capacity_) return;
 
   // Allocate new data buffer.
-  char *buffer =
-    AllocateMemory(n * connector_->size(), connector_->alignment());
+  char *buffer = MemAlloc(n * connector_->size(), connector_->alignment());
 
   // Copy existing data to new buffer.
   if (data_ != nullptr) {
     memcpy(buffer, data_, size_ * connector_->size());
-    FreeMemory(data_);
+    MemFree(data_);
   }
 
   // Set new data buffer.
@@ -656,12 +655,19 @@ bool Step::NeedsSynchronization() {
   return false;
 }
 
+char *Step::AllocateKernelMemory(size_t size, int alignment) {
+  CHECK(kernel_memory_ == nullptr);
+  CHECK(cell_ != nullptr);
+  kernel_memory_ = cell_->network()->AllocateMemory(size, alignment);
+  return kernel_memory_;
+}
+
 Network::Network() {
   runtime_ = &default_runtime;
 }
 
 Network::~Network() {
-  for (auto *m : memory_) FreeMemory(m);
+  for (auto *m : memory_) MemFree(m);
   for (auto *t : parameters_) delete t;
   for (auto *t : constants_) {
     if (t->shared() == nullptr) {
@@ -679,6 +685,12 @@ Network::~Network() {
 Tensor *Network::GetParameter(const string &name) const {
   auto f = names_.find(name);
   return f == names_.end() ? nullptr : f->second;
+}
+
+char *Network::AllocateMemory(size_t size, int alignment) {
+  char *data = MemAlloc(size, alignment);
+  memory_.push_back(data);
+  return data;
 }
 
 static bool CompareUsage(const std::pair<int, Tensor *> &a,
@@ -925,18 +937,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     step->kernel_->Adjust(step);
   }
 
-  // Propagate alignment for shared tensors.
-  for (auto it : tensors) {
-    Tensor *tensor = it.second;
-    Tensor *next = tensor->shared_;
-    while (next != nullptr) {
-      if (next->byte_alignment_ < tensor->byte_alignment_) {
-        next->byte_alignment_ = tensor->byte_alignment_;
-      }
-      next = next->shared_;
-    }
-  }
-
   // Propagate alignment between linked tensors.
   bool again = true;
   while (again) {
@@ -1080,6 +1080,21 @@ bool Network::Compile(const Flow &flow, const Library &library) {
             << " stride " << tensor->stride_.ToString()
             << " order " << tensor->order_
             << " on " << placename[tensor->placement_];
+  }
+
+  // Propagate size and alignment for shared tensors.
+  for (auto it : tensors) {
+    Tensor *tensor = it.second;
+    Tensor *next = tensor->shared_;
+    while (next != nullptr) {
+      if (next->size_ < tensor->size_) {
+        next->size_ = tensor->size_;
+      }
+      if (next->byte_alignment_ < tensor->byte_alignment_) {
+        next->byte_alignment_ = tensor->byte_alignment_;
+      }
+      next = next->shared_;
+    }
   }
 
   // Compute size and alignment for connectors.
@@ -1506,7 +1521,6 @@ char *Network::AllocateTensor(Tensor *tensor) {
 
   // Allocate memory for tensor.
   char *data = AllocateMemory(tensor->size_, alignment);
-  memory_.push_back(data);
   memset(data, 0, tensor->size_);
 
   // Copy data.

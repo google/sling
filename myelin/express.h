@@ -31,10 +31,11 @@ namespace myelin {
 // computations as a sequence of operations on variables. The following kinds of
 // variables are supported:
 //
-//   %n: input variable
+//   %n: memory-based input variable
 //   #n: constant variable
-//   @n: output variable
-//   $n: temporary variable
+//   !n: register-based input variable
+//   @n: memory-based output variable
+//   $n: temporary register variable
 //   _n: number
 //
 // An Express recipe is a text format for representing computations over
@@ -47,10 +48,11 @@ namespace myelin {
 //   <operation> := <name> '(' <arg list> ')'
 //   <arg list> := <arg> | <arg> ',' <arg list>
 //   <arg> := <variable> | <expression>
-//   <variable> := <input variable> | <constant> |
+//   <variable> := <input variable> | <constant> | <register>
 //                 <output variable> | <temp variable> | <number>
 //   <input variable> := '%' <integer>
 //   <constant> := '#' <integer>
+//   <register> := '!' <integer>
 //   <output variable> := '@' <integer>
 //   <temp variable> := '$' <integer>
 //   <number> := '_' <integer>
@@ -61,7 +63,7 @@ class Express {
   struct Op;
 
   // Variable type.
-  enum VarType {INPUT, CONST, OUTPUT, TEMP, NUMBER};
+  enum VarType {INPUT, REGISTER, CONST, OUTPUT, TEMP, NUMBER};
 
   // Operation type.
   enum OpType {
@@ -148,6 +150,9 @@ class Express {
     // Redirect all consumers of variable to another variable.
     void Redirect(Var *other);
 
+    // Temporary variables and register-based inputs are in registers.
+    bool IsRegister() const { return type == TEMP || type == REGISTER; }
+
     VarType type;                 // variable type
     int id;                       // variable id (-1 for unassigned temps)
     Op *producer;                 // operation producing value for variable
@@ -156,6 +161,7 @@ class Express {
     // Live range for variable.
     Op *first = nullptr;          // first usage of variable
     Op *last = nullptr;           // last usage of variable
+    int reg = -1;                 // register number for variable
   };
 
   // Operation in expression.
@@ -209,6 +215,7 @@ class Express {
     bool mov_reg_imm = false;       // dst = imm
     bool mov_reg_mem = false;       // dst = [mem]
     bool mov_mem_reg = false;       // [mem] = src
+    bool mov_mem_imm = false;       // [mem] = imm
 
     // Two-operand instruction formats.
     bool op_reg_reg = false;        // dst = op(dst, src)
@@ -259,14 +266,11 @@ class Express {
   // is not set for the returned op.
   Op *Function(OpType type, std::vector<Var *> &args, bool expand = false);
 
-  // Add new variable to expression.
+  // Lookup variable in expression or add a new variable if it does not exist.
   Var *Variable(VarType type, int id);
 
-  // Look up variable. Return null if variable does not exist.
-  Var *LookupVariable(VarType type, int id);
-
   // Add new temp variable to expression.
-  Var *NewTemp() { return Variable(TEMP, -1); }
+  Var *Temp() { return Variable(TEMP, -1); }
 
   // Add new number variable.
   Var *Number(ConstantNumber number);
@@ -345,14 +349,14 @@ class Express {
   Var *Do(OpType type, Var *x) {
     Op *op = Operation(type);
     op->AddArgument(x);
-    op->Assign(NewTemp());
+    op->Assign(Temp());
     return op->result;
   }
   Var *Do(OpType type, Var *x, Var *y) {
     Op *op = Operation(type);
     op->AddArgument(x);
     op->AddArgument(y);
-    op->Assign(NewTemp());
+    op->Assign(Temp());
     return op->result;
   }
   Var *Do(OpType type, Var *x, Var *y, Var *z) {
@@ -360,7 +364,7 @@ class Express {
     op->AddArgument(x);
     op->AddArgument(y);
     op->AddArgument(z);
-    op->Assign(NewTemp());
+    op->Assign(Temp());
     return op->result;
   }
 

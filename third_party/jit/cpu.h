@@ -53,6 +53,7 @@ class ProcessorInformation {
   int ext_family() const { return ext_family_; }
   int type() const { return type_; }
   const char *architecture();
+  int family_model() const { return (family_ << 8) | model_; }
 
   // General features.
   bool has_fpu() const { return has_fpu_; }
@@ -77,35 +78,39 @@ class ProcessorInformation {
   bool has_bmi2() const { return has_bmi2_; }
   bool has_lzcnt() const { return has_lzcnt_; }
   bool has_popcnt() const { return has_popcnt_; }
+  bool has_zero_idiom() const { return has_zero_idiom_; }
+  bool has_one_idiom() const { return has_one_idiom_; }
 
  private:
   char vendor_[13];
   char brand_[49];
-  int stepping_;
-  int model_;
-  int ext_model_;
-  int family_;
-  int ext_family_;
-  int type_;
-  int cache_line_size_;
-  bool has_fpu_;
-  bool has_cmov_;
-  bool has_sahf_;
-  bool has_mmx_;
-  bool has_sse_;
-  bool has_sse2_;
-  bool has_sse3_;
-  bool has_ssse3_;
-  bool has_sse41_;
-  bool has_sse42_;
-  bool has_osxsave_;
-  bool has_avx_;
-  bool has_avx2_;
-  bool has_fma3_;
-  bool has_bmi1_;
-  bool has_bmi2_;
-  bool has_lzcnt_;
-  bool has_popcnt_;
+  int stepping_ = 0;
+  int model_ = 0;
+  int ext_model_ = 0;
+  int family_ = 0;
+  int ext_family_ = 0;
+  int type_ = 0;
+  int cache_line_size_ = UNKNOWN_CACHE_LINE_SIZE;
+  bool has_fpu_ = false;
+  bool has_cmov_ = false;
+  bool has_sahf_ = false;
+  bool has_mmx_ = false;
+  bool has_sse_ = false;
+  bool has_sse2_ = false;
+  bool has_sse3_ = false;
+  bool has_ssse3_ = false;
+  bool has_sse41_ = false;
+  bool has_sse42_ = false;
+  bool has_osxsave_ = false;
+  bool has_avx_ = false;
+  bool has_avx2_ = false;
+  bool has_fma3_ = false;
+  bool has_bmi1_ = false;
+  bool has_bmi2_ = false;
+  bool has_lzcnt_ = false;
+  bool has_popcnt_ = false;
+  bool has_zero_idiom_ = false;
+  bool has_one_idiom_ = false;
 };
 
 // CPU feature flags.
@@ -125,6 +130,8 @@ enum CpuFeature {
   BMI2,
   LZCNT,
   POPCNT,
+  ZEROIDIOM,
+  ONEIDIOM,
 
   NUMBER_OF_CPU_FEATURES,
 };
@@ -186,7 +193,7 @@ class CPU {
   // Cache line size.
   static unsigned cache_line_size;
 
-  // VZEROUPPER needed on 128/256 bit transitions.
+  // VZEROUPPER needed on AVX/SSE transitions.
   static bool vzero_needed;
 
   // CPU features are only probed once.

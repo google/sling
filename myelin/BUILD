@@ -74,3 +74,13 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "builder",
+  srcs = ["builder.cc"],
+  hdrs = ["builder.h"],
+  deps = [
+    ":flow",
+    "//base",
+  ],
+)
+

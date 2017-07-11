@@ -53,6 +53,10 @@ class AVXVecMatMulBase : public Kernel {
     // The matrix must support required order.
     if (!W->SupportsOrder(order_)) return false;
 
+    // Transpose not supported.
+    if (step->GetAttr("transpose_a", false)) return false;
+    if (step->GetAttr("transpose_b", false)) return false;
+
     // Check bias vector.
     if (bias_) {
       Tensor *b = step->input(2);
@@ -84,6 +88,7 @@ class AVXVecMatMulBase : public Kernel {
   Type otype_;   // output type
 };
 
+// Vertical float vector-matrix multiplication for CPUs with AVX.
 class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
  public:
   // Maximum number of loop unrolls.
@@ -141,6 +146,11 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
     for (int i = 1; i <= kMaxUnrolls; ++i) {
       int batch_size = i * 8;
       if (main_cols >= batch_size && main_cols % batch_size == 0) unrolls = i;
+    }
+    if (step->variant().empty()) {
+      string variant = "U" + std::to_string(unrolls);
+      if (remaining_cols > 0) variant += "R" + std::to_string(remaining_cols);
+      step->set_variant(variant);
     }
 
     // Allocate general registers.
@@ -438,6 +448,10 @@ class AVXFltVecMatMulHBase : public AVXVecMatMulBase {
     int adders = unrolls;
     if (adders < 1) adders = 1;
     if (adders > kMaxAdders) adders = kMaxAdders;
+    string variant = "U" + std::to_string(unrolls);
+    variant += "A" + std::to_string(adders);
+    if (remaining_rows > 0) variant += "R" + std::to_string(remaining_rows);
+    step->set_variant(variant);
 
     // Allocate general registers.
     Register row = rr.alloc();
@@ -665,13 +679,21 @@ class AVXFltMatMatMul : public Kernel {
     if (C->rank() != 2 || C->type() != DT_FLOAT) return false;
 
     // Check shape.
-    if (A->dim(0) != C->dim(0)) return false;
-    if (A->dim(1) != B->dim(0)) return false;
-    if (B->dim(1) != C->dim(1)) return false;
+    bool transpose_a = step->GetAttr("transpose_a", false);
+    bool transpose_b = step->GetAttr("transpose_b", false);
+    Shape a = A->shape();
+    Shape b = B->shape();
+    Shape c = C->shape();
+    if (transpose_a) a.transpose();
+    if (transpose_b) b.transpose();
+
+    if (a.dim(0) != c.dim(0)) return false;
+    if (a.dim(1) != b.dim(0)) return false;
+    if (b.dim(1) != c.dim(1)) return false;
 
     // Check order.
-    if (!A->SupportsOrder(ROW_MAJOR)) return false;
-    if (!B->SupportsOrder(COLUMN_MAJOR)) return false;
+    if (!A->SupportsOrder(transpose_a ? COLUMN_MAJOR : ROW_MAJOR)) return false;
+    if (!B->SupportsOrder(transpose_b ? ROW_MAJOR : COLUMN_MAJOR)) return false;
     if (!C->SupportsOrder(ROW_MAJOR)) return false;
 
     return true;
@@ -684,14 +706,25 @@ class AVXFltMatMatMul : public Kernel {
     Tensor *C = step->output(0);
 
     // Set alignment requirements.
-    A->MinAlign({1, 8});
+    bool transpose_a = step->GetAttr("transpose_a", false);
+    bool transpose_b = step->GetAttr("transpose_b", false);
+    if (transpose_a) {
+      A->MinAlign({8, 1});
+    } else {
+      A->MinAlign({1, 8});
+    }
+    if (transpose_b) {
+      B->MinAlign({1, 8});
+    } else {
+      B->MinAlign({8, 1});
+    }
+
     A->SetMiniumAlignment(32);
-    B->MinAlign({8, 1});
     B->SetMiniumAlignment(32);
 
     // Set order requirements.
-    A->SetRequiredOrder(ROW_MAJOR);
-    B->SetRequiredOrder(COLUMN_MAJOR);
+    A->SetRequiredOrder(transpose_a ? COLUMN_MAJOR : ROW_MAJOR);
+    B->SetRequiredOrder(transpose_b ? ROW_MAJOR : COLUMN_MAJOR);
     C->SetRequiredOrder(ROW_MAJOR);
   }
 
@@ -705,10 +738,19 @@ class AVXFltMatMatMul : public Kernel {
     Tensor *B = step->input(1);
     Tensor *C = step->output(0);
 
+    // Get dimensions for matrices.
+    bool transpose_a = step->GetAttr("transpose_a", false);
+    bool transpose_b = step->GetAttr("transpose_b", false);
+    int a_row_dim = transpose_a ? 1 : 0;
+    int a_col_dim = transpose_a ? 0 : 1;
+    int b_row_dim = transpose_b ? 1 : 0;
+    int b_col_dim = transpose_b ? 0 : 1;
+    int c_col_dim = 1;
+
     // Compute the number of unrolls and adders.
     int unrolls = 1;
     for (int i = 2; i <= kMaxUnrolls; ++i) {
-      if (B->aligned(0) % (i * 8) == 0) unrolls = i;
+      if (B->aligned(b_row_dim) % (i * 8) == 0) unrolls = i;
     }
     int adders = unrolls;
     if (adders > kMaxAdders) adders = kMaxAdders;
@@ -777,7 +819,7 @@ class AVXFltMatMatMul : public Kernel {
     }
 
     __ addq(k, Immediate(8 * unrolls));
-    __ cmpq(k, Immediate(A->dim(1)));
+    __ cmpq(k, Immediate(A->dim(a_col_dim)));
     __ j(less, &l3);
 
     // Sum adders in sum[0].
@@ -799,19 +841,19 @@ class AVXFltMatMatMul : public Kernel {
 
     // Save to C[i,j].
     __ vmovss(Operand(c), sum[0]);
-    __ addq(c, Immediate(C->stride(1)));
+    __ addq(c, Immediate(C->stride(c_col_dim)));
 
     // Move to next column in B
-    __ addq(b_row, Immediate(B->stride(1)));
+    __ addq(b_row, Immediate(B->stride(b_col_dim)));
     __ cmpq(b_row, b_end);
     __ j(less, &l2);
 
     // Move to next row in A.
-    __ addq(a, Immediate(A->stride(0)));
+    __ addq(a, Immediate(A->stride(a_row_dim)));
 
     // Move to next row in C.
     if (C->padding(1) != 0) {
-      __ addq(c, Immediate(C->padding(1)));
+      __ addq(c, Immediate(C->padding(c_col_dim)));
     }
     __ cmpq(c, c_end);
     __ j(less, &l1);

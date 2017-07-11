@@ -96,6 +96,11 @@ void CodeGenerator::bind_to(Label *l, int pos) {
   if (l->is_linked()) {
     int current = l->pos();
     int next = long_at(current);
+    int sl = 0;
+    if (next < 0) {
+      sl = 1;
+      next = -next;
+    }
     while (next != current) {
       if (current >= 4 && long_at(current - 4) == 0) {
         // Absolute address.
@@ -104,11 +109,16 @@ void CodeGenerator::bind_to(Label *l, int pos) {
         refs_.push_back(current - 4);
       } else {
         // Relative address, relative to point after address.
-        int imm32 = pos - (current + sizeof(int32_t));
+        int imm32 = pos - (current + sizeof(int32_t) + sl);
         long_at_put(current, imm32);
       }
       current = next;
       next = long_at(next);
+      sl = 0;
+      if (next < 0) {
+        sl = 1;
+        next = -next;
+      }
     }
     // Fix up last fixup on linked list.
     if (current >= 4 && long_at(current - 4) == 0) {
@@ -118,7 +128,7 @@ void CodeGenerator::bind_to(Label *l, int pos) {
       refs_.push_back(current - 4);
     } else {
       // Relative address, relative to point after address.
-      int imm32 = pos - (current + sizeof(int32_t));
+      int imm32 = pos - (current + sizeof(int32_t) + sl);
       long_at_put(current, imm32);
     }
   }

@@ -190,11 +190,15 @@ static void AppendVar(string *str,
 }
 
 static bool Exclusive(Flow::Variable *var, Flow::Function *func) {
-  if (var->producer != nullptr && var->producer->func != func) return false;
-  for (auto *op : var->consumers) {
-    if (op->func != func) return false;
+  if ((var->producer != nullptr && var->producer->func == func) ||
+      !var->consumers.empty()) {
+    for (Flow::Operation *consumer : var->consumers) {
+      if (consumer->func != func) return false;
+    }
+    return true;
+  } else {
+    return false;
   }
-  return true;
 }
 
 string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
