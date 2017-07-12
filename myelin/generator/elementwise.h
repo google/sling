@@ -34,14 +34,14 @@ namespace myelin {
 class ElementwiseIndexGenerator : public IndexGenerator {
  public:
   // Create element-wise index generator for step.
-  ElementwiseIndexGenerator(const Step *step);
+  ElementwiseIndexGenerator(const Step *step, MacroAssembler *masm);
   ~ElementwiseIndexGenerator();
 
   // Initialize index generator for vector size.
   void Initialize(size_t vecsize) override;
 
   // Allocate registers. Return false in case of register overflow.
-  bool AllocateRegisters(MacroAssembler *masm) override;
+  bool AllocateRegisters() override;
 
   // Return operand for accessing memory variable.
   jit::Operand addr(Express::Var *var) override;
@@ -50,8 +50,8 @@ class ElementwiseIndexGenerator : public IndexGenerator {
   void *data(Express::Var *var) override;
 
   // Generate start and end of loop.
-  void BeginLoop(MacroAssembler *masm);
-  void EndLoop(MacroAssembler *masm);
+  void BeginLoop();
+  void EndLoop();
 
   // Whether only one iteration is needed.
   bool single() const { return single_; }
@@ -65,7 +65,7 @@ class ElementwiseIndexGenerator : public IndexGenerator {
   bool InitializeLocator(Tensor *var, Locator *loc);
 
   // Allocate registers for locator.
-  bool AllocateLocatorRegisters(Locator *loc, MacroAssembler *masm);
+  bool AllocateLocatorRegisters(Locator *loc);
 
   // Get locator for variable.
   Locator *GetLocator(Express::Var *var) {
@@ -118,9 +118,6 @@ class ElementwiseIndexGenerator : public IndexGenerator {
   // Loop begin label.
   jit::Label begin_;
 
-  // Instance pointer register.
-  jit::Register instance_;
-
   // Output offset register.
   jit::Register offset_;
 
@@ -133,9 +130,6 @@ class ElementwiseIndexGenerator : public IndexGenerator {
 
   // Iterators.
   std::vector<Iterator *> iterators_;
-
-  // Assembler for generating code and data.
-  MacroAssembler *masm_ = nullptr;
 };
 
 }  // namespace myelin

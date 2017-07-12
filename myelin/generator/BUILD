@@ -20,3 +20,26 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "expression",
+  srcs = [
+    "expression.cc",
+    "scalar-flt-sse.cc",
+    "scalar-flt-avx.cc",
+    "vector-flt-sse.cc",
+    "vector-flt-avx128.cc",
+    "vector-flt-avx256.cc",
+    "scalar-int.cc",
+    "vector-int-sse.cc",
+    "vector-int-avx128.cc",
+    "vector-int-avx256.cc",
+  ],
+  hdrs = ["expression.h"],
+  deps = [
+    ":index",
+    "//base",
+    "//myelin:compute",
+    "//myelin:express",
+  ],
+)
+

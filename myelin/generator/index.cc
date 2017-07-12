@@ -21,31 +21,33 @@ namespace myelin {
 
 using namespace jit;
 
-bool IndexGenerator::AllocateRegisters(MacroAssembler *masm) {
+bool IndexGenerator::AllocateRegisters() {
+  CHECK(masm_ != nullptr);
+
   // Allocate fixed registers.
   bool ok = true;
   for (auto r : fixed_) {
-    ok |= !masm->rr().used(r);
-    masm->rr().alloc_fixed(r);
+    ok |= !masm_->rr().used(r);
+    masm_->rr().alloc_fixed(r);
   }
 
   // Allocate temporary registers.
   for (auto &r : regs_) {
-    r = masm->rr().try_alloc();
+    r = masm_->rr().try_alloc();
     if (!r.is_valid()) ok = false;
   }
   for (auto &m : mmregs_) {
-    m = masm->mm().try_alloc();
+    m = masm_->mm().try_alloc();
     if (m == -1) ok = false;
   }
 
   // Allocate auxiliary registers.
   for (auto &r : aux_) {
-    r = masm->rr().try_alloc();
+    r = masm_->rr().try_alloc();
     if (!r.is_valid()) ok = false;
   }
   for (auto &m : mmaux_) {
-    m = masm->mm().try_alloc();
+    m = masm_->mm().try_alloc();
     if (m == -1) ok = false;
   }
 

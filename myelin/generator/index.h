@@ -29,13 +29,14 @@ namespace myelin {
 // allocation for temporary and auxiliary variables.
 class IndexGenerator {
  public:
+  IndexGenerator(MacroAssembler *masm) : masm_(masm) {}
   virtual ~IndexGenerator() = default;
 
   // Initialize index generator.
   virtual void Initialize(size_t vecsize) = 0;
 
   // Allocate registers. Return false in case of register overflow.
-  virtual bool AllocateRegisters(MacroAssembler *masm);
+  virtual bool AllocateRegisters();
 
   // Return operand for accessing memory variable.
   virtual jit::Operand addr(Express::Var *var) = 0;
@@ -75,6 +76,9 @@ class IndexGenerator {
   void ReserveAuxRegisters(int count);
   void ReserveAuxXMMRegisters(int count);
   void ReserveYMMRegisters(int count);
+
+ protected:
+  MacroAssembler *masm_;              // macro assembler for code generation
 
  private:
   std::vector<jit::Register> fixed_;  // reserved fixed registers

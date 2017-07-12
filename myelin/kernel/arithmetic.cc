@@ -129,7 +129,8 @@ static void InitExpression(const Step *step, Express *expr, bool expand) {
 // Expression code generator for element-wise operations.
 struct Expression {
   // Initialize expression.
-  Expression(const Step *step, int spare_regs = 0) : index(step) {
+  Expression(const Step *step, MacroAssembler *masm, int spare_regs = 0)
+      : index(step, masm) {
     // Determine output type and shape from the first output.
     output = step->output(0);
     Type type = output->type();
@@ -157,16 +158,16 @@ struct Expression {
   ~Expression() { delete generator; }
 
   // Allocate registers.
-  bool AllocateRegisters(MacroAssembler *masm) {
-    return index.AllocateRegisters(masm);
+  bool AllocateRegisters() {
+    return index.AllocateRegisters();
   }
 
   // Generate code for expression loop.
   void Generate(MacroAssembler *masm) {
     generator->GenerateInit(masm);
-    index.BeginLoop(masm);
+    index.BeginLoop();
     generator->GenerateBody(masm);
-    index.EndLoop(masm);
+    index.EndLoop();
   }
 
   // Compute complexity.
@@ -385,7 +386,7 @@ class Calculate : public Kernel {
   }
 
   void Adjust(Step *step) override {
-    Expression expression(step);
+    Expression expression(step, nullptr);
     step->set_variant(expression.generator->Name());
 
     // Set alignment.
@@ -419,8 +420,8 @@ class Calculate : public Kernel {
     if (type == DT_FLOAT || type == DT_DOUBLE) {
       // Perform dry-run to estimate the number of SIMD registers needed.
       MacroAssembler dryrun_masm(nullptr, 0);
-      Expression dryrun_expr(step, 0);
-      CHECK(dryrun_expr.AllocateRegisters(&dryrun_masm)) << "Register overflow";
+      Expression dryrun_expr(step, &dryrun_masm, 0);
+      CHECK(dryrun_expr.AllocateRegisters()) << "Register overflow";
 
       // Count the number of spare SIMD registers.
       if (!dryrun_expr.index.single()) {
@@ -429,13 +430,13 @@ class Calculate : public Kernel {
     }
 
     // Generate code for element-wise expression evaluation.
-    Expression expression(step, spare_regs);
-    CHECK(expression.AllocateRegisters(masm)) << "Register overflow";
+    Expression expression(step, masm, spare_regs);
+    CHECK(expression.AllocateRegisters()) << "Register overflow";
     expression.Generate(masm);
   }
 
   int64 Complexity(const Step *step) override {
-    Expression expression(step);
+    Expression expression(step, nullptr);
     return expression.Complexity();
   }
 

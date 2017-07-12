@@ -21,7 +21,8 @@ namespace myelin {
 
 using namespace jit;
 
-ElementwiseIndexGenerator::ElementwiseIndexGenerator(const Step *step) {
+ElementwiseIndexGenerator::ElementwiseIndexGenerator(
+    const Step *step, MacroAssembler *masm) : IndexGenerator(masm) {
   // Get size from first output.
   CHECK_GE(step->outdegree(), 1);
   type_ = step->output(0)->type();
@@ -105,24 +106,23 @@ void ElementwiseIndexGenerator::Initialize(size_t vecsize) {
   single_ = shape_.elements() * element_size() == vecsize_;
 }
 
-bool ElementwiseIndexGenerator::AllocateRegisters(MacroAssembler *masm) {
+bool ElementwiseIndexGenerator::AllocateRegisters() {
   // Allocate temp vars.
-  if (!IndexGenerator::AllocateRegisters(masm)) return false;
+  if (!IndexGenerator::AllocateRegisters()) return false;
 
   // Allocate register for output offset.
-  Registers &rr = masm->rr();
+  Registers &rr = masm_->rr();
   if (!single_) {
     offset_ = rr.try_alloc();
     if (!offset_.is_valid()) return false;
   }
-  instance_ = masm->instance();
 
   // Allocate registers for locators.
   for (auto &loc : input_) {
-    if (!AllocateLocatorRegisters(&loc, masm)) return false;
+    if (!AllocateLocatorRegisters(&loc)) return false;
   }
   for (auto &loc : output_) {
-    if (!AllocateLocatorRegisters(&loc, masm)) return false;
+    if (!AllocateLocatorRegisters(&loc)) return false;
   }
 
   // Try to allocate extra base registers as an optimization.
@@ -141,15 +141,11 @@ bool ElementwiseIndexGenerator::AllocateRegisters(MacroAssembler *masm) {
     }
   }
 
-  // Save macro assembler for constant generation.
-  masm_ = masm;
-
   return true;
 }
 
-bool ElementwiseIndexGenerator::AllocateLocatorRegisters(
-    Locator *loc, MacroAssembler *masm) {
-  Registers &rr = masm->rr();
+bool ElementwiseIndexGenerator::AllocateLocatorRegisters(Locator *loc) {
+  Registers &rr = masm_->rr();
   switch (loc->iterator->type) {
     case SIMPLE:
     case SCALAR:
@@ -189,8 +185,9 @@ bool ElementwiseIndexGenerator::AllocateLocatorRegisters(
   return true;
 }
 
-void ElementwiseIndexGenerator::BeginLoop(MacroAssembler *masm) {
+void ElementwiseIndexGenerator::BeginLoop() {
   // Load tensor addresses and initialize index registers.
+  MacroAssembler *masm = masm_;
   for (auto &loc : input_) {
     if (loc.base.is_valid()) {
       __ LoadTensorAddress(loc.base, loc.var);
@@ -218,7 +215,8 @@ void ElementwiseIndexGenerator::BeginLoop(MacroAssembler *masm) {
   }
 }
 
-void ElementwiseIndexGenerator::EndLoop(MacroAssembler *masm) {
+void ElementwiseIndexGenerator::EndLoop() {
+  MacroAssembler *masm = masm_;
   if (!single_) {
     // Move to next output element.
     __ addq(offset_, Immediate(vecsize_));
@@ -322,7 +320,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
             return Operand(loc->base);
           } else {
             // Index single element using offset in instance.
-            return Operand(instance_, loc->var->offset());
+            return Operand(masm_->instance(), loc->var->offset());
           }
         } else {
           // Multiple iterations.
@@ -331,7 +329,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
             return Operand(loc->base, offset_);
           } else {
             // Index element using offset in instance and index.
-            return Operand(instance_, offset_, times_1, loc->var->offset());
+            return Operand(masm_->instance(), offset_, times_1, loc->var->offset());
           }
         }
       case SCALAR:
@@ -340,7 +338,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
           return Operand(loc->base);
         } else {
           // Index scalar using offset in instance.
-          return Operand(instance_, loc->var->offset());
+          return Operand(masm_->instance(), loc->var->offset());
         }
       case CONST: {
         // Scalar constant in code block, vectorized if needed.
@@ -358,7 +356,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
             return Operand(loc->base);
           } else {
             // Index single element using offset in instance.
-            return Operand(instance_, loc->var->offset());
+            return Operand(masm_->instance(), loc->var->offset());
           }
         } else {
           // Multiple iterations.
@@ -367,7 +365,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
             return Operand(loc->base, loc->iterator->offset);
           } else {
             // Index element using offset in instance and index.
-            return Operand(instance_, loc->iterator->offset, times_1,
+            return Operand(masm_->instance(), loc->iterator->offset, times_1,
                            loc->var->offset());
           }
         }
