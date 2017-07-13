@@ -51,6 +51,7 @@ DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
 DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 MAKE_SPEC=1
 DO_TRAINING=1
+BATCH_SIZE=1
 
 for i in "$@"
 do
@@ -81,6 +82,10 @@ case $i in
     ;;
     --train_only|--only_train)
     MAKE_SPEC=0
+    shift
+    ;;
+    --batch=*|--batch_size=*)
+    BATCH_SIZE="${i#*=}"
     shift
     ;;
     *)
@@ -117,10 +122,10 @@ then
   exit 1
 fi
 
-HYPERPARAMS="learning_rate:0.0005 decay_steps=800000 "
+HYPERPARAMS="learning_rate:0.001 decay_steps=800000 "
 HYPERPARAMS+="seed:1 learning_method:'adam' "
 HYPERPARAMS+="use_moving_average:true dropout_rate:0.9 "
-HYPERPARAMS+="gradient_clip_norm:1.0 adam_beta1:0.01 "
+HYPERPARAMS+="gradient_clip_norm:100.0 adam_beta1:0.01 "
 HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.0001"
 
 if [[ "$MAKE_SPEC" -eq 1 ]];
@@ -142,7 +147,8 @@ then
     --commons=${COMMONS} \
     --train_corpus=${TRAIN_FILEPATTERN} \
     --dev_corpus=${DEV_GOLD_FILEPATTERN} \
-    --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN}
+    --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN} \
+    --batch_size=${BATCH_SIZE}
 fi
 
 echo "Done."
