@@ -34,7 +34,7 @@ class Reshape : public Kernel {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) return false;
+    if (x->elements() != y->elements()) return false;
     return true;
   }
 
@@ -65,7 +65,7 @@ class Squeeze : public Kernel {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) return false;
+    if (x->elements() != y->elements()) return false;
     return true;
   }
 
@@ -96,7 +96,7 @@ class ExpandDims : public Kernel {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) return false;
+    if (x->elements() != y->elements()) return false;
     return true;
   }
 
@@ -107,6 +107,80 @@ class ExpandDims : public Kernel {
 
   void Generate(Step *step, MacroAssembler *masm) override {
     CHECK(step->input(0)->SharedWith(step->output(0)));
+  }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+  }
+};
+
+// Kernel for resizing the input by padding or cropping.
+class Resize : public Kernel {
+ public:
+  bool Supports(Step *step) override {
+    // Check inputs and outputs.
+    if (step->indegree() != 3 || step->outdegree() != 1) return false;
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    if (x->type() != y->type()) return false;
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    step->AllowInPlace(0, 0, x->elements() == y->elements());
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    // Check if resize is a no-op.
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    bool shared = x->SharedWith(y);
+    bool pad = y->size() > x->size();
+    bool crop = y->size() < x->size();
+    if (shared && !pad && !crop) {
+      step->set_variant("nop");
+      return;
+    } else if (!shared) {
+      step->set_variant("copy");
+    } else if (pad) {
+      step->set_variant("pad");
+    } else if (crop) {
+      step->set_variant("crop");
+    }
+
+    // Allocate registers.
+    Register src = masm->rr().alloc_fixed(rsi);
+    Register dst = masm->rr().alloc_fixed(rdi);
+    Register cnt = masm->rr().alloc_fixed(rcx);
+    Register acc = masm->rr().alloc_fixed(rax);
+
+    if (shared) {
+     // Pad output if needed.
+     if (pad) {
+       __ LoadTensorAddress(dst, y);
+       __ addq(dst, Immediate(x->size()));
+       __ xorq(acc, acc);
+       __ movq(cnt, Immediate(y->size() - x->size()));
+       __ repstosb();
+     }
+    } else {
+      // Load tensors.
+      __ LoadTensorAddress(src, x);
+      __ LoadTensorAddress(dst, y);
+
+      // Copy input to output.
+      __ movq(cnt, Immediate(std::min(x->size(), y->size())));
+      __ repmovsb();
+
+      // Pad output if needed.
+      if (pad) {
+        __ xorq(acc, acc);
+        __ movq(cnt, Immediate(y->size() - x->size()));
+        __ repstosb();
+      }
+    }
   }
 
   int64 Complexity(const Step *step) override {
@@ -116,70 +190,18 @@ class ExpandDims : public Kernel {
 
 // Divide "spatial" dimensions [1, ..., M] of the input, and interleaves these
 // with the "batch" dimension (0).
-class SpaceToBatch : public Kernel {
+class SpaceToBatch : public Resize {
  public:
   string Name() override { return "SpaceToBatch"; }
   string Operation() override { return "SpaceToBatchND"; }
-
-  bool Supports(Step *step) override {
-    // Check inputs and outputs.
-    if (step->indegree() != 3 || step->outdegree() != 1) return false;
-    Tensor *x = step->input(0);
-    Tensor *y = step->output(0);
-    if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) {
-      LOG(WARNING) << step->name() << " needs padding: "
-                   << x->shape().ToString() << " -> " <<  y->shape().ToString();
-    }
-    return true;
-  }
-
-  void Adjust(Step *step) override {
-    step->output(0)->set_ref(step->input(0)->ref());
-    CHECK(step->AllowInPlace(0, 0, true));
-  }
-
-  void Generate(Step *step, MacroAssembler *masm) override {
-    CHECK(step->input(0)->SharedWith(step->output(0)));
-  }
-
-  int64 Complexity(const Step *step) override {
-    return 0;
-  }
 };
 
 // Reshapes the "batch" dimension 0 into M + 1 dimensions, and interleaves these
 // back into the spatial dimensions [1, ..., M].
-class BatchToSpace : public Kernel {
+class BatchToSpace : public Resize {
  public:
   string Name() override { return "BatchToSpace"; }
   string Operation() override { return "BatchToSpaceND"; }
-
-  bool Supports(Step *step) override {
-    // Check inputs and outputs.
-    if (step->indegree() != 3 || step->outdegree() != 1) return false;
-    Tensor *x = step->input(0);
-    Tensor *y = step->output(0);
-    if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) {
-      LOG(WARNING) << step->name() << " needs padding: "
-                   << x->shape().ToString() << " -> " <<  y->shape().ToString();
-    }
-    return true;
-  }
-
-  void Adjust(Step *step) override {
-    step->output(0)->set_ref(step->input(0)->ref());
-    CHECK(step->AllowInPlace(0, 0, true));
-  }
-
-  void Generate(Step *step, MacroAssembler *masm) override {
-    CHECK(step->input(0)->SharedWith(step->output(0)));
-  }
-
-  int64 Complexity(const Step *step) override {
-    return 0;
-  }
 };
 
 // Packs an array of rank-R tensors into one rank-(R+1) tensor.
@@ -194,7 +216,7 @@ class Pack : public Kernel {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) return false;
+    if (x->elements() != y->elements()) return false;
     return true;
   }
 
@@ -224,7 +246,7 @@ class Unpack : public Kernel {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
-    if (x->shape().elements() != y->shape().elements()) return false;
+    if (x->elements() != y->elements()) return false;
     return true;
   }
 

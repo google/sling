@@ -116,12 +116,13 @@ class InstanceAllocator {
   // Initialize instance allocator for cell and placement.
   InstanceAllocator(Cell *cell, Placement placement) : placement_(placement) {
     if (placement == HOST) {
-      instance_size_ = &cell->instance_size_;
+      max_instance_size_ = &cell->instance_size_;
       instance_alignment_ = &cell->instance_alignment_;
     } else {
-      instance_size_ = &cell->device_instance_size_;
+      max_instance_size_ = &cell->device_instance_size_;
       instance_alignment_ = &cell->device_instance_alignment_;
     }
+    current_instance_size_ = *max_instance_size_;
   }
 
   // Allocate space for variable in instance data block.
@@ -175,17 +176,18 @@ class InstanceAllocator {
 
     if (offset == -1) {
       // No free space in instance block. Extend the instance block and add new
-      // variable at the end. First, ensure alignment of variable in instance.
-      size_t aligned = Align(*instance_size_, align);
-      if (aligned > *instance_size_) {
-        // Insert alignment padding in free list.
-        Insert(*instance_size_, aligned);
-        *instance_size_ = aligned;
+      // variable at the end.
+      size_t end = current_instance_size_;
+      size_t aligned = Align(end, align);
+      offset = aligned;
+      current_instance_size_ = aligned + size;
+      if (current_instance_size_ > *max_instance_size_) {
+        *max_instance_size_ = current_instance_size_;
       }
-
-      // Allocate variable at the end of the instance block.
-      offset = *instance_size_;
-      *instance_size_ += size;
+      if (aligned > end) {
+        // Insert alignment padding in free list.
+        Insert(end, aligned);
+      }
     }
 
     // Ensure that instance has at least the same alignment as the tensor.
@@ -297,6 +299,17 @@ class InstanceAllocator {
       // Insert new entry before the current entry.
       freelist_.emplace(it, start, end);
     }
+
+    // Remove last free list entry if this extends to the end of the current
+    // instance block.
+    if (!freelist_.empty()) {
+      auto &last = freelist_.back();
+      if (last.second == current_instance_size_) {
+        current_instance_size_ = last.first;
+        freelist_.pop_back();
+      }
+    }
+
     DCHECK(FreeListConsistent());
   }
 
@@ -304,11 +317,14 @@ class InstanceAllocator {
   // device instance data block.
   Placement placement_;
 
-  // Current instance size.
-  size_t *instance_size_;
+  // Maximum size of instance.
+  size_t *max_instance_size_;
 
-  // Current instance alignment.
+  // Maximum instance alignment.
   int *instance_alignment_;
+
+  // Current instance size.
+  size_t current_instance_size_;
 
   // List of free blocks (start,end) in instance.
   std::list<std::pair<size_t, size_t>> freelist_;
@@ -1494,11 +1510,11 @@ void Network::ComputeLiveRanges() {
     Step *step = steps_[i];
     for (Tensor *input : step->inputs_) {
       if (input->first_ == -1) input->first_ = i;
-      if (!input->in_ && !input->out_) input->last_ = i;
+      if (!input->out_) input->last_ = i;
     }
     for (Tensor *output : step->outputs_) {
       if (output->first_ == -1) output->first_ = i;
-      if (!output->in_ && !output->out_) output->last_ = i;
+      if (!output->out_) output->last_ = i;
     }
   }
 

@@ -834,6 +834,14 @@ void Flow::Analyze(const Transformations &transformations) {
 }
 
 void Flow::InferInputsAndOutputs() {
+  // Connector links are considered both inputs and outputs.
+  for (Connector *cnx : cnxs_) {
+    for (Variable *link : cnx->links) {
+      link->in = true;
+      link->out = true;
+    }
+  }
+
   for (Variable *var : vars_) {
     // Check the input and output attributes of the producing op.
     bool input_set = false;
@@ -1175,7 +1183,7 @@ static bool CompareOpOrder(Flow::Operation *o1, Flow::Operation *o2) {
 struct PriorityComparator {
   bool operator ()(Flow::Operation *o1, Flow::Operation *o2) {
     if (o1->priority == o2->priority) {
-      return o1->order < o2->order;
+      return o1->order > o2->order;
     } else {
       return o1->priority > o2->priority;
     }

@@ -496,19 +496,71 @@ class DragnnTyper : public Typer {
 class DragnnTransformer : public Transformer {
  public:
   bool Transform(Flow *flow) override {
+    std::vector<Flow::Operation *> noops;
     for (Flow::Operation *op : flow->ops()) {
-      if (op->type == "FeatureVector") {
-        flow->Eliminate(op);
-        return true;
+      if (op->type == "FeatureVector" ||
+          op->type == "Identity" ||
+          op->type == "Enter") {
+        noops.push_back(op);
       }
     }
-    return false;
+    for (Flow::Operation *op : noops) {
+      flow->Eliminate(op);
+    }
+    return !noops.empty();
+  }
+};
+
+// Precompute embeddings with a linear transform.
+class PrecomputedEmbeddings : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    int num_precompute = 0;
+    for (auto *op : flow->Find({"Lookup", "Reshape", "MatMul"})) {
+      Flow::Operation *matmul = op;
+      Flow::Operation *reshape = matmul->inputs[0]->producer;
+      Flow::Operation *lookup = reshape->inputs[0]->producer;
+      if (matmul->indegree() != 2 || !matmul->inputs[1]->constant()) continue;
+      if (lookup->indegree() != 2 || !lookup->inputs[1]->constant()) continue;
+      if (lookup->outputs[0]->out) continue;
+      if (reshape->outputs[0]->out) continue;
+      Flow::Variable *feature = lookup->inputs[0];
+      Flow::Variable *embedding = lookup->inputs[1];
+      Flow::Variable *transform = matmul->inputs[1];
+      if (embedding->type != transform->type) continue;
+      if (embedding->rank() != 2 || transform->rank() != 2) continue;
+
+      // Multiply the embeddings with the linear transform.
+      string name = embedding->name + "/" + transform->name;
+      Flow::Variable *precomputed =
+        flow->AddVariable(name, transform->type,
+                          {embedding->dim(0), transform->dim(1)});
+      flow->AddOperation(lookup->func, name + "/Precompute", "MatMul",
+                         {embedding, transform}, {precomputed});
+
+      // Convert the MatMul to a Lookup on the precomputed embeddings.
+      matmul->type = "Lookup";
+      matmul->ReplaceInput(matmul->inputs[0], feature);
+      matmul->ReplaceInput(transform, precomputed);
+
+      // Remove old Lookup if it is no longer used.
+      if (reshape->outputs[0]->consumers.empty()) {
+        flow->RemoveOperation(reshape);
+      }
+      if (lookup->outputs[0]->consumers.empty()) {
+        flow->RemoveOperation(lookup);
+      }
+
+      num_precompute++;
+    }
+    return num_precompute > 0;
   }
 };
 
 // Register Dragnn library.
 void RegisterDragnnLibrary(Library *library) {
   library->RegisterTyper(new DragnnTyper());
+  library->RegisterTransformer(new PrecomputedEmbeddings());
   library->RegisterTransformer(new DragnnTransformer());
   library->Register(new DragnnInitializer());
   library->Register(new DragnnLookup());

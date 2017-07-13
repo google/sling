@@ -17,6 +17,21 @@ cc_library(
 )
 
 cc_library(
+  name = "arithmetic",
+  srcs = [
+    "arithmetic.cc",
+  ],
+  hdrs = ["arithmetic.h"],
+  deps = [
+    "//base",
+    "//myelin:compute",
+    "//myelin:express",
+    "//myelin/generator:elementwise",
+    "//myelin/generator:expression",
+  ],
+)
+
+cc_library(
   name = "sse",
   srcs = [
     "sse.cc",
@@ -45,12 +60,25 @@ cc_library(
 )
 
 cc_library(
+  name = "precompute",
+  srcs = ["precompute.cc"],
+  hdrs = ["precompute.h"],
+  deps = [
+    ":arithmetic",
+    ":generic",
+    "//myelin:compute",
+  ],
+)
+
+cc_library(
   name = "tensorflow",
   srcs = ["tensorflow.cc"],
   hdrs = ["tensorflow.h"],
   deps = [
+    ":arithmetic",
     ":avx",
     ":generic",
+    ":precompute",
     ":sse",
     "//myelin:compute",
   ],

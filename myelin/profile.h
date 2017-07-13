@@ -16,6 +16,7 @@
 #define MYELIN_PROFILE_H_
 
 #include <string>
+#include <vector>
 
 #include "base/clock.h"
 #include "base/types.h"
@@ -26,8 +27,11 @@ namespace myelin {
 
 class Profile {
  public:
+  // Sort order for steps.
+  enum Order {POSITION, TIME, GFLOPS, COMPLEXITY, KERNEL, NAME, TASK};
+
   // Initialize profile for cell instance.
-  Profile(Instance *instance);
+  Profile(Instance *instance, Order order = POSITION);
 
   // Cell for profiled instance.
   const Cell *cell() const { return instance_->cell(); }
@@ -36,7 +40,7 @@ class Profile {
   bool enabled() const { return timing_ != nullptr; }
 
   // Number of steps in the cell.
-  int steps() const { return enabled() ? cell()->steps().size() : 0; }
+  int steps() const { return steps_.size(); }
 
   // Number of tasks in the cell.
   int tasks() const { return enabled() ? cell()->num_tasks() : 0; }
@@ -45,10 +49,10 @@ class Profile {
   int64 invocations() const { return invocations_; }
 
   // Raw CPU cycle counts for step.
-  int64 timing(int idx) const { return timing_[idx]; }
+  int64 timing(int idx) const { return timing_[steps_[idx].index]; }
 
   // Return step in the cell computation.
-  const Step *step(int idx) const { return cell()->steps()[idx]; }
+  const Step *step(int idx) const { return steps_[idx].step; }
 
   // Number of CPU cycles used per invocation.
   int64 cycles() const {
@@ -62,12 +66,12 @@ class Profile {
 
   // Number of CPU cycles per invocation used by step in cell computation.
   int64 cycles(int idx) const {
-    return invocations_ > 0 ? timing_[idx] / invocations_ : 0;
+    return invocations_ > 0 ? timing(idx) / invocations_ : 0;
   }
 
   // Time per invocation in microseconds used by step in cell computation.
   double time(int idx) const {
-    return invocations_ > 0 ? timing_[idx] / (Clock::mhz() * invocations_) : 0;
+    return invocations_ > 0 ? timing(idx) / (Clock::mhz() * invocations_) : 0;
   }
 
   // Percentage of time used by step in cell computation.
@@ -128,6 +132,24 @@ class Profile {
     int64 wait;
   };
 
+
+  // Step information.
+  struct StepInfo {
+    int index;              // position in execution order
+    const Step *step;       // step in cell
+    string sort_name;       // name used for sorting
+    float sort_value = 0;   // sort value
+
+    // Comparison operator for sorting steps.
+    bool operator <(const StepInfo &other) const {
+      if (sort_value < other.sort_value) return true;
+      if (sort_value > other.sort_value) return false;
+      if (sort_name  < other.sort_name) return true;
+      if (sort_name  > other.sort_name) return false;
+      return index < other.index;
+    }
+  };
+
   // Instance for profile.
   Instance *instance_;
 
@@ -146,6 +168,20 @@ class Profile {
 
   // Array of clock cycle counts for each task.
   TaskTiming *tasks_;
+
+  // Sorted step information.
+  std::vector<StepInfo> steps_;
+};
+
+// Data profile for cell instance tensor allocation.
+class DataProfile {
+ public:
+  DataProfile(Cell *cell) : cell_(cell) {}
+
+  string AsSVG();
+
+ private:
+  Cell *cell_;
 };
 
 }  // namespace myelin

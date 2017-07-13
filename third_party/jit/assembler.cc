@@ -1357,6 +1357,26 @@ void Assembler::emit_repmovs(int size) {
   emit(0xA5);
 }
 
+void Assembler::repstosb() {
+  EnsureSpace ensure_space(this);
+  emit(0xF3);
+  emit(0xAA);
+}
+
+void Assembler::repstosw() {
+  EnsureSpace ensure_space(this);
+  emit(0x66);  // operand size override
+  emit(0xF3);
+  emit(0xAA);
+}
+
+void Assembler::emit_repstos(int size) {
+  EnsureSpace ensure_space(this);
+  emit(0xF3);
+  emit_rex(size);
+  emit(0xAB);
+}
+
 void Assembler::mull(Register src) {
   EnsureSpace ensure_space(this);
   emit_optional_rex_32(src);
@@ -1812,6 +1832,13 @@ void Assembler::emit_test(const Operand &op, Register reg, int size) {
   emit_rex(reg, op, size);
   emit(0x85);
   emit_operand(reg, op);
+}
+
+void Assembler::emit_prefetch(const Operand &src, int subcode) {
+  EnsureSpace ensure_space(this);
+  emit(0x0F);
+  emit(0x18);
+  emit_operand(subcode, src);
 }
 
 // FPU instructions.

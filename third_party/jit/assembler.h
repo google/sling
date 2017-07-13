@@ -323,6 +323,13 @@ class Assembler : public CodeGenerator {
   void repmovsl() { emit_repmovs(kInt32Size); }
   void repmovsq() { emit_repmovs(kInt64Size); }
 
+  // Repeated stores.
+  void repstosb();
+  void repstosw();
+  void repstosp() { emit_repstos(kPointerSize); }
+  void repstosl() { emit_repstos(kInt32Size); }
+  void repstosq() { emit_repstos(kInt64Size); }
+
   // Instruction to load from an immediate 64-bit pointer into RAX.
   void load_rax(void *ptr);
 
@@ -552,6 +559,11 @@ class Assembler : public CodeGenerator {
   void ud2();
   void setcc(Condition cc, Register reg);
   void rdtsc();
+
+  void prefetcht0(const Operand &src) { emit_prefetch(src, 1); }
+  void prefetcht1(const Operand &src) { emit_prefetch(src, 2); }
+  void prefetcht2(const Operand &src) { emit_prefetch(src, 3); }
+  void prefetchnta(const Operand &src) { emit_prefetch(src, 0); }
 
   // Label operations & relative jumps (PPUM Appendix D)
   //
@@ -3003,6 +3015,7 @@ class Assembler : public CodeGenerator {
   }
 
   void emit_repmovs(int size);
+  void emit_repstos(int size);
 
   void emit_sbb(Register dst, Register src, int size) {
     arithmetic_op(0x1b, dst, src, size);
@@ -3058,6 +3071,8 @@ class Assembler : public CodeGenerator {
   void emit_xor(const Operand &dst, Register src, int size) {
     arithmetic_op(0x31, src, dst, size);
   }
+
+  void emit_prefetch(const Operand &src, int subcode);
 
   // Most BMI instructions are similiar.
   void bmi1q(byte op, Register reg, Register vreg, Register rm);

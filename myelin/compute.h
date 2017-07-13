@@ -419,6 +419,13 @@ class Tensor {
   bool in() const { return in_; }
   bool out() const { return out_; }
 
+  // Live range for tensor.
+  int first() const { return first_; }
+  int last() const { return last_; }
+
+  // Byte alignment.
+  int byte_alignment() const { return byte_alignment_; }
+
   // Return tensor type as string.
   string TypeString() const;
 
@@ -1037,6 +1044,9 @@ class Network {
 
   // Network parameters.
   const std::vector<Tensor *> parameters() const { return parameters_; }
+
+  // Network steps.
+  const std::vector<Step *> &steps() const { return steps_; }
 
  private:
   // Compute live ranges for all the variables.

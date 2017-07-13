@@ -30,16 +30,17 @@ file:
 ```python
 from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
-import google3.experimental.users.ringgaard.sling.myelin as myelin
+from flow import Flow
+from flow import FlowBuilder
 
 # Import data.
-mnist = input_data.read_data_sets("mnist", one_hot=True)
+mnist = input_data.read_data_sets("/tmp/mnist", one_hot=True)
 
 # Create the model.
-x = tf.placeholder(tf.float32, [None, 784])
-W = tf.Variable(tf.zeros([784, 10]))
-b = tf.Variable(tf.zeros([10]))
-y = tf.matmul(x, W) + b
+x = tf.placeholder(tf.float32, [None, 784], name='x')
+W = tf.Variable(tf.zeros([784, 10]), name='W')
+b = tf.Variable(tf.zeros([10]), name='b')
+y = tf.add(tf.matmul(x, W), b, name='y')
 
 # Define loss and optimizer.
 y_ = tf.placeholder(tf.float32, [None, 10])
@@ -55,10 +56,10 @@ for _ in range(1000):
   sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
 
 # Save model to flow file.
-flow = myelin.Flow()
-builder = myelin.FlowBuilder(sess, flow)
+flow = Flow()
+builder = FlowBuilder(sess, flow)
 builder.add(flow.func("classifier"), [x], [y])
-flow.save("/tmp/model.flow")
+flow.save("/tmp/mnist.flow")
 ```
 
 This will extract the parts of the TF graph needed for computing `y` from `x`.
@@ -73,16 +74,17 @@ a flow file:
 
 ```python
 import tensorflow as tf
-import google3.experimental.users.ringgaard.sling.myelin as myelin
+from flow import Flow
+from flow import FlowBuilder
 
 # Load Tensorflow checkpoint.
 sess = tf.Session()
-saver = tf.train.import_meta_graph('/tmp/model.ckpt.meta')
-saver.restore(sess, '/tmp/model.ckpt')
+saver = tf.train.import_meta_graph('/tmp/mnist.ckpt.meta')
+saver.restore(sess, '/tmp/mnist.ckpt')
 
 # Create Myelin flow.
-flow = myelin.Flow()
-builder = myelin.FlowBuilder(sess, flow)
+flow = Flow()
+builder = FlowBuilder(sess, flow)
 
 # Extract flow from graph.
 inputs = [sess.graph.get_tensor_by_name("x:0")]
@@ -90,22 +92,20 @@ outputs = [sess.graph.get_tensor_by_name("y:0")]
 builder.add(flow.func("classifier"), inputs, outputs)
 
 # Save flow.
-flow.save("/tmp/model.flow")
+flow.save("/tmp/mnist.flow")
 ```
 
 ## Setting up a kernel library
 
 ```c++
 #include "myelin/compute.h"
-#include "myelin/kernel/avx.h"
-#include "myelin/kernel/generic.h"
+#include "myelin/kernel/tensorflow.h"
 
 using namespace sling::myelin;
 
 // Initialize library with kernels.
 Library library;
-RegisterAVXKernels(&library);
-RegisterGenericKernels(&library);
+RegisterTensorflowLibrary(&library);
 ```
 
 Myelin uses a library of transformations and kernels for generating code
@@ -120,7 +120,7 @@ for generating optimized code for special cases of standard ops.
 ```c++
 // Load and compile neural network.
 Network nn;
-CHECK(nn.Compile("/tmp/model.flow", library));
+CHECK(nn.Compile("/tmp/mnist.flow", library));
 
 // Get neural network cell for classifier.
 Cell *classifier = nn.GetCell("classifier");
@@ -178,8 +178,8 @@ computation.
 ## Flow file format
 
 A flow file contains a trained neural network with variables, operations,
-functions and connectors. It is a simple binary file format with the following
-structure:
+functions, connectors, and blobs. It is a simple binary file format with the
+following structure:
 
 ```
 flow = "flow" <version>
@@ -187,20 +187,21 @@ flow = "flow" <version>
        <#ops> op*
        <#funcs> func*
        <#cnxs> cnx*
+       <#blobs> blob* (from version 4)
 
 var = <name$> <dtype$>
       <#aliases> <alias$>
       <shape>
       <#bytes> value
 
-shape = <#dims> <size>*
-
 op = <name$> <type$>
      <#inputs> <input$>*
      <#outputs> <output$>*
      <#attrs> attr*
 
-attr = <name$> <value$>
+blob = <name$> <type$>
+       <#attrs> attr*
+       <#bytes> data
 
 func = <name$>
        <#ops> <op$>
@@ -208,11 +209,15 @@ func = <name$>
 cnx = <name$>
       <#vars> <var$>
 
+shape = <#dims> <size>*
+
+attr = <name$> <value$>
+
 dtype = "float16" | "float32" | "float64" | "int8" | "uint8" |
         "int16" | "uint16" | "int32" | "uint64"
 
 "flow" = 0x776f6c66
-version = 3
+version = 3 | 4
 ```
 
 A flow file begins with the _magic_ string "flow" followed by a version number.
