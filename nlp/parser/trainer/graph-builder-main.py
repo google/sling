@@ -48,8 +48,8 @@ flags.DEFINE_string('dev_corpus_without_gold', '',
 flags.DEFINE_string('tf_master', '',
                     'TensorFlow execution engine to connect to.')
 flags.DEFINE_string('pretrain_steps', '100', 'Comma separated pretrained steps')
-flags.DEFINE_string('train_steps', '50000', 'Comma separated train steps')
-flags.DEFINE_integer('report_every', 1000, 'Checkpoint interval')
+flags.DEFINE_string('train_steps', '100000', 'Comma separated train steps')
+flags.DEFINE_integer('report_every', 500, 'Checkpoint interval')
 flags.DEFINE_integer('batch_size', 8, 'Training batch size')
 
 def read_corpus(file_pattern):
@@ -111,10 +111,11 @@ def evaluator(gold_docs, test_docs):
     print("Evaluation failed: ", e.returncode, e.output)
     return {'eval_metric': 0.0}
 
-  print 'Full evaluation:', output
+  #print 'Full evaluation:', output
   eval_output = {}
   for line in output.splitlines():
     line = line.rstrip()
+    tf.logging.info("Evaluation Metric: %s", line)
     parts = line.split('\t')
     check.Eq(len(parts), 2, line)
     eval_output[parts[0]] = float(parts[1])
@@ -182,7 +183,7 @@ def main(unused_argv):
       trainers += [builder.add_training_from_config(target)]
 
     # Construct annotation and saves. Will use moving average if enabled.
-    annotator = builder.add_annotation()
+    annotator = builder.add_annotation(enable_tracing=False)
     builder.add_annotation('annotation_with_trace', enable_tracing=True)
     builder.add_saver()
 
@@ -190,15 +191,7 @@ def main(unused_argv):
     summaries = []
     for component in builder.components:
       summaries += component.get_summaries()
-    summaries.append(
-        tf.contrib.deprecated.scalar_summary(
-            'Global step', builder.master_vars['step']))
-    summaries.append(
-        tf.contrib.deprecated.scalar_summary(
-            'Learning rate', builder.master_vars['learning_rate']))
-    tf.identity(
-        tf.contrib.deprecated.merge_summary(summaries),
-        name='training/summary/summary')
+    merged_summaries = tf.summary.merge_all()
 
     # Construct target to initialize variables.
     tf.group(tf.global_variables_initializer(), name='inits')
@@ -211,6 +204,7 @@ def main(unused_argv):
   print "The graph can be viewed via"
   print "  tensorboard --logdir=" + events_dir
   print "  then navigating to http://localhost:6006 and clicking on 'GRAPHS'"
+  print len(trainers), "trainers built"
 
   # Also dump the graph separately.
   with file(graph_file, 'w') as fout:
@@ -236,7 +230,7 @@ def main(unused_argv):
     # Make sure to re-initialize all underlying state.
     sess.run(tf.global_variables_initializer())
     trainer_lib.run_training(
-        sess, trainers, annotator,
+        sess, trainers, annotator, # merged_summaries,
         evaluator, pretrain_steps,
         train_steps, train_corpus, dev_corpus_without_gold,
         dev_corpus_with_gold, FLAGS.batch_size, summary_writer,
