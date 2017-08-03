@@ -71,6 +71,10 @@ using syntaxnet::dragnn::RegisteredModuleSpec;
 DEFINE_string(documents, "", "File pattern of training documents.");
 DEFINE_string(commons, "", "Path to common store.");
 DEFINE_string(output_dir, "/tmp/sempar_out", "Output directory.");
+DEFINE_string(word_embeddings,
+              "/usr/local/google/home/grahul/sempar_ontonotes/"
+              "word2vec-embedding-bi-true-64.tf.recordio",
+              "Word embeddings TF recordio.");
 
 // Various options for generating the action table, lexicons, spec.
 constexpr int kActionTableCoveragePercentile = 99;
@@ -273,7 +277,7 @@ void OutputMasterSpec(Artifacts *artifacts) {
   SetParam(lr_lstm->mutable_transition_system(), "left_to_right", "true");
   SetParam(lr_lstm->mutable_network_unit(), "hidden_layer_sizes", "256");
   lr_lstm->set_num_actions(1);
-  AddFixedFeature(lr_lstm, "words", "word", 32);
+  AddFixedFeature(lr_lstm, "words", "word", 64);
   AddFixedFeature(lr_lstm, "suffix", "suffix(length=3)", 16);
   AddFixedFeature(
       lr_lstm, "shape",
@@ -317,6 +321,25 @@ void OutputMasterSpec(Artifacts *artifacts) {
   TrainFeatures(artifacts, lr_lstm);
   TrainFeatures(artifacts, rl_lstm);
   TrainFeatures(artifacts, ff);
+
+  // Add pretrained embeddings for word features.
+  for (auto &component : *artifacts->spec.mutable_component()) {
+    string vocab_file;
+    for (const auto &resource : component.resource()) {
+      if (resource.name() == "word-vocab") {
+        vocab_file = resource.part(0).file_pattern();
+      }
+    }
+    if (!vocab_file.empty()) {
+      for (auto &feature : *component.mutable_fixed_feature()) {
+        if (feature.name() == "words") {
+          feature.mutable_pretrained_embedding_matrix()->add_part()->
+              set_file_pattern(FLAGS_word_embeddings);
+          feature.mutable_vocab()->add_part()->set_file_pattern(vocab_file);
+        }
+      }
+    }
+  }
 
   // Dump the master spec.
   string spec_file = FullName("master_spec");
