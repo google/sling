@@ -52,6 +52,7 @@ DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 MAKE_SPEC=1
 DO_TRAINING=1
 BATCH_SIZE=1
+REPORT_EVERY=500
 
 for i in "$@"
 do
@@ -88,6 +89,10 @@ case $i in
     BATCH_SIZE="${i#*=}"
     shift
     ;;
+    --report_every=*|--checkpoint_every=*)
+    REPORT_EVERY="${i#*=}"
+    shift
+    ;;
     *)
     echo "Unknown option " $i
     exit 1
@@ -122,11 +127,11 @@ then
   exit 1
 fi
 
-HYPERPARAMS="learning_rate:0.001 decay_steps=800000 "
+HYPERPARAMS="learning_rate:0.0005 decay_steps=800000 "
 HYPERPARAMS+="seed:1 learning_method:'adam' "
 HYPERPARAMS+="use_moving_average:true dropout_rate:0.9 "
-HYPERPARAMS+="gradient_clip_norm:100.0 adam_beta1:0.01 "
-HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.0001"
+HYPERPARAMS+="gradient_clip_norm:1.0 adam_beta1:0.01 "
+HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.00001"
 
 if [[ "$MAKE_SPEC" -eq 1 ]];
 then
@@ -148,7 +153,8 @@ then
     --train_corpus=${TRAIN_FILEPATTERN} \
     --dev_corpus=${DEV_GOLD_FILEPATTERN} \
     --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN} \
-    --batch_size=${BATCH_SIZE}
+    --batch_size=${BATCH_SIZE} \
+    --report_every=${REPORT_EVERY}
 fi
 
 echo "Done."
