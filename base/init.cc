@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <iostream>
 #include <string>
 
 #include "base/init.h"
@@ -38,14 +39,16 @@ void InitProgram(int *argc, char ***argv) {
   google::InstallFailureSignalHandler();
 
   // Initialize logging.
-  google::InitGoogleLogging((*argv)[0]);
+  google::InitGoogleLogging(*argc == 0 ? "dummy" : (*argv)[0]);
 
   // Initialize command line flags.
-  string usage;
-  usage.append((*argv)[0]);
-  usage.append(" [OPTIONS]");
-  gflags::SetUsageMessage(usage);
-  gflags::ParseCommandLineFlags(argc, argv, true);
+  if (*argc > 0) {
+    string usage;
+    usage.append((*argv)[0]);
+    usage.append(" [OPTIONS]");
+    gflags::SetUsageMessage(usage);
+    gflags::ParseCommandLineFlags(argc, argv, true);
+  }
 
   // Run module initializers.
   ModuleInitializer *initializer = ModuleInitializer::first;
