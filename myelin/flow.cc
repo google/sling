@@ -437,7 +437,7 @@ void Flow::Operation::RemoveOutput(Variable *var) {
 
   // Remove variable from outputs.
   auto f = std::find(outputs.begin(), outputs.end(), var);
-  CHECK(f != inputs.end());
+  CHECK(f != outputs.end());
   outputs.erase(f);
 }
 
