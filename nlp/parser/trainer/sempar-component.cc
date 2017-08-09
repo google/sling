@@ -18,12 +18,12 @@
 #include <memory>
 
 #include "base/logging.h"
-#include "file/file.h"
 #include "dragnn/components/util/bulk_feature_extractor.h"
 #include "dragnn/core/component_registry.h"
 #include "dragnn/core/input_batch_cache.h"
 #include "dragnn/core/interfaces/component.h"
 #include "dragnn/core/interfaces/transition_state.h"
+#include "file/file.h"
 #include "nlp/parser/trainer/document-batch.h"
 #include "string/strcat.h"
 #include "syntaxnet/sparse.pb.h"
@@ -218,6 +218,7 @@ void SemparComponent::AdvanceFromPrediction(const float scores[],
   int offset = 0;
   int num_actions = 1;
   if (!shift_only()) num_actions = resources_.table.NumActions();
+  CHECK_EQ(transition_matrix_length, batch_.size() * num_actions);
   for (int i = 0; i < batch_.size(); ++i) {
     CHECK_LE(offset + num_actions, transition_matrix_length) << offset;
     SemparState *state = batch_.at(i);
