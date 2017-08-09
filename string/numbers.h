@@ -402,7 +402,7 @@ inline string SimpleItoa(unsigned long i) {
 //
 // Returns true if parsing was successful.
 template <typename int_type>
-bool MUST_USE_RESULT SimpleAtoi(const char *s, int_type *out) {
+bool ABSL_MUST_USE_RESULT SimpleAtoi(const char *s, int_type *out) {
   // Must be of integer type (not pointer type), with more than 16-bitwidth.
   static_assert(sizeof(*out) == 4 || sizeof(*out) == 8,
                 "SimpleAtoi works with 32 or 64 bit ints");
@@ -428,7 +428,7 @@ bool MUST_USE_RESULT SimpleAtoi(const char *s, int_type *out) {
 }
 
 template <typename int_type>
-bool MUST_USE_RESULT SimpleAtoi(const string &s, int_type *out) {
+bool ABSL_MUST_USE_RESULT SimpleAtoi(const string &s, int_type *out) {
   return SimpleAtoi(s.c_str(), out);
 }
 

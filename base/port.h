@@ -209,9 +209,9 @@ inline void *memrchr(const void *bytes, int find_char, size_t len) {
 
 // Tell the compiler to do printf format string checking if the
 // compiler supports it.
-#define PRINTF_ATTRIBUTE(string_index, first_to_check) \
+#define ABSL_PRINTF_ATTRIBUTE(string_index, first_to_check) \
     __attribute__((__format__ (__printf__, string_index, first_to_check)))
-#define SCANF_ATTRIBUTE(string_index, first_to_check) \
+#define ABSL_SCANF_ATTRIBUTE(string_index, first_to_check) \
     __attribute__((__format__ (__scanf__, string_index, first_to_check)))
 
 // Prevent the compiler from padding a structure to natural alignment.
@@ -219,33 +219,28 @@ inline void *memrchr(const void *bytes, int find_char, size_t len) {
 
 // Prevent the compiler from complaining about or optimizing away variables
 // that appear unused.
-#undef ATTRIBUTE_UNUSED
-#define ATTRIBUTE_UNUSED __attribute__ ((unused))
+#undef ABSL_ATTRIBUTE_UNUSED
+#define ABSL_ATTRIBUTE_UNUSED __attribute__ ((unused))
 
 // For functions we want to force inline or not inline.
-#define ATTRIBUTE_ALWAYS_INLINE  __attribute__ ((always_inline))
-#define HAVE_ATTRIBUTE_ALWAYS_INLINE 1
-#define ATTRIBUTE_NOINLINE __attribute__ ((noinline))
-#define HAVE_ATTRIBUTE_NOINLINE 1
-
-// For weak functions.
-#undef ATTRIBUTE_WEAK
-#define ATTRIBUTE_WEAK __attribute__ ((weak))
-#define HAVE_ATTRIBUTE_WEAK 1
+#define ABSL_ATTRIBUTE_ALWAYS_INLINE  __attribute__ ((always_inline))
+#define ABSL_HAVE_ATTRIBUTE_ALWAYS_INLINE 1
+#define ABSL_ATTRIBUTE_NOINLINE __attribute__ ((noinline))
+#define ABSL_HAVE_ATTRIBUTE_NOINLINE 1
 
 // Tell the compiler that some function parameters should be non-null pointers.
-#define ATTRIBUTE_NONNULL(arg_index) __attribute__((nonnull(arg_index)))
+#define ABSL_ATTRIBUTE_NONNULL(arg_index) __attribute__((nonnull(arg_index)))
 
 // Tell the compiler that a given function never returns.
-#define ATTRIBUTE_NORETURN __attribute__((noreturn))
+#define ABSL_ATTRIBUTE_NORETURN __attribute__((noreturn))
 
 // Tell the compiler to warn about unused return values for functions declared
 // with this macro. The macro should be used on function declarations following
 // the argument list.
 #if __GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4)
-#define MUST_USE_RESULT __attribute__ ((warn_unused_result))
+#define ABSL_MUST_USE_RESULT __attribute__ ((warn_unused_result))
 #else
-#define MUST_USE_RESULT
+#define ABSL_MUST_USE_RESULT
 #endif
 
 // GCC can be told that a certain branch is not likely to be taken (for
@@ -294,17 +289,15 @@ inline void aligned_free(void *aligned_memory) {
 
 #else   // not GCC
 
-#define PRINTF_ATTRIBUTE(string_index, first_to_check)
-#define SCANF_ATTRIBUTE(string_index, first_to_check)
+#define ABSL_PRINTF_ATTRIBUTE(string_index, first_to_check)
+#define ABSL_SCANF_ATTRIBUTE(string_index, first_to_check)
 #define PACKED
-#define ATTRIBUTE_UNUSED
-#define ATTRIBUTE_ALWAYS_INLINE
-#define ATTRIBUTE_NOINLINE
-#define ATTRIBUTE_WEAK
-#define HAVE_ATTRIBUTE_WEAK 0
-#define ATTRIBUTE_NONNULL(arg_index)
-#define ATTRIBUTE_NORETURN
-#define MUST_USE_RESULT
+#define ABSL_ATTRIBUTE_UNUSED
+#define ABSL_ATTRIBUTE_ALWAYS_INLINE
+#define ABSL_ATTRIBUTE_NOINLINE
+#define ABSL_ATTRIBUTE_NONNULL(arg_index)
+#define ABSL_ATTRIBUTE_NORETURN
+#define ABSL_MUST_USE_RESULT
 #define PREDICT_FALSE(x) x
 #define PREDICT_TRUE(x) x
 

@@ -308,7 +308,7 @@ class Tensor {
   int elements() const { return shape_.elements(); }
 
   // Value for constant tensor. Return null for parameters.
-  char *data() const { return data_; }
+  const char *data() const { return data_; }
 
   // Pointer to constant tensor on device.
   DevicePtr device_data() const { return device_data_; }
@@ -385,7 +385,9 @@ class Tensor {
   int ConsumerTask() const;
 
   // Return scalar value.
-  template<typename T> T value() const { return *reinterpret_cast<T *>(data_); }
+  template<typename T> const T value() const {
+    return *reinterpret_cast<const T *>(data_);
+  }
 
   // Element order.
   Order order() const { return order_; }
@@ -480,7 +482,7 @@ class Tensor {
   Tensor *link_ = nullptr;
 
   // Value for constant tensor (not owned).
-  char *data_ = nullptr;
+  const char *data_ = nullptr;
 
   // Pointer to constant tensor data on device. This is only set for constant
   // tensors that need to be access from the device.

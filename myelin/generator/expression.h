@@ -175,11 +175,11 @@ class ExpressionGenerator {
   Operand addr(Express::Var *var) { return index_->addr(var); }
 
   // Return pointer to constant data.
-  void *data(Express::Var *var) { return index_->data(var); }
+  const void *data(Express::Var *var) { return index_->data(var); }
 
   // Return constant variable value.
-  template<typename T> T value(Express::Var *var) {
-    return *reinterpret_cast<T *>(data(var));
+  template<typename T> const T value(Express::Var *var) {
+    return *reinterpret_cast<const T *>(data(var));
   }
 
   // Return register for temporary variable.

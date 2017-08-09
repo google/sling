@@ -23,6 +23,66 @@
 namespace sling {
 namespace myelin {
 
+namespace {
+
+// Mapping from operation name to operation type.
+static std::map<string, Express::OpType> optypes = {
+  {"Id", Express::MOV},
+  {"Add", Express::ADD},
+  {"Sub", Express::SUB},
+  {"Mul", Express::MUL},
+  {"Div", Express::DIV},
+  {"Min", Express::MIN},
+  {"Max", Express::MAX},
+  {"Neg", Express::NEG},
+  {"Abs", Express::ABS},
+  {"Relu", Express::RELU},
+  {"Softsign", Express::SOFTSIGN},
+  {"Softplus", Express::SOFTPLUS},
+  {"LogSigmoid", Express::LOGSIGMOID},
+  {"Reciprocal", Express::RECIPROCAL},
+  {"Square", Express::SQUARE},
+  {"Log", Express::LOG},
+  {"Exp", Express::EXP},
+  {"Sigmoid", Express::SIGMOID},
+  {"Tanh", Express::TANH},
+  {"MulAdd132", Express::MULADD132},
+  {"MulAdd213", Express::MULADD213},
+  {"MulAdd231", Express::MULADD231},
+  {"MulSub132", Express::MULSUB132},
+  {"MulSub213", Express::MULSUB213},
+  {"MulSub231", Express::MULSUB231},
+  {"CmpEqOQ", Express::CMPEQOQ},
+  {"CmpLtOQ", Express::CMPLTOQ},
+  {"CmpGtOQ", Express::CMPGTOQ},
+  {"CmpNgeUQ", Express::CMPNGEUQ},
+  {"Shr23", Express::SHR23},
+  {"Shl23", Express::SHL23},
+  {"And", Express::AND},
+  {"Or", Express::OR},
+  {"AndNot", Express::ANDNOT},
+  {"Floor", Express::FLOOR},
+  {"CvtFltInt", Express::CVTFLTINT},
+  {"CvtIntFlt", Express::CVTINTFLT},
+  {"SubInt", Express::SUBINT},
+};
+
+static const string opname[] = {
+  "Id",
+  "Add", "Sub", "Mul", "Div",
+  "Min", "Max",
+  "Neg", "Abs", "Relu", "Softsign", "Softplus", "LogSigmoid",
+  "Reciprocal", "Square",
+  "Log", "Exp", "Sigmoid", "Tanh",
+  "MulAdd132", "MulAdd213", "MulAdd231",
+  "MulSub132", "MulSub213", "MulSub231",
+  "CmpEqOQ", "CmpLtOQ", "CmpGtOQ", "CmpNgeUQ",
+  "Shr23", "Shl23",
+  "And", "Or", "AndNot",
+  "Floor", "CvtFltInt", "CvtIntFlt", "SubInt",
+  "???",
+};
+
 // Variable mapping.
 class VariableMap {
  public:
@@ -104,133 +164,13 @@ class RegisterAllocator {
   std::vector<Express::Var *> reg_;
 };
 
-// Mapping from operation name to operation type.
-static std::map<string, Express::OpType> optypes = {
-  {"Id", Express::MOV},
-  {"Add", Express::ADD},
-  {"Sub", Express::SUB},
-  {"Mul", Express::MUL},
-  {"Div", Express::DIV},
-  {"Min", Express::MIN},
-  {"Max", Express::MAX},
-  {"Neg", Express::NEG},
-  {"Abs", Express::ABS},
-  {"Relu", Express::RELU},
-  {"Softsign", Express::SOFTSIGN},
-  {"Softplus", Express::SOFTPLUS},
-  {"LogSigmoid", Express::LOGSIGMOID},
-  {"Reciprocal", Express::RECIPROCAL},
-  {"Square", Express::SQUARE},
-  {"Log", Express::LOG},
-  {"Exp", Express::EXP},
-  {"Sigmoid", Express::SIGMOID},
-  {"Tanh", Express::TANH},
-  {"MulAdd132", Express::MULADD132},
-  {"MulAdd213", Express::MULADD213},
-  {"MulAdd231", Express::MULADD231},
-  {"MulSub132", Express::MULSUB132},
-  {"MulSub213", Express::MULSUB213},
-  {"MulSub231", Express::MULSUB231},
-  {"CmpEqOQ", Express::CMPEQOQ},
-  {"CmpLtOQ", Express::CMPLTOQ},
-  {"CmpGtOQ", Express::CMPGTOQ},
-  {"CmpNgeUQ", Express::CMPNGEUQ},
-  {"Shr23", Express::SHR23},
-  {"Shl23", Express::SHL23},
-  {"And", Express::AND},
-  {"Or", Express::OR},
-  {"AndNot", Express::ANDNOT},
-  {"Floor", Express::FLOOR},
-  {"CvtFltInt", Express::CVTFLTINT},
-  {"CvtIntFlt", Express::CVTINTFLT},
-  {"SubInt", Express::SUBINT},
-};
-
-static const string opname[] = {
-  "Id",
-  "Add", "Sub", "Mul", "Div",
-  "Min", "Max",
-  "Neg", "Abs", "Relu", "Softsign", "Softplus", "LogSigmoid",
-  "Reciprocal", "Square",
-  "Log", "Exp", "Sigmoid", "Tanh",
-  "MulAdd132", "MulAdd213", "MulAdd231",
-  "MulSub132", "MulSub213", "MulSub231",
-  "CmpEqOQ", "CmpLtOQ", "CmpGtOQ", "CmpNgeUQ",
-  "Shr23", "Shl23",
-  "And", "Or", "AndNot",
-  "Floor", "CvtFltInt", "CvtIntFlt", "SubInt",
-  "???",
-};
-
 template <class Dest, class Source>
-inline Dest bit_cast(const Source& source) {
+inline Dest bit_cast(const Source &source) {
+  static_assert(sizeof(Dest) == sizeof(Source), "size error");
   Dest dest;
   memcpy(&dest, &source, sizeof(dest));
   return dest;
 }
-
-#define FLT_FROM_INT(x) bit_cast<float>(x)
-#define DBL_FROM_INT(x) bit_cast<double>(x)
-
-// System-defined numeric constants.
-#define FLTCONST(x) {x##f, x}
-#define INTCONST(f) {FLT_FROM_INT(f), DBL_FROM_INT(f)}
-Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
-  FLTCONST(0.0),    // ZERO
-  FLTCONST(1.0),    // ONE
-  FLTCONST(0.5),    // HALF
-  FLTCONST(9.0),    // P9
-  FLTCONST(-9.0),   // N9
-  FLTCONST(127.0),  // P127
-
-  FLTCONST(-0.6931471805599453),   // NLN2
-
-  INTCONST(0x00800000),   // MIN_NORM_POS
-  INTCONST(~0x7f800000),  // INV_MANT_MASK
-  INTCONST(0x7f),         // INT127
-
-  // Polynomial coefficients for natural logarithm.
-  FLTCONST(0.707106781186547524),  // CEPHES_SQRTHF
-  FLTCONST(7.0376836292E-2),       // CEPHES_LOG_P0
-  FLTCONST(-1.1514610310E-1),      // CEPHES_LOG_P1
-  FLTCONST(1.1676998740E-1),       // CEPHES_LOG_P2
-  FLTCONST(-1.2420140846E-1),      // CEPHES_LOG_P3
-  FLTCONST(+1.4249322787E-1),      // CEPHES_LOG_P4
-  FLTCONST(-1.6668057665E-1),      // CEPHES_LOG_P5
-  FLTCONST(+2.0000714765E-1),      // CEPHES_LOG_P6
-  FLTCONST(-2.4999993993E-1),      // CEPHES_LOG_P7
-  FLTCONST(+3.3333331174E-1),      // CEPHES_LOG_P8
-  FLTCONST(-2.12194440E-4),        // CEPHES_LOG_Q1
-  FLTCONST(0.693359375),           // CEPHES_LOG_Q2
-
-  // Clamping interval for exponential function.
-  FLTCONST(88.3762626647950),      // EXP_HI
-  FLTCONST(-88.3762626647949),     // EXP_LO
-
-  // Polynomial coefficients for exponential function.
-  FLTCONST(1.44269504088896341),   // CEPHES_LOG2EF
-  FLTCONST(1.9875691500E-4),       // CEPHES_EXP_P0
-  FLTCONST(1.3981999507E-3),       // CEPHES_EXP_P1
-  FLTCONST(8.3334519073E-3),       // CEPHES_EXP_P2
-  FLTCONST(4.1665795894E-2),       // CEPHES_EXP_P3
-  FLTCONST(1.6666665459E-1),       // CEPHES_EXP_P4
-  FLTCONST(5.0000001201E-1),       // CEPHES_EXP_P5
-
-  // Monomial coefficients of the numerator polynomial for tanh (odd).
-  FLTCONST(-2.76076847742355e-16),  // ALPHA_1
-  FLTCONST(2.00018790482477e-13),   // ALPHA_3
-  FLTCONST(-8.60467152213735e-11),  // ALPHA_5
-  FLTCONST(5.12229709037114e-08),   // ALPHA_7
-  FLTCONST(1.48572235717979e-05),   // ALPHA_9
-  FLTCONST(6.37261928875436e-04),   // ALPHA_11
-  FLTCONST(4.89352455891786e-03),   // ALPHA_13
-
-  // Monomial coefficients of the denominator polynomial for tanh (even).
-  FLTCONST(1.19825839466702e-06),  // BETA_0
-  FLTCONST(1.18534705686654e-04),  // BETA_2
-  FLTCONST(2.26843463243900e-03),  // BETA_4
-  FLTCONST(4.89352518554385e-03),  // BETA_6
-};
 
 // Recipe parser for converting a string to an expression.
 class RecipeParser {
@@ -387,6 +327,71 @@ class RecipeParser {
   const char *end_;            // end of parsed recipe
   Express *expr_;              // target expression
   bool expand_;                // expand intrinsic function into basic ops
+};
+
+}  // namespace
+
+#define FLT_FROM_INT(x) bit_cast<float>(x)
+#define DBL_FROM_INT(x) bit_cast<double>(x)
+
+// System-defined numeric constants.
+#define FLTCONST(x) {x##f, x}
+#define INTCONST(a, b) {FLT_FROM_INT(a), DBL_FROM_INT(b)}
+Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
+  FLTCONST(0.0),    // ZERO
+  FLTCONST(1.0),    // ONE
+  FLTCONST(0.5),    // HALF
+  FLTCONST(9.0),    // P9
+  FLTCONST(-9.0),   // N9
+  FLTCONST(127.0),  // P127
+
+  FLTCONST(-0.6931471805599453),   // NLN2
+
+  INTCONST(0x00800000, 0x0010000000000000LL),   // MIN_NORM_POS
+  INTCONST(~0x7f800000, ~0x7FF0000000000000LL),  // INV_MANT_MASK
+  INTCONST(0x7f, 0x7ffLL),         // MAX_MANT
+
+  // Polynomial coefficients for natural logarithm.
+  FLTCONST(0.707106781186547524),  // CEPHES_SQRTHF
+  FLTCONST(7.0376836292E-2),       // CEPHES_LOG_P0
+  FLTCONST(-1.1514610310E-1),      // CEPHES_LOG_P1
+  FLTCONST(1.1676998740E-1),       // CEPHES_LOG_P2
+  FLTCONST(-1.2420140846E-1),      // CEPHES_LOG_P3
+  FLTCONST(+1.4249322787E-1),      // CEPHES_LOG_P4
+  FLTCONST(-1.6668057665E-1),      // CEPHES_LOG_P5
+  FLTCONST(+2.0000714765E-1),      // CEPHES_LOG_P6
+  FLTCONST(-2.4999993993E-1),      // CEPHES_LOG_P7
+  FLTCONST(+3.3333331174E-1),      // CEPHES_LOG_P8
+  FLTCONST(-2.12194440E-4),        // CEPHES_LOG_Q1
+  FLTCONST(0.693359375),           // CEPHES_LOG_Q2
+
+  // Clamping interval for exponential function.
+  FLTCONST(88.3762626647950),      // EXP_HI
+  FLTCONST(-88.3762626647949),     // EXP_LO
+
+  // Polynomial coefficients for exponential function.
+  FLTCONST(1.44269504088896341),   // CEPHES_LOG2EF
+  FLTCONST(1.9875691500E-4),       // CEPHES_EXP_P0
+  FLTCONST(1.3981999507E-3),       // CEPHES_EXP_P1
+  FLTCONST(8.3334519073E-3),       // CEPHES_EXP_P2
+  FLTCONST(4.1665795894E-2),       // CEPHES_EXP_P3
+  FLTCONST(1.6666665459E-1),       // CEPHES_EXP_P4
+  FLTCONST(5.0000001201E-1),       // CEPHES_EXP_P5
+
+  // Monomial coefficients of the numerator polynomial for tanh (odd).
+  FLTCONST(-2.76076847742355e-16),  // ALPHA_1
+  FLTCONST(2.00018790482477e-13),   // ALPHA_3
+  FLTCONST(-8.60467152213735e-11),  // ALPHA_5
+  FLTCONST(5.12229709037114e-08),   // ALPHA_7
+  FLTCONST(1.48572235717979e-05),   // ALPHA_9
+  FLTCONST(6.37261928875436e-04),   // ALPHA_11
+  FLTCONST(4.89352455891786e-03),   // ALPHA_13
+
+  // Monomial coefficients of the denominator polynomial for tanh (even).
+  FLTCONST(1.19825839466702e-06),  // BETA_0
+  FLTCONST(1.18534705686654e-04),  // BETA_2
+  FLTCONST(2.26843463243900e-03),  // BETA_4
+  FLTCONST(4.89352518554385e-03),  // BETA_6
 };
 
 Express::OpType Express::Lookup(const string &opname) {
@@ -624,7 +629,7 @@ bool Express::TryToEliminateOps() {
   return false;
 }
 
-void Express::CacheConstants(int limit) {
+void Express::HoistConstants(int limit) {
   // Collect all existing cached variables.
   std::set<Var *> cached;
   for (int i = 0; i < body_; ++i) {
@@ -1402,7 +1407,7 @@ Express::Var *Express::Log(Var *x) {
 
   // Part 1: x = frexpf(x, e).
   Var *emm0 = Do(SHR23, x);
-  emm0 = Do(SUBINT, emm0, Number(INT127));
+  emm0 = Do(SUBINT, emm0, Number(MAX_MANT));
   Var *e = Add(Do(CVTINTFLT, emm0), Number(ONE));
 
   // Keep only the fractional part.

@@ -47,7 +47,7 @@ namespace jit {
 // bit_cast<Dest,Source> is a template function that implements the
 // equivalent of "*reinterpret_cast<Dest*>(&source)".
 template <class Dest, class Source>
-inline Dest bit_cast(const Source& source) {
+inline Dest bit_cast(const Source &source) {
   static_assert(sizeof(Dest) == sizeof(Source),
                 "Source and destination types should have equal sizes.");
 
@@ -1022,7 +1022,7 @@ void Assembler::emit_lea(Register dst, const Operand &src, int size) {
   emit_operand(dst, src);
 }
 
-void Assembler::load_rax(void *value) {
+void Assembler::load_rax(const void *value) {
   EnsureSpace ensure_space(this);
   if (kPointerSize == kInt64Size) {
     emit(0x48);  // REX.W
@@ -1169,7 +1169,7 @@ void Assembler::emit_mov(const Operand &dst, Immediate value, int size) {
   emit(value);
 }
 
-void Assembler::movp(Register dst, void *value) {
+void Assembler::movp(Register dst, const void *value) {
   EnsureSpace ensure_space(this);
   emit_rex(dst, kPointerSize);
   emit(0xB8 | dst.low_bits());
@@ -1666,7 +1666,7 @@ void Assembler::emit_xchg(Register dst, const Operand &src, int size) {
   emit_operand(dst, src);
 }
 
-void Assembler::store_rax(void *dst) {
+void Assembler::store_rax(const void *dst) {
   EnsureSpace ensure_space(this);
   if (kPointerSize == kInt64Size) {
     emit(0x48);  // REX.W

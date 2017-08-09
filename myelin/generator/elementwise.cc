@@ -329,7 +329,8 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
             return Operand(loc->base, offset_);
           } else {
             // Index element using offset in instance and index.
-            return Operand(masm_->instance(), offset_, times_1, loc->var->offset());
+            return Operand(masm_->instance(), offset_, times_1,
+                           loc->var->offset());
           }
         }
       case SCALAR:
@@ -379,7 +380,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
   }
 }
 
-void *ElementwiseIndexGenerator::data(Express::Var *var) {
+const void *ElementwiseIndexGenerator::data(Express::Var *var) {
   DCHECK_EQ(var->type, Express::CONST);
   Locator *loc = GetLocator(var);
   DCHECK(loc->var->IsConstant());

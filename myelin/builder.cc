@@ -34,8 +34,9 @@ Flow::Variable *Builder::Constant(const void *data, Type type,
                                   const Shape &shape) {
   Variable *var = Var(OpName("const"), type, shape);
   var->size = TypeTraits::of(type).size() * shape.elements();
-  var->data = flow_->AllocateMemory(var->size);
-  memcpy(var->data, data, var->size);
+  char *buffer = flow_->AllocateMemory(var->size);
+  var->data = buffer;
+  memcpy(buffer, data, var->size);
   return var;
 }
 

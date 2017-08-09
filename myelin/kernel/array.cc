@@ -411,7 +411,6 @@ class GeneralConcat : public Kernel {
     Label l;
     int axis = step->input(n)->value<int32>();
     int prefix = step->output(0)->shape().outer(axis);
-    LOG(INFO) << "Prefix size " << prefix;
     __ bind(&l);
 
     // Copy input tensors to output.
@@ -507,6 +506,7 @@ class SingleGather : public Kernel {
     Tensor *v = step->output(0);
     CHECK(f->IsLocal());
     CHECK(v->IsLocal());
+    CHECK(v->ref());
 
     // Allocate registers.
     Register acc = masm->rr().alloc();
@@ -529,12 +529,7 @@ class SingleGather : public Kernel {
     __ addq(acc, embeddings);
 
     // Save reference to embedding vector.
-    if (f->ref()) {
-      __ movq(addr, Operand(masm->instance(), v->offset()));
-      __ movsxlq(acc, Operand(addr));
-    } else {
-      __ movq(Operand(masm->instance(), v->offset()), acc);
-    }
+    __ movq(Operand(masm->instance(), v->offset()), acc);
   }
 
   int64 Complexity(const Step *step) override {

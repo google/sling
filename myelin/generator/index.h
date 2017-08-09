@@ -42,7 +42,7 @@ class IndexGenerator {
   virtual jit::Operand addr(Express::Var *var) = 0;
 
   // Return pointer to constant data.
-  virtual void *data(Express::Var *var) = 0;
+  virtual const void *data(Express::Var *var) = 0;
 
   // Return register for accessing temporary variable.
   jit::Register reg(int idx) { return regs_[idx]; }

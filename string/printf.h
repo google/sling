@@ -31,16 +31,15 @@
 namespace sling {
 
 // Return a C++ string.
-extern string StringPrintf(const char *format, ...)
-    PRINTF_ATTRIBUTE(1,2);
+extern string StringPrintf(const char *format, ...) ABSL_PRINTF_ATTRIBUTE(1, 2);
 
 // Store result into a supplied string and return it.
 extern const string &SStringPrintf(string *dst, const char *format, ...)
-    PRINTF_ATTRIBUTE(2,3);
+    ABSL_PRINTF_ATTRIBUTE(2, 3);
 
 // Append result to a supplied string
 extern void StringAppendF(string *dst, const char *format, ...)
-    PRINTF_ATTRIBUTE(2,3);
+    ABSL_PRINTF_ATTRIBUTE(2, 3);
 
 // Lower-level routine that takes a va_list and appends to a specified string.
 extern void StringAppendV(string *dst, const char *format, va_list ap);

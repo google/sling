@@ -123,35 +123,35 @@ const TypeTraits &TypeTraits::of(string &name) {
   return f != typemap.end() ? typetraits[f->second] : typetraits[DT_INVALID];
 }
 
-string TypeTraits::str(void *data) const {
+string TypeTraits::str(const void *data) const {
   if (data == nullptr) return "null";
   switch (type_) {
     case DT_INT8:
-      return std::to_string(*reinterpret_cast<int8 *>(data));
+      return std::to_string(*reinterpret_cast<const int8 *>(data));
 
     case DT_INT16:
-      return std::to_string(*reinterpret_cast<int16 *>(data));
+      return std::to_string(*reinterpret_cast<const int16 *>(data));
 
     case DT_INT32:
-      return std::to_string(*reinterpret_cast<int32 *>(data));
+      return std::to_string(*reinterpret_cast<const int32 *>(data));
 
     case DT_INT64:
-      return std::to_string(*reinterpret_cast<int64 *>(data));
+      return std::to_string(*reinterpret_cast<const int64 *>(data));
 
     case DT_UINT8:
-      return std::to_string(*reinterpret_cast<uint8 *>(data));
+      return std::to_string(*reinterpret_cast<const uint8 *>(data));
 
     case DT_UINT16:
-      return std::to_string(*reinterpret_cast<uint16 *>(data));
+      return std::to_string(*reinterpret_cast<const uint16 *>(data));
 
     case DT_FLOAT:
-      return std::to_string(*reinterpret_cast<float *>(data));
+      return std::to_string(*reinterpret_cast<const float *>(data));
 
     case DT_DOUBLE:
-      return std::to_string(*reinterpret_cast<double *>(data));
+      return std::to_string(*reinterpret_cast<const double *>(data));
 
     case DT_BOOL:
-      return (*reinterpret_cast<bool *>(data)) ? "true" : "false";
+      return (*reinterpret_cast<const bool *>(data)) ? "true" : "false";
 
     default:
       return "???";
@@ -167,36 +167,36 @@ Transformations::~Transformations() {
 class Parser {
  public:
   // Initialize parser with input buffer.
-  Parser(char *ptr, char *end) : ptr_(ptr), end_(end) {}
+  Parser(const char *ptr, const char *end) : ptr_(ptr), end_(end) {}
 
   // Get data buffer from input and advance the current input pointer.
-  char *Get(int len) {
+  const char *Get(int len) {
     CHECK_LE(len, end_ - ptr_) << "Unexpected end of input";
-    char *p = ptr_;
+    const char *p = ptr_;
     ptr_ += len;
     return p;
   }
 
   // Get next integer from input.
   int GetInt() {
-    return *reinterpret_cast<int *>(Get(4));
+    return *reinterpret_cast<const int *>(Get(4));
   }
 
   // Get next 64-bit integer from input.
   uint64_t GetLong() {
-    return *reinterpret_cast<uint64_t *>(Get(8));
+    return *reinterpret_cast<const uint64_t *>(Get(8));
   }
 
   // Get next length-prefixed string from input.
   string GetString() {
     int len = GetInt();
-    char *str = Get(len);
+    const char *str = Get(len);
     return string(str, len);
   }
 
  private:
-  char *ptr_;  // current position
-  char *end_;  // end of input buffer
+  const char *ptr_;  // current position
+  const char *end_;  // end of input buffer
 };
 
 // Flow file writer.
@@ -311,10 +311,11 @@ string Flow::Variable::TypeString() const {
 
 string Flow::Variable::DataString() const {
   // Locate data.
-  char *p  = data;
+  const char *p = data;
+  if (p == nullptr) return "∅";
   if (ref) {
+    p = *reinterpret_cast<const char * const *>(p);
     if (p == nullptr) return "null";
-    p = *reinterpret_cast<char **>(p);
   }
   if (shape.partial()) return "*";
 
@@ -558,12 +559,18 @@ Status Flow::Load(const string &filename) {
   CHECK(file->GetSize(&size));
   char *data = AllocateMemory(size);
   file->ReadOrDie(data, size);
-  CHECK(file->Close());
+  st = file->Close();
+  if (!st.ok()) return st;
 
+  Read(data, size);
+  return Status::OK;
+}
+
+void Flow::Read(const char *data, size_t size) {
   // Read header.
   Parser parser(data, data + size);
   int magic = parser.GetInt();
-  CHECK_EQ(magic, kMagic) << filename << " is not a flow file";
+  CHECK_EQ(magic, kMagic) << "not a flow file";
   int version = parser.GetInt();
   CHECK(version >= 3 && version <= 4)
       << "unsupported flow file version " << version;
@@ -715,8 +722,6 @@ Status Flow::Load(const string &filename) {
       if (blob->size != 0) blob->data = parser.Get(blob->size);
     }
   }
-
-  return Status::OK;
 }
 
 void Flow::Save(const string &filename, int version) const {
@@ -995,7 +1000,7 @@ std::vector<Flow::Operation *> Flow::Find(const Path &path) {
         match = false;
         break;
       }
-      Variable *var = current->inputs[node.input];
+      Variable *var = current->inputs[input];
       Operation *next = var->producer;
       if (next == nullptr) {
         match = false;

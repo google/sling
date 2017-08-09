@@ -30,7 +30,7 @@ namespace myelin {
 //   auto *w = tf.Constant(weights, DT_FLOAT, {784, 10});
 //   auto *b = tf.Constant(bias, DT_FLOAT, {10});
 //   auto *x = tf.Var("x", DT_FLOAT, {1, 784});
-//   auto *y = tf.Add(MatMul(x, w), b);
+//   auto *y = tf.Add(tf.MatMul(x, w), b);
 class Builder {
  public:
   // Flow typedefs.

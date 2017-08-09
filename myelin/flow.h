@@ -64,7 +64,7 @@ class TypeTraits {
   size_t size() const { return size_; }
   bool valid() const { return type_ != DT_INVALID; }
   const char *ptx() const { return ptx_; }
-  string str(void *data) const;
+  string str(const void *data) const;
 
   // Look up traits from type code.
   static const TypeTraits &of(Type type);
@@ -295,8 +295,8 @@ class Flow {
     string DataString() const;
 
     // Set data for variable. The storage is not owned by the variable.
-    void SetData(void *buffer, int len) {
-      data = static_cast<char *>(buffer);
+    void SetData(const void *buffer, int len) {
+      data = static_cast<const char *>(buffer);
       size = len;
     }
 
@@ -309,7 +309,7 @@ class Flow {
     Type type = DT_INVALID;              // element type for variable
     bool ref = false;                    // is variable a reference?
     Shape shape;                         // variable shape
-    char *data = nullptr;                // data for constants (owned by flow)
+    const char *data = nullptr;          // data for constants (owned by flow)
     uint64_t size = 0;                   // size of data in bytes
     bool in = false;                     // is variable a function input?
     bool out = false;                    // is variable a function output?
@@ -428,7 +428,7 @@ class Flow {
     string name;                      // name of data block
     string type;                      // data block type
     Attributes attrs;                 // attributes for data block
-    char *data = nullptr;             // data for blob
+    const char *data = nullptr;       // data for blob
     uint64_t size = 0;                // size of data for blob
   };
 
@@ -448,6 +448,10 @@ class Flow {
 
   // Load flow from file.
   Status Load(const string &filename);
+
+  // Read flow from buffer. This does not take ownership of the buffer and it
+  // must outlive the flow.
+  void Read(const char *data, size_t size);
 
   // Save flow to file.
   void Save(const string &filename, int version = kVersion) const;

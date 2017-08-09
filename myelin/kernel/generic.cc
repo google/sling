@@ -189,7 +189,7 @@ class StandardTyper : public Typer {
         if (axis->type == DT_INT32 &&
             axis->rank() == 0 &&
             axis->data != nullptr) {
-          int a = *reinterpret_cast<int *>(axis->data);
+          int a = *reinterpret_cast<const int *>(axis->data);
           Shape concat = op->inputs[0]->shape;
           bool compatible = true;
           for (int i = 1; i < n; ++i) {
@@ -223,7 +223,7 @@ class StandardTyper : public Typer {
             shape->rank() == 1 &&
             shape->data != nullptr) {
           // The output shape is constant.
-          int *dims = reinterpret_cast<int *>(shape->data);
+          const int *dims = reinterpret_cast<const int *>(shape->data);
           result->shape.clear();
           for (int d = 0; d < shape->dim(0); ++d) {
             result->shape.add(dims[d] == -1 ? 1 : dims[d]);

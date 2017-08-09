@@ -117,7 +117,7 @@ class Express {
   // System-defined numeric constants.
   enum ConstantNumber {
     ZERO, ONE, HALF, P9, N9, P127, NLN2,
-    MIN_NORM_POS, INV_MANT_MASK, INT127,
+    MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
     CEPHES_LOG_P5, CEPHES_LOG_P6, CEPHES_LOG_P7, CEPHES_LOG_P8,
@@ -228,7 +228,7 @@ class Express {
     bool op_reg_reg_reg = false;    // dst = op(src1, src2)
     bool op_reg_reg_imm = false;    // dst = op(src, imm)
     bool op_reg_reg_mem = false;    // dst = op(src, [mem])
-    bool op_mem_reg_reg = false;    // [mem} = op(src, src2)
+    bool op_mem_reg_reg = false;    // [mem] = op(src, src2)
 
     // Unary function instruction formats.
     bool func_reg_reg = false;      // dst = op(src)
@@ -262,8 +262,8 @@ class Express {
   Op *OperationBefore(Op *pos, OpType type);
   Op *OperationAfter(Op *pos, OpType type);
 
-  // Add function with with optional intrinsics expansion. The result variable
-  // is not set for the returned op.
+  // Add function with optional intrinsics expansion. The result variable is not
+  // set for the returned op.
   Op *Function(OpType type, std::vector<Var *> &args, bool expand = false);
 
   // Lookup variable in expression or add a new variable if it does not exist.
@@ -293,7 +293,7 @@ class Express {
   // Cache constants and move the loads outside the body of the code. Each
   // cached constant takes up an additional register, so the number of cached
   // constants is limited to the number of spare registers.
-  void CacheConstants(int limit);
+  void HoistConstants(int limit);
 
   // Cache inputs and results used in multiple ops in temporary variables.
   void CacheResults();
@@ -318,8 +318,8 @@ class Express {
   void FuseMulAdd() { Fuse(ADD, MUL, MULADD213, MULADD231); }
   void FuseMulSub() { Fuse(SUB, MUL, MULSUB213, INVALID); }
 
-  // Rewrite expression to match instruction forms supported by target
-  // architecture. The expression is assumed to be on static single assignment
+  // Rewrite expression to match instruction formats supported by target
+  // architecture. The expression is assumed to be in static single assignment
   // form. The expression is rewritten by adding additional temporary variables
   // to the rewritten expression so only the supported instruction form are
   // needed for evaluating the expression.
@@ -403,7 +403,7 @@ class Express {
 
   // Return value for system-defined numeric constant.
   static float NumericFlt32(int number) { return constants[number].flt; }
-  static float NumericFlt64(int number) { return constants[number].dbl; }
+  static double NumericFlt64(int number) { return constants[number].dbl; }
 
  private:
   // Try to eliminate identical operations from expression. Return true if any
@@ -428,7 +428,8 @@ class Express {
   // Operations in expression.
   std::vector<Op *> ops_;
 
-  // First operation in the body. All instructions before are loop invariant.
+  // First operation in the body. All instructions before are loop invariant. If
+  // body is 0 (the default), there are no loop invariant instructions.
   int body_ = 0;
 
   // System-defined numeric constants.

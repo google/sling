@@ -143,9 +143,10 @@ class ConstantFolding : public Transformer {
           } else {
             output->size = sizeof(int32);
           }
-          output->data = flow->AllocateMemory(output->size);
+          char *data = flow->AllocateMemory(output->size);
+          output->data = data;
           output->in = true;
-          int32 *result = reinterpret_cast<int32 *>(output->data);
+          int32 *result = reinterpret_cast<int32 *>(data);
 
           // Create constant variable with the pre-computed value.
           if (op->type == "Shape") {

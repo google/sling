@@ -557,8 +557,8 @@ string Instance::ToString(Tensor *param) const {
   // Locate parameter in instance.
   char *p  = data_ + param->offset();
   if (param->ref()) {
-    if (p == nullptr) return "null";
     p = *reinterpret_cast<char **>(p);
+    if (p == nullptr) return "null";
   }
   if (param->shape().partial()) return "*";
 
@@ -1546,7 +1546,7 @@ char *Network::AllocateTensor(Tensor *tensor) {
     memcpy(data, tensor->data_, tensor->size_);
   } else if (tensor->rank() == 2) {
     // Copy matrix one element at a time.
-    char *src = tensor->data_;
+    const char *src = tensor->data_;
     int element_size = tensor->element_size();
     for (int r = 0; r < tensor->dim(0); ++r) {
       for (int c = 0; c < tensor->dim(1); ++c) {
@@ -1555,7 +1555,7 @@ char *Network::AllocateTensor(Tensor *tensor) {
       }
     }
   } else if (tensor->rank() == 3) {
-    char *src = tensor->data_;
+    const char *src = tensor->data_;
     int element_size = tensor->element_size();
     for (int r = 0; r < tensor->dim(0); ++r) {
       for (int c = 0; c < tensor->dim(1); ++c) {
@@ -1566,7 +1566,7 @@ char *Network::AllocateTensor(Tensor *tensor) {
       }
     }
   } else if (tensor->rank() == 4) {
-    char *src = tensor->data_;
+    const char *src = tensor->data_;
     int element_size = tensor->element_size();
     for (int r = 0; r < tensor->dim(0); ++r) {
       for (int c = 0; c < tensor->dim(1); ++c) {

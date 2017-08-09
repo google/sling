@@ -47,7 +47,7 @@ class ElementwiseIndexGenerator : public IndexGenerator {
   jit::Operand addr(Express::Var *var) override;
 
   // Return pointer to constant data.
-  void *data(Express::Var *var) override;
+  const void *data(Express::Var *var) override;
 
   // Generate start and end of loop.
   void BeginLoop();

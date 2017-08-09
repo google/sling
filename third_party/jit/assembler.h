@@ -299,7 +299,7 @@ class Assembler : public CodeGenerator {
   void movl(const Operand &dst, Label *src);
 
   // Loads a pointer into a register.
-  void movp(Register dst, void *ptr);
+  void movp(Register dst, const void *ptr);
 
   // Loads a 64-bit immediate into a register.
   void movq(Register dst, int64_t value);
@@ -331,7 +331,7 @@ class Assembler : public CodeGenerator {
   void repstosq() { emit_repstos(kInt64Size); }
 
   // Instruction to load from an immediate 64-bit pointer into RAX.
-  void load_rax(void *ptr);
+  void load_rax(const void *ptr);
 
   // Conditional moves.
   void cmovq(Condition cc, Register dst, Register src);
@@ -449,7 +449,7 @@ class Assembler : public CodeGenerator {
   // Shifts src:dst right by cl bits, affecting only dst.
   void shrd(Register dst, Register src);
 
-  void store_rax(void *dst);
+  void store_rax(const void *dst);
 
   void addb(Register dst, Register src) { emit_add(dst, src, 1); }
   void addb(Register dst, const Operand &src) { emit_add(dst, src, 1); }
@@ -2558,7 +2558,7 @@ class Assembler : public CodeGenerator {
     pc_ += sizeof(uint32_t);
   }
 
-  void emitp(void *x) {
+  void emitp(const void *x) {
     uintptr_t value = reinterpret_cast<uintptr_t>(x);
     Memory::uintptr_at(pc_) = value;
     pc_ += sizeof(uintptr_t);
