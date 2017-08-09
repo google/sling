@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A program for creating and dumping a DRAGNN graph."""
+"""Creates a DRAGNN Sempar graph from a MasterSpec and training with it.
+Although it can be called by itself, it is best invoked from train.sh
+"""
 
 import glob
 import os
@@ -102,7 +104,6 @@ def evaluator(gold_docs, test_docs):
     print("Evaluation failed: ", e.returncode, e.output)
     return {'eval_metric': 0.0}
 
-  #print 'Full evaluation:', output
   eval_output = {}
   for line in output.splitlines():
     line = line.rstrip()
@@ -115,13 +116,6 @@ def evaluator(gold_docs, test_docs):
 
   check.IsTrue(eval_output.has_key('eval_metric'), str(eval_output))
   return eval_output
-
-
-  
-#def main(unused_argv):
-#  train_corpus = read_corpus(FLAGS.train_corpus)
-#  dev_corpus_with_gold = read_corpus(FLAGS.dev_corpus)
-#  dev_corpus_without_gold = read_corpus(FLAGS.dev_corpus_without_gold)
 
 
 def empty_dir(folder):
