@@ -29,9 +29,10 @@ from syntaxnet.util import check
 
 import dragnn.python.load_dragnn_cc_impl
 
-#tf.load_op_library("/usr/local/google/home/grahul/oss/models/syntaxnet/bazel-bin/dragnn/python/dragnn_cc_impl.so")
 tf.load_op_library(
-    os.path.join('bazel-bin', tf.resource_loader.get_data_files_path(), 'sempar-component-dragnn.so'))
+    os.path.join('bazel-bin',
+                 tf.resource_loader.get_data_files_path(),
+                 'sempar-component-dragnn.so'))
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS

@@ -167,6 +167,7 @@ fi
 if [[ "$DO_TRAINING" -eq 1 ]];
 then
   bazel build -c opt nlp/parser/trainer:frame-evaluation
+  bazel build -c opt nlp/parser/trainer:sempar-component-dragnn.so
   python nlp/parser/trainer/graph-builder-main.py \
     --master_spec="${OUTPUT_FOLDER}/master_spec" \
     --hyperparams="${HYPERPARAMS}" \
