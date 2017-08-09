@@ -27,6 +27,9 @@
 # - Path to the commons store.
 # - Name of the output folder. All generated resources e.g. feature lexicons,
 #   action table, master spec, TF graph, trained model etc. will be dumped here.
+# - Word embedding dimension, and optionally a pretrained word embedding.
+# - Training parameters, e.g. batch size, training steps, learning rate,
+#   checkpoint interval etc.
 
 # It performs the following steps:
 # - Builds the action table.
@@ -38,7 +41,7 @@
 # Tweaks:
 # - The features and component attributes (e.g. hidden layer size) are
 #   hard-coded in generate-master-spec.cc and can be changed there.
-# - The default training hyperparameters are hard-coded in this script and
+# - Some training hyperparameters are hard-coded in this script and
 #   can be changed in $HYPERPARAMS below.
 
 set -eux
