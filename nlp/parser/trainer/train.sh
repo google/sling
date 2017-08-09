@@ -53,6 +53,8 @@ MAKE_SPEC=1
 DO_TRAINING=1
 BATCH_SIZE=1
 REPORT_EVERY=500
+LEARNING_RATE=0.0005
+TRAIN_STEPS=100000
 
 for i in "$@"
 do
@@ -93,6 +95,14 @@ case $i in
     REPORT_EVERY="${i#*=}"
     shift
     ;;
+    --learning_rate=*|--eta=*)
+    LEARNING_RATE="${i#*=}"
+    shift
+    ;;
+    --train_steps=*|--steps=*|--num_train_steps=*)
+    TRAIN_STEPS="${i#*=}"
+    shift
+    ;;
     *)
     echo "Unknown option " $i
     exit 1
@@ -127,9 +137,9 @@ then
   exit 1
 fi
 
-HYPERPARAMS="learning_rate:0.0005 decay_steps=800000 "
-HYPERPARAMS+="seed:1 learning_method:'adam' "
-HYPERPARAMS+="use_moving_average:true dropout_rate:0.9 "
+HYPERPARAMS="learning_rate:${LEARNING_RATE} decay_steps:800000 "
+HYPERPARAMS+="seed:2 learning_method:'adam' "
+HYPERPARAMS+="use_moving_average:true dropout_rate:1.0 "
 HYPERPARAMS+="gradient_clip_norm:1.0 adam_beta1:0.01 "
 HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.00001"
 
@@ -147,14 +157,15 @@ then
   bazel build -c opt nlp/parser/trainer:frame-evaluation
   python nlp/parser/trainer/graph-builder-main.py \
     --master_spec="${OUTPUT_FOLDER}/master_spec" \
-    --hyperparams=${HYPERPARAMS} \
+    --hyperparams="${HYPERPARAMS}" \
     --output_folder=${OUTPUT_FOLDER} \
     --commons=${COMMONS} \
     --train_corpus=${TRAIN_FILEPATTERN} \
     --dev_corpus=${DEV_GOLD_FILEPATTERN} \
     --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN} \
     --batch_size=${BATCH_SIZE} \
-    --report_every=${REPORT_EVERY}
+    --report_every=${REPORT_EVERY} \
+    --train_steps=${TRAIN_STEPS} \
 fi
 
 echo "Done."
