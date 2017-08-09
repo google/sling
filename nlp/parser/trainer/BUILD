@@ -198,6 +198,16 @@ cc_library(
   alwayslink = 1,
 )
 
+cc_library(
+    name = "my-init",
+    srcs = ["my-init.cc"],
+    hdrs = [],
+    deps = [
+        "//base",
+        "//string",
+    ],
+)
+
 cc_binary(
     name = "sempar-component-dragnn.so",
     linkopts = select({
@@ -208,11 +218,29 @@ cc_binary(
     deps = [
         ":fixed-features",
         ":link-features",
+        ":my-init",
         ":sempar-component",
         "//file:file",
         "//file:posix",
     ],
 )
+
+cc_binary(
+  name = "make-test-docs",
+  srcs = ["make-test-docs.cc"],
+  deps = [
+    ":shared-resources",
+    "//base",
+    "//file:file",
+    "//file:posix",
+    "//frame:object",
+    "//frame:store",
+    "//nlp/document:document",
+    "//nlp/document:token-breaks",
+    "//string:strcat",
+  ],
+)
+
 
 cc_binary(
   name = "sempar-component-test",
