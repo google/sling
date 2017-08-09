@@ -47,6 +47,8 @@
 #include "nlp/parser/trainer/shared-resources.h"
 #include "string/strcat.h"
 #include "syntaxnet/affix.h"
+#include "syntaxnet/dictionary.pb.h"
+#include "syntaxnet/proto_io.h"
 #include "syntaxnet/task_context.h"
 #include "syntaxnet/task_spec.pb.h"
 #include "syntaxnet/term_frequency_map.h"
@@ -71,10 +73,12 @@ using syntaxnet::dragnn::RegisteredModuleSpec;
 DEFINE_string(documents, "", "File pattern of training documents.");
 DEFINE_string(commons, "", "Path to common store.");
 DEFINE_string(output_dir, "/tmp/sempar_out", "Output directory.");
+DEFINE_int32(word_embeddings_dim, 32, "Word embeddings dimensionality.");
 DEFINE_string(word_embeddings,
               "/usr/local/google/home/grahul/sempar_ontonotes/"
-              "word2vec-embedding-bi-true-64.tf.recordio",
-              "Word embeddings TF recordio.");
+              "word2vec-embedding-bi-true-32.tf.recordio",
+              "Pretrained word embeddings TF recordio. Should have a "
+              "dimensionality of FLAGS_word_embeddings_dim.");
 
 // Various options for generating the action table, lexicons, spec.
 constexpr int kActionTableCoveragePercentile = 99;
@@ -270,14 +274,28 @@ void TrainFeatures(Artifacts *artifacts, ComponentSpec *spec) {
   }
 }
 
+void CheckWordEmbeddingsDimensionality() {
+  if (FLAGS_word_embeddings.empty()) return;
+
+  syntaxnet::ProtoRecordReader reader(FLAGS_word_embeddings);
+  syntaxnet::TokenEmbedding embedding;
+  CHECK_EQ(reader.Read(&embedding), tensorflow::Status::OK());
+  int size = embedding.vector().values_size();
+  CHECK_EQ(size, FLAGS_word_embeddings_dim)
+      << "Pretrained embeddings have dim=" << size
+      << ", whereas word embeddings have dim=" << FLAGS_word_embeddings_dim;
+}
+
 void OutputMasterSpec(Artifacts *artifacts) {
+  CheckWordEmbeddingsDimensionality();
+
   // Left to right LSTM.
   auto *lr_lstm = AddComponent(
       "lr_lstm", "SemparComponent", "LSTMNetwork", "shift-only", artifacts);
   SetParam(lr_lstm->mutable_transition_system(), "left_to_right", "true");
   SetParam(lr_lstm->mutable_network_unit(), "hidden_layer_sizes", "256");
   lr_lstm->set_num_actions(1);
-  AddFixedFeature(lr_lstm, "words", "word", 64);
+  AddFixedFeature(lr_lstm, "words", "word", FLAGS_word_embeddings_dim);
   AddFixedFeature(lr_lstm, "suffix", "suffix(length=3)", 16);
   AddFixedFeature(
       lr_lstm, "shape",
@@ -323,22 +341,27 @@ void OutputMasterSpec(Artifacts *artifacts) {
   TrainFeatures(artifacts, ff);
 
   // Add pretrained embeddings for word features.
-  for (auto &component : *artifacts->spec.mutable_component()) {
-    string vocab_file;
-    for (const auto &resource : component.resource()) {
-      if (resource.name() == "word-vocab") {
-        vocab_file = resource.part(0).file_pattern();
+  if (!FLAGS_word_embeddings.empty()) {
+    for (auto &component : *artifacts->spec.mutable_component()) {
+      string vocab_file;
+      for (const auto &resource : component.resource()) {
+        if (resource.name() == "word-vocab") {
+          vocab_file = resource.part(0).file_pattern();
+        }
       }
-    }
-    if (!vocab_file.empty()) {
-      for (auto &feature : *component.mutable_fixed_feature()) {
-        if (feature.name() == "words") {
-          feature.mutable_pretrained_embedding_matrix()->add_part()->
-              set_file_pattern(FLAGS_word_embeddings);
-          feature.mutable_vocab()->add_part()->set_file_pattern(vocab_file);
+      if (!vocab_file.empty()) {
+        for (auto &feature : *component.mutable_fixed_feature()) {
+          if (feature.name() == "words") {
+            feature.mutable_pretrained_embedding_matrix()->add_part()->
+                set_file_pattern(FLAGS_word_embeddings);
+            feature.mutable_vocab()->add_part()->set_file_pattern(vocab_file);
+          }
         }
       }
     }
+    LOG(INFO) << "Using pretrained word embeddings: " << FLAGS_word_embeddings;
+  } else {
+    LOG(INFO) << "No pretrained word embeddings specified";
   }
 
   // Dump the master spec.

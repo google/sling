@@ -55,6 +55,8 @@ BATCH_SIZE=1
 REPORT_EVERY=500
 LEARNING_RATE=0.0005
 TRAIN_STEPS=100000
+WORD_EMBEDDINGS_DIM=32
+PRETRAINED_WORD_EMBEDDINGS=
 
 for i in "$@"
 do
@@ -103,6 +105,14 @@ case $i in
     TRAIN_STEPS="${i#*=}"
     shift
     ;;
+    --word_embeddings_dim=*|--word_dim=*|--word_embedding_dim=*)
+    WORD_EMBEDDINGS_DIM="${i#*=}"
+    shift
+    ;;
+    --word_embeddings=*|--pretrained_embeddings=*|--pretrained_word_embeddings=*)
+    PRETRAINED_WORD_EMBEDDINGS="${i#*=}"
+    shift
+    ;;
     *)
     echo "Unknown option " $i
     exit 1
@@ -149,7 +159,9 @@ then
   bazel-bin/nlp/parser/trainer/generate-master-spec \
     --documents=${TRAIN_FILEPATTERN} \
     --commons=${COMMONS} \
-    --output_dir=${OUTPUT_FOLDER}
+    --output_dir=${OUTPUT_FOLDER} \
+    --word_embeddings=${PRETRAINED_WORD_EMBEDDINGS} \
+    --word_embeddings_dim=${WORD_EMBEDDINGS_DIM}
 fi
 
 if [[ "$DO_TRAINING" -eq 1 ]];
@@ -165,7 +177,7 @@ then
     --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN} \
     --batch_size=${BATCH_SIZE} \
     --report_every=${REPORT_EVERY} \
-    --train_steps=${TRAIN_STEPS} \
+    --train_steps=${TRAIN_STEPS}
 fi
 
 echo "Done."
