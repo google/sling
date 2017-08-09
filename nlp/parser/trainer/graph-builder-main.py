@@ -27,9 +27,9 @@ from dragnn.python import trainer_lib
 from google.protobuf import text_format
 from syntaxnet.util import check
 
-#import dragnn.python.load_dragnn_cc_impl
+import dragnn.python.load_dragnn_cc_impl
 
-tf.load_op_library("/usr/local/google/home/grahul/oss/models/syntaxnet/bazel-bin/dragnn/python/dragnn_cc_impl.so")
+#tf.load_op_library("/usr/local/google/home/grahul/oss/models/syntaxnet/bazel-bin/dragnn/python/dragnn_cc_impl.so")
 tf.load_op_library(
     os.path.join('bazel-bin', tf.resource_loader.get_data_files_path(), 'sempar-component-dragnn.so'))
 
@@ -74,16 +74,6 @@ def evaluator(gold_docs, test_docs):
 
   folder = os.path.join(FLAGS.output_folder, "tmp_docs")
   empty_dir(folder)
-
-  # Dump gold and test docs.
-  #for i in xrange(len(gold_docs)):
-  #  fname = os.path.join(folder, "gold." + str(i))
-  #  with open(fname, 'w') as f:
-  #    f.write(gold_docs[i])
-  #
-  # fname = os.path.join(folder, "test." + str(i))
-  #  with open(fname, 'w') as f:
-  #    f.write(test_docs[i])
 
   gold_zip_name = os.path.join(folder, "dev.gold.zip")
   test_zip_name = os.path.join(folder, "dev.test.zip")
@@ -146,6 +136,7 @@ def main(unused_argv):
   # Read hyperparams and master spec.
   hyperparam_config = spec_pb2.GridPoint()
   text_format.Parse(FLAGS.hyperparams, hyperparam_config)
+  print hyperparam_config
   master_spec = spec_pb2.MasterSpec()
 
   with file(FLAGS.master_spec, 'r') as fin:
