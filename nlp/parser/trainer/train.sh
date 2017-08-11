@@ -46,20 +46,36 @@
 
 set -eux
 
+# Input resources and arguments.
 SEM=$HOME/sempar_ontonotes
 COMMONS=${SEM}/commons
 OUTPUT_FOLDER=${SEM}/out
 TRAIN_FILEPATTERN=${SEM}/train.zip
 DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
 DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
-MAKE_SPEC=1
-DO_TRAINING=1
+WORD_EMBEDDINGS_DIM=32
+PRETRAINED_WORD_EMBEDDINGS=
+
+# Training hyperparameters.
 BATCH_SIZE=1
 REPORT_EVERY=500
 LEARNING_RATE=0.0005
+SEED=2
+METHOD=adam
+ADAM_BETA1=0.01
+ADAM_BETA2=0.999
+ADAM_EPS=0.00001
+GRAD_CLIP_NORM=1.0
+DROPOUT=1.0
 TRAIN_STEPS=100000
-WORD_EMBEDDINGS_DIM=32
-PRETRAINED_WORD_EMBEDDINGS=
+DECAY_STEPS=50000
+MOVING_AVERAGE=true
+
+# Whether we should make the MasterSpec again or not.
+MAKE_SPEC=1
+
+# Whether we should train or stop after making the MasterSpec.
+DO_TRAINING=1
 
 for i in "$@"
 do
@@ -116,6 +132,42 @@ case $i in
     PRETRAINED_WORD_EMBEDDINGS="${i#*=}"
     shift
     ;;
+    --seed=*)
+    SEED="${i#*=}"
+    shift
+    ;;
+    --method=*|--optimizer=*)
+    METHOD="${i#*=}"
+    shift
+    ;;
+    --adam_beta1=*)
+    ADAM_BETA1="${i#*=}"
+    shift
+    ;;
+    --adam_beta2=*)
+    ADAM_BETA2="${i#*=}"
+    shift
+    ;;
+    --adam_eps=*|--adam_epsilon=*)
+    ADAM_EPS="${i#*=}"
+    shift
+    ;;
+    --grad_clip_norm=*|--gradient_clip_norm=*|--grad_clip=*|--gradient_clip=*)
+    GRAD_CLIP_NORM="${i#*=}"
+    shift
+    ;;
+    --dropout=*|--dropout_rate=*)
+    DROPOUT="${i#*=}"
+    shift
+    ;;
+    --decay=*|--decay_steps=*)
+    DECAY="${i#*=}"
+    shift
+    ;;
+    --moving_average=*|--use_moving_average=*)
+    MOVING_AVERAGE="${i#*=}"
+    shift
+    ;;
     *)
     echo "Unknown option " $i
     exit 1
@@ -150,11 +202,11 @@ then
   exit 1
 fi
 
-HYPERPARAMS="learning_rate:${LEARNING_RATE} decay_steps:800000 "
-HYPERPARAMS+="seed:2 learning_method:'adam' "
-HYPERPARAMS+="use_moving_average:true dropout_rate:1.0 "
-HYPERPARAMS+="gradient_clip_norm:1.0 adam_beta1:0.01 "
-HYPERPARAMS+="adam_beta2:0.999 adam_eps:0.00001"
+HYPERPARAMS="learning_rate:${LEARNING_RATE} decay_steps:${DECAY_STEPS} "
+HYPERPARAMS+="seed:${SEED} learning_method:'${METHOD}' "
+HYPERPARAMS+="use_moving_average:${MOVING_AVERAGE} dropout_rate:${DROPOUT} "
+HYPERPARAMS+="gradient_clip_norm:${GRAD_CLIP_NORM} adam_beta1:${ADAM_BETA1} "
+HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS}"
 
 if [[ "$MAKE_SPEC" -eq 1 ]];
 then
