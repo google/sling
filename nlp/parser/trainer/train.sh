@@ -227,7 +227,7 @@ fi
 
 if [[ "$DO_TRAINING" -eq 1 ]];
 then
-  bazel build -c opt nlp/parser/trainer:frame-evaluation
+  bazel build -c opt nlp/parser/trainer:evaluate-frames
   bazel build -c opt nlp/parser/trainer:sempar-component-dragnn.so
   python nlp/parser/trainer/train.py \
     --master_spec="${OUTPUT_FOLDER}/master_spec" \
