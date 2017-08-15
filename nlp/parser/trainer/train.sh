@@ -55,6 +55,7 @@ DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
 DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 WORD_EMBEDDINGS_DIM=32
 PRETRAINED_WORD_EMBEDDINGS=
+OOV_FEATURES=true
 
 # Training hyperparameters.
 BATCH_SIZE=1
@@ -130,6 +131,10 @@ case $i in
     ;;
     --word_embeddings=*|--pretrained_embeddings=*|--pretrained_word_embeddings=*)
     PRETRAINED_WORD_EMBEDDINGS="${i#*=}"
+    shift
+    ;;
+    --oov_features=*|--oov_lstm_features=*)
+    OOV_FEATURES="${i#*=}"
     shift
     ;;
     --seed=*)
@@ -216,7 +221,8 @@ then
     --commons=${COMMONS} \
     --output_dir=${OUTPUT_FOLDER} \
     --word_embeddings=${PRETRAINED_WORD_EMBEDDINGS} \
-    --word_embeddings_dim=${WORD_EMBEDDINGS_DIM}
+    --word_embeddings_dim=${WORD_EMBEDDINGS_DIM} \
+    --oov_lstm_features=${OOV_FEATURES}
 fi
 
 if [[ "$DO_TRAINING" -eq 1 ]];
