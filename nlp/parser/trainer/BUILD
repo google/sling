@@ -42,7 +42,6 @@ cc_binary(
     ":link-features",
     ":shared-resources",
     "//base",
-    "//file:file",
     "//file:posix",
     "//frame:object",
     "//frame:serialization",
@@ -220,7 +219,6 @@ cc_binary(
         ":link-features",
         ":my-init",
         ":sempar-component",
-        "//file:file",
         "//file:posix",
     ],
 )
@@ -231,7 +229,6 @@ cc_library(
   srcs = ["frame-evaluation.cc"],
   deps = [
     "//base",
-    "//file:file",
     "//file:posix",
     "//frame:object",
     "//frame:serialization",
@@ -248,7 +245,6 @@ cc_binary(
   deps = [
     ":frame-evaluation",
     "//base",
-    "//file:file",
     "//file:posix",
     "//third_party/zlib:miniunzip",
     "//third_party/zlib:zlib",

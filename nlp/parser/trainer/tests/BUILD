@@ -5,7 +5,6 @@ cc_binary(
   srcs = ["inspect-docs.cc"],
   deps = [
     "//base",
-    "//file:file",
     "//file:posix",
     "//frame:store",
     "//nlp/document:document",
@@ -22,7 +21,6 @@ cc_binary(
   srcs = ["make-test-docs.cc"],
   deps = [
     "//base",
-    "//file:file",
     "//file:posix",
     "//frame:object",
     "//frame:store",
@@ -38,7 +36,6 @@ cc_binary(
   srcs = ["sempar-component-test.cc"],
   deps = [
     "//base",
-    "//file:file",
     "//file:posix",
     "//nlp/document:document",
     "//nlp/document:document-source",
