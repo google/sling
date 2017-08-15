@@ -59,3 +59,18 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "document-source",
+  srcs = ["document-source.cc"],
+  hdrs = ["document-source.h"],
+  deps = [
+    ":document",
+    "//base",
+    "//frame:object",
+    "//frame:serialization",
+    "//frame:store",
+    "//string",
+    "//util:zip-iterator",
+  ],
+)
+

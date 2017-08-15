@@ -260,7 +260,7 @@ class ActionTable {
   int shift_index_ = 0;
 
   // Whether or not to use fingerprint/typechecks to compute allowed actions.
-  bool action_checks_ = true;
+  bool action_checks_ = false;
 };
 
 }  // namespace nlp

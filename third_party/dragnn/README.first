@@ -1,0 +1,17 @@
+
+The BUILD rules in this folder use soft-links to add SyntaxNet and Tensorflow code to our include path.
+This is because Bazel doesn't directly work with include paths external to the current repo (at least I can't get it to work), thus necessitating the use of soft-links.
+
+However soft-links can't be checked into Github, so you must create the following soft-links before you can use these BUILD rules.
+
+Say your SyntaxNet repo clone is at:
+SYN=/path/to/models/syntaxnet
+and your Tensorflow includes are at
+TF_INC=/path/to/tensorflow/include
+(this is typically /usr/local/lib/python2.7/dist-packages/tensorflow/include/).
+
+Then the soft-links can be created via:
+
+ln -s -T $SYN include1
+ln -s -T $SYN/bazel-genfiles include2
+ln -s -T $TF_INC include3

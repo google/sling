@@ -47,6 +47,9 @@ class ActionTableGenerator {
             const string &summary_file,
             const string &unknown_symbols_file) const;
 
+  // Returns the action table.
+  const ActionTable &action_table() const { return table_; }
+
  private:
   // Retrieves unknown symbols from 'document' to be logged later.
   void GetUnknownSymbols(const Document &document);
