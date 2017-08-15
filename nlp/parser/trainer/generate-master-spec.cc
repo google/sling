@@ -79,6 +79,9 @@ DEFINE_string(word_embeddings,
               "word2vec-embedding-bi-true-32.tf.recordio",
               "Pretrained word embeddings TF recordio. Should have a "
               "dimensionality of FLAGS_word_embeddings_dim.");
+DEFINE_bool(oov_lstm_features, true,
+            "Whether fallback features (shape, suffix etc) should "
+            "be used in the LSTMs");
 
 // Various options for generating the action table, lexicons, spec.
 constexpr int kActionTableCoveragePercentile = 99;
@@ -296,10 +299,13 @@ void OutputMasterSpec(Artifacts *artifacts) {
   SetParam(lr_lstm->mutable_network_unit(), "hidden_layer_sizes", "256");
   lr_lstm->set_num_actions(1);
   AddFixedFeature(lr_lstm, "words", "word", FLAGS_word_embeddings_dim);
-  AddFixedFeature(lr_lstm, "suffix", "suffix(length=3)", 16);
-  AddFixedFeature(
-      lr_lstm, "shape",
-      "digit hyphen punctuation quote capitalization", 8);
+
+  if (FLAGS_oov_lstm_features) {
+    AddFixedFeature(lr_lstm, "suffix", "suffix(length=3)", 16);
+    AddFixedFeature(
+        lr_lstm, "shape",
+        "digit hyphen punctuation quote capitalization", 8);
+  }
   AddResource(
       lr_lstm, "commons", artifacts->commons_filename, "store", "encoded");
 
