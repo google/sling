@@ -209,9 +209,7 @@ cc_library(
 
 cc_binary(
     name = "sempar-component-dragnn.so",
-    linkopts = select({
-        "//conditions:default": ["-lm"],
-    }),
+    linkopts = ["-lm"],
     linkshared = 1,
     linkstatic = 1,
     deps = [
