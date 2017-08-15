@@ -50,7 +50,7 @@ cc_binary(
     "//nlp/document:document",
     "//nlp/document:document-source",
     "//string:strcat",
-    "//third_party/sempar_dragnn:sempar_dragnn",
+    "//third_party/dragnn:dragnn",
   ],
 )
 
@@ -61,7 +61,7 @@ cc_library(
   deps = [
       "//frame:store",
       "//nlp/document:document",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
 )
 
@@ -75,7 +75,7 @@ cc_library(
       "//frame:serialization",
       "//frame:store",
       "//nlp/document:document",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
 )
 
@@ -88,7 +88,7 @@ cc_library(
       "//frame:serialization",
       "//frame:store",
       "//nlp/document:document",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
 )
 
@@ -105,7 +105,7 @@ cc_library(
       "//nlp/document:document",
       "//nlp/parser:parser-action",
       "//nlp/parser:parser-state",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
 )
 
@@ -146,7 +146,7 @@ cc_library(
       "//frame:serialization",
       "//nlp/document:document-source",
       "//string:numbers",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
   alwayslink = 1,
 )
@@ -161,7 +161,7 @@ cc_library(
       "//file",
       "//stream:file-input",
       "//string:strcat",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
   alwayslink = 1,
 )
@@ -173,7 +173,7 @@ cc_library(
   deps = [
       ":feature",
       "//string:strcat",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
   alwayslink = 1,
 )
@@ -193,7 +193,7 @@ cc_library(
       "//nlp/parser:action-table",
       "//nlp/parser:parser-action",
       "//nlp/parser:parser-state",
-      "//third_party/sempar_dragnn:sempar_dragnn",
+      "//third_party/dragnn:dragnn",
   ],
   alwayslink = 1,
 )
@@ -225,52 +225,8 @@ cc_binary(
     ],
 )
 
-cc_binary(
-  name = "make-test-docs",
-  srcs = ["make-test-docs.cc"],
-  deps = [
-    ":shared-resources",
-    "//base",
-    "//file:file",
-    "//file:posix",
-    "//frame:object",
-    "//frame:store",
-    "//nlp/document:document",
-    "//nlp/document:token-breaks",
-    "//string:strcat",
-  ],
-)
-
-
-cc_binary(
-  name = "sempar-component-test",
-  srcs = ["sempar-component-test.cc"],
-  deps = [
-    ":fixed-features",
-    ":feature",
-    ":link-features",
-    ":sempar-component",
-    ":shared-resources",
-    "//base",
-    "//file:file",
-    "//file:posix",
-    "//nlp/document:document",
-    "//nlp/document:document-source",
-    "//nlp/parser:parser-action",
-    "//string:strcat",
-    "//third_party/sempar_dragnn:sempar_dragnn",
-  ],
-)
-
-py_binary(
-    name = "train",
-    srcs = ["train.py"],
-    data = [],
-    deps = [],
-)
-
 cc_library(
-  name = "frame-evaluation-lib",
+  name = "frame-evaluation",
   hdrs = ["frame-evaluation.h"],
   srcs = ["frame-evaluation.cc"],
   deps = [
@@ -287,10 +243,10 @@ cc_library(
 )
 
 cc_binary(
-  name = "frame-evaluation",
-  srcs = ["frame-evaluation-main.cc"],
+  name = "evaluate-frames",
+  srcs = ["evaluate-frames.cc"],
   deps = [
-    ":frame-evaluation-lib",
+    ":frame-evaluation",
     "//base",
     "//file:file",
     "//file:posix",

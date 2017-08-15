@@ -34,7 +34,6 @@
 namespace sling {
 namespace nlp {
 
-using sling::StrCat;
 using syntaxnet::utils::Join;
 using syntaxnet::utils::Split;
 
@@ -371,7 +370,8 @@ void SemparComponent::FinalizeData() {
   // This chooses the top-scoring beam item to annotate the underlying document.
   for (SemparState *state : batch_) {
     if (!state->shift_only()) {
-      state->parser_state()->AddParseToDocument(state->instance()->document);
+      state->parser_state()->AddParseToDocument(state->document());
+      state->document()->Update();
     }
   }
 }

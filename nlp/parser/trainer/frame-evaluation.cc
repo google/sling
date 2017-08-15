@@ -43,18 +43,6 @@ Handle FrameEvaluation::Alignment::Lookup(Handle handle) const {
   return f == end() ? Handle::nil() : f->second;
 }
 
-namespace {
-
-Document *ReadDocumentOrDie(Store *store, const string &file) {
-  FileDecoder decoder(store, file);
-  Object top = decoder.Decode();
-  CHECK(top.valid()) << "Invalid document in " << file;
-  CHECK(top.IsFrame()) << "Document not a frame in " << file;
-  return new Document(top.AsFrame());
-}
-
-}  // namespace
-
 void FrameEvaluation::Evaluate(Store *commons,
                                const string &gold_file_pattern,
                                const string &test_file_pattern,

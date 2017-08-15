@@ -26,6 +26,7 @@
 namespace sling {
 namespace nlp {
 
+// Iterator implementation which assumes one encoded document per input file.
 class EncodedDocumentSource : public DocumentSource {
  public:
   EncodedDocumentSource(const std::vector<string> &files) {
@@ -51,6 +52,8 @@ class EncodedDocumentSource : public DocumentSource {
   int index_;
 };
 
+// Iterator implementation for zip archives..
+// Assumes that each encoded document is a separate file in the zip archive.
 class ZipDocumentSource : public DocumentSource {
  public:
   ZipDocumentSource(const string &file) {
@@ -85,6 +88,7 @@ Document *DocumentSource::Next(Store *store) {
 }
 
 DocumentSource *DocumentSource::Create(const string &file_pattern) {
+  // TODO: Add more formats as needed.
   int size = file_pattern.size();
   if (size > 4 && file_pattern.substr(size - 4) == ".zip") {
     return new ZipDocumentSource(file_pattern);

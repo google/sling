@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream>
 #include <string>
 
 #include "base/init.h"
@@ -39,7 +38,7 @@ void InitProgram(int *argc, char ***argv) {
   google::InstallFailureSignalHandler();
 
   // Initialize logging.
-  google::InitGoogleLogging(*argc == 0 ? "dummy" : (*argv)[0]);
+  google::InitGoogleLogging(*argc == 0 ? "program" : (*argv)[0]);
 
   // Initialize command line flags.
   if (*argc > 0) {

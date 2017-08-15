@@ -430,7 +430,6 @@ void ParserState::AddParseToDocument(Document *document) {
   for (int i = 0; i < frames.size(); ++i) {
     if (!evoked[i]) document->AddTheme(frames[i]);
   }
-  document->Update();
 }
 
 Handle ParserState::type(int index) const {

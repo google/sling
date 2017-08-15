@@ -4,7 +4,7 @@ licenses(["notice"])
 
 # IMPORTANT: Ensure that you have followed the instructions in README.first.
 cc_library(
-  name = "sempar_dragnn",
+  name = "dragnn",
   includes = [
       "include1",
       "include2",
