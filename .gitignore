@@ -6,4 +6,5 @@ bazel-out
 bazel-testlogs
 examples
 local
+*.pyc
 

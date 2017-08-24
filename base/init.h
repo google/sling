@@ -41,12 +41,16 @@ struct ModuleInitializer {
 #define REGISTER_INITIALIZER(name, body)                        \
   namespace {                                                   \
     static void init_module_##name () { body; }                 \
-    sling::ModuleInitializer initializer_module_##name(         \
-      #name, init_module_##name);                               \
+    __attribute__((init_priority(1000)))                        \
+    sling::ModuleInitializer initializer_module_##name          \
+      (#name, init_module_##name);                              \
   }
 
-// Run program initializers.
+// Run module initializers for program.
 void InitProgram(int *argc, char **argv[]);
+
+// Run module initializers for shared library.
+void InitSharedLibrary();
 
 }  // namespace sling
 

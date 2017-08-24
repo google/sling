@@ -33,6 +33,15 @@ cc_library(
 )
 
 cc_library(
+  name = "libinit",
+  srcs = ["libinit.cc"],
+  deps = [
+    ":base",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
   name = "registry",
   srcs = ["registry.cc"],
   hdrs = ["registry.h"],

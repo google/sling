@@ -2,4 +2,5 @@ build --color=yes
 build --cxxopt=-Wno-deprecated
 build --cxxopt=-Wno-sign-compare
 build --cxxopt=-Wno-unused-local-typedefs
+build --spawn_strategy=standalone
 

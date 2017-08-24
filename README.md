@@ -4,10 +4,21 @@ SLING is a parser for annotating text with frame semantic annotations. It is
 trained on an annotated corpus using [Tensorflow](https://www.tensorflow.org/)
 and [Dragnn](https://github.com/tensorflow/models/blob/master/syntaxnet/g3doc/DRAGNN.md).
 
+## Installation
+
+The parser trainer uses Tensorflow for training. SLING uses the Python 2.7
+distribution of Tensorflow, so this needs to be installed. The installed version
+of protocol buffers needs to match the version used by Tensorflow.
+
+```shell
+sudo pip install -U protobuf==3.3.0
+sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.3.0-cp27-none-linux_x86_64.whl
+```
+
 ## Building
 
 Operating system: Linux<br>
-Languages: C++, assembler<br>
+Languages: C++, Python 2.7, assembler<br>
 CPU: Intel x64 or compatible<br>
 Build system: Bazel<br>
 

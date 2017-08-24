@@ -83,8 +83,6 @@ SemparComponent::~SemparComponent() {
 }
 
 void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
-  File::Init();
-
   // Save off the passed spec for future reference.
   spec_ = spec;
 

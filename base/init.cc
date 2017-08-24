@@ -33,6 +33,15 @@ ModuleInitializer::ModuleInitializer(const char *n, Handler h)
   last = this;
 }
 
+static void RunModuleInitializers(bool silent) {
+  ModuleInitializer *initializer = ModuleInitializer::first;
+  while (initializer != nullptr) {
+    if (!silent) VLOG(2) << "Initializing " << initializer->name << " module";
+    initializer->handler();
+    initializer = initializer->next;
+  }
+}
+
 void InitProgram(int *argc, char ***argv) {
   // Install signal handlers for dumping crash information.
   google::InstallFailureSignalHandler();
@@ -50,12 +59,18 @@ void InitProgram(int *argc, char ***argv) {
   }
 
   // Run module initializers.
-  ModuleInitializer *initializer = ModuleInitializer::first;
-  while (initializer != nullptr) {
-    VLOG(2) << "Initializing " << initializer->name << " module";
-    initializer->handler();
-    initializer = initializer->next;
-  }
+  RunModuleInitializers(false);
+}
+
+void InitSharedLibrary() {
+  // Install signal handlers for dumping crash information.
+  google::InstallFailureSignalHandler();
+
+  // Initialize logging.
+  google::InitGoogleLogging("library");
+
+  // Run module initializers.
+  RunModuleInitializers(true);
 }
 
 }  // namespace sling

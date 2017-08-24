@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc.
+// Copyright 2017 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,20 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// =============================================================================
 
-#include <iostream>
-#include <string>
-#include "base/init.h"
+#include "dragnn/core/component_registry.h"
 
-// Wrapper around InitProgram that is automatically called when an object is
-// constructed. One such object is the global variable below.
-class MyInit {
- public:
-  MyInit() {
-    int argc = 0;
-    sling::InitProgram(&argc, NULL);
-  }
-};
+namespace syntaxnet {
 
-// Calls MyInit() automatically.
-MyInit _my_init_;
+// Class registry for DRAGNN components.
+REGISTER_SYNTAXNET_CLASS_REGISTRY("DRAGNN Component", dragnn::Component);
+
+}  // namespace syntaxnet

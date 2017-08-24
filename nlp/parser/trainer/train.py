@@ -19,22 +19,20 @@ Although it can be called by itself, it is best invoked from train.sh
 import glob
 import os
 import subprocess
+import sys
 import tensorflow as tf
 import zipfile
+
+sys.path.insert(0, "third_party/syntaxnet")
 
 from dragnn.protos import spec_pb2
 from dragnn.python import dragnn_ops
 from dragnn.python import graph_builder
 from dragnn.python import trainer_lib
+from dragnn.python import check
 from google.protobuf import text_format
-from syntaxnet.util import check
 
-import dragnn.python.load_dragnn_cc_impl
-
-tf.load_op_library(
-    os.path.join('bazel-bin',
-                 tf.resource_loader.get_data_files_path(),
-                 'sempar-component-dragnn.so'))
+tf.load_op_library('bazel-bin/nlp/parser/trainer/sempar.so')
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
