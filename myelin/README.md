@@ -189,8 +189,9 @@ flow = "flow" <version>
        <#cnxs> cnx*
        <#blobs> blob* (from version 4)
 
-var = <name$> <dtype$>
+var = <name$>
       <#aliases> <alias$>
+      <dtype$>
       <shape>
       <#bytes> value
 
