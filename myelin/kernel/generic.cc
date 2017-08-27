@@ -236,6 +236,26 @@ class StandardTyper : public Typer {
       }
     }
 
+    // Infer shape for gather operation.
+    if (op->type == "Gather") {
+      // For the 2-arg form tf.gather(params, indices):
+      //   result.type = params.dtype.
+      //   result.shape = indices.shape + params.shape[1:].
+      // https://www.tensorflow.org/api_docs/python/tf/gather
+      // Note that there is also a 3-arg form tf.gather(params, indices, axis).
+      if (op->indegree() == 2 && op->outdegree() == 1) {
+        Flow::Variable *params = op->inputs[0];
+        Flow::Variable *indices = op->inputs[1];
+        Flow::Variable *result = op->outputs[0];
+        result->type = params->type;
+        result->shape = indices->shape;
+        for (int i = 1; i < params->shape.rank(); ++i) {
+          result->shape.add(params->shape.dim(i));
+        }
+        return true;
+      }
+    }
+
     return false;
   }
 };
