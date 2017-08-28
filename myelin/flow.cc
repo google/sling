@@ -1141,6 +1141,7 @@ void Flow::Eliminate(Operation *op) {
     }
     if (output->in) input->in = true;
     if (output->out) input->out = true;
+    if (output->ref) input->ref = true;
     for (Operation *target : ops_) {
       for (int i = 0; i < target->inputs.size(); ++i) {
         if (target->inputs[i] == output) {
