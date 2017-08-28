@@ -817,14 +817,14 @@ class Instance {
 
   // Get raw pointer to location of parameter in instance memory.
   char *GetAddress(Tensor *param) {
-    DCHECK(param != nullptr) << param->name();
+    DCHECK(param != nullptr);
     DCHECK(!param->IsConstant()) << param->name();
     return data_ + param->offset();
   }
 
   // Get pointer to location of parameter in instance memory.
   template<typename T> T *Get(Tensor *param) {
-    DCHECK(param != nullptr) << param->name();
+    DCHECK(param != nullptr);
     DCHECK(!param->IsConstant()) << param->name();
     DCHECK(!param->ref()) << param->name();
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
@@ -833,14 +833,14 @@ class Instance {
 
   // Get pointer to location of element of parameter in instance memory.
   template<typename T> T *Get(Tensor *param, int r) {
-    DCHECK(param != nullptr) << param->name();
+    DCHECK(param != nullptr);
     DCHECK(!param->IsConstant()) << param->name();
     DCHECK(!param->ref()) << param->name();
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
     return reinterpret_cast<T *>(data_ + param->offset() + param->offset(r));
   }
   template<typename T> T *Get(Tensor *param, int r, int c) {
-    DCHECK(param != nullptr) << param->name();
+    DCHECK(param != nullptr);
     DCHECK(!param->IsConstant()) << param->name();
     DCHECK(!param->ref()) << param->name();
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
@@ -857,7 +857,7 @@ class Instance {
   // Sets a reference parameter to an address.  Caller is responsible for
   // ensuring proper alignment and any other constraints.
   void SetReference(Tensor *param, char *address) {
-    DCHECK(param != nullptr) << param->name();
+    DCHECK(param != nullptr);
     DCHECK(!param->IsConstant()) << param->name();
     DCHECK(param->ref()) << param->name();
     *reinterpret_cast<char **>(data_ + param->offset()) = address;
