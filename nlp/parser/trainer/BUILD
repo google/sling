@@ -60,7 +60,7 @@ cc_library(
     "//frame:store",
     "//nlp/document:document",
     "//third_party/syntaxnet",
-  ],
+  srcs = [],
 )
 
 cc_library(
@@ -170,6 +170,7 @@ cc_library(
   ],
   alwayslink = 1,
 )
+
 
 cc_binary(
   name = "sempar.so",
