@@ -41,10 +41,12 @@ namespace sling {
 class StringReader {
  public:
   // Initializes reading objects from a string.
-  StringReader(Store *store, Text data)
-    : stream_(data.data(), data.size()),
+  StringReader(Store *store, const char *data, size_t size)
+    : stream_(data, size),
       input_(&stream_),
       reader_(store, &input_) {}
+  StringReader(Store *store, Text data)
+    : StringReader(store, data.data(), data.size()) {}
 
   // Reads next object from input.
   Object Read() { return reader_.Read(); }
@@ -109,10 +111,12 @@ class StringPrinter {
 class StringDecoder {
  public:
   // Initializes reading objects from a memory buffer.
-  StringDecoder(Store *store, Text data)
-    : stream_(data.data(), data.size()),
+  StringDecoder(Store *store, const char *data, size_t size)
+    : stream_(data, size),
       input_(&stream_),
       decoder_(store, &input_) {}
+  StringDecoder(Store *store, Text data)
+    : StringDecoder(store, data.data(), data.size()) {}
 
   // Decodes the next object from the input.
   Object Decode() { return decoder_.Decode(); }

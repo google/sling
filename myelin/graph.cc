@@ -245,7 +245,7 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
   // Output DOT graph edges between ops.
   for (Flow::Operation *op : flow.ops()) {
     for (Flow::Variable *input : op->inputs) {
-      if (input->producer != nullptr) {
+      if (input->producer != nullptr && !input->in && !input->out) {
         AppendOpId(&str, input->producer);
         str.append(" -> ");
         AppendOpId(&str, op);
@@ -259,7 +259,7 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
     }
   }
 
-  // Output shared variable.
+  // Output shared variables.
   for (Flow::Variable *var : flow.vars()) {
     if (exclusive.count(var) == 0) {
       if (options.include_constants || var->data == nullptr) {

@@ -82,6 +82,9 @@ class File:
     """Write array to flow file."""
     if a is None:
       self.write_long(0)
+    elif isinstance(a, str):
+      self.write_long(len(a))
+      self.f.write(a)
     else:
       self.write_long(a.nbytes)
       a.tofile(self.f)
@@ -124,7 +127,7 @@ class Operation:
 
   def add_attr(self, name, value):
     """Add operation attribute."""
-    self.attrs[name] = value
+    self.attrs[name] = str(value)
 
 
 class Function:
@@ -139,6 +142,7 @@ class Function:
     """Add operation to function."""
     self.ops.append(op)
 
+
 class Connector:
   """Flow connector with linked variables."""
 
@@ -151,6 +155,22 @@ class Connector:
     """Add linked variable to connector."""
     self.links.append(var)
 
+
+class Blob:
+  """Blob for storing extra data like lexicons and feature maps."""
+
+  def __init__(self, name):
+    """Initialize new blob."""
+    self.name = name
+    self.type = ""
+    self.data = None
+    self.attrs = {}
+
+  def add_attr(self, name, value):
+    """Add blob attribute."""
+    self.attrs[name] = str(value)
+
+
 class Flow:
   """Flow with variables, operations, and functions."""
 
@@ -160,6 +180,7 @@ class Flow:
     self.ops = {}
     self.funcs = {}
     self.cnxs = {}
+    self.blobs = {}
 
   def func(self, name):
     """Add function to flow."""
@@ -186,12 +207,41 @@ class Flow:
     return o
 
   def cnx(self, name):
-    """Add connectors to flow."""
+    """Add connector to flow."""
     c = self.cnxs.get(name, None)
     if c == None:
       c = Connector(name)
       self.cnxs[name] = c
     return c
+
+  def blob(self, name):
+    """Add blob to flow."""
+    b = self.blobs.get(name, None)
+    if b == None:
+      b = Blob(name)
+      self.blobs[name] = b
+    return b
+
+  def rename_prefix(self, prefix, replacement):
+    """Replace prefix in all names."""
+    for mapping in [self.vars, self.ops, self.funcs, self.cnxs]:
+      for name in mapping.keys():
+        if name.startswith(prefix):
+          element = mapping.pop(name)
+          newname = replacement + name[len(prefix):]
+          element.name = newname
+          mapping[newname] = element
+
+  def rename_suffix(self, suffix, replacement):
+    """Replace suffix in all names."""
+    for mapping in [self.vars, self.ops, self.funcs, self.cnxs]:
+      for name in mapping.keys():
+        if name.endswith(suffix):
+          element = mapping.pop(name)
+          newname = name[:-len(suffix)] + replacement
+          element.name = newname
+          mapping[newname] = element
+
 
   def save(self, filename):
     """Write flow to file."""
@@ -199,7 +249,7 @@ class Flow:
     # Write flow file header
     f = File(filename)
     f.write('flow')
-    f.write_int(3)
+    f.write_int(4)
 
     # Write variables.
     f.write_int(len(self.vars))
@@ -243,11 +293,24 @@ class Flow:
     for name in self.cnxs:
       cnx = self.cnxs[name]
       f.write_string(cnx.name)
-      f.write_int(len(cnxs.links))
-      for link in cnxs.links:
+      f.write_int(len(cnx.links))
+      for link in cnx.links:
         f.write_string(link.name)
 
+    # Write blobs.
+    f.write_int(len(self.blobs))
+    for name in self.blobs:
+      blob = self.blobs[name]
+      f.write_string(blob.name)
+      f.write_string(blob.type)
+      f.write_int(len(blob.attrs))
+      for a in blob.attrs:
+        f.write_string(a)
+        f.write_string(blob.attrs[a])
+      f.write_array(blob.data)
+
     f.close()
+
 
 class FlowBuilder:
   """Extract myelin flow from tensorflow graph."""
@@ -272,13 +335,33 @@ class FlowBuilder:
       self.vars.append(var)
       v = self.flow.var(var.name)
       v.type = var.dtype.base_dtype.name
-      for d in var.get_shape().as_list():
-        v.shape.append(d if d != None else -1)
-      if var.op.type in ["Const", "ConstV2", "Variable", "VariableV2"]:
+
+      # Get data for constants and variables.
+      if var.op.type in ["Const", "ConstV2"]:
+        v.data = tf.contrib.util.constant_value(var)
+      elif var.op.type in ["Variable", "VariableV2"]:
         if self.feed is None:
           v.data = var.eval(session=self.sess)
         else:
           v.data = self.sess.run(var, feed_dict=self.feed)
+
+      # Get shape.
+      if v.data is not None:
+        for d in v.data.shape:
+          v.shape.append(d)
+      else:
+        shape = var.get_shape()
+        if shape.dims != None:
+          undef = True
+          for d in shape.dims:
+            if d != None:
+              v.shape.append(d)
+              undef = False
+            else:
+              v.shape.append(0)
+          if undef: v.shape = [0] * len(shape.dims)
+        else:
+          v.shape = [0]
 
       if not var in inputs:
         op = var.op

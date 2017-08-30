@@ -48,10 +48,14 @@ void DocumentBatch::Decode(Store *global) {
     if (items_[i].store != nullptr) continue;
 
     items_[i].store = new Store(global);
-    StringDecoder decoder(items_[i].store, items_[i].encoded);
-    Object top = decoder.Decode();
-    CHECK(!top.invalid());
-    items_[i].document = new Document(top.AsFrame());
+    if (items_[i].encoded.empty()) {
+      items_[i].document = new Document(items_[i].store);
+    } else {
+      StringDecoder decoder(items_[i].store, items_[i].encoded);
+      Object top = decoder.Decode();
+      CHECK(!top.invalid());
+      items_[i].document = new Document(top.AsFrame());
+    }
   }
 }
 

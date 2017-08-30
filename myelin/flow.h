@@ -223,6 +223,9 @@ class Shape {
   bool operator==(const Shape &other) const { return IsSameSize(other); }
   bool operator!=(const Shape &other) const { return !IsSameSize(other); }
 
+  // Check if shape is broadcast compatible with another shape.
+  bool IsCompatible(const Shape &other) const;
+
   // Return the common size between this shape and another shape. The common
   // size is the product of all the shared suffix dimensions.
   int CommonSize(const Shape &other) const;
@@ -484,13 +487,16 @@ class Flow {
   Connector *AddConnector(const string &name);
 
   // Add data block.
-  Blob *AddBlob(const string &name);
+  Blob *AddBlob(const string &name, const string &type);
 
   // Delete variable.
   void DeleteVariable(Variable *var);
 
   // Delete operation.
   void DeleteOperation(Operation *op);
+
+  // Delete function.
+  void DeleteFunction(Function *func);
 
   // Look up variable by name.
   Variable *Var(const string &name);
@@ -500,6 +506,9 @@ class Flow {
 
   // Look up function by name.
   Function *Func(const string &name);
+
+  // Look up blob by name.
+  Blob *DataBlock(const string &name);
 
   // Return flow in text format.
   string ToString() const;
@@ -560,8 +569,9 @@ class Flow {
   // Infer which variables are inputs and outputs to functions.
   void InferInputsAndOutputs();
 
-  // Apply transformations to flow graph.
-  void Transform(const Transformations &transformations);
+  // Apply transformations to flow graph. Returns false if no transformations
+  // were applied.
+  bool Transform(const Transformations &transformations);
 
   // Sort operations in topological order of computation.
   void Sort();

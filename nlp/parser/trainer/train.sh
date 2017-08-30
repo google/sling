@@ -44,7 +44,7 @@
 # - Some training hyperparameters are hard-coded in this script and
 #   can be changed in $HYPERPARAMS below.
 
-set -eux
+set -eu
 
 # Input resources and arguments.
 SEM=$HOME/sempar_ontonotes
@@ -56,6 +56,7 @@ DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 WORD_EMBEDDINGS_DIM=32
 PRETRAINED_WORD_EMBEDDINGS=
 OOV_FEATURES=true
+FLOW=
 
 # Training hyperparameters.
 BATCH_SIZE=1
@@ -87,6 +88,10 @@ case $i in
     ;;
     --output_dir=*|--output=*|--output_folder=*)
     OUTPUT_FOLDER="${i#*=}"
+    shift
+    ;;
+    --flow=*)
+    FLOW="${i#*=}"
     shift
     ;;
     --train=*|--train_corpus=*)
@@ -233,6 +238,7 @@ then
     --master_spec="${OUTPUT_FOLDER}/master_spec" \
     --hyperparams="${HYPERPARAMS}" \
     --output_folder=${OUTPUT_FOLDER} \
+    --flow=${FLOW} \
     --commons=${COMMONS} \
     --train_corpus=${TRAIN_FILEPATTERN} \
     --dev_corpus=${DEV_GOLD_FILEPATTERN} \

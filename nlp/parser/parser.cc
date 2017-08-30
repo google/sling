@@ -14,6 +14,7 @@
 
 #include "nlp/parser/parser.h"
 
+#include "frame/serialization.h"
 #include "myelin/kernel/dragnn.h"
 #include "myelin/kernel/tensorflow.h"
 
@@ -39,38 +40,38 @@ void Parser::Load(Store *store, const string &model) {
   ff_ = GetCell("ff");
 
   // Get connectors.
-  lr_c_ = GetConnector("lr_lstm_c");
-  lr_h_ = GetConnector("lr_lstm_h");
-  rl_c_ = GetConnector("rl_lstm_c");
-  rl_h_ = GetConnector("rl_lstm_h");
-  ff_steps_ = GetConnector("ff_steps");
+  lr_control_ = GetConnector("lr_lstm/control");
+  lr_hidden_ = GetConnector("lr_lstm/hidden");
+  rl_control_ = GetConnector("rl_lstm/control");
+  rl_hidden_ = GetConnector("rl_lstm/hidden");
+  ff_step_ = GetConnector("ff/step");
 
   // Get LR LSTM parameters.
-  lr_feature_words_ = GetParam("lr_lstm/feature/words");
+  lr_feature_words_ = GetParam("lr_lstm/words");
   lr_c_in_ = GetParam("lr_lstm/c_in");
   lr_c_out_ = GetParam("lr_lstm/c_out");
   lr_h_in_ = GetParam("lr_lstm/h_in");
   lr_h_out_ = GetParam("lr_lstm/h_out");
 
   // Get RL LSTM parameters.
-  rl_feature_words_ = GetParam("rl_lstm/feature/words");
+  rl_feature_words_ = GetParam("rl_lstm/words");
   rl_c_in_ = GetParam("rl_lstm/c_in");
   rl_c_out_ = GetParam("rl_lstm/c_out");
   rl_h_in_ = GetParam("rl_lstm/h_in");
   rl_h_out_ = GetParam("rl_lstm/h_out");
 
   // Get FF parameters.
-  ff_feature_lr_focus_ = GetParam("ff/feature/lr");
-  ff_feature_rl_focus_ = GetParam("ff/feature/rl");
-  ff_feature_lr_attention_ = GetParam("ff/feature/frame-end-lr");
-  ff_feature_rl_attention_ = GetParam("ff/feature/frame-end-rl");
-  ff_feature_frame_create_ = GetParam("ff/feature/frame-creation-steps");
-  ff_feature_frame_focus_ = GetParam("ff/feature/frame-focus-steps");
-  ff_feature_history_ = GetParam("ff/feature/history");
-  ff_feature_roles_ = GetParam("ff/feature/roles");
-  ff_link_lr_ = GetParam("ff/link/lr");
-  ff_link_rl_ = GetParam("ff/link/rl");
-  ff_link_step_ = GetParam("ff/link/step");
+  ff_feature_lr_focus_ = GetParam("ff/lr");
+  ff_feature_rl_focus_ = GetParam("ff/rl");
+  ff_feature_lr_attention_ = GetParam("ff/frame-end-lr");
+  ff_feature_rl_attention_ = GetParam("ff/frame-end-rl");
+  ff_feature_frame_create_ = GetParam("ff/frame-creation-steps");
+  ff_feature_frame_focus_ = GetParam("ff/frame-focus-steps");
+  ff_feature_history_ = GetParam("ff/history");
+  ff_feature_roles_ = GetParam("ff/roles");
+  ff_lr_lstm_ = GetParam("ff/link/lr_lstm");
+  ff_rl_lstm_ = GetParam("ff/link/rl_lstm");
+  ff_steps_ = GetParam("ff/steps");
   ff_hidden_ = GetParam("ff/hidden");
   ff_output_ = GetParam("ff/output");
 
@@ -87,40 +88,29 @@ void Parser::Load(Store *store, const string &model) {
   max_roles_ = ff_feature_roles_->elements();
 
   // Load lexicon.
-  myelin::Flow::Function *lexicon = flow.Func("lexicon");
-  CHECK(lexicon != nullptr && lexicon->ops.size() == 1);
-  const string &vocab = lexicon->ops[0]->GetAttr("dict");
-  int pos = 0;
-  int index = 0;
-  string word;
-  for (;;) {
-    int next = vocab.find('\n', pos);
-    if (next == -1) break;
-    word.assign(vocab, pos, next - pos);
-    if (word == "<UNKNOWN>") {
-      oov_ = index++;
-    } else {
-      vocabulary_[word] = index++;
-    }
-    pos = next + 1;
+  myelin::Flow::Blob *vocabulary = flow.DataBlock("lexicon");
+  CHECK(vocabulary != nullptr);
+  lexicon_.Init(vocabulary);
+  normalize_digits_ = vocabulary->attrs.Get("normalize_digits", false);
+  oov_ = vocabulary->attrs.Get("oov", -1);
+
+  // Load commons and action stores.
+  myelin::Flow::Blob *commons = flow.DataBlock("commons");
+  if (commons != nullptr) {
+    StringDecoder decoder(store, commons->data, commons->size);
+    decoder.DecodeAll();
+  }
+  myelin::Flow::Blob *actions = flow.DataBlock("actions");
+  if (actions != nullptr) {
+    StringDecoder decoder(store, actions->data, actions->size);
+    decoder.DecodeAll();
   }
 
-  // Get mapping from words ids to reverse word embedding ids.
-  const string &reverse_data = lexicon->ops[0]->GetAttr("reverse");
-  const int *reverse_array = reinterpret_cast<const int *>(reverse_data.data());
-  int reverse_size = reverse_data.size() / sizeof(int);
-  reverse_.assign(reverse_array, reverse_array + reverse_size);
-
-  // Get mapping from role predicates to role ids.
-  const string &role_data = lexicon->ops[0]->GetAttr("roles");
-  const int *role_array = reinterpret_cast<const int *>(role_data.data());
-  int role_size = role_data.size() / sizeof(int);
-  role_map_.assign(role_array, role_array + role_size);
-
-  // Load action table.
+  // Initialize action table.
   store_ = store;
   actions_.Init(store);
   num_actions_ = actions_.NumActions();
+  CHECK_GT(num_actions_, 0);
 
   // Get the set of roles that connect two frames.
   for (int i = 0; i < num_actions_; ++i) {
@@ -143,29 +133,26 @@ void Parser::Load(Store *store, const string &model) {
   inlink_offset_ = outlink_offset_ + combinations;
   unlabeled_link_offset_ = inlink_offset_ + combinations;
   labeled_link_offset_ = unlabeled_link_offset_ + frame_limit_ * frame_limit_;
-  int role_predicates = labeled_link_offset_ + frame_limit_ * combinations + 1;
-  role_map_.resize(role_predicates, -1);
 }
 
 int Parser::LookupWord(const string &word) const {
   // Lookup word in vocabulary.
-  auto f = vocabulary_.find(word);
-  if (f != vocabulary_.end()) return f->second;
+  int id = lexicon_.Lookup(word);
 
-  // Check if word has digits.
-  bool has_digits = false;
-  for (char c : word) if (c >= '0' && c <= '9') has_digits = true;
+  if (id == oov_ && normalize_digits_) {
+    // Check if word has digits.
+    bool has_digits = false;
+    for (char c : word) if (c >= '0' && c <= '9') has_digits = true;
 
-  if (has_digits) {
-    // Normalize digits and lookup the normalized word.
-    string normalized = word;
-    for (char &c : normalized) if (c >= '0' && c <= '9') c = '9';
-    auto fn = vocabulary_.find(normalized);
-    if (fn != vocabulary_.end()) return fn->second;
+    if (has_digits) {
+      // Normalize digits and lookup the normalized word.
+      string normalized = word;
+      for (char &c : normalized) if (c >= '0' && c <= '9') c = '9';
+      id = lexicon_.Lookup(normalized);
+    }
   }
 
-  // Unknown word.
-  return oov_;
+  return id;
 }
 
 void Parser::Parse(Document *document) const {
@@ -217,7 +204,7 @@ void Parser::Parse(Document *document) const {
     int step = 0;
     while (!done) {
       // Allocate space for next step.
-      data.ff_steps.push();
+      data.ff_step.push();
 
       // Attach instance to recurrent layers.
       data.ff.Clear();
@@ -315,11 +302,11 @@ ParserInstance::ParserInstance(const Parser *parser, Document *document,
       lr(parser->lr_),
       rl(parser->rl_),
       ff(parser->ff_),
-      lr_c(parser->lr_c_),
-      lr_h(parser->lr_h_),
-      rl_c(parser->rl_c_),
-      rl_h(parser->rl_h_),
-      ff_steps(parser->ff_steps_) {
+      lr_c(parser->lr_control_),
+      lr_h(parser->lr_hidden_),
+      rl_c(parser->rl_control_),
+      rl_h(parser->rl_hidden_),
+      ff_step(parser->ff_step_) {
   // Allocate space for word ids.
   int length = end - begin;
   words.resize(length);
@@ -331,7 +318,7 @@ ParserInstance::ParserInstance(const Parser *parser, Document *document,
   rl_h.resize(length + 1);
 
   // Reserve two transitions per token.
-  ff_steps.reserve(length * 2);
+  ff_step.reserve(length * 2);
 }
 
 void ParserInstance::AttachLR(int input, int output) {
@@ -349,10 +336,10 @@ void ParserInstance::AttachRL(int input, int output) {
 }
 
 void ParserInstance::AttachFF(int output) {
-  ff.Set(parser->ff_link_lr_, &lr_h);
-  ff.Set(parser->ff_link_rl_, &rl_h);
-  ff.Set(parser->ff_link_step_, &ff_steps);
-  ff.Set(parser->ff_hidden_, &ff_steps, output);
+  ff.Set(parser->ff_lr_lstm_, &lr_h);
+  ff.Set(parser->ff_rl_lstm_, &rl_h);
+  ff.Set(parser->ff_steps_, &ff_step);
+  ff.Set(parser->ff_hidden_, &ff_step, output);
 }
 
 void ParserInstance::ExtractFeaturesLR(int current) {
@@ -362,7 +349,6 @@ void ParserInstance::ExtractFeaturesLR(int current) {
 
 void ParserInstance::ExtractFeaturesRL(int current) {
   int word = words[current];
-  if (word >= 0) word = parser->reverse_[word];
   *rl.Get<int>(parser->rl_feature_words_) = word;
 }
 
@@ -424,7 +410,6 @@ void ParserInstance::ExtractFeaturesFF(int step) {
   // Compute role features.
   int *roles = ff.Get<int>(parser->ff_feature_roles_);
   int r = 0;
-  const std::vector<int> &rmap = parser->role_map_;
   for (const auto &kv : frame_to_attention) {
     // Attention index of the source frame.
     int source = kv.second;
@@ -440,8 +425,7 @@ void ParserInstance::ExtractFeaturesFF(int step) {
       int role = it->second;
       if (r < parser->max_roles_) {
         // (source, role).
-        int idx = outlink_base + role;
-        roles[r++] = rmap[idx];
+        roles[r++] = outlink_base + role;
       }
       if (slot->value.IsIndex()) {
         const auto &it2 = frame_to_attention.find(slot->value.AsIndex());
@@ -450,25 +434,22 @@ void ParserInstance::ExtractFeaturesFF(int step) {
           int target = it2->second;
           if (r < parser->max_roles_) {
             // (role, target)
-            int idx = parser->inlink_offset_ +
-                      target * parser->roles_.size() +
-                      role;
-            roles[r++] = rmap[idx];
+            roles[r++] = parser->inlink_offset_ +
+                         target * parser->roles_.size() +
+                         role;
           }
           if (r < parser->max_roles_) {
             // (source, target)
-            int idx = parser->unlabeled_link_offset_ +
-                      source * parser->frame_limit_ +
-                      target;
-            roles[r++] = rmap[idx];
+            roles[r++] = parser->unlabeled_link_offset_ +
+                         source * parser->frame_limit_ +
+                         target;
           }
           if (r < parser->max_roles_) {
             // (source, role, target)
-            int idx = parser->labeled_link_offset_ +
-                      source * parser->frame_limit_ * parser->roles_.size() +
-                      target * parser->roles_.size() +
-                      role;
-            roles[r++] = rmap[idx];
+            roles[r++] = parser->labeled_link_offset_ +
+                         source * parser->frame_limit_ * parser->roles_.size() +
+                         target * parser->roles_.size() +
+                         role;
           }
         }
       }

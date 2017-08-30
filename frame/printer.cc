@@ -274,7 +274,7 @@ void Printer::PrintSymbol(const SymbolDatum *symbol, bool reference) {
 }
 
 void Printer::PrintLink(Handle handle) {
-  // Determine if only a link to the object shoud be printed.
+  // Determine if only a link to the object should be printed.
   if (handle.IsRef() && !handle.IsNil()) {
     const Datum *datum = store_->GetObject(handle);
     if (datum->IsFrame()) {

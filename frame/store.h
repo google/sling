@@ -244,6 +244,7 @@ struct Handle {
   // Value type checking.
   bool IsInt() const { return tag() == kIntTag; }
   bool IsFloat() const { return tag() == kFloatTag; }
+  bool IsNumber() const { return (bits & kNumber) != 0; }
   bool IsRef() const { return (bits & kNumber) == 0; }
   bool IsGlobalRef() const { return tag() == kGlobalTag; }
   bool IsLocalRef() const { return tag() == kLocalTag; }
@@ -272,8 +273,8 @@ struct Handle {
 
   // Returns value as floating-point number.
   float AsFloat() const {
-    DCHECK(IsFloat());
-    return  bit_cast<float>(bits & ~kTagMask);
+    DCHECK(IsNumber());
+    return IsFloat() ? bit_cast<float>(bits & ~kTagMask) : AsInt();
   }
 
   // Returns raw handle value.
@@ -997,9 +998,9 @@ class Store {
   // the store read-only.
   void Freeze();
 
-  // Merges occurences of the same string. This saves memory by only keeping one
-  // copy of each string value. This uses hashing, so it is not guaranteed to
-  // find all identical strings.
+  // Merges occurrences of the same string. This saves memory by only keeping
+  // one copy of each string value. This uses hashing, so it is not guaranteed
+  // to find all identical strings.
   void CoalesceStrings();
 
   // Computes memory usage for store.
@@ -1244,7 +1245,7 @@ class Store {
   // Checks if a handle is valid reference.
   bool IsValidReference(Handle handle) const;
 
-  // Replaces all instaces of a handle with another handle in all heap objects.
+  // Replaces all instances of a handle with another handle in all heap objects.
   // This is a very expensive operation that requires a complete heap traversal.
   void ReplaceHandle(Handle handle, Handle replacement);
 
@@ -1255,7 +1256,7 @@ class Store {
   void Compact();
 
   // Pointers to the global and local handle tables. These must be first in
-  // the store object for fast deferencing of object handles. These will be
+  // the store object for fast dereferencing of object handles. These will be
   // pointers to the handle tables of the global and local stores.
   Address pools_[2];
 

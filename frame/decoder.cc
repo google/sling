@@ -152,7 +152,7 @@ Handle Decoder::DecodeFrame(int slots, int replace) {
         // replace the proxy with the new frame.
         Datum *existing = store_->Deref(symbol->value);
         if (existing->IsProxy()) {
-          // Swap the handle for the exising proxy and the new frame.
+          // Swap the handle for the existing proxy and the new frame.
           FrameDatum *frame = store_->Deref(handle)->AsFrame();
           store_->ReplaceProxy(existing->AsProxy(), frame);
           handle = frame->self;
