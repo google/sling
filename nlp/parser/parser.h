@@ -25,6 +25,7 @@
 #include "file/file.h"
 #include "frame/store.h"
 #include "myelin/compute.h"
+#include "myelin/dictionary.h"
 #include "myelin/flow.h"
 #include "nlp/document/document.h"
 #include "nlp/parser/action-table.h"
@@ -63,11 +64,11 @@ class Parser {
   myelin::Cell *ff_;                         // feed-forward cell
 
   // Connectors.
-  myelin::Connector *lr_c_;                  // left-to-right LSTM control layer
-  myelin::Connector *lr_h_;                  // left-to-right LSTM hidden layer
-  myelin::Connector *rl_c_;                  // right-to-left LSTM control layer
-  myelin::Connector *rl_h_;                  // right-to-left LSTM hidden layer
-  myelin::Connector *ff_steps_;              // FF step hidden activations
+  myelin::Connector *lr_control_;            // left-to-right LSTM control layer
+  myelin::Connector *lr_hidden_;             // left-to-right LSTM hidden layer
+  myelin::Connector *rl_control_;            // right-to-left LSTM control layer
+  myelin::Connector *rl_hidden_;             // right-to-left LSTM hidden layer
+  myelin::Connector *ff_step_;               // FF step hidden activations
 
   // Left-to-right LSTM network parameters and links.
   myelin::Tensor *lr_feature_words_;         // word feature
@@ -96,9 +97,9 @@ class Parser {
   myelin::Tensor *ff_feature_history_;       // history feature
   myelin::Tensor *ff_feature_roles_;         // roles feature
 
-  myelin::Tensor *ff_link_lr_;               // link to LR LSTM hidden layer
-  myelin::Tensor *ff_link_rl_;               // link to RL LSTM hidden layer
-  myelin::Tensor *ff_link_step_;             // link to FF step hidden layer
+  myelin::Tensor *ff_lr_lstm_;               // link to LR LSTM hidden layer
+  myelin::Tensor *ff_rl_lstm_;               // link to RL LSTM hidden layer
+  myelin::Tensor *ff_steps_;                 // link to FF step hidden layer
   myelin::Tensor *ff_hidden_;                // link to FF hidden layer output
   myelin::Tensor *ff_output_;                // link to FF logit layer output
 
@@ -115,14 +116,9 @@ class Parser {
   int num_actions_;
 
   // Lexicon.
-  std::unordered_map<string, int> vocabulary_;
+  myelin::Dictionary lexicon_;
+  bool normalize_digits_ = false;
   int oov_ = -1;
-
-  // Mapping from word ids to reverse word embedding ids.
-  std::vector<int> reverse_;
-
-  // Role predicate to feature mapping.
-  std::vector<int> role_map_;
 
   // Global store for parser.
   Store *store_ = nullptr;
@@ -145,7 +141,7 @@ class Parser {
   // Starting offset for (source, role, target) features.
   int labeled_link_offset_;
 
-  // Mapping of role handles to predicates.
+  // Set of roles considered.
   HandleMap<int> roles_;
 
   // Symbols.
@@ -197,7 +193,7 @@ class ParserInstance {
   myelin::Channel lr_h;
   myelin::Channel rl_c;
   myelin::Channel rl_h;
-  myelin::Channel ff_steps;
+  myelin::Channel ff_step;
 
   // Word ids.
   std::vector<int> words;

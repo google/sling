@@ -28,7 +28,7 @@ namespace sling {
 // by the reader.
 class Printer {
  public:
-  // Intializes printer with store and output.
+  // Initializes printer with store and output.
   Printer(const Store *store, Output *output)
       : store_(store), output_(output), global_(store->globals() == nullptr) {}
 

@@ -181,6 +181,7 @@ class Object : public Root {
   // Object type checking.
   bool IsInt() const { return handle_.IsInt(); }
   bool IsFloat() const { return handle_.IsFloat(); }
+  bool IsNumber() const { return handle_.IsNumber(); }
   bool IsRef() const { return handle_.IsRef(); }
   bool IsGlobal() const { return handle_.IsGlobalRef(); }
   bool IsLocal() const { return handle_.IsLocalRef(); }
@@ -283,7 +284,7 @@ class Symbol : public Object {
   // Looks up symbol in symbol table.
   Symbol(Store *store, Text id);
 
-  // Copy constructor which aquires a new lock for the symbol.
+  // Copy constructor which acquires a new lock for the symbol.
   Symbol(const Symbol &other) : Object(other) {}
 
   // Assignment operator.
@@ -361,7 +362,7 @@ class Frame : public Object {
   // Looks up frame in symbol table.
   Frame(Store *store, Text id);
 
-  // Copy constructor which aquires a new lock for the frame reference.
+  // Copy constructor which acquires a new lock for the frame reference.
   Frame(const Frame &other) : Object(other) {}
 
   // Creates a new frame in the store.
