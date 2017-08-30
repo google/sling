@@ -1046,9 +1046,11 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // Check for dense encoding conflicts.
     if (tensor->require_dense_) {
       for (int d = 0; d < tensor->rank(); ++d) {
-        if (tensor->minalign(d) > 1) {
-          LOG(ERROR) << "Conflicting alignment requirements for "
-                     << tensor->name();
+        if (tensor->dim(d) % tensor->minalign(d) != 0) {
+          LOG(ERROR) << "Conflicting dense encoding requirements for "
+                     << tensor->name()
+                     << " shape " << tensor->shape().ToString()
+                     << " align " << tensor->minalign().ToString();
           return false;
         }
       }
