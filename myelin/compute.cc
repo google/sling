@@ -45,6 +45,19 @@ static const Order combined_order[4][4] = {
 // Placement names.
 const char *placename[] = {"nowhere", "host", "device", "host and device"};
 
+static int LeastCommonMultiple(int n, int m) {
+  int a = n;
+  int b = m;
+  while (a != b) {
+    if (a < b) {
+      a += n;
+    } else {
+      b += m;
+    }
+  }
+  return a;
+}
+
 static bool IsPowerOfTwo32(int value) {
   return value && !(value & (value - 1));
 }
@@ -411,39 +424,29 @@ bool Library::Singleton(const string &op,
 void Tensor::MinAlign(const Shape &align) {
   CHECK_LE(align.rank(), minalign_.rank());
   for (int d = 0; d < align.rank(); ++d) {
-    if (align.dim(d) > minalign_.dim(d)) minalign_.set(d, align.dim(d));
-  }
-}
-
-void Tensor::MaxAlign(const Shape &align) {
-  CHECK_LE(align.rank(), maxalign_.rank());
-  for (int d = 0; d < align.rank(); ++d) {
-    if (align.dim(d) != 0 &&  align.dim(d) < maxalign_.dim(d)) {
-      maxalign_.set(d, align.dim(d));
-    }
+    minalign_.set(d, LeastCommonMultiple(minalign_.dim(d), align.dim(d)));
   }
 }
 
 void Tensor::MinAlignLast(int align) {
-  if (rank() > 0 && align > minalign_.dim(rank() - 1)) {
-    minalign_.set(rank() - 1, align);
+  if (rank() > 0) {
+    int d = rank() - 1;
+    minalign_.set(d, LeastCommonMultiple(minalign_.dim(d), align));
   }
 }
 
 void Tensor::SameAlign(Tensor *other) {
   MinAlign(other->minalign_);
   other->MinAlign(minalign_);
-  MaxAlign(other->maxalign_);
-  other->MaxAlign(maxalign_);
 }
 
 void Tensor::CompatibleAlign(Tensor *other) {
   int d1 = rank() - 1;
   int d2 = other->rank() - 1;
   while (d1 >= 0 && d2 >= 0) {
-    int align = std::max(minalign_.dim(d1), other->minalign_.dim(d2));
-    minalign_.set(d1--, align);
-    other->minalign_.set(d2--, align);
+    int lcm = LeastCommonMultiple(minalign_.dim(d1), other->minalign_.dim(d2));
+    minalign_.set(d1--, lcm);
+    other->minalign_.set(d2--, lcm);
   }
 }
 
@@ -460,6 +463,16 @@ bool Tensor::Compatible(const Tensor *other) const {
   return true;
 }
 
+bool Tensor::SupportsAlignment(const Shape &align) const {
+  if (align.rank() != rank()) return false;
+  if (require_dense_) {
+    for (int d = 0; d < align.rank(); ++d) {
+      if (dim(d) % align.dim(d) != 0) return false;
+    }
+  }
+  return true;
+}
+
 bool Tensor::SupportsOrder(Order order) {
   return combined_order[required_order_][order] != CONFLICTING_ORDER;
 }
@@ -469,7 +482,7 @@ void Tensor::SetRequiredOrder(Order order) {
 }
 
 void Tensor::SetMiniumAlignment(int alignment) {
-  if (alignment > byte_alignment_) byte_alignment_ = alignment;
+  byte_alignment_ = LeastCommonMultiple(byte_alignment_, alignment);
 }
 
 bool Tensor::HasSameShape(const Tensor *other) const {
@@ -751,7 +764,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     tensor->shape_ = var->shape;
     tensor->aligned_ = var->shape;
     tensor->minalign_.fill(var->rank(), 1);
-    tensor->maxalign_.fill(var->rank(), 0);
     tensor->stride_.fill(var->rank(), 0);
     tensor->byte_alignment_ = TypeTraits::of(var->type).size();
 
@@ -792,7 +804,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     t->shape_ = prototype->shape_;
     t->shape_.set(0, -1);
     t->minalign_ = prototype->minalign_;
-    t->maxalign_ = prototype->maxalign_;
     t->aligned_ = prototype->aligned_;
     t->stride_ = prototype->stride_;
     t->byte_alignment_ = prototype->byte_alignment_;
@@ -936,7 +947,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       profile->size_ = profile->space_ = size * sizeof(int64);
       profile->aligned_ = profile->shape_;
       profile->minalign_.assign(sizeof(int64));
-      profile->maxalign_.assign(0);
       profile->stride_.assign(sizeof(int64));
       profile->placement_ = HOST;
       profile->current_placement_ = HOST;
@@ -974,9 +984,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
       // Propagate alignment.
       Shape &mint = t->minalign_;
-      Shape &maxt = t->maxalign_;
       Shape &minl = l->minalign_;
-      Shape &maxl = l->minalign_;
       int dt = t->rank() - 1;
       int dl = l->rank() - 1;
       while (dt >= 0 && dl >= 0) {
@@ -987,15 +995,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
             again = true;
           } else if (mint.dim(dt) < minl.dim(dl)) {
             mint.set(dt, minl.dim(dl));
-            again = true;
-          }
-
-          // Propagate maximum alignment in both directions.
-          if (maxt.dim(dt) > maxl.dim(dl)) {
-            maxl.set(dl, maxl.dim(dt));
-            again = true;
-          } else if (maxt.dim(dt) < maxl.dim(dl)) {
-            maxt.set(dt, maxl.dim(dl));
             again = true;
           }
         }
@@ -1044,12 +1043,14 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         return false;
     }
 
-    // Check for conflicting alignment requirements.
-    for (int d = 0; d < tensor->rank(); ++d) {
-      if (tensor->maxalign(d) > tensor->minalign(d)) {
-        LOG(ERROR) << "Conflicting alignment requirements for "
-                   << tensor->name();
-        return false;
+    // Check for dense encoding conflicts.
+    if (tensor->require_dense_) {
+      for (int d = 0; d < tensor->rank(); ++d) {
+        if (tensor->minalign(d) > 1) {
+          LOG(ERROR) << "Conflicting alignment requirements for "
+                     << tensor->name();
+          return false;
+        }
       }
     }
 
@@ -1088,8 +1089,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     VLOG(5) << "Tensor " << tensor->name_ << ": " << tensor->TypeString()
-            << " min " << tensor->minalign_.ToString()
-            << " max " << tensor->maxalign_.ToString()
+            << " align " << tensor->minalign_.ToString()
             << ":" << tensor->byte_alignment_
             << " aligned " << tensor->aligned_.ToString()
             << " size " << tensor->space_
@@ -1127,7 +1127,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
     VLOG(5) << "Connector " << connector->name() << ": " << t->TypeString()
             << " min " << t->minalign_.ToString()
-            << " max " << t->maxalign_.ToString()
             << ":" << connector->alignment_
             << " aligned " << t->aligned_.ToString()
             << " size " << t->size_

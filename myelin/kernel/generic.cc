@@ -59,13 +59,32 @@ class IdentityTransformer : public Transformer {
     for (Flow::Operation *op : flow->ops()) {
       if (op->type == "Identity" ||
           op->type == "Const" ||
-
-
           op->type == "Variable" ||
           op->type == "VariableV2" ||
           op->type == "Placeholder" ||
           op->type == "Enter") {
         noops.push_back(op);
+      } else if (op->type == "Reshape") {
+        // Eliminate reshaping if input and output shapes are equal.
+        if (op->indegree() == 2 && op->outdegree() == 1) {
+          Flow::Variable *in = op->inputs[0];
+          Flow::Variable *out = op->outputs[0];
+          if (!in->shape.undefined() && !in->shape.partial() &&
+              !out->shape.undefined() && !out->shape.partial() &&
+              in->shape == out->shape &&in->type == out->type) {
+            Flow::Variable *shape = op->inputs[1];
+            op->RemoveInput(shape);
+            noops.push_back(op);
+          }
+        }
+      } else if (op->type == "Concat" || op->type == "ConcatV2") {
+        // Eliminate concatenations with only one input.
+        int n = op->GetAttr("N", 0);
+        if (n == 1) {
+          Flow::Variable *axis = op->inputs[n];
+          op->RemoveInput(axis);
+          noops.push_back(op);
+        }
       }
     }
 
@@ -103,6 +122,7 @@ class CombineTransformer : public Transformer {
       if (var->consumers[0]->type != second) continue;
       if (var->consumers[0]->task != op->task) continue;
       if (var->out) continue;
+      if (var->shape.undefined()) continue;
       if (op->indegree() >= 1) {
         // Only combine for vector inputs.
         Flow::Variable *input = op->inputs[0];
@@ -183,33 +203,36 @@ class StandardTyper : public Typer {
     // Infer shape for concat operation.
     if (op->type == "ConcatV2") {
       int n = op->GetAttr("N", 0);
-      if (n > 0 && op->indegree() == n + 1 && op->outdegree() == 1) {
-        Flow::Variable *axis = op->inputs[n];
+      if (n > op->indegree()) return false;
+      int axis = 0;
+      if (op->indegree() == n + 1) {
+        Flow::Variable *a = op->inputs[n];
+        if (a->type == DT_INT32 && a->rank() == 0 && a->data != nullptr) {
+          axis = *reinterpret_cast<const int *>(a->data);
+        }
+      }
+
+      if (n > 0 && op->outdegree() == 1) {
         Flow::Variable *result = op->outputs[0];
-        if (axis->type == DT_INT32 &&
-            axis->rank() == 0 &&
-            axis->data != nullptr) {
-          int a = *reinterpret_cast<const int *>(axis->data);
-          Shape concat = op->inputs[0]->shape;
-          bool compatible = true;
-          for (int i = 1; i < n; ++i) {
-            Flow::Variable *input = op->inputs[i];
-            if (input->shape.rank() == concat.rank()) {
-              for (int d = 0; d < concat.rank(); ++d) {
-                if (d == a) {
-                  concat.set(d, concat.dim(d) + input->shape.dim(d));
-                } else if (concat.dim(d) != input->shape.dim(d)) {
-                  compatible = false;
-                }
+        Shape concat = op->inputs[0]->shape;
+        bool compatible = true;
+        for (int i = 1; i < n; ++i) {
+          Flow::Variable *input = op->inputs[i];
+          if (input->shape.rank() == concat.rank()) {
+            for (int d = 0; d < concat.rank(); ++d) {
+              if (d == axis) {
+                concat.set(d, concat.dim(d) + input->shape.dim(d));
+              } else if (concat.dim(d) != input->shape.dim(d)) {
+                compatible = false;
               }
-            } else {
-              compatible = false;
             }
+          } else {
+            compatible = false;
           }
-          if (compatible) {
-            result->shape = concat;
-            return true;
-          }
+        }
+        if (compatible) {
+          result->shape = concat;
+          return true;
         }
       }
     }

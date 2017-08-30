@@ -116,7 +116,7 @@ class Express {
 
   // System-defined numeric constants.
   enum ConstantNumber {
-    ZERO, ONE, HALF, P9, N9, P127, NLN2,
+    ZERO, ONE, HALF, TWO, N1, P9, N9, P127, NLN2,
     MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,

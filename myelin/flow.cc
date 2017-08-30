@@ -29,7 +29,7 @@ namespace sling {
 namespace myelin {
 
 std::unordered_map<string, Type> typemap = {
-  {"", DT_INVALID},
+  {"void", DT_INVALID},
   {"float16", DT_HALF},
   {"float32", DT_FLOAT},
   {"float64", DT_DOUBLE},
@@ -84,6 +84,19 @@ bool Shape::IsSameSize(const Shape &other) const {
     if (dim(d) != other.dim(d) && dim(d) != -1 && other.dim(d) != -1) {
       return false;
     }
+  }
+  return true;
+}
+
+bool Shape::IsCompatible(const Shape &other) const {
+  int d1 = rank() - 1;
+  int d2 = other.rank() - 1;
+  while (d1 >= 0 && d2 >= 0) {
+    int s1 = dim(d1--);
+    int s2 = other.dim(d2--);
+    if (s1 == -1 || s1 == 1) continue;
+    if (s2 == -1 || d2 == 1) continue;
+    if (s1 != s2) return false;
   }
   return true;
 }
@@ -401,7 +414,7 @@ void Flow::Operation::AddInput(Variable *var) {
 
 void Flow::Operation::AddOutput(Variable *var) {
   outputs.push_back(var);
-  CHECK(var->producer == nullptr);
+  CHECK(var->producer == nullptr) << var->name;
   var->producer = this;
 }
 
@@ -601,7 +614,7 @@ void Flow::Read(const char *data, size_t size) {
         type.erase(0, 1);
       }
       const TypeTraits &t = TypeTraits::of(type);
-      CHECK(t.valid()) << "Unknown type: " << type;
+      CHECK(t.valid() || type == "void") << "Unknown type: " << type;
       var->type = t.type();
     }
 
@@ -729,9 +742,10 @@ void Flow::Save(const string &filename, int version) const {
   FlowFileWriter file(filename);
 
   // Write header (magic and version).
-  CHECK_EQ(version, kVersion);
+  CHECK_GE(version, 3);
+  CHECK_LE(version, kVersion);
   file.WriteInt(kMagic);
-  file.WriteInt(3);
+  file.WriteInt(version);
 
   // Write variables.
   file.WriteInt(vars_.size());
@@ -746,7 +760,11 @@ void Flow::Save(const string &filename, int version) const {
     }
 
     // Write type.
-    file.WriteString(TypeTraits::of(var->type).name());
+    if (var->ref) {
+      file.WriteString("&" + TypeTraits::of(var->type).name());
+    } else {
+      file.WriteString(TypeTraits::of(var->type).name());
+    }
 
     // Write shape.
     file.WriteInt(var->shape.rank());
@@ -832,10 +850,23 @@ void Flow::Save(const string &filename, int version) const {
 }
 
 void Flow::Analyze(const Transformations &transformations) {
+  // Infer input and output variables.
   InferInputsAndOutputs();
+
+  // Run first round of transformations.
   Transform(transformations);
+
+  // Sort ops and vars in dependency order.
   Sort();
+
+  // Infer missing types and shapes for variables.
   InferTypes(transformations);
+
+  // Run second round of transformations after types have been resolved.
+  if (Transform(transformations)) {
+    // Make sure ops are still sorted after second round of transformations.
+    Sort();
+  }
 }
 
 void Flow::InferInputsAndOutputs() {
@@ -882,17 +913,22 @@ void Flow::InferInputsAndOutputs() {
   }
 }
 
-void Flow::Transform(const Transformations &transformations) {
+bool Flow::Transform(const Transformations &transformations) {
   // Keep transforming flow until no more transformations can be applied.
   bool again = true;
+  bool transformed = false;
   while (again) {
     // Run flow transformers.
     auto &transformers = transformations.transformers();
     again = false;
     for (int t = transformers.size() -1; t >= 0; --t) {
-      if (transformers[t]->Transform(this)) again = true;
+      if (transformers[t]->Transform(this)) {
+        transformed = true;
+        again = true;
+      }
     }
   }
+  return transformed;
 }
 
 Flow::Operation *Flow::Fuse(Operation *first,
@@ -1443,10 +1479,11 @@ Flow::Connector *Flow::AddConnector(const string &name) {
   return cnx;
 }
 
-Flow::Blob *Flow::AddBlob(const string &name) {
+Flow::Blob *Flow::AddBlob(const string &name, const string &type) {
   Blob *blob = new Blob;
   blobs_.push_back(blob);
   blob->name = name;
+  blob->type = type;
   return blob;
 }
 
@@ -1468,6 +1505,12 @@ void Flow::DeleteOperation(Operation *op) {
   auto f = std::find(ops_.begin(), ops_.end(), op);
   if (f != ops_.end()) ops_.erase(f);
   delete op;
+}
+
+void Flow::DeleteFunction(Function *func) {
+  auto f = std::find(funcs_.begin(), funcs_.end(), func);
+  if (f != funcs_.end()) funcs_.erase(f);
+  delete func;
 }
 
 void Flow::RemoveOperation(Operation *op) {
@@ -1621,7 +1664,7 @@ string Flow::ToString() const {
                     output->TypeString().c_str());
     }
     for (const Attribute &attr : op->attrs) {
-      if (attr.value.size() > 128) {
+      if (attr.value.size() > 512) {
         StringAppendF(&str, "  %s = <<%lu bytes>>\n",
                       attr.name.c_str(),
                       attr.value.size());
@@ -1651,6 +1694,19 @@ string Flow::ToString() const {
     StringAppendF(&str, "}\n\n");
   }
 
+  for (const Blob *blob : blobs_) {
+    StringAppendF(&str, "blob %s : %s { %lu bytes\n",
+                  blob->name.c_str(),
+                  blob->type.c_str(),
+                  blob->size);
+    for (const Attribute &attr : blob->attrs) {
+      StringAppendF(&str, "  %s = %s\n",
+                    attr.name.c_str(),
+                    attr.value.c_str());
+    }
+    StringAppendF(&str, "}\n\n");
+  }
+
   return str;
 }
 
@@ -1674,6 +1730,13 @@ Flow::Operation *Flow::Op(const string &name) {
 Flow::Function *Flow::Func(const string &name) {
   for (Function *func : funcs_) {
     if (func->name == name) return func;
+  }
+  return nullptr;
+}
+
+Flow::Blob *Flow::DataBlock(const string &name) {
+  for (Blob *blob : blobs_) {
+    if (blob->name == name) return blob;
   }
   return nullptr;
 }

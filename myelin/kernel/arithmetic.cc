@@ -94,8 +94,30 @@ static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
 
   // Mark constant inputs.
   for (int i = 0; i < op->indegree(); ++i) {
-    if (op->inputs[i]->data != nullptr && op->inputs[i]->elements() == 1) {
-      expr->Variable(Express::INPUT, i)->type = Express::CONST;
+    auto *input = op->inputs[i];
+    if (input->constant() && input->elements() == 1) {
+      int const_id = -1;
+      if (input->type == DT_FLOAT) {
+        float value = *reinterpret_cast<const float *>(input->data);
+        if (value == 0.0) {
+          const_id = Express::ZERO;
+        } else if (value == 1.0) {
+          const_id = Express::ONE;
+        } else if (value == 0.5) {
+          const_id = Express::HALF;
+        } else if (value == 2.0) {
+          const_id = Express::TWO;
+        } else if (value == -1.0) {
+          const_id = Express::N1;
+        }
+      }
+      auto *var = expr->Variable(Express::INPUT, i);
+      if (const_id != -1) {
+        var->type = Express::NUMBER;
+        var->id = const_id;
+      } else {
+        var->type = Express::CONST;
+      }
     }
   }
 }
@@ -188,6 +210,33 @@ struct Expression {
   ExpressionGenerator *generator;
 };
 
+// Convert division with constant c to multiplication with constant 1/c to
+// take advantage of mul being much faster than div.
+class DivToMulTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    int updates = 0;
+    for (Flow::Operation *op : flow->ops()) {
+      // Look for Div(x, c) where c is a non-shared scalar float constant.
+      if (op->type != "Div" && op->type != "RealDiv") continue;
+      if (op->indegree() != 2) continue;
+      Flow::Variable *second = op->inputs[1];
+      if (second->type != DT_FLOAT || second->elements() != 1) continue;
+      if (!second->constant() || second->consumers.size() != 1) continue;
+
+      // Change Div(x,c) to Mul(x,1/c).
+      CHECK_EQ(second->size, sizeof(float));
+      op->type = "Mul";
+      float multiplier = 1.0 / *reinterpret_cast<const float *>(second->data);
+      char *buffer = flow->AllocateMemory(sizeof(float));
+      *reinterpret_cast<float *>(buffer) = multiplier;
+      second->data = buffer;
+      updates++;
+    }
+    return updates > 0;
+  }
+};
+
 // Combine arithmetic operators into expressions that can be computed by a
 // Calculate kernel.
 class ExpressionTransformer : public Transformer {
@@ -240,18 +289,22 @@ class ExpressionTransformer : public Transformer {
     const Shape &shape = first->outputs[0]->shape;
     for (auto *input : first->inputs) {
       if (input->type != type) return false;
-      // TODO: check that input shape is compatible with the output shape.
+      if (input->shape.undefined()) return false;
+      if (!input->shape.IsCompatible(shape)) return false;
     }
     for (auto *input : second->inputs) {
       if (input->type != type) return false;
-      // TODO: check that input shape is compatible with the output shape.
+      if (input->shape.undefined()) return false;
+      if (!input->shape.IsCompatible(shape)) return false;
     }
     for (auto *output : first->outputs) {
       if (output->type != type) return false;
+      if (output->shape.undefined()) return false;
       if (output->shape != shape) return false;
     }
     for (auto *output : second->outputs) {
       if (output->type != type) return false;
+      if (output->shape.undefined()) return false;
       if (output->shape != shape) return false;
     }
 
@@ -320,6 +373,7 @@ class ExpressionTransformer : public Transformer {
       // Map output from second op to a new output in the merged expression.
       mapping[vars2[v]] = expr1.Variable(Express::OUTPUT, next_output++);
     }
+    expr1.CompactTempVars();
     expr2.CompactTempVars();
 
     // Merge second expression into the first one.
@@ -372,7 +426,7 @@ class Calculate : public Kernel {
     const Shape &shape = step->output(0)->shape();
     for (auto *input : step->inputs()) {
       if (input->type() != type) return false;
-      // TODO: check that input shape is compatible with the output shape.
+      if (!input->Compatible(step->output(0))) return false;
     }
     for (auto *output : step->outputs()) {
       if (output->type() != type) return false;
@@ -381,6 +435,10 @@ class Calculate : public Kernel {
 
     // Strict math not supported.
     if (step->GetAttr("strict", false)) return false;
+
+    // Dense encoding required.
+    for (auto *input : step->inputs()) input->RequireDense();
+    for (auto *output : step->outputs()) output->RequireDense();
 
     return true;
   }
@@ -393,12 +451,14 @@ class Calculate : public Kernel {
     int alignment = expression.generator->VectorSize();
     for (auto *input : step->inputs()) {
       input->SetMiniumAlignment(alignment);
+      input->RequireDense();
+      input->RequireStandardOrder();
     }
     for (auto *output : step->outputs()) {
       output->SetMiniumAlignment(alignment);
+      output->RequireDense();
+      output->RequireStandardOrder();
     }
-
-    // TODO: require compact row-major encoding.
 
     // Enable sharing of inputs and outputs.
     for (int i = 0; i < step->indegree(); ++i) {
@@ -474,6 +534,7 @@ void RegisterArithmeticLibrary(Library *library) {
 // Register arithmetic transforms.
 void RegisterArithmeticTransforms(Library *library) {
   library->RegisterTransformer(new ExpressionTransformer());
+  library->RegisterTransformer(new DivToMulTransformer());
 }
 
 }  // namespace myelin

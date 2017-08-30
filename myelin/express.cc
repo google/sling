@@ -341,6 +341,8 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(0.0),    // ZERO
   FLTCONST(1.0),    // ONE
   FLTCONST(0.5),    // HALF
+  FLTCONST(2.0),    // TWO
+  FLTCONST(-1.0),   // N1
   FLTCONST(9.0),    // P9
   FLTCONST(-9.0),   // N9
   FLTCONST(127.0),  // P127
@@ -585,6 +587,22 @@ int Express::CompactTempVars() {
 }
 
 void Express::EliminateCommonSubexpressions() {
+  // Coalesce system constant variables.
+  std::map<int, Var *> sysvars;
+  std::vector<Var *> unused;
+  for (Var *v : vars_) {
+    if (v->type == NUMBER) {
+      auto f = sysvars.find(v->id);
+      if (f == sysvars.end()) {
+        sysvars[v->id] = v;
+      } else {
+        v->Redirect(f->second);
+        unused.push_back(v);
+      }
+    }
+  }
+  for (Var *v : unused) RemoveVar(v);
+
   // Keep trying to eliminate ops until no more can be removed.
   int iterations = 0;
   while (TryToEliminateOps()) iterations++;
