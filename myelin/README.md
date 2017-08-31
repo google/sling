@@ -225,6 +225,6 @@ A flow file begins with the _magic_ string "flow" followed by a version number.
 Numbers are encoded as 32-bit integers stored in little-endian format (aka Intel
 format). Strings are stored as length-prefixed strings where the length is
 encoded as a 32-bit integer. Constant data for variables are stored in numpy
-ndarray row-major format with a 64-bit little-endian length prefix. If a
-variable does not have any constant value, the length is zero.
+ndarray row-major format with an unsigned 64-bit little-endian length prefix. If
+a variable does not have any constant value, the length is zero.
 
