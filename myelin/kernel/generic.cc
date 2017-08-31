@@ -34,8 +34,8 @@ void RegisterGenericMatMul(Library *library);
 // generic-operators.cc
 void RegisterGenericOperators(Library *library);
 
-// If the |variable| is an int32 constant scalar, sets |data| to the constant
-// value and returns true.
+// If the variable is an int32 constant scalar, sets data to the constant value
+// and returns true.
 static bool TryGetInt32Data(const Flow::Variable &variable, int *data) {
   if (variable.type != DT_INT32) return false;
   if (variable.rank() != 0) return false;
@@ -169,12 +169,12 @@ class FlattenConcatTransformer : public Transformer {
   }
 
  private:
-  // Returns true if the |operation| is a concatenation.
+  // Returns true if the operation is a concatenation.
   static bool IsConcat(const Flow::Operation &operation) {
     if (operation.type != "ConcatV2") return false;
     if (!operation.HasAttr("N")) return false;
     const int num_to_concat = operation.GetAttr("N", -1);
-    CHECK_GT(num_to_concat, 0);
+    if (num_to_concat <= 0) return false;
     if (operation.indegree() != num_to_concat + 1) return false;
     if (operation.outdegree() != 1) return false;
     return true;
@@ -210,11 +210,11 @@ class FlattenConcatTransformer : public Transformer {
     return false;
   }
 
-  // Flattens the |child| concatenation into the |parent| concatenation by
-  // replacing the |child| with the inputs it concatenates.
+  // Flattens the child concatenation into the parent concatenation by replacing
+  // the child with the inputs it concatenates.
   static void Flatten(Flow *flow, Flow::Operation *parent,
                       Flow::Operation *child) {
-    VLOG(1) << "Flattening " << child->type << " (" << child->name << ") into "
+    VLOG(9) << "Flattening " << child->type << " (" << child->name << ") into "
             << parent->type << " (" << parent->name << ")";
 
     // Find the index of the child among the parent's inputs.  This is where the
