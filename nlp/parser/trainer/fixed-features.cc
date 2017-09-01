@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@ using syntaxnet::ProtoRecordWriter;
 using syntaxnet::VectorIntWorkspace;
 using syntaxnet::dragnn::ComponentSpec;
 
+static constexpr char kUnknown[] = "<UNKNOWN>";
+
 class PrecomputedFeature : public SemparFeature {
  public:
    void RequestWorkspaces(syntaxnet::WorkspaceRegistry *registry) override {
@@ -54,12 +56,12 @@ class PrecomputedFeature : public SemparFeature {
 
   void Extract(Args *args) override {
     int index = args->state->current() + argument();
-    if (index < 0 || index >= args->state->end()) {
-      return;
+    int begin = args->state->begin();
+    if (index >= begin && index < args->state->end()) {
+      int64 id = args->workspaces()->Get<VectorIntWorkspace>(
+          workspace_id_).element(index + begin);
+      if (id != -1) args->Output(id);
     }
-    int64 id = args->workspaces()->Get<VectorIntWorkspace>(
-        workspace_id_).element(index);
-    args->Output(id);
   }
 
  protected:
@@ -69,14 +71,24 @@ class PrecomputedFeature : public SemparFeature {
   int workspace_id_ = -1;
 };
 
+namespace {
+
+bool HasSpaces(const string &word) {
+  for (char c : word) {
+    if (c == ' ') return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 // Feature that returns the id of the current word (offset via argument()).
 class WordFeature : public PrecomputedFeature {
  public:
-  void TrainInit(SharedResources *resources, const string &output_folder)
-      override {
-    // Add an unknown word to the dictionary for representing OOV words.
-    dictionary_file_ = StrCat(output_folder, "/", DictionaryName());
-    Add(kUnknown);
+  void TrainInit(SharedResources *resources,
+                 const ComponentSpec &spec,
+                 const string &output_folder) override {
+    vocabulary_file_ = StrCat(output_folder, "/", spec.name(), "-word-vocab");
   }
 
   void TrainProcess(const Document &document) override {
@@ -84,47 +96,62 @@ class WordFeature : public PrecomputedFeature {
       const auto &token = document.token(t);
       string word = token.text();
       syntaxnet::utils::NormalizeDigits(&word);
-      if (!word.empty() && !HasSpaces(word)) Add(word);
+      if (word.empty() || HasSpaces(word)) continue;
+      Add(word);
     }
   }
 
   int TrainFinish(ComponentSpec *spec) override {
-    // Write dictionary to file.
+    // Write vocabulary to file.
     string contents;
     for (const string &w : id_to_word_) {
       StrAppend(&contents, !contents.empty() ? "\n" : "", w);
     }
-    CHECK(File::WriteContents(dictionary_file_, contents));
 
-    // Add path to the dictionary to the spec.
-    AddResourceToSpec(DictionaryName(), dictionary_file_, spec);
+    // Add kUnknown to the vocabulary.
+    if (!contents.empty()) StrAppend(&contents, "\n");
+    StrAppend(&contents, kUnknown);
+    CHECK(File::WriteContents(vocabulary_file_, contents));
 
-    return id_to_word_.size();
+    // Add path to the vocabulary to the spec.
+    AddResourceToSpec("word-vocab", vocabulary_file_, spec);
+
+    return id_to_word_.size() + 1;  // +1 for kUnknown
   }
 
   void Init(const ComponentSpec &spec, SharedResources *resources) override {
-    string file = GetResource(spec, DictionaryName());
+    string file = GetResource(spec, "word-vocab");
     CHECK(!file.empty()) << spec.DebugString();
     FileInput input(file);
     string word;
+    int64 count = 0;
     while (input.ReadLine(&word)) {
       if (!word.empty() && word.back() == '\n') word.pop_back();
+      if (word == kUnknown) {
+        oov_ = count;
+        continue;
+      }
       Add(word);
-      if (word == kUnknown) oov_ = id_to_word_.size() - 1;
+      count++;
     }
+    CHECK_NE(oov_, -1) << kUnknown << " not in " << file;
     LOG(INFO) << "WordFeature: " << id_to_word_.size() << " words read, "
               << " OOV feature id: " << oov_;
   }
 
   string FeatureToString(int64 id) const override {
-    return id_to_word_.at(id);
+    return (id == oov_) ? kUnknown : id_to_word_.at(id);
   }
 
  protected:
-  virtual string DictionaryName() const {
-    return "word-vocab";
+  int64 Get(int index, const string &word) override {
+    string s = word;
+    syntaxnet::utils::NormalizeDigits(&s);
+    const auto &it = words_.find(s);
+    return it == words_.end() ? oov_ : it->second;
   }
 
+ private:
   virtual void Add(const string &word) {
     const auto &it = words_.find(word);
     if (it == words_.end()) {
@@ -135,30 +162,12 @@ class WordFeature : public PrecomputedFeature {
     }
   }
 
-  virtual int64 Get(int index, const string &word) {
-    string s = word;
-    syntaxnet::utils::NormalizeDigits(&s);
-    const auto &it = words_.find(s);
-    return it == words_.end() ? oov_ : it->second;
-  }
+  // Unknown word id.
+  int64 oov_ = -1;
 
-  bool HasSpaces(const string &word) {
-    for (char c : word) {
-      if (c == ' ') return true;
-    }
-    return false;
-  }
+  // Path of vocabulary under construction.
+  string vocabulary_file_;
 
-  // Unknown word.
-  static constexpr char kUnknown[] = "<UNKNOWN>";
-
-  // Id of the unknown word.
-  int64 oov_ = 0;
-
-  // Path of dictionary under construction.
-  string dictionary_file_;
-
- private:
   // Word -> Id.
   std::unordered_map<string, int64> words_;
 
@@ -166,35 +175,46 @@ class WordFeature : public PrecomputedFeature {
   std::vector<string> id_to_word_;
 };
 
-constexpr char WordFeature::kUnknown[];
-
 REGISTER_SEMPAR_FEATURE("word", WordFeature);
 
-class PrefixFeature : public WordFeature {
+class PrefixFeature : public PrecomputedFeature {
  public:
   ~PrefixFeature() override {
     delete affixes_;
   }
 
-  void TrainInit(SharedResources *resources, const string &output_folder)
-      override {
-    dictionary_file_ = StrCat(output_folder, "/", DictionaryName());
+  void TrainInit(SharedResources *resources,
+                 const ComponentSpec &spec,
+                 const string &output_folder) override {
+    vocabulary_file_ =
+        StrCat(output_folder, "/", spec.name(), "-", VocabularyName());
     length_ = GetIntParam("length", 3);
     affixes_ = new AffixTable(AffixType(), length_);
   }
 
+  void TrainProcess(const Document &document) override {
+    for (int t = 0; t < document.num_tokens(); ++t) {
+      const auto &token = document.token(t);
+      string word = token.text();
+      syntaxnet::utils::NormalizeDigits(&word);
+      if (!word.empty() && !HasSpaces(word)) {
+        affixes_->AddAffixesForWord(word.c_str(), word.size());
+      }
+    }
+  }
+
   int TrainFinish(ComponentSpec *spec) override {
-    syntaxnet::ProtoRecordWriter writer(dictionary_file_);
+    syntaxnet::ProtoRecordWriter writer(vocabulary_file_);
     affixes_->Write(&writer);
 
-    // Add path to the dictionary to the spec.
-    AddResourceToSpec(DictionaryName(), dictionary_file_, spec);
+    // Add path to the vocabulary to the spec.
+    AddResourceToSpec(VocabularyName(), vocabulary_file_, spec);
 
-    return affixes_->size() + 1;  // +1 for OOV
+    return affixes_->size() + 1;  // +1 for kUnknown
   }
 
   void Init(const ComponentSpec &spec, SharedResources *resources) override {
-    string filename = GetResource(spec, DictionaryName());
+    string filename = GetResource(spec, VocabularyName());
     CHECK(!filename.empty()) << spec.DebugString();
 
     length_ = GetIntParam("length", 3);
@@ -213,12 +233,8 @@ class PrefixFeature : public WordFeature {
     return AffixTable::PREFIX;
   }
 
-  string DictionaryName() const override {
+  virtual string VocabularyName() const {
     return "prefix-table";
-  }
-
-  void Add(const string &word) override {
-    affixes_->AddAffixesForWord(word.c_str(), word.size());
   }
 
   int64 Get(int index, const string &word) override {
@@ -234,13 +250,11 @@ class PrefixFeature : public WordFeature {
     return affix_id == -1 ? oov_ : affix_id;
   }
 
- protected:
   AffixTable *affixes_ = nullptr;
   int length_ = 0;
-  static constexpr char kUnknown[] = "<UNKNOWN_AFFIX>";
+  int oov_ = -1;
+  string vocabulary_file_;
 };
-
-constexpr char PrefixFeature::kUnknown[];
 
 REGISTER_SEMPAR_FEATURE("prefix", PrefixFeature);
 
@@ -250,7 +264,7 @@ class SuffixFeature : public PrefixFeature {
     return AffixTable::SUFFIX;
   }
 
-  string DictionaryName() const override {
+  string VocabularyName() const override {
     return "suffix-table";
   }
 
@@ -535,7 +549,9 @@ REGISTER_SEMPAR_FEATURE("digit", DigitFeature);
 // where i, j are attention indices and r is a role that connects those frames.
 class FrameRolesFeature : public SemparFeature {
  public:
-  void TrainInit(SharedResources *resources, const string &output_folder) {
+  void TrainInit(SharedResources *resources,
+                 const ComponentSpec &spec,
+                 const string &output_folder) override {
     Store *global = resources->global;
     for (int i = 0; i < resources->table.NumActions(); ++i) {
       const auto &action = resources->table.Action(i);
@@ -568,7 +584,8 @@ class FrameRolesFeature : public SemparFeature {
   }
 
   void Init(const ComponentSpec &spec, SharedResources *resources) override {
-    TrainInit(resources, "" /* output_folder; unused */);
+    ComponentSpec unused_spec;
+    TrainInit(resources, unused_spec, "" /* output_folder; unused */);
   }
 
   // Returns the four types of features.

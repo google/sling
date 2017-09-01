@@ -45,13 +45,7 @@ class WordEmbeddingInitializer : public OpKernel {
  public:
   explicit WordEmbeddingInitializer(OpKernelConstruction *context)
       : OpKernel(context) {
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("task_context", &task_context_path_));
     OP_REQUIRES_OK(context, context->GetAttr("vocabulary", &vocabulary_path_));
-    OP_REQUIRES(
-        context, task_context_path_.empty() != vocabulary_path_.empty(),
-        InvalidArgument(
-            "Exactly one of task_context or vocabulary must be specified"));
     OP_REQUIRES_OK(context, context->GetAttr("vectors", &vectors_path_));
     OP_REQUIRES_OK(context, context->GetAttr("cache_vectors_locally",
                                              &cache_vectors_locally_));
@@ -86,6 +80,7 @@ class WordEmbeddingInitializer : public OpKernel {
     // allocation until the first iteration of the loop.
     Tensor *embedding_matrix = nullptr;
     TokenEmbedding embedding;
+    int64 count = 0;
     while (reader.Read(&embedding) == tensorflow::Status::OK()) {
       if (embedding_matrix == nullptr) {
         OP_REQUIRES_OK(context,
@@ -95,6 +90,7 @@ class WordEmbeddingInitializer : public OpKernel {
       if (vocab.find(embedding.token()) != vocab.end()) {
         SetNormalizedRow(embedding.vector(), vocab[embedding.token()],
                          embedding_matrix);
+        ++count;
       }
     }
 
@@ -107,45 +103,15 @@ class WordEmbeddingInitializer : public OpKernel {
         InvalidArgument(tensorflow::strings::StrCat(
             "found no pretrained embeddings in vectors=", vectors_path_,
             " vocabulary=", vocabulary_path_, " vocab_size=", vocab.size())));
+    LOG(INFO) << "Initialized with " << count << " pre-trained embedding "
+              << "vectors out of a vocabulary of " << vocab.size();
   }
 
  private:
-  // Loads the vocabulary from the task context or vocabulary.
+  // Loads the |vocabulary| from the |vocabulary_path_| file.
+  // The file is assumed to list one word per line, including <UNKNOWN>.
+  // The zero-based line number is taken as the id of the corresponding word.
   tensorflow::Status LoadVocabulary(
-      std::unordered_map<string, int64> *vocabulary) const {
-    if (!task_context_path_.empty()) {
-      return LoadVocabularyFromTaskContext(vocabulary);
-    } else {
-      return LoadVocabularyFromFile(vocabulary);
-    }
-  }
-
-  // Loads the |vocabulary| from the "word-map" input of the task context at
-  // |task_context_path_|, or returns non-OK on error.
-  tensorflow::Status LoadVocabularyFromTaskContext(
-      std::unordered_map<string, int64> *vocabulary) const {
-    vocabulary->clear();
-    string textproto;
-    TF_RETURN_IF_ERROR(ReadFileToString(tensorflow::Env::Default(),
-                                        task_context_path_, &textproto));
-    TaskContext task_context;
-    if (!TextFormat::ParseFromString(textproto, task_context.mutable_spec())) {
-      return InvalidArgument("Could not parse task context at ",
-                             task_context_path_);
-    }
-    const string path =
-        TaskContext::InputFile(*task_context.GetInput("word-map"));
-    const TermFrequencyMap *word_map =
-        SharedStoreUtils::GetWithDefaultName<TermFrequencyMap>(path, 0, 0);
-    for (int i = 0; i < word_map->Size(); ++i) {
-      (*vocabulary)[word_map->GetTerm(i)] = i;
-    }
-    return tensorflow::Status::OK();
-  }
-
-  // Loads the |vocabulary| from the |vocabulary_path_| file, which contains one
-  // word per line in order, or returns non-OK on error.
-  tensorflow::Status LoadVocabularyFromFile(
       std::unordered_map<string, int64> *vocabulary) const {
     vocabulary->clear();
     string text;
@@ -164,6 +130,7 @@ class WordEmbeddingInitializer : public OpKernel {
       const int64 index = vocabulary->size();
       (*vocabulary)[line] = index;
     }
+
     return tensorflow::Status::OK();
   }
 
@@ -231,8 +198,7 @@ class WordEmbeddingInitializer : public OpKernel {
     }
   }
 
-  // Path to the task context or vocabulary.  Exactly one must be specified.
-  string task_context_path_;
+  // Path to the vocabulary file.
   string vocabulary_path_;
 
   // Whether to cache the vectors to a local temp file, to reduce I/O latency.

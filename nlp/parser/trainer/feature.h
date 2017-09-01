@@ -97,7 +97,9 @@ class SemparFeature : public Component<SemparFeature> {
   // Initializes any resources that will be constructed during training.
   // Any files should be written to 'output_folder'.
   virtual void TrainInit(
-      SharedResources *resources, const string &output_folder) {}
+      SharedResources *resources,
+      const syntaxnet::dragnn::ComponentSpec &spec,
+      const string &output_folder) {}
 
   // Augments the under construction resource(s) using 'doc'.
   virtual void TrainProcess(const Document &doc) {}

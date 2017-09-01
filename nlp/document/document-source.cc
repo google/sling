@@ -87,10 +87,18 @@ Document *DocumentSource::Next(Store *store) {
   return new Document(decoder.Decode().AsFrame());
 }
 
+namespace {
+
+bool HasSuffix(const string &s, const string &suffix) {
+  int len = suffix.size();
+  return (s.size() >= len) && (s.substr(s.size() - len) == suffix);
+}
+
+}  // namespace
+
 DocumentSource *DocumentSource::Create(const string &file_pattern) {
   // TODO: Add more formats as needed.
-  int size = file_pattern.size();
-  if (size > 4 && file_pattern.substr(size - 4) == ".zip") {
+  if (HasSuffix(file_pattern, ".zip")) {
     return new ZipDocumentSource(file_pattern);
   } else {
     std::vector<string> files;

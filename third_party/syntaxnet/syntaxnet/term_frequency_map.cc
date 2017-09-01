@@ -16,6 +16,7 @@ limitations under the License.
 #include "syntaxnet/term_frequency_map.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <algorithm>
 #include <limits>
 
@@ -77,13 +78,12 @@ void TermFrequencyMap::Load(const string &filename, int min_frequency,
     TF_CHECK_OK(buffer.ReadLine(&line));
     string term;
     int64 frequency = 0;
-#if 0 // FIXME
-    CHECK(RE2::FullMatch(line, "(.*) (\\d*)", &term, &frequency));
-#else
-    LOG(FATAL) << "Plase fix TermFrequencyMap reading";
-#endif
-    CHECK(!term.empty());
-    CHECK_GT(frequency, 0);
+    size_t space_index = line.find(' ');
+    CHECK(space_index != string::npos) << line;
+    term = line.substr(0, space_index);
+    frequency = strtoull(line.substr(space_index + 1).c_str(), nullptr, 10);
+    CHECK(!term.empty()) << line;
+    CHECK_GT(frequency, 0) << line;
 
     // Check frequency sorting (descending order).
     if (i > 0) CHECK_GE(last_frequency, frequency);

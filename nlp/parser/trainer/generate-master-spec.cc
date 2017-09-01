@@ -72,13 +72,11 @@ using syntaxnet::dragnn::RegisteredModuleSpec;
 
 DEFINE_string(documents, "", "File pattern of training documents.");
 DEFINE_string(commons, "", "Path to common store.");
-DEFINE_string(output_dir, "/tmp/sempar_out", "Output directory.");
+DEFINE_string(output_dir, "", "Output directory.");
 DEFINE_int32(word_embeddings_dim, 32, "Word embeddings dimensionality.");
-DEFINE_string(word_embeddings,
-              "/usr/local/google/home/grahul/sempar_ontonotes/"
-              "word2vec-embedding-bi-true-32.tf.recordio",
-              "Pretrained word embeddings TF recordio. Should have a "
-              "dimensionality of FLAGS_word_embeddings_dim.");
+DEFINE_string(word_embeddings, "",
+              "TF recordio of pretrained word embeddings. Should have a "
+              "dimensionality = FLAGS_word_embeddings_dim.");
 DEFINE_bool(oov_lstm_features, true,
             "Whether fallback features (shape, suffix etc) should "
             "be used in the LSTMs");
@@ -171,7 +169,7 @@ void AddFixedFeature(ComponentSpec *component,
   f->set_name(name);
   f->set_fml(fml);
   f->set_embedding_dim(embedding_dim);
-  f->set_predicate_map("hashed");
+  f->set_predicate_map("none");
 }
 
 void AddLinkedFeature(ComponentSpec *component,
@@ -240,10 +238,7 @@ void TrainFeatures(Artifacts *artifacts, ComponentSpec *spec) {
     fixed_feature_extractor.AddChannel(fixed_channel);
   }
 
-  // Note: We are NOT copying spec->transition_system().parameters() over to
-  // the features. Therefore any parameters for the features should be
-  // specified in the FML itself.
-
+  // Note: All parameters for a feature should be specified in its FML.
   auto size_and_vocab = fixed_feature_extractor.Train(
       artifacts->train_corpus,
       FLAGS_output_dir,
@@ -286,7 +281,7 @@ void CheckWordEmbeddingsDimensionality() {
   int size = embedding.vector().values_size();
   CHECK_EQ(size, FLAGS_word_embeddings_dim)
       << "Pretrained embeddings have dim=" << size
-      << ", whereas word embeddings have dim=" << FLAGS_word_embeddings_dim;
+      << ", but specified word embedding dim=" << FLAGS_word_embeddings_dim;
 }
 
 void OutputMasterSpec(Artifacts *artifacts) {

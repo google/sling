@@ -144,7 +144,7 @@ def run_training(sess, trainers, annotator, evaluator, pretrain_steps,
     checkpoint_stats[target_idx + 1] += 1
     if step % 100 == 0:
       tf.logging.info('training step: %d, actual: %d', step, actual_step + step)
-    if step % report_every == 0:
+    if step % report_every == 0 and step > 0:
       tf.logging.info('finished step: %d, actual: %d', step, actual_step + step)
 
       annotated = annotate_dataset(sess, annotator, eval_corpus)

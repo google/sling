@@ -49,8 +49,7 @@ flags.DEFINE_string('dev_corpus_without_gold', '',
                     'Dev corpus without gold frames.')
 flags.DEFINE_string('tf_master', '',
                     'TensorFlow execution engine to connect to.')
-flags.DEFINE_string('pretrain_steps', '100', 'Comma separated pretrained steps')
-flags.DEFINE_string('train_steps', '100000', 'Comma separated train steps')
+flags.DEFINE_integer('train_steps', 200000, 'Number of training steps')
 flags.DEFINE_integer('report_every', 500, 'Checkpoint interval')
 flags.DEFINE_integer('batch_size', 8, 'Training batch size')
 flags.DEFINE_string('flow', '', 'Myelin flow file for model output')
@@ -138,15 +137,11 @@ def main(unused_argv):
     text_format.Parse(fin.read(), master_spec)
   fin.close()
 
-  pretrain_steps = map(int, FLAGS.pretrain_steps.split(','))
-  train_steps = map(int, FLAGS.train_steps.split(','))
-
   # Make output folder
   if not os.path.isdir(FLAGS.output_folder):
     os.makedirs(FLAGS.output_folder)
 
   # Construct TF Graph.
-  graph_file = os.path.join(FLAGS.output_folder, "graph")
   graph = tf.Graph()
 
   with graph.as_default():
@@ -159,14 +154,14 @@ def main(unused_argv):
             max_index=idx + 1,
             unroll_using_oracle=[False] * idx + [True])
         for idx, component in enumerate(master_spec.component)
-        if (component.transition_system.registered_name != 'shift-only' and
-            component.transition_system.registered_name != 'once')
+        if (component.transition_system.registered_name != 'shift-only')
     ]
 
     # Add default and manually specified targets.
     trainers = []
     for target in default_targets:
       trainers += [builder.add_training_from_config(target)]
+    check.Eq(len(trainers), 1, "Expected only one training target (FF unit)")
 
     # Construct annotation and saves. Will use moving average if enabled.
     annotator = builder.add_annotation(enable_tracing=False)
@@ -190,13 +185,6 @@ def main(unused_argv):
   print "The graph can be viewed via"
   print "  tensorboard --logdir=" + events_dir
   print "  then navigating to http://localhost:6006 and clicking on 'GRAPHS'"
-  print len(trainers), "trainers built"
-
-  # Also dump the graph separately.
-  with file(graph_file, 'w') as fout:
-    fout.write(graph.as_graph_def().SerializeToString())
-  fout.close()
-  print "Also wrote serialized graph proto separately to", graph_file
 
   with graph.as_default():
     tf.set_random_seed(hyperparam_config.seed)
@@ -218,9 +206,9 @@ def main(unused_argv):
 
     # Run training.
     trainer_lib.run_training(
-        sess, trainers, annotator, # merged_summaries,
-        evaluator, pretrain_steps,
-        train_steps, train_corpus, dev_corpus_without_gold,
+        sess, trainers, annotator,
+        evaluator, [0], # pretrain_steps
+        [FLAGS.train_steps], train_corpus, dev_corpus_without_gold,
         dev_corpus_with_gold, FLAGS.batch_size, summary_writer,
         FLAGS.report_every, builder.saver, checkpoint_path)
 

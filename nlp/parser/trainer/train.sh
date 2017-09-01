@@ -46,6 +46,8 @@
 
 set -eu
 
+readonly COMMAND=`echo $0 $@`
+
 # Input resources and arguments.
 SEM=$HOME/sempar_ontonotes
 COMMONS=${SEM}/commons
@@ -54,13 +56,13 @@ TRAIN_FILEPATTERN=${SEM}/train.zip
 DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
 DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 WORD_EMBEDDINGS_DIM=32
-PRETRAINED_WORD_EMBEDDINGS=
+PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-embedding-bi-true-32.tf.recordio
 OOV_FEATURES=true
 FLOW=
 
 # Training hyperparameters.
-BATCH_SIZE=1
-REPORT_EVERY=500
+BATCH_SIZE=8
+REPORT_EVERY=2000
 LEARNING_RATE=0.0005
 SEED=2
 METHOD=adam
@@ -69,8 +71,8 @@ ADAM_BETA2=0.999
 ADAM_EPS=0.00001
 GRAD_CLIP_NORM=1.0
 DROPOUT=1.0
-TRAIN_STEPS=100000
-DECAY_STEPS=50000
+TRAIN_STEPS=200000
+DECAY_STEPS=500000
 MOVING_AVERAGE=true
 
 # Whether we should make the MasterSpec again or not.
@@ -217,6 +219,14 @@ HYPERPARAMS+="seed:${SEED} learning_method:'${METHOD}' "
 HYPERPARAMS+="use_moving_average:${MOVING_AVERAGE} dropout_rate:${DROPOUT} "
 HYPERPARAMS+="gradient_clip_norm:${GRAD_CLIP_NORM} adam_beta1:${ADAM_BETA1} "
 HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS}"
+
+mkdir -p "${OUTPUT_FOLDER}"
+
+set +x
+readonly COMMAND_FILE="${OUTPUT_FOLDER}/command"
+echo "Writing command to ${COMMAND_FILE}"
+echo $COMMAND > ${COMMAND_FILE}
+set -x
 
 if [[ "$MAKE_SPEC" -eq 1 ]];
 then

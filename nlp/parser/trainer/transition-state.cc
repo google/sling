@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,8 +39,9 @@ SemparState::SemparState(SemparInstance *instance,
     parser_state_ = new ParserState(instance->store, 0, num_tokens());
     ComputeAllowed();
   } else {
+    shift_only_state_.begin = 0;
+    shift_only_state_.end = num_tokens();
     shift_only_state_.steps_taken = 0;
-    shift_only_state_.size = num_tokens();
     shift_only_state_.left_to_right = shift_only_left_to_right;
   }
 }
@@ -138,7 +139,7 @@ int SemparState::NextGoldAction() {
 
 bool SemparState::IsFinal() const {
   return shift_only() ?
-      (shift_only_state_.steps_taken >= shift_only_state_.size) :
+      (shift_only_state_.steps_taken >= shift_only_state_.size()) :
       parser_state_->done();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -100,6 +100,12 @@ class SemparState
   Store *store() { return instance_->store; }
   int num_tokens() const { return instance_->document->num_tokens(); }
 
+  string current_token_text() const {
+    int c = current();
+    return (c >= 0 && c < num_tokens()) ? document()->token(c).text() :
+        StrCat("<", c, ">");
+  }
+
   syntaxnet::dragnn::ComponentTrace *mutable_trace() {
     CHECK(trace_ != nullptr) << "Trace is not initialized";
     return trace_;
@@ -156,14 +162,17 @@ class SemparState
 
   // Current position (works for both SHIFT_ONLY and SEMPAR cases).
   int current() const {
-    if (!shift_only()) return parser_state()->current();
-    return shift_only_state_.left_to_right ? shift_only_state_.steps_taken :
-        (shift_only_state_.size - 1 - shift_only_state_.steps_taken);
+    return shift_only() ? shift_only_state_.current() :
+        parser_state()->current();
   }
 
-  // End position (works for both SHIFT_ONLY and SEMPAR cases).
+  // Begin/End position.
+  int begin() const {
+    return shift_only() ? shift_only_state_.begin : parser_state()->begin();
+  }
+
   int end() const {
-    return shift_only() ? shift_only_state_.size : parser_state()->end();
+    return shift_only() ? shift_only_state_.end : parser_state()->end();
   }
 
  private:
@@ -196,9 +205,16 @@ class SemparState
 
   // State information for shift-only cases.
   struct ShiftOnlyState {
+    int begin = 0;   // beginning token index
+    int end = 0;     // ending token index (exclusive)
     int steps_taken = 0;
-    int size = 0;
     bool left_to_right = true;
+
+    int current() const {
+      return left_to_right ? (begin + steps_taken) : (end - 1 - steps_taken);
+    }
+
+    int size() const { return end - begin; }
   };
 
   // Computes the set of allowed actions for the current ParserState.

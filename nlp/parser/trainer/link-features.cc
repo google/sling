@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -84,7 +84,8 @@ class FrameEndStepFeature : public SemparFeature {
     CHECK(!args->state->shift_only());
     if (argument() >= args->parser_state()->AttentionSize()) return;
     if (argument() < 0) return;
-    args->Output(args->parser_state()->FrameEvokeEnd(argument()) - 1);
+    int frame = args->parser_state()->Attention(argument());
+    args->Output(args->parser_state()->FrameEvokeEnd(frame) - 1);
   }
 };
 

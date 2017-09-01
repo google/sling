@@ -1,22 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_binary(
-  name = "inspect-docs",
-  srcs = ["inspect-docs.cc"],
-  deps = [
-    "//base",
-    "//file:posix",
-    "//frame:store",
-    "//nlp/document:document",
-    "//nlp/document:document-source",
-    "//nlp/parser/trainer:shared-resources",
-    "//string:strcat",
-    "//third_party/zlib:miniunzip",
-    "//third_party/zlib:zlib",
-  ],
-)
-
-cc_binary(
   name = "make-test-docs",
   srcs = ["make-test-docs.cc"],
   deps = [

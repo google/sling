@@ -42,8 +42,7 @@ using sling::StrCat;
 using sling::nlp::Document;
 using sling::nlp::SharedResources;
 
-DEFINE_string(commons, "/usr/local/google/home/grahul/sempar_ontonotes/commons",
-              "Path to commons");
+DEFINE_string(commons, "", "Path to commons");
 DEFINE_string(output, "",
               "Output file for writing the document. "
               "Tokens-only version is written to <FLAGS_output>-only-tokens.");
@@ -131,7 +130,7 @@ int main(int argc, char **argv) {
       &local,
       tokens,
       {{0, 1}, {1, 2}, {3, 4}},
-      {"/saft/person", "/pb/live-01", "/saft/location"},
+      {"/s/thing", "/pb/live-01", "/s/thing"},
       {
         std::make_tuple(1, 0, "/pb/arg0"),
         std::make_tuple(1, 2, "/pb/argm-loc")

@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2017 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -268,18 +268,16 @@ int SemparComponent::GetFixedFeatures(
   args.debug = do_tracing_;
 
   std::vector<int> segment_indices;
-  int next_segment_index = -1;
+  int next_segment_index = 0;
+  int channel_size = spec_.fixed_feature(channel_id).size();
   for (SemparState *state : batch_) {
     args.state = state;
     int old_size = args.output.size();
     feature_extractor_.Extract(&args, channel_id);
 
     for (int i = old_size; i < args.output.size(); ++i) {
-      if ((i == old_size) ||
-          (args.output[i].feature_index < args.output[i - 1].feature_index)) {
-        next_segment_index++;
-      }
-      segment_indices.emplace_back(next_segment_index);
+      segment_indices.emplace_back(
+          next_segment_index + args.output[i].feature_index);
     }
 
     if (do_tracing_) {
@@ -295,6 +293,7 @@ int SemparComponent::GetFixedFeatures(
             value.debug);
       }
     }
+    next_segment_index += channel_size;
   }
   int feature_count = args.output.size();
   CHECK_EQ(feature_count, segment_indices.size());

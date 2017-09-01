@@ -605,7 +605,7 @@ string ActionTable::Serialize(const Store *global, int percentile) const {
   Array symbols_array(&store, symbols);
   top.Add("/table/symbols", symbols_array);
 
-  StringEncoder encoder(&store);  // TODO(grahul): move to FileEncoder
+  StringEncoder encoder(&store);
   encoder.Encode(top.Create());
   return encoder.buffer();
 }

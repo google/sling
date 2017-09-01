@@ -143,7 +143,7 @@ std::vector<std::pair<int, int>> SemparFeatureExtractor::Train(
     ComponentSpec *spec) {
   for (auto &channel : channels_) {
     for (auto *feature : channel.features) {
-      feature->TrainInit(resources, output_folder);
+      feature->TrainInit(resources, *spec, output_folder);
     }
   }
 
