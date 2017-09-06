@@ -68,7 +68,6 @@ cc_library(
     "//third_party/tensorflow",
   ],
   includes = ["."],
-  alwayslink = 1,
 )
 
 cc_library(

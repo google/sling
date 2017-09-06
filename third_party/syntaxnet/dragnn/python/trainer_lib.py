@@ -83,7 +83,9 @@ def get_summary_writer(tensorboard_dir):
 def run_training_step(sess, trainer, train_corpus, batch_size):
   """Runs a single iteration of train_op on a randomly sampled batch."""
   batch = random.sample(train_corpus, batch_size)
-  sess.run(trainer['run'], feed_dict={trainer['input_batch']: batch})
+  cost, _ = sess.run([trainer['cost'], trainer['run']],
+                     feed_dict={trainer['input_batch']: batch})
+  return cost
 
 
 def run_training(sess, trainers, annotator, evaluator, pretrain_steps,
@@ -140,13 +142,14 @@ def run_training(sess, trainers, annotator, evaluator, pretrain_steps,
   tf.logging.info('Starting training...')
   actual_step = sum(checkpoint_stats[1:])
   for step, target_idx in enumerate(target_for_step):
-    run_training_step(sess, trainers[target_idx], train_corpus, batch_size)
+    cost = run_training_step(
+        sess, trainers[target_idx], train_corpus, batch_size)
     checkpoint_stats[target_idx + 1] += 1
-    if step % 100 == 0:
-      tf.logging.info('training step: %d, actual: %d', step, actual_step + step)
+    if step == 0:
+      tf.logging.info('Initial cost at step = 0: %f', cost)
     if step % report_every == 0 and step > 0:
-      tf.logging.info('finished step: %d, actual: %d', step, actual_step + step)
-
+      tf.logging.info('finished step: %d, actual: %d, cost : %f',
+                      step, actual_step + step, cost)
       annotated = annotate_dataset(sess, annotator, eval_corpus)
       summaries = evaluator(eval_gold, annotated)
       for label, metric in summaries.iteritems():

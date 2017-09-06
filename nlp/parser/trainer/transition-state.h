@@ -96,8 +96,10 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
 
   string current_token_text() const {
     int c = current();
-    return (c >= 0 && c < num_tokens()) ? document()->token(c).text() :
-        StrCat("<", c, ">");
+    if (c < 0 || c >= num_tokens()) {
+      return StrCat("<", c, ">");
+    }
+    return document()->token(c).text();
   }
 
   syntaxnet::dragnn::ComponentTrace *mutable_trace() {

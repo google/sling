@@ -89,6 +89,7 @@ class WordFeature : public PrecomputedFeature {
                  const ComponentSpec &spec,
                  const string &output_folder) override {
     vocabulary_file_ = StrCat(output_folder, "/", spec.name(), "-word-vocab");
+    Add(kUnknown);
   }
 
   void TrainProcess(const Document &document) override {
@@ -102,21 +103,18 @@ class WordFeature : public PrecomputedFeature {
   }
 
   int TrainFinish(ComponentSpec *spec) override {
-    // Write vocabulary to file.
+    // Write vocabulary to file. Note that kUnknown is the first entry.
     string contents;
+    DCHECK_GT(id_to_word_.size(), 0);
     for (const string &w : id_to_word_) {
-      StrAppend(&contents, !contents.empty() ? "\n" : "", w);
+      StrAppend(&contents, contents.empty() ? "" : "\n", w);
     }
-
-    // Add kUnknown to the vocabulary.
-    if (!contents.empty()) StrAppend(&contents, "\n");
-    StrAppend(&contents, kUnknown);
     CHECK(File::WriteContents(vocabulary_file_, contents));
 
     // Add path to the vocabulary to the spec.
     AddResourceToSpec("word-vocab", vocabulary_file_, spec);
 
-    return id_to_word_.size() + 1;  // +1 for kUnknown
+    return id_to_word_.size();  // includes kUnknown
   }
 
   void Init(const ComponentSpec &spec, SharedResources *resources) override {
@@ -127,14 +125,12 @@ class WordFeature : public PrecomputedFeature {
     int64 count = 0;
     while (input.ReadLine(&word)) {
       if (!word.empty() && word.back() == '\n') word.pop_back();
-      if (word == kUnknown) {
-        oov_ = count;
-        continue;
-      }
+      if (word == kUnknown) oov_ = count;
       Add(word);
       count++;
     }
     CHECK_NE(oov_, -1) << kUnknown << " not in " << file;
+    CHECK_EQ(oov_, 0) << kUnknown << " wasn't the first entry in " << file;
     LOG(INFO) << "WordFeature: " << id_to_word_.size() << " words read, "
               << " OOV feature id: " << oov_;
   }

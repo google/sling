@@ -602,5 +602,4 @@ class MasterBuilder(object):
     self.saver = tf.train.Saver(
         var_list=[
             x for x in tf.global_variables() if 'quantized' not in x.name
-        ],
-        write_version=saver_pb2.SaverDef.V1)
+        ])

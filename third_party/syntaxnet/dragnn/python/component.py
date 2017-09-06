@@ -231,11 +231,11 @@ class ComponentBuilderBase(object):
         return tf.constant(0, tf.float32)
 
     summaries = []
-    summaries.append(tf.summary.scalar('%s step' % self.name, self._step))
-    summaries.append(tf.summary.scalar('%s total' % self.name, self._total))
+    summaries.append(tf.summary.scalar('%s_step' % self.name, self._step))
+    summaries.append(tf.summary.scalar('%s_total' % self.name, self._total))
     if self.network.params:
       summaries.append(
-          tf.summary.scalar('%s parameter Norm' % self.name,
+          tf.summary.scalar('%s_parameter_Norm' % self.name,
                             combine_norm(self.network.params)))
       slot_names = self.master.optimizer.get_slot_names()
       for name in slot_names:
@@ -243,13 +243,13 @@ class ComponentBuilderBase(object):
             self.master.optimizer.get_slot(p, name) for p in self.network.params
         ]
         summaries.append(
-            tf.summary.scalar('%s %s Norm' % (self.name, name),
+            tf.summary.scalar('%s_%s_Norm' % (self.name, name),
                               combine_norm(slot_params)))
 
       # Construct moving average.
       if self.master.hyperparams.use_moving_average:
         summaries.append(
-            tf.summary.scalar('%s avg Norm' % self.name,
+            tf.summary.scalar('%s_avg_Norm' % self.name,
                               combine_norm([
                                   self.moving_average.average(p)
                                   for p in self.network.params
