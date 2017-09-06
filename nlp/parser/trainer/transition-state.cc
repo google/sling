@@ -46,30 +46,6 @@ SemparState::SemparState(SemparInstance *instance,
   }
 }
 
-SemparState::SemparState(const SemparState *other) {
-  if (other->parser_state_ != nullptr) {
-    parser_state_ = new ParserState(*other->parser_state_);
-  }
-  instance_ = other->instance_;
-  resources_ = other->resources_;
-  system_type_ = other->system_type_;
-  shift_only_state_ = other->shift_only_state_;
-  allowed_ = other->allowed_;
-  step_info_ = other->step_info_;
-  score_ = other->score_;
-  history_ = other->history_;
-  gold_transition_generator_ = other->gold_transition_generator_;
-  current_beam_index_ = other->current_beam_index_;
-  parent_beam_index_ = other->parent_beam_index_;
-  next_gold_index_ = other->next_gold_index_;
-
-  // Copy trace if it exists.
-  if (other->trace_ != nullptr) {
-    delete trace_;
-    trace_ = new syntaxnet::dragnn::ComponentTrace(*other->trace_);
-  }
-}
-
 SemparState::~SemparState() {
   delete parser_state_;
   delete trace_;
@@ -78,11 +54,6 @@ SemparState::~SemparState() {
 void SemparState::Init(const TransitionState &parent) {
   score_ = parent.GetScore();
   parent_beam_index_ = parent.GetBeamIndex();
-}
-
-std::unique_ptr<SemparState> SemparState::Clone() const {
-  std::unique_ptr<SemparState> copy(new SemparState(this));
-  return copy;
 }
 
 const int SemparState::ParentBeamIndex() const {

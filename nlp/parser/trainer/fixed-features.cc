@@ -15,29 +15,23 @@
 #include "nlp/parser/trainer/feature.h"
 
 #include "file/file.h"
+#include "nlp/document/affix.h"
+#include "nlp/parser/trainer/workspace.h"
+#include "stream/file.h"
 #include "stream/file-input.h"
 #include "string/strcat.h"
-#include "syntaxnet/affix.h"
-#include "syntaxnet/char_properties.h"
-#include "syntaxnet/proto_io.h"
-#include "syntaxnet/workspace.h"
-#include "util/utf8/unicodetext.h"
-#include "util/utf8/unilib_utf8_utils.h"
+#include "util/unicode.h"
 
 namespace sling {
 namespace nlp {
 
-using syntaxnet::AffixTable;
-using syntaxnet::ProtoRecordReader;
-using syntaxnet::ProtoRecordWriter;
-using syntaxnet::VectorIntWorkspace;
 using syntaxnet::dragnn::ComponentSpec;
 
 static constexpr char kUnknown[] = "<UNKNOWN>";
 
 class PrecomputedFeature : public SemparFeature {
  public:
-   void RequestWorkspaces(syntaxnet::WorkspaceRegistry *registry) override {
+   void RequestWorkspaces(WorkspaceRegistry *registry) override {
     workspace_id_ = registry->Request<VectorIntWorkspace>(name());
   }
 
@@ -80,6 +74,12 @@ bool HasSpaces(const string &word) {
   return false;
 }
 
+void NormalizeDigits(string *form) {
+  for (size_t i = 0; i < form->size(); ++i) {
+    if ((*form)[i] >= '0' && (*form)[i] <= '9') (*form)[i] = '9';
+  }
+}
+
 }  // namespace
 
 // Feature that returns the id of the current word (offset via argument()).
@@ -95,7 +95,7 @@ class WordFeature : public PrecomputedFeature {
     for (int t = 0; t < document.num_tokens(); ++t) {
       const auto &token = document.token(t);
       string word = token.text();
-      syntaxnet::utils::NormalizeDigits(&word);
+      NormalizeDigits(&word);
       if (word.empty() || HasSpaces(word)) continue;
       Add(word);
     }
@@ -146,7 +146,7 @@ class WordFeature : public PrecomputedFeature {
  protected:
   int64 Get(int index, const string &word) override {
     string s = word;
-    syntaxnet::utils::NormalizeDigits(&s);
+    NormalizeDigits(&s);
     const auto &it = words_.find(s);
     return it == words_.end() ? oov_ : it->second;
   }
@@ -196,7 +196,7 @@ class PrefixFeature : public PrecomputedFeature {
     for (int t = 0; t < document.num_tokens(); ++t) {
       const auto &token = document.token(t);
       string word = token.text();
-      syntaxnet::utils::NormalizeDigits(&word);
+      NormalizeDigits(&word);
       if (!word.empty() && !HasSpaces(word)) {
         affixes_->AddAffixesForWord(word.c_str(), word.size());
       }
@@ -204,8 +204,10 @@ class PrefixFeature : public PrecomputedFeature {
   }
 
   int TrainFinish(ComponentSpec *spec) override {
-    syntaxnet::ProtoRecordWriter writer(vocabulary_file_);
-    affixes_->Write(&writer);
+    // Write affix table to file.
+    FileOutputStream output(vocabulary_file_);
+    affixes_->Write(&output);
+    CHECK(output.Close());
 
     // Add path to the vocabulary to the spec.
     AddResourceToSpec(VocabularyName(), vocabulary_file_, spec);
@@ -214,13 +216,13 @@ class PrefixFeature : public PrecomputedFeature {
   }
 
   void Init(const ComponentSpec &spec, SharedResources *resources) override {
-    string filename = GetResource(spec, VocabularyName());
-    CHECK(!filename.empty()) << spec.DebugString();
+    vocabulary_file_ = GetResource(spec, VocabularyName());
+    CHECK(!vocabulary_file_.empty()) << spec.DebugString();
 
     length_ = GetIntParam("length", 3);
     affixes_ = new AffixTable(AffixType(), length_);
-    ProtoRecordReader reader(filename);
-    affixes_->Read(&reader);
+    FileInputStream input(vocabulary_file_);
+    affixes_->Read(&input);
     oov_ = affixes_->size();
   }
 
@@ -238,14 +240,18 @@ class PrefixFeature : public PrecomputedFeature {
   }
 
   int64 Get(int index, const string &word) override {
-    UnicodeText text;
-    text.PointToUTF8(word.c_str(), word.size());
-    if (length_ > text.size()) return oov_;
+    const char *start = word.data();
+    const char *end = word.data() + word.size();
+    const char *p = start;
+    int n = 0;
+    while (n < length_ && p < end) {
+      int len = UTF8::CharLen(p);
+      if (p + len > end) return oov_;
+      p += len;
+      n++;
+    }
 
-    UnicodeText::const_iterator start, end;
-    start = end = text.begin();
-    for (int i = 0; i < length_; ++i) ++end;
-    string affix(start.utf8_data(), end.utf8_data() - start.utf8_data());
+    string affix(start, p - start);
     int affix_id = affixes_->AffixId(affix);
     return affix_id == -1 ? oov_ : affix_id;
   }
@@ -269,14 +275,17 @@ class SuffixFeature : public PrefixFeature {
   }
 
   int64 Get(int index, const string &word) override {
-    UnicodeText text;
-    text.PointToUTF8(word.c_str(), word.size());
-    if (length_ > text.size()) return oov_;
+    const char *start = word.data();
+    const char *end = word.data() + word.size();
+    const char *p = end;
+    int n = 0;
+    while (n < length_ && p > start) {
+      p = UTF8::Previous(p, start);
+      n++;
+    }
+    if (n < length_) return oov_;
 
-    UnicodeText::const_iterator start, end;
-    start = end = text.end();
-    for (int i = 0; i < length_; ++i) --start;
-    string affix(start.utf8_data(), end.utf8_data() - start.utf8_data());
+    string affix(p, end - p);
     int affix_id = affixes_->AffixId(affix);
     return affix_id == -1 ? oov_ : affix_id;
   }
@@ -294,7 +303,7 @@ class HyphenFeature : public PrecomputedFeature {
   };
 
   // Returns the final domain size of the feature.
-  int TrainFinish(syntaxnet::dragnn::ComponentSpec *spec) override {
+  int TrainFinish(ComponentSpec *spec) override {
     return CARDINALITY;
   }
 
@@ -327,7 +336,7 @@ class CapitalizationFeature : public PrecomputedFeature {
   };
 
   // Returns the final domain size of the feature.
-  int TrainFinish(syntaxnet::dragnn::ComponentSpec *spec) override {
+  int TrainFinish(ComponentSpec *spec) override {
     return CARDINALITY;
   }
 
@@ -368,15 +377,6 @@ class CapitalizationFeature : public PrecomputedFeature {
 
 REGISTER_SEMPAR_FEATURE("capitalization", CapitalizationFeature);
 
-namespace {
-
-int UTF8FirstLetterNumBytes(const char *utf8_str) {
-  if (*utf8_str == '\0') return 0;
-  return UniLib::OneCharLen(utf8_str);
-}
-
-}  // namespace
-
 // A feature for computing whether the focus token contains any punctuation
 // for ternary features.
 class PunctuationAmountFeature : public PrecomputedFeature {
@@ -390,7 +390,7 @@ class PunctuationAmountFeature : public PrecomputedFeature {
   };
 
   // Returns the final domain size of the feature.
-  int TrainFinish(syntaxnet::dragnn::ComponentSpec *spec) override {
+  int TrainFinish(ComponentSpec *spec) override {
     return CARDINALITY;
   }
 
@@ -409,16 +409,16 @@ class PunctuationAmountFeature : public PrecomputedFeature {
     bool has_punctuation = false;
     bool all_punctuation = true;
 
-    const char *start = word.c_str();
-    const char *end = word.c_str() + word.size();
-    while (start < end) {
-      int char_length = UTF8FirstLetterNumBytes(start);
-      bool char_is_punct =
-          syntaxnet::is_punctuation_or_symbol(start, char_length);
-      all_punctuation &= char_is_punct;
-      has_punctuation |= char_is_punct;
+    const char *s = word.data();
+    const char *end = word.data() + word.size();
+    while (s < end) {
+      int code = UTF8::Decode(s, end - s);
+      if (code < 0) break;
+      bool is_punct = Unicode::IsPunctuation(code);
+      all_punctuation &= is_punct;
+      has_punctuation |= is_punct;
       if (!all_punctuation && has_punctuation) return SOME_PUNCTUATION;
-      start += char_length;
+      s = UTF8::Next(s);
     }
     if (!all_punctuation) return NO_PUNCTUATION;
     return ALL_PUNCTUATION;
@@ -442,7 +442,7 @@ class QuoteFeature : public PrecomputedFeature {
   };
 
   // Returns the final domain size of the feature.
-  int TrainFinish(syntaxnet::dragnn::ComponentSpec *spec) override {
+  int TrainFinish(ComponentSpec *spec) override {
     return CARDINALITY;
   }
 
@@ -488,15 +488,17 @@ class QuoteFeature : public PrecomputedFeature {
     // Penn Treebank open and close quotes are multi-character.
     if (word == "``") return OPEN_QUOTE;
     if (word == "''") return CLOSE_QUOTE;
-    if (word.length() == 1) {
-      int char_len = UTF8FirstLetterNumBytes(word.c_str());
-      bool is_open = syntaxnet::is_open_quote(word.c_str(), char_len);
-      bool is_close = syntaxnet::is_close_quote(word.c_str(), char_len);
-      if (is_open && !is_close) return OPEN_QUOTE;
-      if (is_close && !is_open) return CLOSE_QUOTE;
-      if (is_open && is_close) return UNKNOWN_QUOTE;
+    int code = UTF8::Decode(word.data(), word.size());
+    if (code < 0) return NO_QUOTE;
+    switch (Unicode::Category(code)) {
+      case CHARCAT_INITIAL_QUOTE_PUNCTUATION: return OPEN_QUOTE;
+      case CHARCAT_FINAL_QUOTE_PUNCTUATION: return CLOSE_QUOTE;
+      case CHARCAT_OTHER_PUNCTUATION:
+        if (word == "'" || word == "\"") return UNKNOWN_QUOTE;
+        return NO_QUOTE;
+      default:
+        return NO_QUOTE;
     }
-    return NO_QUOTE;
   }
 };
 
@@ -514,7 +516,7 @@ class DigitFeature : public PrecomputedFeature {
   };
 
   // Returns the final domain size of the feature.
-  int TrainFinish(syntaxnet::dragnn::ComponentSpec *spec) override {
+  int TrainFinish(ComponentSpec *spec) override {
     return CARDINALITY;
   }
 

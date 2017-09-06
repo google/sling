@@ -18,7 +18,6 @@
 #include <memory>
 
 #include "base/logging.h"
-#include "dragnn/components/util/bulk_feature_extractor.h"
 #include "dragnn/core/component_registry.h"
 #include "dragnn/core/input_batch_cache.h"
 #include "dragnn/core/interfaces/component.h"
@@ -26,18 +25,10 @@
 #include "file/file.h"
 #include "nlp/parser/trainer/document-batch.h"
 #include "string/strcat.h"
-#include "syntaxnet/sparse.pb.h"
-#include "syntaxnet/task_context.h"
-#include "syntaxnet/task_spec.pb.h"
-#include "syntaxnet/utils.h"
 
 namespace sling {
 namespace nlp {
 
-using syntaxnet::utils::Join;
-using syntaxnet::utils::Split;
-
-using syntaxnet::SparseFeatures;
 using syntaxnet::dragnn::ComponentSpec;
 using syntaxnet::dragnn::ComponentStepTrace;
 using syntaxnet::dragnn::ComponentTrace;
@@ -69,6 +60,21 @@ ComponentStepTrace GetNewStepTrace(const ComponentSpec &spec,
 ComponentStepTrace *GetLastStepInTrace(ComponentTrace *trace) {
   CHECK_GT(trace->step_trace_size(), 0) << "Trace has no steps added yet";
   return trace->mutable_step_trace(trace->step_trace_size() - 1);
+}
+
+// Splits the given string on every occurrence of the given delimiter char.
+std::vector<string> Split(const string &text, char delim) {
+  std::vector<string> result;
+  int token_start = 0;
+  if (!text.empty()) {
+    for (size_t i = 0; i < text.size() + 1; i++) {
+      if (i == text.size() || text[i] == delim) {
+        result.push_back(string(text.data() + token_start, i - token_start));
+        token_start = i + 1;
+      }
+    }
+  }
+  return result;
 }
 
 }  // namespace
@@ -312,12 +318,6 @@ int SemparComponent::GetFixedFeatures(
   }
 
   return feature_count;
-}
-
-int SemparComponent::BulkGetFixedFeatures(
-    const syntaxnet::dragnn::BulkFeatureExtractor &extractor) {
-  LOG(FATAL) << "Not implemented";
-  return -1;
 }
 
 std::vector<LinkFeatures> SemparComponent::GetRawLinkFeatures(

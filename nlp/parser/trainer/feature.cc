@@ -15,7 +15,6 @@
 
 #include "frame/serialization.h"
 #include "string/numbers.h"
-#include "syntaxnet/utils.h"
 
 REGISTER_COMPONENT_REGISTRY("sempar feature", sling::nlp::SemparFeature);
 
@@ -23,7 +22,25 @@ namespace sling {
 namespace nlp {
 
 using syntaxnet::dragnn::ComponentSpec;
-using syntaxnet::utils::Split;
+
+namespace {
+
+// Splits the given string on every occurrence of the given delimiter char.
+std::vector<string> Split(const string &text, char delim) {
+  std::vector<string> result;
+  int token_start = 0;
+  if (!text.empty()) {
+    for (size_t i = 0; i < text.size() + 1; i++) {
+      if (i == text.size() || text[i] == delim) {
+        result.push_back(string(text.data() + token_start, i - token_start));
+        token_start = i + 1;
+      }
+    }
+  }
+  return result;
+}
+
+}  // namespace
 
 int SemparFeature::GetIntParam(const string &name, int default_value) const {
   const auto &it = params_.find(name);
@@ -202,8 +219,7 @@ void SemparFeatureExtractor::Init(const ComponentSpec &spec,
   }
 }
 
-void SemparFeatureExtractor::RequestWorkspaces(
-    syntaxnet::WorkspaceRegistry *registry) {
+void SemparFeatureExtractor::RequestWorkspaces(WorkspaceRegistry *registry) {
   for (auto &channel : channels_) {
     for (auto *feature : channel.features) {
       feature->RequestWorkspaces(registry);

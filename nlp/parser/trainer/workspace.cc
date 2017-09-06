@@ -13,11 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "syntaxnet/workspace.h"
+#include "nlp/parser/trainer/workspace.h"
 
-#include "tensorflow/core/lib/strings/strcat.h"
-
-namespace syntaxnet {
+namespace sling {
+namespace nlp {
 
 string WorkspaceRegistry::DebugString() const {
   string str;
@@ -25,8 +24,10 @@ string WorkspaceRegistry::DebugString() const {
     const string &type_name = workspace_types_.at(it.first);
     for (size_t index = 0; index < it.second.size(); ++index) {
       const string &workspace_name = it.second[index];
-      tensorflow::strings::StrAppend(&str, "\n  ", type_name, " :: ",
-                                     workspace_name);
+      str.append("\n  ");
+      str.append(type_name);
+      str.append(" :: ");
+      str.append(workspace_name);
     }
   }
   return str;
@@ -47,4 +48,6 @@ VectorVectorIntWorkspace::VectorVectorIntWorkspace(int size)
 
 string VectorVectorIntWorkspace::TypeName() { return "VectorVector"; }
 
-}  // namespace syntaxnet
+}  // namespace nlp
+}  // namespace sling
+

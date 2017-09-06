@@ -23,6 +23,7 @@
 #include "nlp/document/document-source.h"
 #include "nlp/parser/trainer/shared-resources.h"
 #include "nlp/parser/trainer/transition-state.h"
+#include "nlp/parser/trainer/workspace.h"
 
 namespace sling {
 namespace nlp {
@@ -59,7 +60,7 @@ class SemparFeature : public Component<SemparFeature> {
     std::vector<Value> output;            // output of feature extraction
 
     // Short-cut accessors.
-    syntaxnet::WorkspaceSet *workspaces() {
+    WorkspaceSet *workspaces() {
       return state->instance()->workspaces;
     }
     ParserState *parser_state() {
@@ -115,7 +116,7 @@ class SemparFeature : public Component<SemparFeature> {
                     SharedResources *resources) {}
 
   // Requests any necessary workspaces.
-  virtual void RequestWorkspaces(syntaxnet::WorkspaceRegistry *registry) {}
+  virtual void RequestWorkspaces(WorkspaceRegistry *registry) {}
 
   // Preprocesses 'state'.
   virtual void Preprocess(SemparState *state) {}
@@ -175,7 +176,7 @@ class SemparFeatureExtractor {
   // Methods for feature extraction.
   void Init(
       const syntaxnet::dragnn::ComponentSpec &spec, SharedResources *resources);
-  void RequestWorkspaces(syntaxnet::WorkspaceRegistry *registry);
+  void RequestWorkspaces(WorkspaceRegistry *registry);
   void Preprocess(SemparState *state);
   void Extract(SemparFeature::Args *args, int channel) const;
 

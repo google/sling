@@ -222,11 +222,9 @@ HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS}"
 
 mkdir -p "${OUTPUT_FOLDER}"
 
-set +x
-readonly COMMAND_FILE="${OUTPUT_FOLDER}/command"
+COMMAND_FILE="${OUTPUT_FOLDER}/command"
 echo "Writing command to ${COMMAND_FILE}"
 echo $COMMAND > ${COMMAND_FILE}
-set -x
 
 if [[ "$MAKE_SPEC" -eq 1 ]];
 then

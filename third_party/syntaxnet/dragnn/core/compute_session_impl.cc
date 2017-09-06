@@ -18,10 +18,10 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/registry.h"
 #include "dragnn/protos/data.pb.h"
 #include "dragnn/protos/spec.pb.h"
 #include "dragnn/protos/trace.pb.h"
-#include "syntaxnet/registry.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace syntaxnet {
@@ -175,11 +175,6 @@ int ComputeSessionImpl::GetInputFeatures(
   return GetReadiedComponent(component_name)
       ->GetFixedFeatures(allocate_indices, allocate_ids, allocate_weights,
                          channel_id);
-}
-
-int ComputeSessionImpl::BulkGetInputFeatures(
-    const string &component_name, const BulkFeatureExtractor &extractor) {
-  return GetReadiedComponent(component_name)->BulkGetFixedFeatures(extractor);
 }
 
 std::vector<LinkFeatures> ComputeSessionImpl::GetTranslatedLinkFeatures(

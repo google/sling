@@ -29,7 +29,7 @@
 #include "nlp/parser/trainer/shared-resources.h"
 #include "nlp/parser/trainer/transition-state.h"
 #include "nlp/parser/trainer/transition-system-type.h"
-#include "syntaxnet/registry.h"
+#include "nlp/parser/trainer/workspace.h"
 
 namespace sling {
 namespace nlp {
@@ -106,11 +106,6 @@ class SemparComponent : public syntaxnet::dragnn::Component {
                        std::function<float *(int)> allocate_weights,
                        int channel_id) const override;
 
-  // Extracts and populates all FixedFeatures for all channels, advancing this
-  // component via the oracle until it is terminal.
-  int BulkGetFixedFeatures(
-      const syntaxnet::dragnn::BulkFeatureExtractor &extractor) override;
-
   // Extracts and returns the vector of LinkFeatures for the specified
   // channel. Note: these are NOT translated.
   std::vector<syntaxnet::dragnn::LinkFeatures> GetRawLinkFeatures(
@@ -184,7 +179,7 @@ class SemparComponent : public syntaxnet::dragnn::Component {
   SemparFeatureExtractor link_feature_extractor_;
 
   // Internal workspace registry for use in feature extraction.
-  syntaxnet::WorkspaceRegistry workspace_registry_;
+  WorkspaceRegistry workspace_registry_;
 
   // The ComponentSpec used to initialize this component.
   syntaxnet::dragnn::ComponentSpec spec_;

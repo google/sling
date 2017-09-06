@@ -90,7 +90,7 @@ class GetSession : public OpKernel {
     // ComputeSessionPool.
     // Scoping for minimal mutex locking.
     {
-      mutex_lock lock(lock_);
+      tensorflow::mutex_lock lock(lock_);
       OP_REQUIRES_OK(context,
                      rmgr->LookupOrCreate<ComputeSessionPoolResource>(
                          container, "pool", &pool_resource, create_pool));

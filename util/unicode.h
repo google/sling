@@ -95,6 +95,9 @@ class Unicode {
    // Check if code point is whitespace.
    static bool IsWhitespace(int c);
 
+   // Check if code point is punctuation.
+   static bool IsPunctuation(int c);
+
    // Convert code point to lower case.
    static int ToLower(int c);
 
@@ -124,6 +127,10 @@ class UTF8 {
   // Return pointer to next UTF8 character in string.
   static const char *Next(const char *s) { return s + CharLen(s); }
   static char *Next(char *s) { return s + CharLen(s); }
+
+  // Return pointer to previous UTF8 character in string.
+  static const char *Previous(const char *s, const char *limit = nullptr);
+  static char *Previous(char *s, char *limit = nullptr);;
 
   // Check if string is structurally valid.
   static bool Valid(const char *s, int len);

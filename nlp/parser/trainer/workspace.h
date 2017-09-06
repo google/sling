@@ -1,24 +1,23 @@
-/* Copyright 2016 Google Inc. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-==============================================================================*/
+// Copyright 2017 Google Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Notes on thread-safety: All of the classes here are thread-compatible.  More
 // specifically, the registry machinery is thread-safe, as long as each thread
 // performs feature extraction on a different Sentence object.
 
-#ifndef SYNTAXNET_WORKSPACE_H_
-#define SYNTAXNET_WORKSPACE_H_
+#ifndef NLP_PARSER_TRAINER_WORKSPACE_H_
+#define NLP_PARSER_TRAINER_WORKSPACE_H_
 
 #include <string>
 #include <typeindex>
@@ -26,9 +25,11 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "syntaxnet/utils.h"
+#include "base/logging.h"
+#include "base/macros.h"
 
-namespace syntaxnet {
+namespace sling {
+namespace nlp {
 
 // A base class for shared workspaces. Derived classes implement a static member
 // function TypeName() which returns a human readable string name for the class.
@@ -42,7 +43,7 @@ class Workspace {
   Workspace() {}
 
  private:
-  TF_DISALLOW_COPY_AND_ASSIGN(Workspace);
+  DISALLOW_COPY_AND_ASSIGN(Workspace);
 };
 
 // A registry that keeps track of workspaces.
@@ -80,7 +81,7 @@ class WorkspaceRegistry {
   // Workspace names, indexed as workspace_names_[typeid][workspace].
   std::unordered_map<std::type_index, std::vector<string> > workspace_names_;
 
-  TF_DISALLOW_COPY_AND_ASSIGN(WorkspaceRegistry);
+  DISALLOW_COPY_AND_ASSIGN(WorkspaceRegistry);
 };
 
 // A typed collected of workspaces. The workspaces are indexed according to an
@@ -137,7 +138,7 @@ class WorkspaceSet {
 
  private:
   // The set of workspaces, indexed as workspaces_[typeid][index].
-  std::unordered_map<std::type_index, std::vector<Workspace *> > workspaces_;
+  std::unordered_map<std::type_index, std::vector<Workspace *>> workspaces_;
 };
 
 // A workspace that wraps around a single int.
@@ -209,9 +210,10 @@ class VectorVectorIntWorkspace : public Workspace {
 
  private:
   // The enclosed vector of vector of elements.
-  std::vector<std::vector<int> > elements_;
+  std::vector<std::vector<int>> elements_;
 };
 
-}  // namespace syntaxnet
+}  // namespace nlp
+}  // namespace sling
 
-#endif  // SYNTAXNET_WORKSPACE_H_
+#endif  // NLP_PARSER_TRAINER_WORKSPACE_H_

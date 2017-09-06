@@ -54,9 +54,19 @@ cc_binary(
 )
 
 cc_library(
+  name = "workspace",
+  hdrs = ["workspace.h"],
+  srcs = ["workspace.cc"],
+  deps = [
+    "//base",
+  ],
+)
+
+cc_library(
   name = "sempar-instance",
   hdrs = ["sempar-instance.h"],
   deps = [
+    ":workspace",
     "//frame:store",
     "//nlp/document:document",
     "//third_party/syntaxnet",
@@ -70,6 +80,7 @@ cc_library(
   srcs = ["document-batch.cc"],
   deps = [
     ":sempar-instance",
+    ":workspace",
     "//frame:object",
     "//frame:serialization",
     "//frame:store",
@@ -132,10 +143,14 @@ cc_library(
   deps = [
     ":feature",
     ":shared-resources",
+    ":workspace",
     "//file",
+    "//nlp/document:affix",
+    "//stream:file",
     "//stream:file-input",
     "//string:strcat",
     "//third_party/syntaxnet",
+    "//util:unicode",
   ],
   alwayslink = 1,
 )

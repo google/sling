@@ -17,7 +17,7 @@
 
 #include "frame/store.h"
 #include "nlp/document/document.h"
-#include "syntaxnet/workspace.h"
+#include "nlp/parser/trainer/workspace.h"
 
 namespace sling {
 namespace nlp {
@@ -37,7 +37,7 @@ struct SemparInstance {
   // The document itself, its local store, and workspace set.
   Document *document = nullptr;
   Store *store = nullptr;
-  syntaxnet::WorkspaceSet *workspaces = nullptr;
+  WorkspaceSet *workspaces = nullptr;
 };
 
 }  // namespace nlp

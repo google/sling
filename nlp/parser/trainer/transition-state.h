@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "dragnn/core/interfaces/cloneable_transition_state.h"
 #include "dragnn/core/interfaces/transition_state.h"
 #include "dragnn/protos/trace.pb.h"
 #include "frame/store.h"
@@ -40,22 +39,17 @@ namespace nlp {
 // - The normal mode using the full set of actions using a ParserState.
 // - A shift-only mode where the only action allowed is shift. In this
 //   mode, it further supports left-to-right and right-to-left sub-modes.
-class SemparState
-    : public syntaxnet::dragnn::CloneableTransitionState<SemparState> {
+class SemparState : public syntaxnet::dragnn::TransitionState {
  public:
   SemparState(SemparInstance *instance,
               const SharedResources &resources,
               TransitionSystemType type,
               bool shift_only_left_to_right);
 
-  SemparState(const SemparState *other);
   ~SemparState();
 
   // Initializes this TransitionState from a previous TransitionState.
   void Init(const TransitionState &parent) override;
-
-  // Produces a new state with the same backing data as this state.
-  std::unique_ptr<SemparState> Clone() const override;
 
   // Return the beam index of the state passed into the initializer of this
   // TransitionState.

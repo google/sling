@@ -1,0 +1,18 @@
+// Protocol buffer for serializing embeddings.
+
+syntax = "proto2";
+
+package syntaxnet.dragnn;
+
+// A light-weight proto to store vectors in binary format.
+message TokenEmbedding {
+  required bytes token = 1;  // can be word or phrase, or URL, etc.
+
+  // If available, raw count of this token in the training corpus.
+  optional int64 count = 3;
+
+  message Vector {
+    repeated float values = 1 [packed = true];
+  }
+  optional Vector vector = 2;
+};

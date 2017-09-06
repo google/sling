@@ -18,7 +18,6 @@
 
 #include <memory>
 
-#include "dragnn/components/util/bulk_feature_extractor.h"
 #include "dragnn/core/compute_session.h"
 #include "dragnn/core/index_translator.h"
 #include "dragnn/core/input_batch_cache.h"
@@ -64,9 +63,6 @@ class ComputeSessionImpl : public ComputeSession {
                        std::function<int64 *(int)> allocate_ids,
                        std::function<float *(int)> allocate_weights,
                        int channel_id) const override;
-
-  int BulkGetInputFeatures(const string &component_name,
-                           const BulkFeatureExtractor &extractor) override;
 
   std::vector<LinkFeatures> GetTranslatedLinkFeatures(
       const string &component_name, int channel_id) override;

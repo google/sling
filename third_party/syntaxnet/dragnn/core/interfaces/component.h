@@ -18,17 +18,16 @@
 
 #include <vector>
 
-#include "dragnn/components/util/bulk_feature_extractor.h"
+#include "base/registry.h"
 #include "dragnn/core/input_batch_cache.h"
 #include "dragnn/core/interfaces/transition_state.h"
 #include "dragnn/protos/spec.pb.h"
 #include "dragnn/protos/trace.pb.h"
-#include "syntaxnet/registry.h"
 
 namespace syntaxnet {
 namespace dragnn {
 
-class Component : public RegisterableClass<Component> {
+class Component : public sling::Component<Component> {
  public:
   virtual ~Component() {}
 
@@ -104,11 +103,6 @@ class Component : public RegisterableClass<Component> {
       std::function<int64 *(int num_elements)> allocate_ids,
       std::function<float *(int num_elements)> allocate_weights,
       int channel_id) const = 0;
-
-  // Extracts and populates all FixedFeatures for all channels, advancing this
-  // component via the oracle until it is terminal. This call uses a
-  // BulkFeatureExtractor object to contain the functors and other information.
-  virtual int BulkGetFixedFeatures(const BulkFeatureExtractor &extractor) = 0;
 
   // Extracts and returns the vector of LinkFeatures for the specified
   // channel. Note: these are NOT translated.

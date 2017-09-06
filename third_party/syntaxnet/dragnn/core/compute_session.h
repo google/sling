@@ -18,7 +18,6 @@
 
 #include <string>
 
-#include "dragnn/components/util/bulk_feature_extractor.h"
 #include "dragnn/core/index_translator.h"
 #include "dragnn/core/interfaces/component.h"
 #include "dragnn/protos/spec.pb.h"
@@ -77,12 +76,6 @@ class ComputeSession {
       std::function<int64 *(int num_items)> allocate_ids,
       std::function<float *(int num_items)> allocate_weights,
       int channel_id) const = 0;
-
-  // Get the input features for the given component and channel, advancing via
-  // the oracle until the state is final. This passes through to the relevant
-  // Component's BulkGetFixedFeatures() call.
-  virtual int BulkGetInputFeatures(const string &component_name,
-                                   const BulkFeatureExtractor &extractor) = 0;
 
   // Get the input features for the given component and channel. This function
   // can return empty LinkFeatures protos, which represent unused padding slots

@@ -112,6 +112,21 @@ bool Unicode::IsWhitespace(int c) {
   return (unicode_cat_tab[c] & CHARBIT_WHITESPACE) != 0;
 }
 
+bool Unicode::IsPunctuation(int c) {
+  static const int punctuation_mask =
+    (1 << CHARCAT_DASH_PUNCTUATION) |
+    (1 << CHARCAT_START_PUNCTUATION) |
+    (1 << CHARCAT_END_PUNCTUATION) |
+    (1 << CHARCAT_CONNECTOR_PUNCTUATION) |
+    (1 << CHARCAT_OTHER_PUNCTUATION) |
+    (1 << CHARCAT_INITIAL_QUOTE_PUNCTUATION) |
+    (1 << CHARCAT_FINAL_QUOTE_PUNCTUATION);
+
+  if (c & unicode_tab_mask) return false;
+  int category = unicode_cat_tab[c] & CHARCAT_MASK;
+  return ((1 << category) & punctuation_mask) != 0;
+}
+
 int Unicode::ToLower(int c) {
   if (c & unicode_tab_mask) return c;
   return unicode_lower_tab[c];
@@ -134,6 +149,20 @@ int UTF8::Length(const char *s, int len) {
     if ((*s++ & 0xc0) != 0x80) n++;
   }
   return n;
+}
+
+const char *UTF8::Previous(const char *s, const char *limit) {
+  while (s > limit) {
+    if ((*--s & 0xc0) != 0x80) break;
+  }
+  return s;
+}
+
+char *UTF8::Previous(char *s, char *limit) {
+  while (s > limit) {
+    if ((*--s & 0xc0) != 0x80) break;
+  }
+  return s;
 }
 
 bool UTF8::Valid(const char *s, int len) {

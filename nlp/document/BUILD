@@ -74,3 +74,16 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "affix",
+  srcs = ["affix.cc"],
+  hdrs = ["affix.h"],
+  deps = [
+    "//base",
+    "//stream:input",
+    "//stream:output",
+    "//util:fingerprint",
+    "//util:unicode",
+  ],
+)
+
