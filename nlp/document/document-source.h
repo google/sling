@@ -39,6 +39,9 @@ class DocumentSource {
   // 'store' should outlive the returned document, which is owned by the caller.
   virtual Document *Next(Store *store);
 
+  // Same as above, except also returns the name of the document.
+  virtual Document *Next(Store *store, string *name);
+
   // Rewinds to the start of the corpus.
   virtual void Rewind() = 0;
 

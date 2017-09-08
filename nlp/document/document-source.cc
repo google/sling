@@ -87,6 +87,14 @@ Document *DocumentSource::Next(Store *store) {
   return new Document(decoder.Decode().AsFrame());
 }
 
+Document *DocumentSource::Next(Store *store, string *name) {
+  string contents;
+  if (!NextSerialized(name, &contents)) return nullptr;
+
+  StringDecoder decoder(store, contents);
+  return new Document(decoder.Decode().AsFrame());
+}
+
 namespace {
 
 bool HasSuffix(const string &s, const string &suffix) {

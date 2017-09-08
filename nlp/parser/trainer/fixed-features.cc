@@ -242,14 +242,20 @@ class PrefixFeature : public PrecomputedFeature {
     int n = 0;
     while (n < length_ && p < end) {
       int len = UTF8::CharLen(p);
-      if (p + len > end) return oov_;
+      if (p + len > end) return oov_;  // invalid utf8
       p += len;
       n++;
     }
 
-    string affix(start, p - start);
-    int affix_id = affixes_->AffixId(affix);
-    return affix_id == -1 ? oov_ : affix_id;
+    while (n > 0) {
+      string affix(start, p - start);
+      int affix_id = affixes_->AffixId(affix);
+      if (affix_id != -1) return affix_id;
+      p = UTF8::Previous(p, start);
+      n--;
+    }
+
+    return oov_;
   }
 
   AffixTable *affixes_ = nullptr;
@@ -279,11 +285,16 @@ class SuffixFeature : public PrefixFeature {
       p = UTF8::Previous(p, start);
       n++;
     }
-    if (n < length_) return oov_;
 
-    string affix(p, end - p);
-    int affix_id = affixes_->AffixId(affix);
-    return affix_id == -1 ? oov_ : affix_id;
+    while (n > 0) {
+      string affix(p, end - p);
+      int affix_id = affixes_->AffixId(affix);
+      if (affix_id != -1) return affix_id;
+      p = UTF8::Next(p);
+      n--;
+    }
+
+    return oov_;
   }
 };
 
@@ -543,17 +554,55 @@ class DigitFeature : public PrecomputedFeature {
 
 REGISTER_SEMPAR_FEATURE("digit", DigitFeature);
 
-// Returns the roles of the top few frames as: (i, r), (r, j), (i, r, j), (i, j)
-// where i, j are attention indices and r is a role that connects those frames.
-class FrameRolesFeature : public SemparFeature {
+// Short-hand for a list of edges.
+typedef std::vector<std::tuple<int, int, int>> Edges;
+
+namespace {
+
+// Returns a list of (i, r, j) links between all frames i and j, where
+// i and j are attention indices, and r is a role index.
+// i and j are values in 'frame_to_attention', and j can be -1.
+// 'roles' maps role handles to indices.
+void GetEdges(const ParserState *s,
+              const std::unordered_map<int, int> &frame_to_attention,
+              const HandleMap<int> &roles,
+              Edges *edges) {
+  for (const auto &kv : frame_to_attention) {
+    // Attention index of the source frame.
+    int source = kv.second;
+
+    // Go over each slot of the source frame.
+    Handle handle = s->frame(kv.first);
+    const sling::FrameDatum *frame = s->store()->GetFrame(handle);
+    for (const Slot *slot = frame->begin(); slot < frame->end(); ++slot) {
+      int target = -1;
+      if (slot->value.IsIndex()) {
+        const auto &it = frame_to_attention.find(slot->value.AsIndex());
+        if (it != frame_to_attention.end()) target = it->second;
+      }
+
+      const auto &it2 = roles.find(slot->name);
+      if (it2 != roles.end()) {
+        edges->push_back(std::make_tuple(source, it2->second, target));
+      }
+    }
+  }
+}
+
+}  // namespace
+
+// Abstract feature that uses existing links between frames.
+class RoleFeature : public SemparFeature {
  public:
   void TrainInit(SharedResources *resources,
                  const ComponentSpec &spec,
                  const string &output_folder) override {
+    // Collect all roles from role-parameterized actions.
     Store *global = resources->global;
     for (int i = 0; i < resources->table.NumActions(); ++i) {
       const auto &action = resources->table.Action(i);
       if (action.type == ParserAction::CONNECT ||
+          action.type == ParserAction::ASSIGN ||
           action.type == ParserAction::EMBED ||
           action.type == ParserAction::ELABORATE) {
         if (roles_.find(action.role) == roles_.end()) {
@@ -564,29 +613,22 @@ class FrameRolesFeature : public SemparFeature {
       }
     }
 
-    // Compute the offsets for the four types of features. These are laid out
-    // in this order: all (i, r) features, all (r, j) features, all (i, j)
-    // features, all (i, r, j) features.
-    // We restrict i, j to be < frame-limit, a feature parameter.
+    // We restrict to the first 'frame-limit frames in the attention buffer.
     frame_limit_ = GetIntParam("frame-limit", 5);
-    int combinations = frame_limit_ * roles_.size();
-    outlink_offset_ = 0;
-    inlink_offset_ = outlink_offset_ + combinations;
-    unlabeled_link_offset_ = inlink_offset_ + combinations;
-    labeled_link_offset_ = unlabeled_link_offset_ + frame_limit_ * frame_limit_;
-    domain_size_ = labeled_link_offset_ + frame_limit_ * combinations + 1;
   }
 
+  // Returns the domain size of the feature.
   int TrainFinish(ComponentSpec *spec) override {
-    return domain_size_;
+    return DomainSize();
   }
 
+  // Initializes the feature at runtime.
   void Init(const ComponentSpec &spec, SharedResources *resources) override {
     ComponentSpec unused_spec;
     TrainInit(resources, unused_spec, "" /* output_folder; unused */);
   }
 
-  // Returns the four types of features.
+  // Extracts implementation-specific feature ids from the edges.
   void Extract(SemparFeature::Args *args) override {
     CHECK(!args->state->shift_only());
     const ParserState *s = args->parser_state();
@@ -600,37 +642,145 @@ class FrameRolesFeature : public SemparFeature {
         break;
       }
     }
+    Edges edges;
+    GetEdges(s, frame_to_attention, roles_, &edges);
+    Extract(edges, args);
+  }
 
-    // Output features.
-    for (const auto &kv : frame_to_attention) {
-      // Attention index of the source frame.
-      int source = kv.second;
-      int outlink_base = outlink_offset_ + source * roles_.size();
+ protected:
+  // Returns the domain size of the feature.
+  virtual int DomainSize() = 0;
 
-      // Go over each slot of the source frame.
-      Handle handle = s->frame(kv.first);
-      const sling::FrameDatum *frame = s->store()->GetFrame(handle);
-      for (const Slot *slot = frame->begin(); slot < frame->end(); ++slot) {
-        const auto &it = roles_.find(slot->name);
-        if (it == roles_.end()) continue;
+  // Returns feature ids from the edges.
+  virtual void Extract(const Edges &edges, SemparFeature::Args *args) = 0;
 
-        int role = it->second;
-        args->Output(outlink_base + role);
-        if (slot->value.IsIndex()) {
-          const auto &it2 = frame_to_attention.find(slot->value.AsIndex());
-          if (it2 != frame_to_attention.end()) {
-            // Attention index of the target frame.
-            int target = it2->second;
-            args->Output(inlink_offset_ + target * roles_.size() + role);
-            args->Output(
-                unlabeled_link_offset_ + source * frame_limit_ + target);
-            args->Output(labeled_link_offset_ +
-                         source * frame_limit_ * roles_.size() +
-                         target * roles_.size() + role);
-          }
-        }
+  // Number of top-attention frames to restrict to.
+  int frame_limit_ = 0;
+
+  // Set of roles considered.
+  HandleMap<int> roles_;
+  std::vector<string> role_ids_;
+};
+
+// Outputs (source frame id, role) features.
+class OutRoleFeature : public RoleFeature {
+ public:
+  string FeatureToString(int64 id) const override {
+    int r = roles_.size();
+    return StrCat("(S=", id / r,  " -> R=", role_ids_[id % r], ")");
+  }
+
+ protected:
+  int DomainSize() override {
+    return frame_limit_ * roles_.size();
+  }
+
+  void Extract(const Edges &edges, SemparFeature::Args *args) override {
+    for (const auto &e : edges) {
+      args->Output(std::get<0>(e) * roles_.size() + std::get<1>(e));
+    }
+  }
+};
+
+REGISTER_SEMPAR_FEATURE("out-roles", OutRoleFeature);
+
+// Outputs (role, target frame id) features if target is valid.
+class InRoleFeature : public RoleFeature {
+ public:
+  string FeatureToString(int64 id) const override {
+    int r = roles_.size();
+    return StrCat("(T=", id / r,  " <- R=", role_ids_[id % r], ")");
+  }
+
+ protected:
+  int DomainSize() override {
+    return frame_limit_ * roles_.size();
+  }
+
+  void Extract(const Edges &edges, SemparFeature::Args *args) override {
+    for (const auto &e : edges) {
+      int target = std::get<2>(e);
+      if (target != -1) {
+        args->Output(target * roles_.size() + std::get<1>(e));
       }
     }
+  }
+};
+
+REGISTER_SEMPAR_FEATURE("in-roles", InRoleFeature);
+
+// Outputs (source frame, target frame) features if target is valid.
+class UnlabeledRoleFeature : public RoleFeature {
+ public:
+  string FeatureToString(int64 id) const override {
+    return StrCat("(S=", id % frame_limit_,
+                  " -> T=", role_ids_[id / frame_limit_], ")");
+  }
+
+ protected:
+  int DomainSize() override {
+    return frame_limit_ * frame_limit_;
+  }
+
+  void Extract(const Edges &edges, SemparFeature::Args *args) override {
+    for (const auto &e : edges) {
+      int target = std::get<2>(e);
+      if (target != -1) {
+        args->Output(target * frame_limit_ + std::get<0>(e));
+      }
+    }
+  }
+};
+
+REGISTER_SEMPAR_FEATURE("unlabeled-roles", UnlabeledRoleFeature);
+
+// Outputs (source frame, role, target frame) features if target is valid.
+class LabeledRoleFeature : public RoleFeature {
+ public:
+  string FeatureToString(int64 id) const override {
+    int r = roles_.size();
+    int fr = frame_limit_ * roles_.size();
+    return StrCat("(S=", id / fr, " -> R=", role_ids_[(id % fr) % r],
+                  " -> T=", (id % fr) / r, ")");
+  }
+
+ protected:
+  int DomainSize() override {
+    return frame_limit_ * frame_limit_ * roles_.size();
+  }
+
+  void Extract(const Edges &edges, SemparFeature::Args *args) override {
+    for (const auto &e : edges) {
+      int target = std::get<2>(e);
+      if (target != -1) {
+        args->Output(std::get<0>(e) * frame_limit_ * roles_.size() +
+                     target * roles_.size() + std::get<1>(e));
+      }
+    }
+  }
+};
+
+REGISTER_SEMPAR_FEATURE("labeled-roles", LabeledRoleFeature);
+
+// Amalgamation of all four RoleFeatures above. The embeddings for the four
+// different types of features will be summed up, so having this feature is
+// 'lossy' in theory, compared to four separate role features from above.
+class FrameRolesFeature : public RoleFeature {
+ public:
+  void TrainInit(SharedResources *resources,
+                 const ComponentSpec &spec,
+                 const string &output_folder) override {
+    RoleFeature::TrainInit(resources, spec, output_folder);
+
+    // Compute the offsets for the four types of features. These are laid out
+    // in this order: all (i, r) features, all (r, j) features, all (i, j)
+    // features, all (i, r, j) features.
+    // We restrict i, j to be < frame-limit, a feature parameter.
+    int combinations = frame_limit_ * roles_.size();
+    outlink_offset_ = 0;
+    inlink_offset_ = outlink_offset_ + combinations;
+    unlabeled_link_offset_ = inlink_offset_ + combinations;
+    labeled_link_offset_ = unlabeled_link_offset_ + frame_limit_ * frame_limit_;
   }
 
   string FeatureToString(int64 id) const override {
@@ -655,13 +805,32 @@ class FrameRolesFeature : public SemparFeature {
     }
   }
 
+
+ protected:
+  int DomainSize() override {
+    return labeled_link_offset_ + frame_limit_ * frame_limit_ * roles_.size();
+  }
+
+  // Returns the four types of features.
+  void Extract(const Edges &edges, SemparFeature::Args *args) override {
+    int num_roles = roles_.size();
+    for (const auto &e : edges) {
+      int source = std::get<0>(e);
+      int role = std::get<1>(e);
+      int target = std::get<2>(e);
+
+      args->Output(outlink_offset_ + source * num_roles + role);
+      if (target != -1) {
+        args->Output(inlink_offset_ + target * num_roles + role);
+        args->Output(unlabeled_link_offset_ + source * frame_limit_ + target);
+        args->Output(labeled_link_offset_ +
+                     source * frame_limit_ * num_roles +
+                     target * num_roles + role);
+      }
+    }
+  }
+
  private:
-  // Domain size of the feature.
-  int domain_size_;
-
-  // Maximum attention index considered (exclusive).
-  int frame_limit_;
-
   // Starting offset for (source, role) features.
   int outlink_offset_;
 
@@ -673,10 +842,6 @@ class FrameRolesFeature : public SemparFeature {
 
   // Starting offset for (source, role, target) features.
   int labeled_link_offset_;
-
-  // Set of roles considered.
-  HandleMap<int> roles_;
-  std::vector<string> role_ids_;
 };
 
 REGISTER_SEMPAR_FEATURE("roles", FrameRolesFeature);

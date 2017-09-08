@@ -22,7 +22,6 @@ from tensorflow.python.platform import tf_logging as logging
 
 from dragnn.protos import spec_pb2
 from dragnn.python import component
-from dragnn.python import composite_optimizer
 from dragnn.python import dragnn_ops
 from dragnn.python import check
 
@@ -43,13 +42,7 @@ def _create_learning_rate(hyperparams, step_var):
   Returns:
     a scalar `Tensor`, the learning rate based on current step and hyperparams.
   """
-  if hyperparams.learning_method != 'composite':
-    base_rate = hyperparams.learning_rate
-  else:
-    spec = hyperparams.composite_optimizer_spec
-    switch = tf.less(step_var, spec.switch_after_steps)
-    base_rate = tf.cond(switch, lambda: tf.constant(spec.method1.learning_rate),
-                        lambda: tf.constant(spec.method2.learning_rate))
+  base_rate = hyperparams.learning_rate
   return tf.train.exponential_decay(
       base_rate,
       step_var,
@@ -90,17 +83,8 @@ def _create_optimizer(hyperparams, learning_rate_var, step_var=None):
   elif hyperparams.learning_method == 'momentum':
     return tf.train.MomentumOptimizer(
         learning_rate_var, hyperparams.momentum, use_locking=True)
-  elif hyperparams.learning_method == 'composite':
-    spec = hyperparams.composite_optimizer_spec
-    optimizer1 = _create_optimizer(spec.method1, learning_rate_var, step_var)
-    optimizer2 = _create_optimizer(spec.method2, learning_rate_var, step_var)
-    if step_var is None:
-      logging.fatal('step_var is required for CompositeOptimizer')
-    switch = tf.less(step_var, spec.switch_after_steps)
-    return composite_optimizer.CompositeOptimizer(
-        optimizer1, optimizer2, switch, use_locking=True)
   else:
-    logging.fatal('Unknown learning method (optimizer)')
+    logging.fatal('Unknown learning method: %s', hyperparams.learning_method)
 
 
 class MasterBuilder(object):
@@ -346,16 +330,12 @@ class MasterBuilder(object):
       with tf.control_dependencies([handle, cost]):
         args = (master_state, network_states)
         if unroll_using_oracle[component_index]:
-
-          handle, component_cost, component_correct, component_total = (tf.cond(
-              comp.training_beam_size > 1,
-              lambda: comp.build_structured_training(*args),
-              lambda: comp.build_greedy_training(*args)))
-
+          handle, component_cost, correct, total = comp.build_training(
+              *args)
         else:
-          handle = comp.build_greedy_inference(*args, during_training=True)
+          handle = comp.build_inference(*args, during_training=True)
           component_cost = tf.constant(0.)
-          component_correct, component_total = tf.constant(0), tf.constant(0)
+          correct, total = tf.constant(0), tf.constant(0)
 
         weighted_component_cost = tf.multiply(
             component_cost,
@@ -363,12 +343,11 @@ class MasterBuilder(object):
             name='weighted_component_cost')
 
         cost += weighted_component_cost
-        effective_batch += component_total
-        metrics_list += [[component_total], [component_correct]]
+        effective_batch += total
+        metrics_list += [[total], [correct]]
 
         if advance_counters:
-          with tf.control_dependencies(
-              [comp.advance_counters(component_total)]):
+          with tf.control_dependencies([comp.advance_counters(total)]):
             cost = tf.identity(cost)
 
         # Keep track of which parameters will be trained, and any moving
@@ -476,7 +455,7 @@ class MasterBuilder(object):
                                            dragnn_ops.batch_size(
                                                handle, component=comp.name))
       with tf.control_dependencies([handle]):
-        handle = comp.build_greedy_inference(master_state, network_states)
+        handle = comp.build_inference(master_state, network_states)
       handle = dragnn_ops.write_annotations(handle, component=comp.name)
 
     self.read_from_avg = False

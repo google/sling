@@ -73,6 +73,9 @@ DEFINE_string(word_embeddings, "",
 DEFINE_bool(oov_lstm_features, true,
             "Whether fallback features (shape, suffix etc) should "
             "be used in the LSTMs");
+DEFINE_bool(single_role_feature, false,
+            "Whether to use a single 'roles' feature or multiple "
+            "role separate features imitating various aspects of it.");
 
 // Various options for generating the action table, lexicons, spec.
 constexpr int kActionTableCoveragePercentile = 99;
@@ -323,7 +326,17 @@ void OutputMasterSpec(Artifacts *artifacts) {
       "ff", "SemparComponent", "FeedForwardNetwork", "sempar", artifacts);
   SetParam(ff->mutable_network_unit(), "hidden_layer_sizes", "128");
   ff->set_num_actions(artifacts->table().NumActions());
-  AddFixedFeature(ff, "roles", "roles(frame-limit=5)", 16);
+
+  if (FLAGS_single_role_feature) {
+    AddFixedFeature(ff, "roles", "roles(frame-limit=5)", 16);
+  } else {
+    AddFixedFeature(ff, "in-roles", "in-roles(frame-limit=5)", 16);
+    AddFixedFeature(ff, "out-roles", "out-roles(frame-limit=5)", 16);
+    AddFixedFeature(ff, "labeled-roles", "labeled-roles(frame-limit=5)", 16);
+    AddFixedFeature(
+        ff, "unlabeled-roles", "unlabeled-roles(frame-limit=5)", 16);
+  }
+
   AddLinkedFeature(
       ff, "frame-creation-steps", "frame-creation(XX)", 5, 64, "ff");
   AddLinkedFeature(
