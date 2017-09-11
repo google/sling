@@ -33,7 +33,7 @@ int TableWriter::Table::GetColOrDie(const string &col) {
   return it->second;
 }
 
-TableWriter::Cell* TableWriter::Table::GetOrMakeCell(int row, int col) {
+TableWriter::Cell *TableWriter::Table::GetOrMakeCell(int row, int col) {
   CHECK_GE(row, 0);
   CHECK_GE(col, 0);
   CHECK_LT(col, columns.size());

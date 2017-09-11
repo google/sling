@@ -72,14 +72,13 @@ cc_library(
   ],
 )
 
-cc_binary(
-  name = "zip-iterator-test",
-  srcs = ["zip-iterator-test.cc"],
+cc_library(
+  name = "vocabulary",
+  srcs = ["vocabulary.cc"],
+  hdrs = ["vocabulary.h"],
   deps = [
-    ":zip-iterator",
+    ":fingerprint",
     "//base",
-    "//file:file",
-    "//file:posix",
-    "//stream:zipfile",
   ],
 )
+

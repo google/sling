@@ -25,9 +25,9 @@
 #include "file/file.h"
 #include "frame/store.h"
 #include "myelin/compute.h"
-#include "myelin/dictionary.h"
 #include "myelin/flow.h"
 #include "nlp/document/document.h"
+#include "nlp/document/lexicon.h"
 #include "nlp/parser/action-table.h"
 #include "nlp/parser/parser-state.h"
 
@@ -46,62 +46,74 @@ class Parser {
   void Parse(Document *document) const;
 
  private:
+  // LSTM cell.
+  struct LSTM {
+    // Cell.
+    myelin::Cell *cell;                      // LSTM cell
+    bool reverse;                            // LSTM direction
+
+    // Connectors.
+    myelin::Connector *control;              // LSTM control layer
+    myelin::Connector *hidden;               // LSTM hidden layer
+
+    // Features.
+    myelin::Tensor *feature_words;           // word feature
+    myelin::Tensor *feature_prefix;          // prefix feature
+    myelin::Tensor *feature_suffix;          // suffix feature
+    myelin::Tensor *feature_shape;           // shape feature
+
+    // Links.
+    myelin::Tensor *c_in;                    // link to LSTM control input
+    myelin::Tensor *c_out;                   // link to LSTM control output
+    myelin::Tensor *h_in;                    // link to LSTM hidden input
+    myelin::Tensor *h_out;                   // link to LSTM hidden output
+  };
+
+  // Feed-forward cell.
+  struct FF {
+    myelin::Cell *cell;                      // feed-forward cell
+    myelin::Connector *step;                 // FF step hidden activations
+
+    // Features.
+    myelin::Tensor *feature_lr_focus;        // LR LSTM input focus feature
+    myelin::Tensor *feature_rl_focus;        // RL LSTM input focus feature
+
+    myelin::Tensor *feature_lr_attention ;   // LR LSTM frame attention feature
+    myelin::Tensor *feature_rl_attention;    // LR LSTM frame attention feature
+
+    myelin::Tensor *feature_frame_create;    // FF frame create feature
+    myelin::Tensor *feature_frame_focus;     // FF frame focus feature
+
+    myelin::Tensor *feature_history;         // history feature
+    myelin::Tensor *feature_roles;           // roles feature
+
+    // Links.
+    myelin::Tensor *lr_lstm;                 // link to LR LSTM hidden layer
+    myelin::Tensor *rl_lstm;                 // link to RL LSTM hidden layer
+    myelin::Tensor *steps;                   // link to FF step hidden layer
+    myelin::Tensor *hidden;                  // link to FF hidden layer output
+    myelin::Tensor *output;                  // link to FF logit layer output
+  };
+
+  // Initialize LSTM cell.
+  void InitLSTM(const string &name, LSTM *lstm, bool reverse);
+
+  // Initialize FF cell.
+  void InitFF(const string &name, FF *ff);
+
   // Lookup cells, connectors, and parameters.
   myelin::Cell *GetCell(const string &name);
   myelin::Connector *GetConnector(const string &name);
-  myelin::Tensor *GetParam(const string &name);
-
-  // Look up word in vocabulary. Return OOV for unknown words.
-  int LookupWord(const string &word) const;
+  myelin::Tensor *GetParam(const string &name, bool optional = false);
 
   // Parser network.
   myelin::Library library_;
   myelin::Network network_;
 
-  // Parser cells.
-  myelin::Cell *lr_;                         // left-to-right LSTM cell
-  myelin::Cell *rl_;                         // right-to-left LSTM cell
-  myelin::Cell *ff_;                         // feed-forward cell
-
-  // Connectors.
-  myelin::Connector *lr_control_;            // left-to-right LSTM control layer
-  myelin::Connector *lr_hidden_;             // left-to-right LSTM hidden layer
-  myelin::Connector *rl_control_;            // right-to-left LSTM control layer
-  myelin::Connector *rl_hidden_;             // right-to-left LSTM hidden layer
-  myelin::Connector *ff_step_;               // FF step hidden activations
-
-  // Left-to-right LSTM network parameters and links.
-  myelin::Tensor *lr_feature_words_;         // word feature
-  myelin::Tensor *lr_c_in_;                  // link to LSTM control input
-  myelin::Tensor *lr_c_out_;                 // link to LSTM control output
-  myelin::Tensor *lr_h_in_;                  // link to LSTM hidden input
-  myelin::Tensor *lr_h_out_;                 // link to LSTM hidden output
-
-  // Right-to-left LSTM network parameters and links.
-  myelin::Tensor *rl_feature_words_;         // word feature
-  myelin::Tensor *rl_c_in_;                  // link to LSTM control input
-  myelin::Tensor *rl_c_out_;                 // link to LSTM control output
-  myelin::Tensor *rl_h_in_;                  // link to LSTM hidden input
-  myelin::Tensor *rl_h_out_;                 // link to LSTM hidden output
-
-  // Feed-forward network parameters and links.
-  myelin::Tensor *ff_feature_lr_focus_;      // LR LSTM input focus feature
-  myelin::Tensor *ff_feature_rl_focus_;      // RL LSTM input focus feature
-
-  myelin::Tensor *ff_feature_lr_attention_;  // LR LSTM frame attention feature
-  myelin::Tensor *ff_feature_rl_attention_;  // LR LSTM frame attention feature
-
-  myelin::Tensor *ff_feature_frame_create_;  // FF frame create feature
-  myelin::Tensor *ff_feature_frame_focus_;   // FF frame focus feature
-
-  myelin::Tensor *ff_feature_history_;       // history feature
-  myelin::Tensor *ff_feature_roles_;         // roles feature
-
-  myelin::Tensor *ff_lr_lstm_;               // link to LR LSTM hidden layer
-  myelin::Tensor *ff_rl_lstm_;               // link to RL LSTM hidden layer
-  myelin::Tensor *ff_steps_;                 // link to FF step hidden layer
-  myelin::Tensor *ff_hidden_;                // link to FF hidden layer output
-  myelin::Tensor *ff_output_;                // link to FF logit layer output
+  // Cells.
+  LSTM lr_;                                  // left-to-right LSTM cell
+  LSTM rl_;                                  // right-to-left LSTM cell
+  FF ff_;                                    // feed-forward cell
 
   // Number of attention features.
   int attention_depth_;
@@ -116,9 +128,7 @@ class Parser {
   int num_actions_;
 
   // Lexicon.
-  myelin::Dictionary lexicon_;
-  bool normalize_digits_ = false;
-  int oov_ = -1;
+  Lexicon lexicon_;
 
   // Global store for parser.
   Store *store_ = nullptr;
@@ -178,29 +188,29 @@ class ParserInstance {
 
  private:
   // Parser model.
-  const Parser *parser;
+  const Parser *parser_;
 
   // Parser transition state.
-  ParserState state;
+  ParserState state_;
 
   // Instances for network computations.
-  myelin::Instance lr;
-  myelin::Instance rl;
-  myelin::Instance ff;
+  myelin::Instance lr_;
+  myelin::Instance rl_;
+  myelin::Instance ff_;
 
   // Channels for connectors.
-  myelin::Channel lr_c;
-  myelin::Channel lr_h;
-  myelin::Channel rl_c;
-  myelin::Channel rl_h;
-  myelin::Channel ff_step;
+  myelin::Channel lr_c_;
+  myelin::Channel lr_h_;
+  myelin::Channel rl_c_;
+  myelin::Channel rl_h_;
+  myelin::Channel ff_step_;
 
   // Word ids.
-  std::vector<int> words;
+  std::vector<int> words_;
 
   // Frame creation and focus steps.
-  std::vector<int> create_step;
-  std::vector<int> focus_step;
+  std::vector<int> create_step_;
+  std::vector<int> focus_step_;
 
   friend class Parser;
 };

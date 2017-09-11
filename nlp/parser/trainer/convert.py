@@ -305,12 +305,18 @@ def convert_model(master_spec, sess):
 
   # Get external resources.
   lexicon_file = None
+  prefix_file = None
+  suffix_file = None
   commons_file = None
   actions_file = None
   for c in master_spec.component:
     for r in c.resource:
       if r.name == "word-vocab":
         lexicon_file = r.part[0].file_pattern
+      elif r.name == "prefix-table":
+        prefix_file = r.part[0].file_pattern
+      elif r.name == "suffix-table":
+        suffix_file = r.part[0].file_pattern
       elif r.name == "commons":
         commons_file = r.part[0].file_pattern
       elif r.name == "action-table":
@@ -324,6 +330,18 @@ def convert_model(master_spec, sess):
     lexicon.add_attr("oov", 0)
     lexicon.add_attr("normalize_digits", 1)
     lexicon.data = read_file(lexicon_file)
+
+  # Add prefix table to flow.
+  if prefix_file != None:
+    prefixes = flow.blob("prefixes")
+    prefixes.type = "affix"
+    prefixes.data = read_file(prefix_file)
+
+  # Add suffix table to flow.
+  if suffix_file != None:
+    suffixes = flow.blob("suffixes")
+    suffixes.type = "affix"
+    suffixes.data = read_file(suffix_file)
 
   # Add commons to flow.
   if commons_file != None:

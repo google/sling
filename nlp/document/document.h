@@ -214,7 +214,7 @@ class Document {
 
   // Add new span to the document. The span is initialized with a mention frame
   // for the span. If the span already exists, the type is added to the mention
-  // and the existing span is returned. Span can be nested but are not allowed
+  // and the existing span is returned. Spans can be nested but are not allowed
   // to cross, in which case null is returned.
   Span *AddSpan(int begin, int end, Handle type);
   Span *AddSpan(int begin, int end, const Name &type) {

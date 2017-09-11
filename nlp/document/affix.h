@@ -21,6 +21,7 @@
 #include "base/macros.h"
 #include "base/types.h"
 #include "stream/stream.h"
+#include "string/text.h"
 
 namespace sling {
 namespace nlp {
@@ -32,10 +33,10 @@ namespace nlp {
 class Affix {
  private:
   friend class AffixTable;
-  Affix(int id, const char *form, int length)
+  Affix(int id, Text form, int length)
       : id_(id),
         length_(length),
-        form_(form),
+        form_(form.data(), form.size()),
         shorter_(nullptr),
         next_(nullptr) {}
 
@@ -44,7 +45,7 @@ class Affix {
   int id() const { return id_; }
 
   // Returns the textual representation of the affix.
-  string form() const { return form_; }
+  const string &form() const { return form_; }
 
   // Returns the length of the affix.
   int length() const { return length_; }
@@ -96,11 +97,14 @@ class AffixTable {
   // Adds all prefixes/suffixes of the word up to the maximum length to the
   // table. The longest affix is returned. The pointers in the affix can be
   // used for getting shorter affixes.
-  Affix *AddAffixesForWord(const char *word, size_t size);
+  Affix *AddAffixesForWord(Text word);
 
-  // Gets the affix information for the affix with a certain id. Returns NULL if
+  // Gets the affix information for the affix with a certain id. Returns null if
   // there is no affix in the table with this id.
   Affix *GetAffix(int id) const;
+
+  // Finds the longest affix for word.
+  Affix *GetLongestAffix(Text word) const;
 
   // Gets affix form from id. If the affix does not exist in the table, an empty
   // string is returned.
@@ -108,7 +112,7 @@ class AffixTable {
 
   // Gets affix id for affix. If the affix does not exist in the table, -1 is
   // returned.
-  int AffixId(const string &form) const;
+  int AffixId(Text form) const;
 
   // Returns size of the affix table.
   int size() const { return affixes_.size(); }
@@ -118,10 +122,10 @@ class AffixTable {
 
  private:
   // Adds a new affix to table.
-  Affix *AddNewAffix(const string &form, int length);
+  Affix *AddNewAffix(Text form, int length);
 
   // Finds existing affix in table.
-  Affix *FindAffix(const string &form) const;
+  Affix *FindAffix(Text form) const;
 
   // Resizes bucket array.
   void Resize(int size_hint);

@@ -76,7 +76,7 @@ static const uint64 kMix64 = GG_ULONGLONG(0x92c3575458ddc83f);
 
 }  // namespace hash_internal
 
-inline size_t HashStringThoroughly(const char* s, size_t len) {
+inline size_t HashStringThoroughly(const char *s, size_t len) {
   if (hash_internal::sixty_four_bit) {
     return Hash64StringWithSeed(s, static_cast<uint32>(len),
                                 hash_internal::kMix64);
@@ -85,7 +85,7 @@ inline size_t HashStringThoroughly(const char* s, size_t len) {
                              hash_internal::kMix32));
 }
 
-inline size_t HashTo32(const char* s, size_t len) {
+inline size_t HashTo32(const char *s, size_t len) {
   return Hash32StringWithSeed(s, static_cast<uint32>(len),
                               hash_internal::kMix32);
 }

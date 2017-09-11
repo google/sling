@@ -194,7 +194,7 @@ class PrefixFeature : public PrecomputedFeature {
       string word = token.text();
       NormalizeDigits(&word);
       if (!word.empty() && !HasSpaces(word)) {
-        affixes_->AddAffixesForWord(word.c_str(), word.size());
+        affixes_->AddAffixesForWord(word);
       }
     }
   }

@@ -332,7 +332,7 @@ static pair<uint64, uint64> WeakHashLen32WithSeeds(
 
 // Return a 16-byte hash for s[0] ... s[31], a, and b.  Quick and dirty.
 static pair<uint64, uint64> WeakHashLen32WithSeeds(
-    const char* s, uint64 a, uint64 b) {
+    const char *s, uint64 a, uint64 b) {
   return WeakHashLen32WithSeeds(Fetch64(s),
                                 Fetch64(s + 8),
                                 Fetch64(s + 16),

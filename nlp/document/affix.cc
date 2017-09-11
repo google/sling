@@ -20,6 +20,7 @@
 #include "base/logging.h"
 #include "stream/input.h"
 #include "stream/output.h"
+#include "string/text.h"
 #include "util/fingerprint.h"
 #include "util/unicode.h"
 
@@ -30,10 +31,7 @@ namespace nlp {
 // of two.
 static const int kInitialBuckets = 1024;
 
-// Fill factor for term and affix hash maps.
-static const int kFillFactor = 2;
-
-static int TermHash(const string &term) {
+static int TermHash(Text term) {
   return Fingerprint(term.data(), term.size());
 }
 
@@ -72,6 +70,7 @@ void AffixTable::Read(InputStream *stream) {
   // Read affix table size.
   uint32 size;
   CHECK(input.ReadVarint32(&size));
+  Resize(size);
 
   // Read affixes.
   string form;
@@ -129,10 +128,10 @@ void AffixTable::Write(OutputStream *stream) {
   }
 }
 
-Affix *AffixTable::AddAffixesForWord(const char *word, size_t size) {
+Affix *AffixTable::AddAffixesForWord(Text word) {
   // The affix length is measured in characters and not bytes so we need to
   // determine the length in characters.
-  int length = UTF8::Length(word, size);
+  int length = UTF8::Length(word.data(), word.size());
 
   // Determine longest affix.
   int affix_len = length;
@@ -143,20 +142,19 @@ Affix *AffixTable::AddAffixesForWord(const char *word, size_t size) {
   const char *start;
   const char *end;
   if (type_ == PREFIX) {
-    start = end = word;
+    start = end = word.data();
     for (int i = 0; i < affix_len; ++i) end = UTF8::Next(end);
   } else {
-    start = end = word + size;
+    start = end = word.data() + word.size();
     for (int i = 0; i < affix_len; ++i) start = UTF8::Previous(start);
   }
 
   // Try to find successively shorter affixes.
   Affix *top = nullptr;
   Affix *ancestor = nullptr;
-  string s;
   while (affix_len > 0) {
     // Try to find affix in table.
-    s.assign(start, end - start);
+    Text s(start, end - start);
     Affix *affix = FindAffix(s);
     if (affix == nullptr) {
       // Affix not found, add new one to table.
@@ -187,7 +185,7 @@ Affix *AffixTable::AddAffixesForWord(const char *word, size_t size) {
 }
 
 Affix *AffixTable::GetAffix(int id) const {
-  if (id < 0 || id >= static_cast<int>(affixes_.size())) {
+  if (id < 0 || id >= affixes_.size()) {
     return nullptr;
   } else {
     return affixes_[id];
@@ -203,7 +201,7 @@ string AffixTable::AffixForm(int id) const {
   }
 }
 
-int AffixTable::AffixId(const string &form) const {
+int AffixTable::AffixId(Text form) const {
   Affix *affix = FindAffix(form);
   if (affix == nullptr) {
     return -1;
@@ -212,14 +210,14 @@ int AffixTable::AffixId(const string &form) const {
   }
 }
 
-Affix *AffixTable::AddNewAffix(const string &form, int length) {
+Affix *AffixTable::AddNewAffix(Text form, int length) {
   int hash = TermHash(form);
   int id = affixes_.size();
-  if (id > buckets_.size() * kFillFactor) Resize(id);
+  if (id > buckets_.size()) Resize(id);
   int b = hash & (buckets_.size() - 1);
 
   // Create new affix object.
-  Affix *affix = new Affix(id, form.c_str(), length);
+  Affix *affix = new Affix(id, form, length);
   affixes_.push_back(affix);
 
   // Insert affix in bucket chain.
@@ -229,15 +227,38 @@ Affix *AffixTable::AddNewAffix(const string &form, int length) {
   return affix;
 }
 
-Affix *AffixTable::FindAffix(const string &form) const {
+Affix *AffixTable::FindAffix(Text form) const {
   // Compute hash value for word.
   int hash = TermHash(form);
 
   // Try to find affix in hash table.
   Affix *affix = buckets_[hash & (buckets_.size() - 1)];
   while (affix != nullptr) {
-    if (strcmp(affix->form_.c_str(), form.c_str()) == 0) return affix;
+    if (affix->form() == form) return affix;
     affix = affix->next_;
+  }
+  return nullptr;
+}
+
+Affix *AffixTable::GetLongestAffix(Text word) const {
+  const char *start = word.data();
+  const char *end = start + word.size();
+  if (type_ == PREFIX) {
+    const char *p = start;
+    for (int i = 0; i < max_length_ && p < end; ++i) p = UTF8::Next(p);
+    while (p > start) {
+      Affix *affix = FindAffix(Text(start, p - start));
+      if (affix != nullptr) return affix;
+      p = UTF8::Previous(p);
+    }
+  } else {
+    const char *p = end;
+    for (int i = 0; i < max_length_ && p > start; ++i) p = UTF8::Previous(p);
+    while (p < end) {
+      Affix *affix = FindAffix(Text(p, end - p));
+      if (affix != nullptr) return affix;
+      p = UTF8::Next(p);
+    }
   }
   return nullptr;
 }
@@ -255,7 +276,7 @@ void AffixTable::Resize(int size_hint) {
   }
   for (size_t i = 0; i < affixes_.size(); ++i) {
     Affix *affix = affixes_[i];
-    int b = TermHash(affix->form_) & mask;
+    int b = TermHash(affix->form()) & mask;
     affix->next_ = buckets_[b];
     buckets_[b] = affix;
   }

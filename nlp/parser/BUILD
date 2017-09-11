@@ -57,11 +57,11 @@ cc_library(
     "//frame:serialization",
     "//frame:store",
     "//myelin:compute",
-    "//myelin:dictionary",
     "//myelin:flow",
     "//myelin/kernel:dragnn",
     "//myelin/kernel:tensorflow",
     "//nlp/document",
+    "//nlp/document:lexicon",
   ],
 )
 

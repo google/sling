@@ -39,23 +39,19 @@ uint64 FingerprintCat(uint64 fp1, uint64 fp2) {
 uint64 Fingerprint(const char *bytes, size_t len) {
   // Some big prime number.
   uint64 fp = 0xA5B85C5E198ED849u;
-
   const char *end = bytes + len;
-  while (bytes + 8 <= end) {
+  while (bytes + sizeof(uint64) <= end) {
     fp = FingerprintCat(fp, *(reinterpret_cast<const uint64 *>(bytes)));
-    bytes += 8;
+    bytes += sizeof(uint64);
   }
-
-  // Note: we don't care about "consistency" (little or big endian) between
-  // the bulk and the suffix of the message.
-  uint64 last_bytes = 0;
+  uint64 residual = 0;
   while (bytes < end) {
-    last_bytes += *bytes;
-    last_bytes <<= 8;
+    residual <<= 8;
+    residual |= *bytes;
     bytes++;
   }
 
-  return FingerprintCat(fp, last_bytes);
+  return FingerprintCat(fp, residual);
 }
 
 }  // namespace sling
