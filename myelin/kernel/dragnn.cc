@@ -270,13 +270,19 @@ class DragnnLookupSingle : public Kernel {
     if (v->type() != DT_FLOAT || v->rank() != 2) return false;
     if (v->dim(0) != 1 || v->dim(1) != M->dim(1)) return false;
 
+    // Check that the output is not already a reference or a cell output.
+    if (v->ref() || v->out()) return false;
+
     return true;
   }
 
   void Adjust(Step *step) override {
     // Make output a reference into the embedding matrix.
-    step->output(0)->set_ref(true);
-    step->output(0)->set_link(step->input(1));
+    Tensor *v = step->output(0);
+    CHECK(!v->ref());
+    CHECK(!v->out());
+    v->set_ref(true);
+    v->set_link(step->input(1));
 
     // Embedding matrix must be row-major.
     step->input(1)->SetRequiredOrder(ROW_MAJOR);
@@ -457,9 +463,10 @@ class DragnnTyper : public Typer {
     // Infer shape for lookup operation.
     if (op->type == "Lookup") {
       if (op->indegree() == 2 && op->outdegree() == 1) {
+        Flow::Variable *features = op->inputs[0];
         Flow::Variable *embeddings = op->inputs[1];
         Flow::Variable *result = op->outputs[0];
-        if (embeddings->rank() == 2) {
+        if (features->rank() == 2 && embeddings->rank() == 2) {
           result->shape.assign(1, embeddings->dim(1));
           return true;
         }

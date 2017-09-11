@@ -34,27 +34,6 @@ void RegisterGenericMatMul(Library *library);
 // generic-operators.cc
 void RegisterGenericOperators(Library *library);
 
-// If the variable is an int32 constant scalar, sets data to the constant value
-// and returns true.
-static bool TryGetInt32Data(const Flow::Variable &variable, int *data) {
-  if (variable.type != DT_INT32) return false;
-  if (variable.rank() != 0) return false;
-  if (variable.data == nullptr) return false;
-  *data = *reinterpret_cast<const int32 *>(variable.data);
-  return true;
-}
-
-// As above, but for vectors.
-static bool TryGetInt32Data(const Flow::Variable &variable,
-                            std::vector<int> *data) {
-  if (variable.type != DT_INT32) return false;
-  if (variable.rank() != 1) return false;
-  if (variable.data == nullptr) return false;
-  const int32 *array = reinterpret_cast<const int32 *>(variable.data);
-  data->assign(array, array + variable.dim(0));
-  return true;
-}
-
 // Rename operations with aliases.
 class RenameTransformer : public Transformer {
  public:
@@ -91,9 +70,10 @@ class IdentityTransformer : public Transformer {
         if (op->indegree() == 2 && op->outdegree() == 1) {
           Flow::Variable *in = op->inputs[0];
           Flow::Variable *out = op->outputs[0];
-          if (!in->shape.undefined() && !in->shape.partial() &&
-              !out->shape.undefined() && !out->shape.partial() &&
-              in->shape == out->shape &&in->type == out->type) {
+          if (in->shape.defined() &&
+              out->shape.defined() &&
+              in->shape == out->shape &&
+              in->type == out->type) {
             Flow::Variable *shape = op->inputs[1];
             op->RemoveInput(shape);
             noops.push_back(op);
@@ -144,7 +124,7 @@ class CombineTransformer : public Transformer {
       if (var->consumers[0]->type != second) continue;
       if (var->consumers[0]->task != op->task) continue;
       if (var->out) continue;
-      if (var->shape.undefined()) continue;
+      if (!var->shape.defined()) continue;
       if (op->indegree() >= 1) {
         // Only combine for vector inputs.
         Flow::Variable *input = op->inputs[0];
@@ -195,8 +175,8 @@ class FlattenConcatTransformer : public Transformer {
 
       // The axes (i.e., final inputs) should match.
       int parent_axis = 0, child_axis = 0;
-      if (!TryGetInt32Data(*parent->inputs.back(), &parent_axis)) continue;
-      if (!TryGetInt32Data(*child->inputs.back(), &child_axis)) continue;
+      if (!parent->inputs.back()->GetData(&parent_axis)) continue;
+      if (!child->inputs.back()->GetData(&child_axis)) continue;
       if (parent_axis != child_axis) continue;
 
       // The child axis will be pruned, so it should have no other dependencies.
@@ -322,11 +302,8 @@ class StandardTyper : public Typer {
     if (op->type == "ConcatV2") {
       int n = op->GetAttr("N", 0);
       if (n > op->indegree()) return false;
-      int axis = 0;
-      if (op->indegree() == n + 1) {
-        Flow::Variable *a = op->inputs[n];
-        TryGetInt32Data(*a, &axis);
-      }
+      int axis;
+      if (op->indegree() != n + 1 || !op->inputs[n]->GetData(&axis)) axis = 0;
 
       if (n > 0 && op->outdegree() == 1) {
         Flow::Variable *result = op->outputs[0];
@@ -359,7 +336,7 @@ class StandardTyper : public Typer {
         Flow::Variable *shape = op->inputs[1];
         Flow::Variable *result = op->outputs[0];
         std::vector<int> dims;
-        if (TryGetInt32Data(*shape, &dims)) {
+        if (shape->GetData(&dims)) {
           result->shape.clear();
           for (int dim : dims) {
             // Unspecified dimensions (-1) typically correspond to to the input

@@ -71,7 +71,7 @@ class Builder {
   Variable *Mul(Variable *x, Variable *y) { return Op("Mul", {x, y}); }
   Variable *Div(Variable *x, Variable *y) { return Op("Div", {x, y}); }
   Variable *Min(Variable *x, Variable *y) { return Op("Min", {x, y}); }
-  Variable *Max(Variable *x, Variable *y) { return Op("Min", {x, y}); }
+  Variable *Max(Variable *x, Variable *y) { return Op("Max", {x, y}); }
   Variable *MatMul(Variable *x, Variable *y) { return Op("MatMul", {x, y}); }
   Variable *Log(Variable *x) { return Op("Log", {x}); }
   Variable *Exp(Variable *x) { return Op("Exp", {x}); }

@@ -191,11 +191,11 @@ class Shape {
     return n;
   }
 
-  // Check for undefined shape, i.e. some dimensions have zero size.
-  bool undefined() const { return elements() == 0; }
-
-  // Check for partial shape, i.e. some dimensions have unspecified (-1) size.
-  bool partial() const { return elements() == -1; }
+  // Check if shape is fully defined, i.e. all dimensions have specified sizes.
+  bool defined() const {
+    for (int d : dims_) if (d <= 0) return false;
+    return true;
+  }
 
   // Return the number of outer elements relative to dimension.
   int outer(int d) const {
@@ -301,6 +301,27 @@ class Flow {
     void SetData(const void *buffer, int len) {
       data = static_cast<const char *>(buffer);
       size = len;
+    }
+
+    // Get data as scalar. Return false if types do not match.
+    template <typename T> bool GetData(T *value) const {
+      if (data == nullptr) return false;
+      auto &traits = Traits<T>();
+      if (type != traits.type() || size != traits.size()) return false;
+      *value = *reinterpret_cast<const T *>(data);
+      return true;
+    }
+
+    // Get data as vector. Return false if types do not match.
+    template <typename T> bool GetData(std::vector<T> *value) const {
+      if (data == nullptr) return false;
+      auto &traits = Traits<T>();
+      if (type != traits.type()) return false;
+      int elements = size / traits.size();
+      if (elements * traits.size() != size) return false;
+      const T *array = reinterpret_cast<const T *>(data);
+      value->assign(array, array + elements);
+      return true;
     }
 
     // Check if variable has a dependency on some operation.

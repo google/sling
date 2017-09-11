@@ -289,22 +289,22 @@ class ExpressionTransformer : public Transformer {
     const Shape &shape = first->outputs[0]->shape;
     for (auto *input : first->inputs) {
       if (input->type != type) return false;
-      if (input->shape.undefined()) return false;
+      if (!input->shape.defined()) return false;
       if (!input->shape.IsCompatible(shape)) return false;
     }
     for (auto *input : second->inputs) {
       if (input->type != type) return false;
-      if (input->shape.undefined()) return false;
+      if (!input->shape.defined()) return false;
       if (!input->shape.IsCompatible(shape)) return false;
     }
     for (auto *output : first->outputs) {
       if (output->type != type) return false;
-      if (output->shape.undefined()) return false;
+      if (!output->shape.defined()) return false;
       if (output->shape != shape) return false;
     }
     for (auto *output : second->outputs) {
       if (output->type != type) return false;
-      if (output->shape.undefined()) return false;
+      if (!output->shape.defined()) return false;
       if (output->shape != shape) return false;
     }
 

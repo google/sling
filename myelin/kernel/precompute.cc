@@ -127,7 +127,7 @@ class ConstantFolding : public Transformer {
 
         // Shape, Type, and Size can be pre-computed.
         if ((op->type == "Shape" || op->type == "Rank" || op->type == "Size") &&
-             !op->inputs[0]->shape.partial()) {
+             op->inputs[0]->shape.defined()) {
           // Get input and output.
           CHECK_EQ(op->indegree(), 1);
           CHECK_EQ(op->outdegree(), 1);

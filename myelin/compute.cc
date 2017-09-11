@@ -58,6 +58,10 @@ static int LeastCommonMultiple(int n, int m) {
   return a;
 }
 
+static void EnsureAlignment(int *m, int n) {
+  *m = LeastCommonMultiple(*m, n);
+}
+
 static bool IsPowerOfTwo32(int value) {
   return value && !(value & (value - 1));
 }
@@ -482,7 +486,7 @@ void Tensor::SetRequiredOrder(Order order) {
 }
 
 void Tensor::SetMiniumAlignment(int alignment) {
-  byte_alignment_ = LeastCommonMultiple(byte_alignment_, alignment);
+  EnsureAlignment(&byte_alignment_, alignment);
 }
 
 bool Tensor::HasSameShape(const Tensor *other) const {
@@ -573,7 +577,7 @@ string Instance::ToString(Tensor *param) const {
     p = *reinterpret_cast<char **>(p);
     if (p == nullptr) return "null";
   }
-  if (param->shape().partial()) return "*";
+  if (!param->shape().defined()) return "*";
 
   // Get type traits for elements.
   const TypeTraits &traits = TypeTraits::of(param->type());
@@ -990,11 +994,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       while (dt >= 0 && dl >= 0) {
         if (t->dim(dt) != -1 && l->dim(dl) != -1) {
           // Propagate minimum alignment in both directions.
-          if (mint.dim(dt) > minl.dim(dl)) {
-            minl.set(dl, mint.dim(dt));
+          int align = LeastCommonMultiple(mint.dim(dt), minl.dim(dl));
+          if (mint.dim(dt) != align) {
+            mint.set(dt, align);
             again = true;
-          } else if (mint.dim(dt) < minl.dim(dl)) {
-            mint.set(dt, minl.dim(dl));
+          }
+          if (minl.dim(dl) != align) {
+            minl.set(dl, align);
             again = true;
           }
         }
@@ -1013,11 +1019,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       }
 
       // Propagate byte alignment.
-      if (t->byte_alignment_ < l->byte_alignment_) {
-        t->byte_alignment_ = l->byte_alignment_;
+      int align = LeastCommonMultiple(t->byte_alignment_, l->byte_alignment_);
+      if (t->byte_alignment_ != align) {
+        t->byte_alignment_ = align;
         again = true;
-      } else if (t->byte_alignment_ > l->byte_alignment_) {
-        l->byte_alignment_ = t->byte_alignment_;
+      }
+      if (t->byte_alignment_ != align) {
+        l->byte_alignment_ = align;
         again = true;
       }
     }
@@ -1115,17 +1123,11 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
   }
 
-  // Compute size and alignment for connectors.
+  // Compute alignment for connectors.
   for (Connector *connector : connectors_) {
     Tensor *t = connector->type_;
-
-    if (connector->alignment_ < t->byte_alignment_) {
-      connector->alignment_ = t->byte_alignment_;
-    }
-
-    if (connector->alignment_ < jit::CPU::CacheLineSize()) {
-      connector->alignment_ = jit::CPU::CacheLineSize();
-    }
+    EnsureAlignment(&connector->alignment_, t->byte_alignment_);
+    EnsureAlignment(&connector->alignment_, jit::CPU::CacheLineSize());
 
     VLOG(5) << "Connector " << connector->name() << ": " << t->TypeString()
             << " min " << t->minalign_.ToString()
@@ -1164,9 +1166,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   // Compute cell instance size and offset of each parameter.
   for (Cell *cell : cells_) {
     // Adjust cell instance to cache lines.
-    if (cell->instance_alignment_ < jit::CPU::CacheLineSize()) {
-      cell->instance_alignment_ = jit::CPU::CacheLineSize();
-    }
+    EnsureAlignment(&cell->instance_alignment_, jit::CPU::CacheLineSize());
 
     // Allocate space for runtime data at the beginning of the instance block.
     cell->instance_size_ = runtime_->ExtraInstanceData(cell);
@@ -1832,6 +1832,8 @@ void CustomKernel::Generate(Step *step, MacroAssembler *masm) {
   // Call kernel function.
   __ movp(tmp, func_);
   __ call(tmp);
+
+  // Remove kernel arguments from stack.
   __ addq(rsp, Immediate(args * sizeof(TensorData)));
 }
 

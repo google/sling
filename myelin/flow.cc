@@ -330,7 +330,7 @@ string Flow::Variable::DataString() const {
     p = *reinterpret_cast<const char * const *>(p);
     if (p == nullptr) return "null";
   }
-  if (shape.partial()) return "*";
+  if (!shape.defined()) return "*";
 
   // Get type traits for elements.
   const TypeTraits &traits = TypeTraits::of(type);
@@ -1172,7 +1172,7 @@ void Flow::Eliminate(Operation *op) {
     if (input->type != DT_INVALID && output->type != DT_INVALID) {
       CHECK_EQ(input->type, output->type);
     }
-    if (!input->shape.undefined() && !output->shape.undefined()) {
+    if (input->shape.defined() && output->shape.defined()) {
       CHECK(input->shape == output->shape);
     }
     if (output->in) input->in = true;
@@ -1374,7 +1374,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
                      << " because input " << input->name
                      << " is missing type";
       }
-      if (input->shape.undefined()) {
+      if (!input->shape.defined()) {
         missing = true;
         LOG(WARNING) << "Skipping type inference for " << op->name
                      << " because input " << input->name
@@ -1389,7 +1389,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
     // Check if any of the outputs are missing type or shape information.
     bool infer = false;
     for (Variable *output : op->outputs) {
-      if (output->type == DT_INVALID || output->shape.undefined()) infer = true;
+      if (output->type == DT_INVALID || !output->shape.defined()) infer = true;
     }
     if (!infer) continue;
 
@@ -1408,7 +1408,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
         LOG(WARNING) << "Variable " << output->name << " is missing type";
         resolved = false;
       }
-      if (output->shape.undefined()) {
+      if (!output->shape.defined()) {
         LOG(WARNING) << "Variable " << output->name << " is missing shape";
         resolved = false;
       }
