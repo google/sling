@@ -176,7 +176,8 @@ static void AppendVar(string *str,
       str->append("];\n");
     }
   }
-  if (var->out && var->producer != nullptr) {
+  if (var->out) {
+    if (var->producer != nullptr) {
       AppendOpId(str, var->producer);
       str->append(" -> ");
       AppendVarId(str, var);
@@ -186,6 +187,18 @@ static void AppendVar(string *str,
       str->append("\" ");
       AppendPenWidth(str, var, options);
       str->append("];\n");
+    }
+    for (Flow::Operation *consumer : var->consumers) {
+      AppendVarId(str, var);
+      str->append(" -> ");
+      AppendOpId(str, consumer);
+      str->append(" [");
+      str->append("tooltip=\"");
+      str->append(var->name);
+      str->append("\" ");
+      AppendPenWidth(str, var, options);
+      str->append("];\n");
+    }
   }
 }
 
