@@ -34,7 +34,6 @@ cc_library(
   deps = [
     ":store",
     "//base",
-    "//string:strcat",
     "//string:text",
   ],
 )

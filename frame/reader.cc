@@ -71,16 +71,20 @@ Handle Reader::ParseObject() {
       break;
     }
 
+    case NULL_TOKEN:
+      handle = Handle::nil();
+      break;
+
+    case TRUE_TOKEN:
+      handle = Handle::Bool(true);
+      break;
+
+    case FALSE_TOKEN:
+      handle = Handle::Bool(false);
+      break;
+
     case SYMBOL_TOKEN:
-      if (token_text() == "nil" || token_text() == "null") {
-        handle = Handle::nil();
-      } else if (token_text() == "true") {
-        handle = Handle::Bool(true);
-      } else if (token_text() == "false") {
-        handle = Handle::Bool(false);
-      } else {
-        handle = store_->Lookup(token_text());
-      }
+      handle = store_->Lookup(token_text());
       NextToken();
       break;
 
@@ -89,16 +93,7 @@ Handle Reader::ParseObject() {
       NextToken();
       break;
 
-    case NUMERIC_TOKEN: {
-      int32 value;
-      CHECK(safe_strto32(token_text(), &value)) << token_text();
-      Handle &ref = locals_[value];
-      if (ref.IsNil()) ref = store_->CreateUniqueProxy();
-      handle = ref;
-      NextToken();
-      break;
-    }
-
+    case NUMERIC_TOKEN:
     case INDEX_REF_TOKEN: {
       int32 index;
       CHECK(safe_strto32(token_text(), &index)) << token_text();
@@ -257,7 +252,7 @@ Handle Reader::ParseId() {
     Handle handle = store_->Symbol(token_text());
     NextToken();
     return handle;
-  } else if (token() == INDEX_REF_TOKEN) {
+  } else if (token() == INDEX_REF_TOKEN || token() == NUMERIC_TOKEN) {
     int32 value;
     CHECK(safe_strto32(token_text(), &value)) << token_text();
     Handle index = Handle::Index(value);

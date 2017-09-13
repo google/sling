@@ -154,9 +154,10 @@ void Encoder::EncodeLink(Handle handle) {
         link = datum->AsProxy()->symbol;
       } else {
         const FrameDatum *frame = datum->AsFrame();
-        if ((shallow_ && frame->IsPublic()) ||
-            (!global_ && handle.IsGlobalRef() && !frame->IsAnonymous())) {
-          link = frame->get(Handle::id());
+        if (frame->IsNamed()) {
+          if (shallow_ || (!global_ && handle.IsGlobalRef())) {
+            link = frame->get(Handle::id());
+          }
         }
       }
     }
@@ -179,15 +180,9 @@ void Encoder::EncodeLink(Handle handle) {
 }
 
 void Encoder::EncodeSymbol(const SymbolDatum *symbol, int type) {
-  // Numeric symbols are local symbols, so they are output without a name. This
-  // will create a new local symbol when it is decoded.
-  if (symbol->numeric()) {
-    WriteTag(type, 0);
-  } else {
-    const StringDatum *name = store_->GetString(symbol->name);
-    WriteTag(type, name->size());
-    output_->Write(name->data(), name->size());
-  }
+  const StringDatum *name = store_->GetString(symbol->name);
+  WriteTag(type, name->size());
+  output_->Write(name->data(), name->size());
 }
 
 void Encoder::WriteReference(const Reference &ref) {

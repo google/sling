@@ -180,7 +180,6 @@ Handle Decoder::DecodeFrame(int slots, int replace) {
       if (!datum->IsSymbol()) continue;
       SymbolDatum *symbol = datum->AsSymbol();
       if (symbol->unbound()) continue;
-      if (symbol->numeric()) continue;
       FrameDatum *frame = store_->Deref(symbol->value)->AsFrame();
       if (frame->IsProxy()) continue;
 
@@ -244,40 +243,30 @@ Handle Decoder::DecodeArray() {
 }
 
 Handle Decoder::DecodeSymbol(int name_size) {
-  // If name is empty, this is a local numeric symbol.
-  if (name_size == 0) {
-    return store_->Symbol();
+  // Read symbol name and resolve unbound symbol reference.
+  const char *data;
+  if (input_->TryRead(name_size, &data)) {
+    // Fast case.
+    return store_->Symbol(Text(data, name_size));
   } else {
-    // Read symbol name and resolve unbound symbol reference.
-    const char *data;
-    if (input_->TryRead(name_size, &data)) {
-      // Fast case.
-      return store_->Symbol(Text(data, name_size));
-    } else {
-      // Slow case.
-      string name;
-      CHECK(input_->ReadString(name_size, &name));
-      return store_->Symbol(name);
-    }
+    // Slow case.
+    string name;
+    CHECK(input_->ReadString(name_size, &name));
+    return store_->Symbol(name);
   }
 }
 
 Handle Decoder::DecodeLink(int name_size) {
-  // If name is empty, this is a proxy with local numeric symbol.
-  if (name_size == 0) {
-    return store_->CreateUniqueProxy();
+  // Read symbol name and resolve bound symbol reference.
+  const char *data;
+  if (input_->TryRead(name_size, &data)) {
+    // Fast case.
+    return store_->Lookup(Text(data, name_size));
   } else {
-    // Read symbol name and resolve bound symbol reference.
-    const char *data;
-    if (input_->TryRead(name_size, &data)) {
-      // Fast case.
-      return store_->Lookup(Text(data, name_size));
-    } else {
-      // Slow case.
-      string name;
-      CHECK(input_->ReadString(name_size, &name));
-      return store_->Lookup(name);
-    }
+    // Slow case.
+    string name;
+    CHECK(input_->ReadString(name_size, &name));
+    return store_->Lookup(name);
   }
 }
 

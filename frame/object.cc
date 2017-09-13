@@ -116,29 +116,13 @@ Frame::Frame(Store *store, Slot *begin, Slot *end)
   DCHECK(IsNil() || IsFrame()) << Type();
 }
 
-string Frame::Id() const {
-  if (IsNil()) return "";
-  Handle id = frame()->get(Handle::id());
-  if (id.IsNil()) return "";
-  Datum *datum = store_->Deref(id);
-  if (!datum->IsSymbol()) return "";
-  SymbolDatum *symbol = datum->AsSymbol();
-  if (symbol->numeric()) {
-    return StrCat("#", symbol->name.AsInt());
-  } else {
-    StringDatum *symstr = store_->GetString(symbol->name);
-    return string(symstr->data(), symstr->size());
-  }
-}
-
-Text Frame::IdStr() const {
+Text Frame::Id() const {
   if (IsNil()) return Text();
   Handle id = frame()->get(Handle::id());
   if (id.IsNil()) return Text();
   Datum *datum = store_->Deref(id);
   if (!datum->IsSymbol()) return Text();
   SymbolDatum *symbol = datum->AsSymbol();
-  if (symbol->numeric()) return Text();
   StringDatum *symstr = store_->GetString(symbol->name);
   return symstr->str();
 }
@@ -1135,13 +1119,6 @@ void Builder::AddLink(Text symbol) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = store_->Lookup(symbol);
-}
-
-Handle Builder::Builder::AddId() {
-  Slot *slot = NewSlot();
-  slot->name = Handle::id();
-  slot->value = store_->Symbol();
-  return slot->value;
 }
 
 void Builder::Builder::AddId(Handle id) {

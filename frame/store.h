@@ -395,8 +395,7 @@ struct Range {
 // The object type is stored in the upper bits of the size field in the object
 // preamble. The top-most bit is 1 for frames and 0 for other object types. For
 // frames, the lower three bits of the type are used for encoding identifier
-// information like whether the frame has public or private ids and also if the
-// frame is a proxy.
+// information like whether the frame has an id and if the frame is a proxy.
 const Word kSizeBits = 28;
 const Word kSizeMask = (1 << kSizeBits) - 1;
 const Word kTypeMask = 0xF0000000;
@@ -419,8 +418,8 @@ enum Type : Word {
 // Frame type flags.
 enum FrameFlags : Word {
   PROXY   = 0x1UL << kSizeBits,  // frame is a proxy (i.e. only has an id slot)
-  PUBLIC  = 0x2UL << kSizeBits,  // frame has a public id
-  PRIVATE = 0x4UL << kSizeBits,  // frame has a private (i.e. local numeric) id
+  NAMED   = 0x2UL << kSizeBits,  // frame has an id
+  UNUSED_FRAME_FLAG = 0x4UL << kSizeBits,
 };
 
 // All heap objects starts with an 8 byte preamble that contains the handle for
@@ -624,17 +623,14 @@ struct FrameDatum : public Datum {
     return false;
   }
 
-  // Updates the private/public scope bits for frame.
-  void AddScope(Word scope) { info |= (scope & (PRIVATE | PUBLIC)); }
+  // Updates the named flag for frame.
+  void AddFlags(Word flags) { info |= (flags & NAMED); }
 
-  // Returns true if frame has a public id.
-  bool IsPublic() const { return (info & PUBLIC) != 0; }
-
-  // Returns true if frame has a private id.
-  bool IsPrivate() const { return (info & PRIVATE) != 0; }
+  // Returns true if frame has an id.
+  bool IsNamed() const { return (info & NAMED) != 0; }
 
   // Returns true if frame is anonymous, i.e. it has no ids.
-  bool IsAnonymous() const { return (info & (PRIVATE | PUBLIC)) == 0; }
+  bool IsAnonymous() const { return (info & NAMED) == 0; }
 };
 
 // A symbol links a name to a value. Symbols are usually stored in maps which
@@ -654,16 +650,12 @@ struct SymbolDatum : public Datum {
   bool unbound() const { return value == self; }
   bool bound() const { return value != self; }
 
-  // Numeric symbols are used as ids for encoding private references between
-  // frames which do not have public identifiers.
-  bool numeric() const { return name.IsInt(); }
-
   // Size of payload of symbol object.
   static const int kSize = 4 * sizeof(Handle);
 
   Handle hash;   // hash value for name encoded as a tagged integer
   Handle next;   // pointer to next symbol in map bucket
-  Handle name;   // symbol name; either a string or an integer
+  Handle name;   // symbol name; a string object with the name of the symbol
   Handle value;  // symbol value; either a frame, a proxy, or the symbol itself
 };
 
@@ -933,9 +925,6 @@ class Store {
   Handle ExistingSymbol(Text name) const;
   Handle ExistingSymbol(Handle name) const;
 
-  // Allocates new unique private numeric unbound symbol.
-  Handle Symbol();
-
   // Looks up symbol and returns its value. A new symbol is created if the
   // symbol does not already exist. Also, if the symbol is not already bound, a
   // proxy is created.
@@ -962,9 +951,6 @@ class Store {
   // Clones an existing frame and adds an additional slot to the clone. This can
   // only be used on anonymous frames. Returns handle to the new frame.
   Handle Extend(Handle frame, Handle name, Handle value);
-
-  // Creates a new proxy with a unique private numeric symbol as id.
-  Handle CreateUniqueProxy();
 
   // Returns a display name for the handle. This should only be used for display
   // purposes and should not be used as an alternative identifier for the
@@ -1236,9 +1222,6 @@ class Store {
   Handle FindSymbol(Text name) const;
   Handle FindSymbol(Text name, Handle hash) const;
 
-  // Looks up local numeric symbol in symbol table. Returns nil if not found.
-  Handle FindSymbol(Handle number) const;
-
   // Inserts symbol in symbol table.
   void InsertSymbol(SymbolDatum *symbol);
 
@@ -1299,9 +1282,6 @@ class Store {
 
   // Number of hash buckets in the symbol table.
   int num_buckets_;
-
-  // Next symbol number for local symbols.
-  int next_symbol_number_;
 
   // Number of GC locks. No garbage collection is performed as long as the
   // lock count is non-zero.

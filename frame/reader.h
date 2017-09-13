@@ -86,11 +86,6 @@ class Reader : public Tokenizer {
   // Stack for storing intermediate objects while parsing.
   HandleSpace stack_;
 
-  // Table for mapping local numeric symbols in the input to the symbols in the
-  // store. A new numeric symbol is created for each numeric symbol label in the
-  // input.
-  hash_map<int, Handle> locals_;
-
   // Locally indexed frames.
   Handles references_;
 

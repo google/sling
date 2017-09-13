@@ -239,8 +239,7 @@ int Tokenizer::NextToken() {
           int first = current_;
           NextChar();
           if (!ParseName(first)) return Error("Invalid name");
-          if (func_mode_) return Token(LookupKeyword());
-          return Token(SYMBOL_TOKEN);
+          return Token(LookupKeyword());
         }
         return Select(current_);
     }
@@ -458,50 +457,69 @@ bool Tokenizer::ParseName(int first) {
 int Tokenizer::LookupKeyword() {
   const char *name = token_text_.data();
   int first = *name;
-  switch (token_text_.size()) {
-    case 2:
-      if (first == 'i') {
-        if (memcmp(name, "if", 2) == 0) return IF_TOKEN;
-        if (memcmp(name, "in", 2) == 0) return IN_TOKEN;
-      }
-      break;
+  if (func_mode_) {
+    switch (token_text_.size()) {
+      case 2:
+        if (first == 'i') {
+          if (memcmp(name, "if", 2) == 0) return IF_TOKEN;
+          if (memcmp(name, "in", 2) == 0) return IN_TOKEN;
+        }
+        break;
 
-    case 3:
-      if (first == 'f' && memcmp(name, "for", 3) == 0) return FOR_TOKEN;
-      if (first == 'i' && memcmp(name, "isa", 3) == 0) return ISA_TOKEN;
-      if (first == 'n' && memcmp(name, "nil", 3) == 0) return NULL_TOKEN;
-      if (first == 'v' && memcmp(name, "var", 3) == 0) return VAR_TOKEN;
-      break;
+      case 3:
+        if (first == 'f' && memcmp(name, "for", 3) == 0) return FOR_TOKEN;
+        if (first == 'i' && memcmp(name, "isa", 3) == 0) return ISA_TOKEN;
+        if (first == 'n' && memcmp(name, "nil", 3) == 0) return NULL_TOKEN;
+        if (first == 'v' && memcmp(name, "var", 3) == 0) return VAR_TOKEN;
+        break;
 
-    case 4:
-      if (first == 'e' && memcmp(name, "else", 4) == 0) return ELSE_TOKEN;
-      if (first == 'f' && memcmp(name, "func", 4) == 0) return FUNC_TOKEN;
-      if (first == 'n' && memcmp(name, "null", 4) == 0) return NULL_TOKEN;
-      if (first == 's' && memcmp(name, "self", 4) == 0) return SELF_TOKEN;
-      if (first == 't') {
-        if (memcmp(name, "this", 4) == 0) return THIS_TOKEN;
-        if (memcmp(name, "true", 4) == 0) return TRUE_TOKEN;
-      }
-      break;
+      case 4:
+        if (first == 'e' && memcmp(name, "else", 4) == 0) return ELSE_TOKEN;
+        if (first == 'f' && memcmp(name, "func", 4) == 0) return FUNC_TOKEN;
+        if (first == 'n' && memcmp(name, "null", 4) == 0) return NULL_TOKEN;
+        if (first == 's' && memcmp(name, "self", 4) == 0) return SELF_TOKEN;
+        if (first == 't') {
+          if (memcmp(name, "this", 4) == 0) return THIS_TOKEN;
+          if (memcmp(name, "true", 4) == 0) return TRUE_TOKEN;
+        }
+        break;
 
-    case 5:
-      if (first == 'c' && memcmp(name, "const", 5) == 0) return CONST_TOKEN;
-      if (first == 'f' && memcmp(name, "false", 5) == 0) return FALSE_TOKEN;
-      if (first == 'w' && memcmp(name, "while", 5) == 0) return WHILE_TOKEN;
-      break;
+      case 5:
+        if (first == 'c' && memcmp(name, "const", 5) == 0) return CONST_TOKEN;
+        if (first == 'f' && memcmp(name, "false", 5) == 0) return FALSE_TOKEN;
+        if (first == 'w' && memcmp(name, "while", 5) == 0) return WHILE_TOKEN;
+        break;
 
-    case 6:
-      if (first == 'r' && memcmp(name, "return", 6) == 0) return RETURN_TOKEN;
-      if (first == 's' && memcmp(name, "static", 6) == 0) return STATIC_TOKEN;
-      break;
+      case 6:
+        if (first == 'r' && memcmp(name, "return", 6) == 0) return RETURN_TOKEN;
+        if (first == 's' && memcmp(name, "static", 6) == 0) return STATIC_TOKEN;
+        break;
 
-    case 7:
-      if (first == 'p' && memcmp(name, "private", 7) == 0) return PRIVATE_TOKEN;
-      break;
+      case 7:
+        if (first == 'p' && memcmp(name, "private", 7) == 0) {
+          return PRIVATE_TOKEN;
+        }
+        break;
 
-    case 8:
-      if (first == 'f' && memcmp(name, "function", 8) == 0) return FUNC_TOKEN;
-      break;
+      case 8:
+        if (first == 'f' && memcmp(name, "function", 8) == 0) return FUNC_TOKEN;
+        break;
+    }
+  } else {
+    switch (token_text_.size()) {
+      case 3:
+        if (first == 'n' && memcmp(name, "nil", 3) == 0) return NULL_TOKEN;
+        break;
+
+      case 4:
+        if (first == 'n' && memcmp(name, "null", 4) == 0) return NULL_TOKEN;
+        if (first == 't' && memcmp(name, "true", 4) == 0) return TRUE_TOKEN;
+        break;
+
+      case 5:
+        if (first == 'f' && memcmp(name, "false", 5) == 0) return FALSE_TOKEN;
+        break;
+    }
   }
 
   return SYMBOL_TOKEN;

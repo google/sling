@@ -61,8 +61,7 @@ void Printer::Print(Handle handle, bool reference) {
     PrintInt(handle.AsInt());
   } else if (handle.IsFloat()) {
     if (handle.IsIndex()) {
-      if (reference) WriteChar('#');
-      WriteChar('@');
+      WriteChar(reference ? '#' : '@');
       PrintInt(handle.AsIndex());
     } else {
       PrintFloat(handle.AsFloat());
@@ -251,25 +250,19 @@ void Printer::PrintArray(const ArrayDatum *array) {
 
 void Printer::PrintSymbol(const SymbolDatum *symbol, bool reference) {
   if (!reference && symbol->bound()) WriteChar('\'');
-  if (symbol->name.IsRef()) {
-    const StringDatum *name = store_->GetString(symbol->name);
-    const char *p = name->data();
-    const char *end = p + name->size();
-    DCHECK(p != end);
-    if (!ascii_isalpha(*p) && *p != '/' && *p != '_') WriteChar('\\');
-    WriteChar(*p++);
-    while (p < end) {
-      char c = *p++;
-      if (!ascii_isalnum(c) && c != '/' && c != '_' && c != '-') {
-        WriteChar('\\');
-      }
-      WriteChar(c);
+
+  const StringDatum *name = store_->GetString(symbol->name);
+  const char *p = name->data();
+  const char *end = p + name->size();
+  DCHECK(p != end);
+  if (!ascii_isalpha(*p) && *p != '/' && *p != '_') WriteChar('\\');
+  WriteChar(*p++);
+  while (p < end) {
+    char c = *p++;
+    if (!ascii_isalnum(c) && c != '/' && c != '_' && c != '-') {
+      WriteChar('\\');
     }
-  } else if (symbol->numeric()) {
-    WriteChar('#');
-    PrintInt(symbol->name.AsInt());
-  } else {
-    output_->Write("<<<unknown symbol type>>>");
+    WriteChar(c);
   }
 }
 
@@ -285,11 +278,12 @@ void Printer::PrintLink(Handle handle) {
         return;
       } else {
         const FrameDatum *frame = datum->AsFrame();
-        if ((shallow_ && frame->IsPublic()) ||
-            (!global_ && handle.IsGlobalRef() && !frame->IsAnonymous())) {
-          // Print reference.
-          Print(frame->get(Handle::id()), true);
-          return;
+        if (frame->IsNamed()) {
+          if (shallow_ || (!global_ && handle.IsGlobalRef())) {
+            // Print reference.
+            Print(frame->get(Handle::id()), true);
+            return;
+          }
         }
       }
     }

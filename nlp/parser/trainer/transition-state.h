@@ -30,6 +30,7 @@
 #include "nlp/parser/trainer/sempar-instance.h"
 #include "nlp/parser/trainer/shared-resources.h"
 #include "nlp/parser/trainer/transition-system-type.h"
+#include "string/strcat.h"
 
 namespace sling {
 namespace nlp {

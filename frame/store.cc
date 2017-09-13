@@ -30,11 +30,11 @@ namespace sling {
 // when making changes to this table.
 static const Word kInitialHeap[] = {
   // id frame
-  FRAME | PUBLIC |  8, 0x08, 0x08, 0x20,
+  FRAME | NAMED  |  8, 0x08, 0x08, 0x20,
   // isa frame
-  FRAME | PUBLIC |  8, 0x10, 0x08, 0x28,
+  FRAME | NAMED  |  8, 0x10, 0x08, 0x28,
   // is frame
-  FRAME | PUBLIC |  8, 0x18, 0x08, 0x30,
+  FRAME | NAMED  |  8, 0x18, 0x08, 0x30,
   // id symbol
   SYMBOL         | 16, 0x20, 0x9fc5c532, 0, 0x38, 0x08,
   // isa symbol
@@ -55,25 +55,6 @@ const Store::Options Store::kDefaultOptions;
 // Use city hash to compute hash values for strings.
 static inline uint64 HashBytes(const void *ptr, size_t len) {
   return CityHash64(reinterpret_cast<const char *>(ptr), len);
-}
-
-// Parse numeric symbol and return number encoded as handle.
-static inline bool NumericSymbol(Text name, Handle *value) {
-  const char *p = name.data();
-
-  // Numeric symbols must start with #.
-  if (p == nullptr || *p != '#') return false;
-  const char *end = p++ + name.size();
-
-  // Parse number.
-  int number = 0;
-  while (p < end) {
-    int digit = *p++;
-    if (digit < '0' || digit > '9') return false;
-    number = number * 10 + (digit - '0');
-  }
-  *value = Handle::Integer(number);
-  return true;
 }
 
 void Region::reserve(size_t bytes) {
@@ -130,7 +111,6 @@ Store::Store(const Options *options) : options_(options) {
 
   // The symbol table will be allocated later.
   symbols_ = Handle::nil();
-  next_symbol_number_ = 1;
 
   // Initialize handle table.
   handles_.reserve(options_->initial_handles);
@@ -195,7 +175,6 @@ Store::Store(const Store *globals) : globals_(globals) {
   num_buckets_ = options_->map_buckets;
   symbols_ = AllocateArray(num_buckets_);
   roots_.handle_ = symbols_;
-  next_symbol_number_ = globals->next_symbol_number_;
 }
 
 Store::~Store() {
@@ -321,7 +300,7 @@ Handle Store::AllocateFrame(Slot *begin, Slot *end, Handle original) {
 
         // Bind symbol to frame.
         symbol->value = handle;
-        frame->AddScope(symbol->numeric() ? PRIVATE : PUBLIC);
+        frame->AddFlags(NAMED);
       } else if (id->IsProxy()) {
         // This proxy is not the one used for replacement, because otherwise the
         // proxy would have been replaced by the symbol above, so the frame has
@@ -329,7 +308,7 @@ Handle Store::AllocateFrame(Slot *begin, Slot *end, Handle original) {
         // replace the proxy handle with the handle of the new frame.
         CHECK_NE(slot->value.raw(), handle.raw());
         CHECK_EQ(handle.tag(), slot->value.tag());
-        frame->AddScope(id->typebits());
+        frame->AddFlags(id->typebits());
         ReplaceHandle(slot->value, handle);
         LOG(WARNING) << "double proxies are expensive";
       } else {
@@ -390,7 +369,7 @@ void Store::UpdateFrame(Handle handle, Slot *begin, Slot *end) {
 
       // Bind symbol to frame.
       symbol->value = handle;
-      frame->AddScope(symbol->numeric() ? PRIVATE : PUBLIC);
+      frame->AddFlags(NAMED);
     }
   }
 }
@@ -443,7 +422,7 @@ void Store::Set(Handle frame, Handle name, Handle value) {
   datum = GetFrame(frame);
 
   // Replace old frame.
-  replacement->AddScope(datum->typebits());
+  replacement->AddFlags(datum->typebits());
   Replace(frame, replacement);
 
   // Copy slots from original frame.
@@ -474,7 +453,7 @@ void Store::Add(Handle frame, Handle name, Handle value) {
   datum = GetFrame(frame);
 
   // Replace old frame.
-  replacement->AddScope(datum->typebits());
+  replacement->AddFlags(datum->typebits());
   Replace(frame, replacement);
 
   // Copy slots from original frame.
@@ -534,7 +513,7 @@ Handle Store::AllocateProxy(Handle symbol) {
   // Set id slot in proxy.
   proxy->id = Handle::id();
   proxy->symbol = symbol;
-  proxy->AddScope(sym->numeric() ? PRIVATE : PUBLIC);
+  proxy->AddFlags(NAMED);
 
   // Allocate handle for proxy.
   return AllocateHandle(proxy);
@@ -614,83 +593,34 @@ Handle Store::FindSymbol(Text name, Handle hash) const {
   return Handle::nil();
 }
 
-Handle Store::FindSymbol(Handle number) const {
-  const MapDatum *symbols = GetMap(symbols_);
-  Handle h = *symbols->bucket(number);
-  while (!h.IsNil()) {
-    const SymbolDatum *symbol = GetSymbol(h);
-    if (symbol->name == number) return h;
-    h = symbol->next;
-  }
-
-  return Handle::nil();
-}
-
 Handle Store::FindSymbol(Text name) const {
-  Handle number;
-  if (NumericSymbol(name, &number)) {
-    return FindSymbol(number);
-  } else {
-    Handle hash = Hash(name);
-    return FindSymbol(name, hash);
-  }
+  Handle hash = Hash(name);
+  return FindSymbol(name, hash);
 }
 
 Handle Store::Symbol(Text name) {
-  // If the symbol name starts with #, it is a numeric symbol.
-  Handle number;
-  if (NumericSymbol(name, &number)) {
-    // Try to look up numeric symbol in local store.
-    Handle h = FindSymbol(number);
+  // Compute hash for name.
+  Handle hash = Hash(name);
+
+  // Try to look up symbol in local store.
+  Handle h = FindSymbol(name, hash);
+  if (!h.IsNil()) return h;
+
+  // Try to look up symbol in global store.
+  if (globals_ != nullptr) {
+    h = globals_->FindSymbol(name, hash);
     if (!h.IsNil()) return h;
-
-    // Try to look up numeric symbol in global store.
-    if (globals_ != nullptr) {
-      h = globals_->FindSymbol(number);
-      if (!h.IsNil()) return h;
-    }
-
-    // Numeric symbols cannot be created lazily.
-    return Handle::nil();
-  } else {
-    // Compute hash for name.
-    Handle hash = Hash(name);
-
-    // Try to look up symbol in local store.
-    Handle h = FindSymbol(name, hash);
-    if (!h.IsNil()) return h;
-
-    // Try to look up symbol in global store.
-    if (globals_ != nullptr) {
-      h = globals_->FindSymbol(name, hash);
-      if (!h.IsNil()) return h;
-    }
-
-    // Do not create new symbol if store is frozen.
-    if (frozen_) return Handle::nil();
-
-    // Symbol not found; create new symbol.
-    h = AllocateSymbol(name, hash);
-
-    return h;
   }
+
+  // Do not create new symbol if store is frozen.
+  if (frozen_) return Handle::nil();
+
+  // Symbol not found; create new symbol.
+  return AllocateSymbol(name, hash);
 }
 
 Handle Store::Symbol(Handle name) {
-  if (name.IsInt()) {
-    // Try to look up symbol in local store.
-    Handle h = FindSymbol(name);
-    if (!h.IsNil()) return h;
-
-    // Try to look up symbol in global store.
-    if (globals_ != nullptr) {
-      h = globals_->FindSymbol(name);
-      if (!h.IsNil()) return h;
-    }
-
-    // Numeric symbols cannot be created lazily.
-    return Handle::nil();
-  } else if (IsSymbol(name)) {
+  if (IsSymbol(name)) {
     // Name is a symbol, so just return it.
     return name;
   } else {
@@ -714,55 +644,29 @@ Handle Store::Symbol(Handle name) {
     if (frozen_) return Handle::nil();
 
     // Symbol not found; create new symbol.
-    h = AllocateSymbol(name, hash);
-
-    return h;
+    return AllocateSymbol(name, hash);
   }
 }
 
 Handle Store::ExistingSymbol(Text name) const {
-  // If the symbol name starts with #, it is a numeric symbol.
-  Handle number;
-  if (NumericSymbol(name, &number)) {
-    // Try to look up numeric symbol in local store.
-    Handle h = FindSymbol(number);
+  // Compute hash for name.
+  Handle hash = Hash(name);
+
+  // Try to look up symbol in local store.
+  Handle h = FindSymbol(name, hash);
+  if (!h.IsNil()) return h;
+
+  // Try to look up symbol in global store.
+  if (globals_ != nullptr) {
+    h = globals_->FindSymbol(name, hash);
     if (!h.IsNil()) return h;
-
-    // Try to look up numeric symbol in global store.
-    if (globals_ != nullptr) {
-      h = globals_->FindSymbol(number);
-      if (!h.IsNil()) return h;
-    }
-  } else {
-    // Compute hash for name.
-    Handle hash = Hash(name);
-
-    // Try to look up symbol in local store.
-    Handle h = FindSymbol(name, hash);
-    if (!h.IsNil()) return h;
-
-    // Try to look up symbol in global store.
-    if (globals_ != nullptr) {
-      h = globals_->FindSymbol(name, hash);
-      if (!h.IsNil()) return h;
-    }
   }
 
   return Handle::nil();
 }
 
 Handle Store::ExistingSymbol(Handle name) const {
-  if (name.IsInt()) {
-    // Try to look up symbol in local store.
-    Handle h = FindSymbol(name);
-    if (!h.IsNil()) return h;
-
-    // Try to look up symbol in global store.
-    if (globals_ != nullptr) {
-      h = globals_->FindSymbol(name);
-      if (!h.IsNil()) return h;
-    }
-  } else if (IsSymbol(name)) {
+  if (IsSymbol(name)) {
     // Name is a symbol, so just return it.
     return name;
   } else {
@@ -784,14 +688,6 @@ Handle Store::ExistingSymbol(Handle name) const {
   }
 
   return Handle::nil();
-}
-
-Handle Store::Symbol() {
-  // Get the next numeric symbol number.
-  Handle number = Handle::Integer(next_symbol_number_++);
-
-  // Allocate new symbol. The hash of a number is the number handle itself.
-  return AllocateSymbol(number, number);
 }
 
 Handle Store::Lookup(Text name) {
@@ -893,20 +789,6 @@ void Store::ReplaceProxy(ProxyDatum *proxy, FrameDatum *frame) {
   Handle tmp = proxy->self;
   proxy->self = frame->self;
   frame->self = tmp;
-}
-
-Handle Store::CreateUniqueProxy() {
-  // Get the next numeric symbol number.
-  Handle number = Handle::Integer(next_symbol_number_++);
-
-  // Allocate symbol. The hash of a number is the number handle itself.
-  Handle sym = AllocateSymbol(number, number);
-
-  // Allocate proxy for bound symbol.
-  Handle proxy = AllocateProxy(sym);
-  GetSymbol(sym)->value = proxy;
-
-  return proxy;
 }
 
 Datum *Store::AllocateDatumSlow(Type type, Word size) {
@@ -1376,7 +1258,6 @@ string Store::DebugString(Handle handle) const {
     // Get name for symbol.
     if (object->IsSymbol()) {
       const SymbolDatum *symbol = object->AsSymbol();
-      if (symbol->numeric()) return StrCat("#", symbol->name.AsInt());
       object = Deref(symbol->name);
     }
 

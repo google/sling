@@ -69,10 +69,10 @@ void ActionTableGenerator::GetUnknownSymbols(const Document &document) {
           Frame name = Object(store, slot2.name).AsFrame();
           Frame value = Object(store, slot2.value).AsFrame();
           if (name.valid() && name.IsProxy()) {
-            unknown_[name.Id()]++;
+            unknown_[name.Id().str()]++;
           }
           if (slot2.name.IsIsA() && value.valid() && value.IsProxy()) {
-            unknown_[value.Id()]++;
+            unknown_[value.Id().str()]++;
           }
         }
       }
