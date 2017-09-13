@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INDEX_TRANSLATOR_H_
-#define NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INDEX_TRANSLATOR_H_
+#ifndef SYNTAXNET_DRAGNN_CORE_INDEX_TRANSLATOR_H_
+#define SYNTAXNET_DRAGNN_CORE_INDEX_TRANSLATOR_H_
 
 #include <memory>
 #include <vector>
@@ -37,11 +37,10 @@ namespace dragnn {
 
 class IndexTranslator {
  public:
-  // Index into a TensorArray. Provides a given step, and the beam index within
-  // that step, for TensorArray access to data in the given batch.
+  // Index into a TensorArray. Provides a given step, for TensorArray access to
+  // data in the given batch.
   struct Index {
     int batch_index = -1;
-    int beam_index = -1;
     int step_index = -1;
   };
 
@@ -50,9 +49,9 @@ class IndexTranslator {
   // translate from the last Component in the path.
   IndexTranslator(const std::vector<Component *> &path, const string &method);
 
-  // Returns an index in (step, beam, batch) index space as computed from the
+  // Returns an index in (step, batch) index space as computed from the
   // given feature value.
-  Index Translate(int batch_index, int beam_index, int feature_value);
+  Index Translate(int batch_index, int feature_value);
 
   // Returns the path to be walked by this translator.
   const std::vector<Component *> &path() const { return path_; }
@@ -70,8 +69,8 @@ class IndexTranslator {
 
   // The function this translator will use to look up the step in the source
   // component. The function is invoked as:
-  // step_lookup_(batch_index, beam_index, feature).
-  std::function<int(int, int, int)> step_lookup_;
+  // step_lookup_(batch_index, feature).
+  std::function<int(int, int)> step_lookup_;
 
   // This translator's method.
   string method_;
@@ -80,4 +79,4 @@ class IndexTranslator {
 }  // namespace dragnn
 }  // namespace syntaxnet
 
-#endif  // NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INDEX_TRANSLATOR_H_
+#endif  // SYNTAXNET_DRAGNN_CORE_INDEX_TRANSLATOR_H_

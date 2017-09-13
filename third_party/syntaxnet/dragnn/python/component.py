@@ -46,7 +46,7 @@ class MasterState(object):
   """Simple utility to encapsulate tensors associated with the master state.
 
   Attributes:
-    handle: string tensor handle to the underlying nlp_saft::dragnn::MasterState
+    handle: string tensor handle to the underlying MasterState
     current_batch_size: int tensor containing the batch size following the most
         recent MasterState::Reset().
   """
@@ -102,10 +102,6 @@ class ComponentBuilderBase(object):
           self.spec.component_builder.parameters, attr_defaults)
 
     with tf.variable_scope(self.name):
-      self.training_beam_size = tf.constant(
-          self.spec.training_beam_size, name='TrainingBeamSize')
-      self.inference_beam_size = tf.constant(
-          self.spec.inference_beam_size, name='InferenceBeamSize')
       self.locally_normalize = tf.constant(False, name='LocallyNormalize')
       self._step = tf.get_variable(
           'step', [], initializer=tf.zeros_initializer(), dtype=tf.int32)
@@ -163,8 +159,7 @@ class ComponentBuilderBase(object):
     pass
 
   @abstractmethod
-  def build_inference(self, state, network_states,
-                             during_training=False):
+  def build_inference(self, state, network_states, during_training=False):
     """Builds an inference graph for this component.
 
     If this graph is being constructed 'during_training', then it needs to be
@@ -364,8 +359,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
       correctly predicted actions, and the total number of actions.
     """
     logging.info('Building component: %s', self.spec.name)
-    with tf.control_dependencies([tf.assert_equal(self.training_beam_size, 1)]):
-      stride = state.current_batch_size * self.training_beam_size
+    stride = state.current_batch_size
 
     cost = tf.constant(0.)
     correct = tf.constant(0)
@@ -474,10 +468,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
       Handle to the state once inference is complete for this Component.
     """
     logging.info('Building component: %s', self.spec.name)
-    if during_training:
-      stride = state.current_batch_size * self.training_beam_size
-    else:
-      stride = state.current_batch_size * self.inference_beam_size
+    stride = state.current_batch_size
 
     def cond(handle, *_):
       all_final = dragnn_ops.emit_all_final(handle, component=self.name)
@@ -541,7 +532,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
         other components are used for stack-prop style connections.
       network_states: NetworkState object containing the TensorArrays from
         *all* components.
-      stride: int Tensor with the current beam * batch size.
+      stride: int Tensor with the current batch size.
       during_training: Whether to build a unit for training (vs inference).
 
     Returns:

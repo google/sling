@@ -15,12 +15,6 @@ proto_library(
 )
 
 proto_library(
-  name = "trace-proto",
-  srcs = ["dragnn/protos/trace.proto"],
-  deps = [":data-proto"],
-)
-
-proto_library(
   name = "embedding-proto",
   srcs = ["dragnn/protos/embedding.proto"],
 )
@@ -33,11 +27,6 @@ cc_proto_library(
 cc_proto_library(
   name = "spec",
   deps = ["spec-proto"],
-)
-
-cc_proto_library(
-  name = "trace",
-  deps = ["trace-proto"],
 )
 
 cc_proto_library(
@@ -62,7 +51,6 @@ cc_library(
     ":data",
     ":embedding",
     ":spec",
-    ":trace",
     "//base",
     "//base:registry",
     "//third_party/tensorflow",
@@ -75,7 +63,7 @@ cc_library(
   srcs = [
     "dragnn/core/reader_ops.cc",
     "dragnn/core/compute_session_pool.cc",
-    "dragnn/core/compute_session_impl.cc",
+    "dragnn/core/compute_session.cc",
     "dragnn/core/index_translator.cc",
     "dragnn/core/ops/compute_session_op.cc",
     "dragnn/core/ops/dragnn_ops.cc",
@@ -83,7 +71,7 @@ cc_library(
     "dragnn/core/ops/embedding_ops.cc",
   ],
   hdrs = [
-    "dragnn/core/compute_session_impl.h",
+    "dragnn/core/compute_session.h",
     "dragnn/core/compute_session_pool.h",
     "dragnn/core/index_translator.h",
     "dragnn/core/resource_container.h",

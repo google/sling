@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef NLP_SAFT_OPENSOURCE_DRAGNN_CORE_OPS_COMPUTE_SESSION_OP_H_
-#define NLP_SAFT_OPENSOURCE_DRAGNN_CORE_OPS_COMPUTE_SESSION_OP_H_
+#ifndef SYNTAXNET_DRAGNN_CORE_OPS_COMPUTE_SESSION_OP_H_
+#define SYNTAXNET_DRAGNN_CORE_OPS_COMPUTE_SESSION_OP_H_
 
 #include <string>
 
@@ -66,4 +66,4 @@ class ComputeSessionOp : public tensorflow::OpKernel {
 }  // namespace dragnn
 }  // namespace syntaxnet
 
-#endif  // NLP_SAFT_OPENSOURCE_DRAGNN_CORE_OPS_COMPUTE_SESSION_OP_H_
+#endif  // SYNTAXNET_DRAGNN_CORE_OPS_COMPUTE_SESSION_OP_H_

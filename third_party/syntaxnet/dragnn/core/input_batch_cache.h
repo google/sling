@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INPUT_BATCH_CACHE_H_
-#define NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INPUT_BATCH_CACHE_H_
+#ifndef SYNTAXNET_DRAGNN_CORE_INPUT_BATCH_CACHE_H_
+#define SYNTAXNET_DRAGNN_CORE_INPUT_BATCH_CACHE_H_
 
 #include <memory>
 #include <string>
@@ -90,4 +90,4 @@ class InputBatchCache {
 }  // namespace dragnn
 }  // namespace syntaxnet
 
-#endif  // NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INPUT_BATCH_CACHE_H_
+#endif  // SYNTAXNET_DRAGNN_CORE_INPUT_BATCH_CACHE_H_

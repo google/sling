@@ -164,8 +164,7 @@ def main(unused_argv):
     check.Eq(len(trainers), 1, "Expected only one training target (FF unit)")
 
     # Construct annotation and saves. Will use moving average if enabled.
-    annotator = builder.add_annotation(enable_tracing=False)
-    builder.add_annotation('annotation_with_trace', enable_tracing=True)
+    annotator = builder.add_annotation()
     builder.add_saver()
 
     # Add backwards compatible training summary.

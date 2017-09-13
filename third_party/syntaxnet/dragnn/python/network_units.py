@@ -108,9 +108,7 @@ class NamedTensor(object):
 def add_embeddings(channel_id, feature_spec, seed=None):
   """Adds a variable for the embedding of a given fixed feature.
 
-  Supports pre-trained or randomly initialized embeddings In both cases, extra
-  vector is reserved for out-of-vocabulary words, so the embedding matrix has
-  the size of [feature_spec.vocabulary_size + 1, feature_spec.embedding_dim].
+  Supports pre-trained or randomly initialized embeddings.
 
   Args:
     channel_id: Numeric id of the fixed feature channel
@@ -127,7 +125,7 @@ def add_embeddings(channel_id, feature_spec, seed=None):
   check.Gt(feature_spec.embedding_dim, 0,
            'Embeddings requested for non-embedded feature: %s' % feature_spec)
   name = fixed_embeddings_name(channel_id)
-  shape = [feature_spec.vocabulary_size + 1, feature_spec.embedding_dim]
+  shape = [feature_spec.vocabulary_size, feature_spec.embedding_dim]
   if feature_spec.HasField('pretrained_embedding_matrix'):
     if len(feature_spec.pretrained_embedding_matrix.part) > 1:
       raise RuntimeError('pretrained_embedding_matrix resource contains '
@@ -140,8 +138,6 @@ def add_embeddings(channel_id, feature_spec, seed=None):
     embeddings = dragnn_ops.word_embedding_initializer(
         vectors=feature_spec.pretrained_embedding_matrix.part[0].file_pattern,
         vocabulary=feature_spec.vocab.part[0].file_pattern,
-        num_special_embeddings=1,
-        embedding_init=1.0,
         seed=seed1,
         seed2=seed2)
     return tf.get_variable(name, initializer=tf.reshape(embeddings, shape))
@@ -153,24 +149,19 @@ def add_embeddings(channel_id, feature_spec, seed=None):
             stddev=1.0 / feature_spec.embedding_dim**.5, seed=seed))
 
 
-def embedding_lookup(embedding_matrix, indices, ids, weights, size):
-  """Performs a weighted embedding lookup.
+def embedding_lookup(embedding_matrix, indices, ids, size):
+  """Performs an embedding lookup followed by aggregation.
 
   Args:
     embedding_matrix: float Tensor from which to do the lookup.
     indices: int Tensor for the output rows of the looked up vectors.
     ids: int Tensor vectors to look up in the embedding_matrix.
-    weights: float Tensor weights to apply to the looked up vectors.
-    size: int number of output rows. Needed since some output rows may be
-        empty.
+    size: int number of output rows. Needed since some output rows may be empty.
 
   Returns:
-    Weighted embedding vectors.
+    Summed embedding vectors according to indices.
   """
   embeddings = tf.nn.embedding_lookup([embedding_matrix], ids)
-  # TODO(googleuser): allow skipping weights.
-  broadcast_weights_shape = tf.concat([tf.shape(weights), [1]], 0)
-  embeddings *= tf.reshape(weights, broadcast_weights_shape)
   embeddings = tf.unsorted_segment_sum(embeddings, indices, size)
   return embeddings
 
@@ -178,13 +169,11 @@ def embedding_lookup(embedding_matrix, indices, ids, weights, size):
 def fixed_feature_lookup(component, state, channel_id, stride):
   """Looks up fixed features and passes them through embeddings.
 
-  Embedding vectors may be scaled by weights if the features specify it.
-
   Args:
     component: Component object in which to look up the fixed features.
-    state: MasterState object for the live nlp_saft::dragnn::MasterState.
+    state: MasterState object for the live MasterState.
     channel_id: int id of the fixed feature to look up.
-    stride: int Tensor of current batch * beam size.
+    stride: int Tensor of current batch size.
 
   Returns:
     NamedTensor object containing the embedding vectors.
@@ -196,10 +185,10 @@ def fixed_feature_lookup(component, state, channel_id, stride):
 
   with tf.name_scope(
       name='fixed_embedding_' + feature_spec.name, values=[embedding_matrix]):
-    indices, ids, weights = dragnn_ops.extract_fixed_features(
+    indices, ids = dragnn_ops.extract_fixed_features(
         state.handle, component=component.name, channel_id=channel_id)
     size = stride * feature_spec.size
-    embeddings = embedding_lookup(embedding_matrix, indices, ids, weights, size)
+    embeddings = embedding_lookup(embedding_matrix, indices, ids, size)
     dim = feature_spec.size * feature_spec.embedding_dim
     return NamedTensor(
         tf.reshape(embeddings, [-1, dim]), feature_spec.name, dim=dim)
@@ -234,7 +223,7 @@ def get_input_tensor_with_stride(fixed_embeddings, linked_embeddings, stride):
   Args:
     fixed_embeddings: list of NamedTensor objects for fixed feature channels
     linked_embeddings: list of NamedTensor objects for linked feature channels
-    stride: int stride (i.e. beam * batch) to use to reshape the input
+    stride: int stride (i.e. batch size) to use to reshape the input
 
   Returns:
     a tensor of shape [stride, num_steps, D], where D is the total input
@@ -317,12 +306,12 @@ def activation_lookup_recurrent(component, state, channel_id, source_array,
 
   Args:
     component: Component object in which to look up the fixed features.
-    state: MasterState object for the live nlp_saft::dragnn::MasterState.
+    state: MasterState object for the live MasterState.
     channel_id: int id of the fixed feature to look up.
     source_array: TensorArray from which to fetch feature vectors, expected to
         have size [steps + 1] elements of shape [stride, D] each.
     source_layer_size: int length of feature vectors before embedding.
-    stride: int Tensor of current batch * beam size.
+    stride: int Tensor of current batch size.
 
   Returns:
     NamedTensor object containing the embedding vectors.
@@ -331,13 +320,13 @@ def activation_lookup_recurrent(component, state, channel_id, source_array,
 
   with tf.name_scope('activation_lookup_recurrent_%s' % feature_spec.name):
     # Linked features are returned as a pair of tensors, one indexing into
-    # steps, and one indexing within the activation tensor (beam x batch)
+    # steps, and one indexing within the batch_size activation tensor
     # stored for a step.
     step_idx, idx = dragnn_ops.extract_link_features(
         state.handle, component=component.name, channel_id=channel_id)
 
-    # We take the [steps, batch*beam, ...] tensor array, gather and concat
-    # the steps we might need into a [some_steps*batch*beam, ...] tensor,
+    # We take the [steps, batch_size, ...] tensor array, gather and concat
+    # the steps we might need into a [some_steps*batch_size, ...] tensor,
     # and flatten 'idx' to dereference this new tensor.
     #
     # The first element of each tensor array is reserved for an
@@ -381,7 +370,7 @@ def activation_lookup_other(component, state, channel_id, source_tensor,
 
   Args:
     component: Component object in which to look up the fixed features.
-    state: MasterState object for the live nlp_saft::dragnn::MasterState.
+    state: MasterState object for the live MasterState.
     channel_id: int id of the fixed feature to look up.
     source_tensor: Tensor from which to fetch feature vectors. Expected to have
         have shape [steps + 1, stride, D].
@@ -397,7 +386,7 @@ def activation_lookup_other(component, state, channel_id, source_tensor,
 
   with tf.name_scope('activation_lookup_other_%s' % feature_spec.name):
     # Linked features are returned as a pair of tensors, one indexing into
-    # steps, and one indexing within the stride (beam x batch) of each step.
+    # steps, and one indexing within the stride (batch_size) of each step.
     step_idx, idx = dragnn_ops.extract_link_features(
         state.handle, component=component.name, channel_id=channel_id)
 
@@ -522,7 +511,7 @@ class Layer(object):
     """Creates a new tensor array to store this layer's activations.
 
     Arguments:
-      stride: Possibly dynamic batch * beam size with which to initialize the
+      stride: Possibly dynamic batch size with which to initialize the
         tensor array
 
     Returns:

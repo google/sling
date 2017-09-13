@@ -13,7 +13,7 @@
 // limitations under the License.
 // =============================================================================
 
-#include "dragnn/core/compute_session_impl.h"
+#include "dragnn/core/compute_session.h"
 
 #include <algorithm>
 #include <utility>
@@ -21,20 +21,19 @@
 #include "base/registry.h"
 #include "dragnn/protos/data.pb.h"
 #include "dragnn/protos/spec.pb.h"
-#include "dragnn/protos/trace.pb.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace syntaxnet {
 namespace dragnn {
 
-ComputeSessionImpl::ComputeSessionImpl(
+ComputeSession::ComputeSession(
     int id,
     std::function<std::unique_ptr<Component>(const string &component_name,
                                              const string &backend_type)>
         component_builder)
     : component_builder_(std::move(component_builder)), id_(id) {}
 
-void ComputeSessionImpl::Init(const MasterSpec &master_spec,
+void ComputeSession::Init(const MasterSpec &master_spec,
                               const GridPoint &hyperparams) {
   spec_ = master_spec;
   grid_point_ = hyperparams;
@@ -102,12 +101,10 @@ void ComputeSessionImpl::Init(const MasterSpec &master_spec,
     }
   }
   VLOG(2) << "Done adding translators.";
-
   VLOG(2) << "Initialization complete.";
 }
 
-void ComputeSessionImpl::InitializeComponentData(const string &component_name,
-                                                 int max_beam_size) {
+void ComputeSession::InitializeComponentData(const string &component_name) {
   CHECK(input_data_ != nullptr) << "Attempted to access a component without "
                                    "providing input data for this session.";
   Component *component = GetComponent(component_name);
@@ -115,33 +112,19 @@ void ComputeSessionImpl::InitializeComponentData(const string &component_name,
   // Try and find the source component. If one exists, check that it is terminal
   // and get its data; if not, pass in an empty vector for source data.
   auto source_result = predecessors_.find(component);
-  if (source_result == predecessors_.end()) {
-    VLOG(1) << "Source result not found. Using empty initialization vector for "
-            << component_name;
-    component->InitializeData({}, max_beam_size, input_data_.get());
-  } else {
-    VLOG(1) << "Source result found. Using prior initialization vector for "
-            << component_name;
+  if (source_result != predecessors_.end()) {
     auto source = source_result->second;
     CHECK(source->IsTerminal()) << "Source is not terminal for component '"
                                 << component_name << "'. Exiting.";
-    component->InitializeData(source->GetBeam(), max_beam_size,
-                              input_data_.get());
   }
-  if (do_tracing_) {
-    component->InitializeTracing();
-  }
+  component->InitializeData(input_data_.get());
 }
 
-int ComputeSessionImpl::BatchSize(const string &component_name) const {
+int ComputeSession::BatchSize(const string &component_name) const {
   return GetReadiedComponent(component_name)->BatchSize();
 }
 
-int ComputeSessionImpl::BeamSize(const string &component_name) const {
-  return GetReadiedComponent(component_name)->BeamSize();
-}
-
-const ComponentSpec &ComputeSessionImpl::Spec(
+const ComponentSpec &ComputeSession::Spec(
     const string &component_name) const {
   for (const auto &component : spec_.component()) {
     if (component.name() == component_name) {
@@ -151,33 +134,26 @@ const ComponentSpec &ComputeSessionImpl::Spec(
   LOG(FATAL) << "Missing component '" << component_name << "'. Exiting.";
 }
 
-int ComputeSessionImpl::SourceComponentBeamSize(const string &component_name,
-                                                int channel_id) {
-  const auto &translators = GetTranslators(component_name);
-  return translators.at(channel_id)->path().back()->BeamSize();
-}
-
-void ComputeSessionImpl::AdvanceFromOracle(const string &component_name) {
+void ComputeSession::AdvanceFromOracle(const string &component_name) {
   GetReadiedComponent(component_name)->AdvanceFromOracle();
 }
 
-void ComputeSessionImpl::AdvanceFromPrediction(const string &component_name,
+void ComputeSession::AdvanceFromPrediction(const string &component_name,
                                                const float score_matrix[],
                                                int score_matrix_length) {
   GetReadiedComponent(component_name)
       ->AdvanceFromPrediction(score_matrix, score_matrix_length);
 }
 
-int ComputeSessionImpl::GetInputFeatures(
+int ComputeSession::GetInputFeatures(
     const string &component_name, std::function<int32 *(int)> allocate_indices,
     std::function<int64 *(int)> allocate_ids,
-    std::function<float *(int)> allocate_weights, int channel_id) const {
+    int channel_id) const {
   return GetReadiedComponent(component_name)
-      ->GetFixedFeatures(allocate_indices, allocate_ids, allocate_weights,
-                         channel_id);
+      ->GetFixedFeatures(allocate_indices, allocate_ids, channel_id);
 }
 
-std::vector<LinkFeatures> ComputeSessionImpl::GetTranslatedLinkFeatures(
+std::vector<LinkFeatures> ComputeSession::GetTranslatedLinkFeatures(
     const string &component_name, int channel_id) {
   auto *component = GetReadiedComponent(component_name);
   auto features = component->GetRawLinkFeatures(channel_id);
@@ -188,102 +164,41 @@ std::vector<LinkFeatures> ComputeSessionImpl::GetTranslatedLinkFeatures(
     if (feature.has_feature_value()) {
       VLOG(2) << "Raw feature[" << i << "]: " << feature.ShortDebugString();
       IndexTranslator::Index index = translator->Translate(
-          feature.batch_idx(), feature.beam_idx(), feature.feature_value());
+          feature.batch_idx(), feature.feature_value());
       feature.set_step_idx(index.step_index);
       feature.set_batch_idx(index.batch_index);
-      feature.set_beam_idx(index.beam_index);
     } else {
       VLOG(2) << "Raw feature[" << i << "]: PADDING (empty proto)";
     }
   }
 
-  // Add the translated link features to the component's trace.
-  if (do_tracing_) {
-    component->AddTranslatedLinkFeaturesToTrace(features, channel_id);
-  }
-
   return features;
 }
-std::vector<std::vector<int>> ComputeSessionImpl::EmitOracleLabels(
+
+std::vector<int> ComputeSession::EmitOracleLabels(
     const string &component_name) {
   return GetReadiedComponent(component_name)->GetOracleLabels();
 }
 
-bool ComputeSessionImpl::IsTerminal(const string &component_name) {
+bool ComputeSession::IsTerminal(const string &component_name) {
   return GetReadiedComponent(component_name)->IsTerminal();
 }
 
-void ComputeSessionImpl::SetTracing(bool tracing_on) {
-  do_tracing_ = tracing_on;
-  for (auto &component_pair : components_) {
-    if (!tracing_on) {
-      component_pair.second->DisableTracing();
-    }
-  }
-}
-
-void ComputeSessionImpl::FinalizeData(const string &component_name) {
+void ComputeSession::FinalizeData(const string &component_name) {
   VLOG(2) << "Finalizing data for " << component_name;
   GetReadiedComponent(component_name)->FinalizeData();
 }
 
-std::vector<string> ComputeSessionImpl::GetSerializedPredictions() {
+std::vector<string> ComputeSession::GetSerializedPredictions() {
   VLOG(2) << "Geting serialized predictions.";
   return input_data_->SerializedData();
 }
 
-std::vector<MasterTrace> ComputeSessionImpl::GetTraceProtos() {
-  std::vector<MasterTrace> traces;
-
-  // First compute all possible traces for each component.
-  std::map<string, std::vector<std::vector<ComponentTrace>>> component_traces;
-  std::vector<string> pipeline;
-  for (auto &component_spec : spec_.component()) {
-    pipeline.push_back(component_spec.name());
-    component_traces.insert(
-        {component_spec.name(),
-         GetComponent(component_spec.name())->GetTraceProtos()});
-  }
-
-  // Only output for the actual number of states in each beam.
-  auto final_beam = GetComponent(pipeline.back())->GetBeam();
-  for (int batch_idx = 0; batch_idx < final_beam.size(); ++batch_idx) {
-    for (int beam_idx = 0; beam_idx < final_beam[batch_idx].size();
-         ++beam_idx) {
-      std::vector<int> beam_path;
-      beam_path.push_back(beam_idx);
-
-      // Trace components backwards, finding the source of each state in the
-      // prior component.
-      VLOG(2) << "Start trace: " << beam_idx;
-      for (int i = pipeline.size() - 1; i > 0; --i) {
-        const auto *component = GetComponent(pipeline[i]);
-        int source_beam_idx =
-            component->GetSourceBeamIndex(beam_path.back(), batch_idx);
-        beam_path.push_back(source_beam_idx);
-
-        VLOG(2) << "Tracing path: " << pipeline[i] << " = " << source_beam_idx;
-      }
-
-      // Trace the path from the *start* to the end.
-      std::reverse(beam_path.begin(), beam_path.end());
-      MasterTrace master_trace;
-      for (int i = 0; i < pipeline.size(); ++i) {
-        *master_trace.add_component_trace() =
-            component_traces[pipeline[i]][batch_idx][beam_path[i]];
-      }
-      traces.push_back(master_trace);
-    }
-  }
-
-  return traces;
-}
-
-void ComputeSessionImpl::SetInputData(const std::vector<string> &data) {
+void ComputeSession::SetInputData(const std::vector<string> &data) {
   input_data_.reset(new InputBatchCache(data));
 }
 
-void ComputeSessionImpl::ResetSession() {
+void ComputeSession::ResetSession() {
   // Reset all component states.
   for (auto &component_pair : components_) {
     component_pair.second->ResetComponent();
@@ -293,13 +208,13 @@ void ComputeSessionImpl::ResetSession() {
   input_data_.reset();
 }
 
-int ComputeSessionImpl::Id() const { return id_; }
+int ComputeSession::Id() const { return id_; }
 
-string ComputeSessionImpl::GetDescription(const string &component_name) const {
+string ComputeSession::GetDescription(const string &component_name) const {
   return GetComponent(component_name)->Name();
 }
 
-const std::vector<const IndexTranslator *> ComputeSessionImpl::Translators(
+const std::vector<const IndexTranslator *> ComputeSession::Translators(
     const string &component_name) const {
   auto translators = GetTranslators(component_name);
   std::vector<const IndexTranslator *> const_translators;
@@ -309,7 +224,7 @@ const std::vector<const IndexTranslator *> ComputeSessionImpl::Translators(
   return const_translators;
 }
 
-Component *ComputeSessionImpl::GetReadiedComponent(
+Component *ComputeSession::GetReadiedComponent(
     const string &component_name) const {
   auto component = GetComponent(component_name);
   CHECK(component->IsReady())
@@ -318,7 +233,7 @@ Component *ComputeSessionImpl::GetReadiedComponent(
   return component;
 }
 
-Component *ComputeSessionImpl::GetComponent(
+Component *ComputeSession::GetComponent(
     const string &component_name) const {
   auto result = components_.find(component_name);
   if (result == components_.end()) {
@@ -334,7 +249,7 @@ Component *ComputeSessionImpl::GetComponent(
   return component;
 }
 
-const std::vector<IndexTranslator *> &ComputeSessionImpl::GetTranslators(
+const std::vector<IndexTranslator *> &ComputeSession::GetTranslators(
     const string &component_name) const {
   auto result = translators_.find(component_name);
   if (result == translators_.end()) {
@@ -348,7 +263,7 @@ const std::vector<IndexTranslator *> &ComputeSessionImpl::GetTranslators(
   return result->second;
 }
 
-std::unique_ptr<IndexTranslator> ComputeSessionImpl::CreateTranslator(
+std::unique_ptr<IndexTranslator> ComputeSession::CreateTranslator(
     const LinkedFeatureChannel &channel, Component *start_component) {
   const int num_components = spec_.component_size();
   VLOG(2) << "Channel spec: " << channel.ShortDebugString();

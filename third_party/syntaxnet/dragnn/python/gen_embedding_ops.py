@@ -19,10 +19,8 @@ from tensorflow.python.framework import op_def_library as _op_def_library
 _word_embedding_initializer_outputs = ["word_embeddings"]
 
 
-def word_embedding_initializer(vectors, task_context=None, vocabulary=None,
-                               cache_vectors_locally=None,
-                               num_special_embeddings=None,
-                               embedding_init=None, seed=None, seed2=None,
+def word_embedding_initializer(vectors, vocabulary=None,
+                               seed=None, seed2=None,
                                name=None):
   r"""Reads word embeddings from an sstable of dist_belief.TokenEmbedding protos for
 
@@ -30,23 +28,8 @@ def word_embedding_initializer(vectors, task_context=None, vocabulary=None,
 
   Args:
     vectors: A `string`. path to TF record file of word embedding vectors.
-    task_context: An optional `string`. Defaults to `""`.
-      file path at which to read the task context, for its "word-map"
-      input.  Exactly one of `task_context` or `vocabulary` must be specified.
     vocabulary: An optional `string`. Defaults to `""`.
-      path to vocabulary file, which contains one unique word per line, in
-      order.  Exactly one of `task_context` or `vocabulary` must be specified.
-    cache_vectors_locally: An optional `bool`. Defaults to `True`.
-      Whether to cache the vectors file to a local temp file
-      before parsing it.  This greatly reduces initialization time when the vectors
-      are stored remotely, but requires that "/tmp" has sufficient space.
-    num_special_embeddings: An optional `int`. Defaults to `3`.
-      Number of special embeddings to allocate, in addition to
-      those allocated for real words.
-    embedding_init: An optional `float`. Defaults to `1`.
-      embedding vectors that are not found in the input sstable are
-      initialized randomly from a normal distribution with zero mean and
-      std dev = embedding_init / sqrt(embedding_size).
+      path to vocabulary file, which contains one unique word per line.
     seed: An optional `int`. Defaults to `0`.
       If either `seed` or `seed2` are set to be non-zero, the random number
       generator is seeded by the given seed.  Otherwise, it is seeded by a random
@@ -60,11 +43,8 @@ def word_embedding_initializer(vectors, task_context=None, vocabulary=None,
     a tensor containing word embeddings from the specified table.
   """
   result = _op_def_lib.apply_op("WordEmbeddingInitializer", vectors=vectors,
-                                task_context=task_context,
                                 vocabulary=vocabulary,
-                                cache_vectors_locally=cache_vectors_locally,
-                                num_special_embeddings=num_special_embeddings,
-                                embedding_init=embedding_init, seed=seed,
+                                seed=seed,
                                 seed2=seed2, name=name)
   return result
 
@@ -91,38 +71,10 @@ op {
     type: "string"
   }
   attr {
-    name: "task_context"
-    type: "string"
-    default_value {
-      s: ""
-    }
-  }
-  attr {
     name: "vocabulary"
     type: "string"
     default_value {
       s: ""
-    }
-  }
-  attr {
-    name: "cache_vectors_locally"
-    type: "bool"
-    default_value {
-      b: true
-    }
-  }
-  attr {
-    name: "num_special_embeddings"
-    type: "int"
-    default_value {
-      i: 3
-    }
-  }
-  attr {
-    name: "embedding_init"
-    type: "float"
-    default_value {
-      f: 1
     }
   }
   attr {

@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef NLP_SAFT_OPENSOURCE_DRAGNN_CORE_COMPONENT_REGISTRY_H_
-#define NLP_SAFT_OPENSOURCE_DRAGNN_CORE_COMPONENT_REGISTRY_H_
+#ifndef SYNTAXNET_DRAGNN_CORE_COMPONENT_REGISTRY_H_
+#define SYNTAXNET_DRAGNN_CORE_COMPONENT_REGISTRY_H_
 
 #include "base/registry.h"
 #include "dragnn/core/interfaces/component.h"
@@ -25,4 +25,4 @@
 #define REGISTER_DRAGNN_COMPONENT(component) \
   REGISTER_COMPONENT_TYPE(syntaxnet::dragnn::Component, #component, component)
 
-#endif  // NLP_SAFT_OPENSOURCE_DRAGNN_CORE_COMPONENT_REGISTRY_H_
+#endif  // SYNTAXNET_DRAGNN_CORE_COMPONENT_REGISTRY_H_

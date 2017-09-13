@@ -45,12 +45,6 @@ class WordEmbeddingInitializer : public OpKernel {
       : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("vocabulary", &vocabulary_path_));
     OP_REQUIRES_OK(context, context->GetAttr("vectors", &vectors_path_));
-    OP_REQUIRES_OK(context, context->GetAttr("cache_vectors_locally",
-                                             &cache_vectors_locally_));
-    OP_REQUIRES_OK(context, context->GetAttr("num_special_embeddings",
-                                             &num_special_embeddings_));
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("embedding_init", &embedding_init_));
 
     // Convert the seeds into a single 64-bit seed.  NB: seed=0,seed2=0 converts
     // into seed_=0, which causes Eigen PRNGs to seed non-deterministically.
@@ -67,11 +61,7 @@ class WordEmbeddingInitializer : public OpKernel {
     std::unordered_map<string, int64> vocab;
     OP_REQUIRES_OK(context, LoadVocabulary(&vocab));
 
-    string vectors_path = vectors_path_;
-    if (cache_vectors_locally_) {
-      OP_REQUIRES_OK(context, CopyToTmpPath(vectors_path_, &vectors_path));
-    }
-    ProtoRecordReader reader(vectors_path);
+    ProtoRecordReader reader(vectors_path_);
 
     // Load the embedding vectors into a matrix.  Since the |embedding_matrix|
     // output cannot be allocated until the embedding dimension is known, delay
@@ -138,13 +128,13 @@ class WordEmbeddingInitializer : public OpKernel {
       const std::unordered_map<string, int64> &vocabulary,
       const TokenEmbedding &embedding, OpKernelContext *context,
       Tensor **embedding_matrix) const {
-    const int rows = vocabulary.size() + num_special_embeddings_;
+    const int rows = vocabulary.size();
     const int columns = embedding.vector().values_size();
     TF_RETURN_IF_ERROR(context->allocate_output(0, TensorShape({rows, columns}),
                                                 embedding_matrix));
     auto matrix = (*embedding_matrix)->matrix<float>();
     Eigen::internal::NormalRandomGenerator<float> prng(seed_);
-    matrix = matrix.random(prng) * (embedding_init_ / sqrtf(columns));
+    matrix = matrix.random(prng) * (1.0f / sqrtf(columns));
     return tensorflow::Status::OK();
   }
 
@@ -162,56 +152,11 @@ class WordEmbeddingInitializer : public OpKernel {
     }
   }
 
-  // Copies the file at source_path to a temporary file and sets tmp_path to the
-  // temporary file's location. This is helpful since reading from non local
-  // files with a record reader can be very slow.
-  static tensorflow::Status CopyToTmpPath(const string &source_path,
-                                          string *tmp_path) {
-    // Opens source file.
-    std::unique_ptr<tensorflow::RandomAccessFile> source_file;
-    TF_RETURN_IF_ERROR(tensorflow::Env::Default()->NewRandomAccessFile(
-        source_path, &source_file));
-
-    // Creates destination file.
-    std::unique_ptr<tensorflow::WritableFile> target_file;
-    *tmp_path = tensorflow::strings::Printf(
-        "/tmp/%d.%lld", getpid(), tensorflow::Env::Default()->NowMicros());
-    TF_RETURN_IF_ERROR(
-        tensorflow::Env::Default()->NewWritableFile(*tmp_path, &target_file));
-
-    // Performs copy.
-    tensorflow::Status s;
-    const size_t kBytesToRead = 10 << 20;  // 10MB at a time.
-    string scratch;
-    scratch.resize(kBytesToRead);
-    for (uint64 offset = 0; s.ok(); offset += kBytesToRead) {
-      tensorflow::StringPiece data;
-      s.Update(source_file->Read(offset, kBytesToRead, &data, &scratch[0]));
-      TF_RETURN_IF_ERROR(target_file->Append(data));
-    }
-    if (s.code() == OUT_OF_RANGE) {
-      return tensorflow::Status::OK();
-    } else {
-      return s;
-    }
-  }
-
   // Path to the vocabulary file.
   string vocabulary_path_;
 
-  // Whether to cache the vectors to a local temp file, to reduce I/O latency.
-  bool cache_vectors_locally_ = true;
-
-  // Number of special embeddings to allocate.
-  int num_special_embeddings_ = 3;
-
   // Seed for random initialization.
   uint64 seed_ = 0;
-
-  // Embedding vectors that are not found in the input sstable are initialized
-  // randomly from a normal distribution with zero mean and
-  //   std dev = embedding_init_ / sqrt(embedding_size).
-  float embedding_init_ = 1.f;
 
   // Path to recordio with word embedding vectors.
   string vectors_path_;

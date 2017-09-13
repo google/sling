@@ -94,7 +94,6 @@ int main(int argc, char **argv) {
   GridPoint empty_grid_point;
   ComputeSessionPool pool(spec, empty_grid_point);
   auto session = pool.GetSession();
-  session->SetTracing(true);
 
   string global_store_path;
   string action_table_path;
@@ -125,8 +124,9 @@ int main(int argc, char **argv) {
     LOG(INFO) << "Processing : " << name;
     session->SetInputData(input);
     for (int cidx = 0; cidx < spec.component_size(); ++cidx) {
+      int actions = 0;
       const string &name = spec.component(cidx).name();
-      session->InitializeComponentData(name, 1 /* max beam size */);
+      session->InitializeComponentData(name);
       while (!session->IsTerminal(name)) {
         for (int c = 0; c < spec.component(cidx).linked_feature_size(); ++c) {
           session->GetTranslatedLinkFeatures(name, c);
@@ -136,12 +136,10 @@ int main(int argc, char **argv) {
               name, AllocateIndices, AllocateIds, AllocateWeights, c);
         }
         session->AdvanceFromOracle(name);
+        actions++;
       }
+      LOG(INFO) << "  " << name << " : " << actions << " actions";
     }
-
-    const auto trace_protos = session->GetTraceProtos();
-    CHECK_EQ(trace_protos.size(), 1);
-    LOG(INFO) << "Trace proto: " << trace_protos[0].DebugString();
   }
   delete corpus;
 

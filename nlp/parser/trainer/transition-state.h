@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "dragnn/core/interfaces/transition_state.h"
-#include "dragnn/protos/trace.pb.h"
 #include "frame/store.h"
 #include "nlp/document/document.h"
 #include "nlp/parser/action-table.h"
@@ -49,29 +48,14 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
 
   ~SemparState();
 
-  // Initializes this TransitionState from a previous TransitionState.
-  void Init(const TransitionState &parent) override;
-
-  // Return the beam index of the state passed into the initializer of this
-  // TransitionState.
-  const int ParentBeamIndex() const override;
-
-  // Get the current beam index for this state.
-  const int GetBeamIndex() const override;
-
-  // Set the current beam index for this state.
-  void SetBeamIndex(const int index) override;
-
   // Get the score associated with this transition state.
   const float GetScore() const override;
 
   // Set the score associated with this transition state.
   void SetScore(const float score) override;
 
-  // Depicts this state as an HTML-language string.
-  string HTMLRepresentation() const override;
-
-  // **** END INHERITED INTERFACE ****
+  // Depicts this state as a debug string.
+  string DebugString() const;
 
   // Returns whether the state can performs more actions.
   bool IsFinal() const;
@@ -101,15 +85,6 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
       return StrCat("<", c, ">");
     }
     return document()->token(c).text();
-  }
-
-  syntaxnet::dragnn::ComponentTrace *mutable_trace() {
-    CHECK(trace_ != nullptr) << "Trace is not initialized";
-    return trace_;
-  }
-  void set_trace(syntaxnet::dragnn::ComponentTrace *trace) {
-    delete trace_;
-    trace_ = trace;
   }
 
   // Returns the size of the actions history.
@@ -241,20 +216,11 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
   // The current score of this state.
   float score_;
 
-  // The current beam index of this state.
-  int current_beam_index_;
-
-  // The parent beam index for this state.
-  int parent_beam_index_;
-
   // History of previous actions.
   std::vector<int> history_;
 
   // Maximum size of the history.
   static const int kMaxHistory = 10;
-
-  // Trace of the history to produce this state.
-  syntaxnet::dragnn::ComponentTrace *trace_ = nullptr;
 
   // Gold transition generator. Not owned. Only used during training.
   const GoldTransitionGenerator *gold_transition_generator_ = nullptr;

@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INTERFACES_INPUT_BATCH_H_
-#define NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INTERFACES_INPUT_BATCH_H_
+#ifndef SYNTAXNET_DRAGNN_CORE_INTERFACES_INPUT_BATCH_H_
+#define SYNTAXNET_DRAGNN_CORE_INTERFACES_INPUT_BATCH_H_
 
 #include <string>
 #include <vector>
@@ -42,4 +42,4 @@ class InputBatch {
 }  // namespace dragnn
 }  // namespace syntaxnet
 
-#endif  // NLP_SAFT_OPENSOURCE_DRAGNN_CORE_INTERFACES_INPUT_BATCH_H_
+#endif  // SYNTAXNET_DRAGNN_CORE_INTERFACES_INPUT_BATCH_H_

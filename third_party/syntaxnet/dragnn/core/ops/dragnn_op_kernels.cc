@@ -192,8 +192,7 @@ REGISTER_KERNEL_BUILDER(Name("ReleaseSession").Device(DEVICE_CPU),
  *                   ComputeSessionOps below here.
  ******************************************************************************/
 
-// Given a handle to a BatchedBeamComponentState, advances based on the next
-// oracle (gold) action.
+// Advances a session based on the next oracle (gold) action.
 class AdvanceFromOracle : public ComputeSessionOp {
  public:
   explicit AdvanceFromOracle(OpKernelConstruction *context)
@@ -216,9 +215,8 @@ class AdvanceFromOracle : public ComputeSessionOp {
 REGISTER_KERNEL_BUILDER(Name("AdvanceFromOracle").Device(DEVICE_CPU),
                         AdvanceFromOracle);
 
-// Given a handle to a BatchedBeamComponentState and a tensor of scores,
-// advances the state. The tensor of scores has shape batch_size x beam_size
-// x num_actions.
+// Advances the session using predicted action scores.
+// The tensor of scores has shape batch_size x num_actions.
 class AdvanceFromPrediction : public ComputeSessionOp {
  public:
   explicit AdvanceFromPrediction(OpKernelConstruction *context)
@@ -248,28 +246,24 @@ REGISTER_KERNEL_BUILDER(Name("AdvanceFromPrediction").Device(DEVICE_CPU),
 // Given a handle to a ComputeSession and a channel index, outputs fixed
 // features.
 // Fixed features are returned as 3 vectors or equal length:
-//   - ids: specifies which rows should be looked up in the embedding
-//   matrix,
-//   - weights: specifies a scale for each embedding vector,
+//   - ids: specifies ids of rows to be looked up in the embedding matrix,
 //   - indices: sorted vector that assigns the same index to embedding
-//   vectors
-//       that should be summed together.
+//     vectors that should be summed together.
 //
 // For example if we have 3 features, for a given channel, we might have:
-//   feature a: (5, 1)
-//   feature b: (5, 0.5), (6, 0.5)
-//   feature c: (7, 1)
+//   feature a: 5
+//   feature b: 5, 6
+//   feature c: 7
 // In this case:
 //   indices should look like: [0, 1, 1, 2]
 //   ids should be [5, 5, 6, 7]
-//   weights should be [1, 0.5, 0.5, 1]
 class ExtractFixedFeatures : public ComputeSessionOp {
  public:
   explicit ExtractFixedFeatures(OpKernelConstruction *context)
       : ComputeSessionOp(context) {
     OP_REQUIRES_OK(context, context->GetAttr("channel_id", &channel_id_));
     OP_REQUIRES_OK(context, context->MatchSignature(
-                                {DT_STRING}, {DT_INT32, DT_INT64, DT_FLOAT}));
+                                {DT_STRING}, {DT_INT32, DT_INT64}));
   }
 
   bool OutputsHandle() const override { return false; }
@@ -291,15 +285,8 @@ class ExtractFixedFeatures : public ComputeSessionOp {
               .ok());
       return ids_tensor->vec<int64>().data();
     };
-    auto weights_allocator = [context](int num_elements) {
-      Tensor *output;
-      CHECK(context->allocate_output(2, TensorShape({num_elements}), &output)
-                .ok());
-      return output->vec<float>().data();
-    };
     int num_features = session->GetInputFeatures(
-        component_name(), indices_allocator, ids_allocator, weights_allocator,
-        channel_id_);
+        component_name(), indices_allocator, ids_allocator, channel_id_);
     VLOG(2) << "Extracted " << num_features;
   }
 
@@ -311,9 +298,8 @@ class ExtractFixedFeatures : public ComputeSessionOp {
 REGISTER_KERNEL_BUILDER(Name("ExtractFixedFeatures").Device(DEVICE_CPU),
                         ExtractFixedFeatures);
 
-// Given a handle to a ComputeSession and a channel index, outputs link
-// features. Link features are returned as two vectors of length batch_size *
-// beam_size * channel_size:
+// Given a ComputeSession and a channel index, outputs link features.
+// Link features are returned as two vectors of size: batch_size * channel_size:
 //   - step_idx: specifies the element to read in a tensor array of activations,
 //   - idx: specifies the row within the tensor array element.
 class ExtractLinkFeatures : public ComputeSessionOp {
@@ -345,10 +331,6 @@ class ExtractLinkFeatures : public ComputeSessionOp {
     OP_REQUIRES_OK(context, context->allocate_output(
                                 1, TensorShape({num_indices}), &idx_output));
 
-    const int source_beam_size =
-        session->SourceComponentBeamSize(component_name(), channel_id_);
-    VLOG(2) << "source_beam_size:" << source_beam_size;
-
     // Clip step_idx for all features. If a feature is empty, set the step
     // index to -1.
     for (int i = 0; i < features.size(); ++i) {
@@ -362,29 +344,15 @@ class ExtractLinkFeatures : public ComputeSessionOp {
       // Sets the element to read from a tensor array of activations.
       step_idx_output->vec<int32>()(i) = features[i].step_idx();
 
-      // Within the tensor array element the id has to account for beam index
-      // and batch index for this specific component state.
-      idx_output->vec<int32>()(i) =
-          features[i].step_idx() >= 0
-              ? OutputLinearIndex(features[i], source_beam_size)
-              : 0;
+      // Within the tensor array element the id has to account for batch index.
+      idx_output->vec<int32>()(i) = (features[i].step_idx() >= 0)
+              ? features[i].batch_idx() : 0;
 
       VLOG(2) << "features[" << i << "]: " << features[i].ShortDebugString();
     }
   }
 
  private:
-  // Given the beam index and the batch index in a LinkFeatures proto, returns
-  // the corresponding linear index, assuming that the matrix we're indexing
-  // into has shape {batch_size * beam_size, activation_size}, reshaped from a
-  // tensor of shape {batch_size, beam_size, activation_size}.
-  static uint64 OutputLinearIndex(const LinkFeatures &feature,
-                                  const int beam_size) {
-    VLOG(2) << "OutputLinearIndex batch_idx:" << feature.batch_idx()
-            << " beam_size:" << beam_size << " beam_idx:" << feature.beam_idx();
-    return feature.batch_idx() * beam_size + feature.beam_idx();
-  }
-
   int channel_id_;
   TF_DISALLOW_COPY_AND_ASSIGN(ExtractLinkFeatures);
 };
@@ -392,9 +360,7 @@ class ExtractLinkFeatures : public ComputeSessionOp {
 REGISTER_KERNEL_BUILDER(Name("ExtractLinkFeatures").Device(DEVICE_CPU),
                         ExtractLinkFeatures);
 
-// Given a handle to a BatchedBeamComponentState, emits a vector of gold
-// labels.
-// The vector of gold labels has size batch_size * beam_size.
+// Emits a vector of gold labels of size batch_size.
 class EmitOracleLabels : public ComputeSessionOp {
  public:
   explicit EmitOracleLabels(OpKernelConstruction *context)
@@ -407,22 +373,17 @@ class EmitOracleLabels : public ComputeSessionOp {
   void ComputeWithState(OpKernelContext *context,
                         ComputeSession *session) override {
     VLOG(2) << "state->BatchSize: " << session->BatchSize(component_name());
-    VLOG(2) << "state->BeamSize: " << session->BeamSize(component_name());
     Tensor *output;
     OP_REQUIRES_OK(context,
                    context->allocate_output(
                        0,
-                       TensorShape({session->BatchSize(component_name()) *
-                                    session->BeamSize(component_name())}),
+                       TensorShape({session->BatchSize(component_name())}),
                        &output));
-    std::vector<std::vector<int>> batched_labels =
-        session->EmitOracleLabels(component_name());
-    int raw_index = 0;
-    for (const auto &batch_vector : batched_labels) {
-      for (const auto &label : batch_vector) {
-        output->vec<int32>()(raw_index) = label;
-        ++raw_index;
-      }
+    std::vector<int> labels = session->EmitOracleLabels(component_name());
+    int index = 0;
+    for (const auto &label : labels) {
+      output->vec<int32>()(index) = label;
+      ++index;
     }
   }
 
@@ -434,7 +395,7 @@ REGISTER_KERNEL_BUILDER(Name("EmitOracleLabels").Device(DEVICE_CPU),
                         EmitOracleLabels);
 
 // Given a handle to a ComponentState, emits a single bool indicating
-// whether all elements in the batch contain beams containing all final states.
+// whether all elements in the batch are in their final states.
 class EmitAllFinal : public ComputeSessionOp {
  public:
   explicit EmitAllFinal(OpKernelConstruction *context)
@@ -467,7 +428,7 @@ class InitComponentData : public ComputeSessionOp {
   explicit InitComponentData(OpKernelConstruction *context)
       : ComputeSessionOp(context) {
     OP_REQUIRES_OK(context,
-                   context->MatchSignature({DT_STRING, DT_INT32}, {DT_STRING}));
+                   context->MatchSignature({DT_STRING}, {DT_STRING}));
   }
 
   bool OutputsHandle() const override { return true; }
@@ -476,8 +437,7 @@ class InitComponentData : public ComputeSessionOp {
 
   void ComputeWithState(OpKernelContext *context,
                         ComputeSession *session) override {
-    const int beam_size = context->input(1).scalar<int32>()();
-    session->InitializeComponentData(component_name(), beam_size);
+    session->InitializeComponentData(component_name());
   }
 };
 
@@ -534,29 +494,6 @@ class AttachDataReader : public ComputeSessionOp {
 REGISTER_KERNEL_BUILDER(Name("AttachDataReader").Device(DEVICE_CPU),
                         AttachDataReader);
 
-// Sets the tracing flag on the master state, which will enable or disable
-// tracing as inference / training is run.
-class SetTracing : public ComputeSessionOp {
- public:
-  explicit SetTracing(OpKernelConstruction *context)
-      : ComputeSessionOp(context) {
-    OP_REQUIRES_OK(context,
-                   context->MatchSignature({DT_STRING, DT_BOOL}, {DT_STRING}));
-  }
-
-  bool OutputsHandle() const override { return true; }
-  bool RequiresComponentName() const override { return false; }
-
-  // Calls SetTracing() on the ComputeSession.
-  void ComputeWithState(OpKernelContext *context,
-                        ComputeSession *session) override {
-    auto tracing_on = context->input(1).scalar<bool>()();
-    session->SetTracing(tracing_on);
-  }
-};
-
-REGISTER_KERNEL_BUILDER(Name("SetTracing").Device(DEVICE_CPU), SetTracing);
-
 class WriteAnnotations : public ComputeSessionOp {
  public:
   explicit WriteAnnotations(OpKernelConstruction *context)
@@ -610,37 +547,6 @@ class EmitAnnotations : public ComputeSessionOp {
 
 REGISTER_KERNEL_BUILDER(Name("EmitAnnotations").Device(DEVICE_CPU),
                         EmitAnnotations);
-
-// Get the component trace.
-class GetComponentTrace : public ComputeSessionOp {
- public:
-  explicit GetComponentTrace(OpKernelConstruction *context)
-      : ComputeSessionOp(context) {
-    OP_REQUIRES_OK(context, context->MatchSignature({DT_STRING}, {DT_STRING}));
-  }
-
-  bool OutputsHandle() const override { return false; }
-  bool RequiresComponentName() const override { return true; }
-
-  void ComputeWithState(OpKernelContext *context,
-                        ComputeSession *session) override {
-    auto traces = session->GetTraceProtos();
-
-    const int64 size = traces.size();
-    Tensor *trace_output_tensor;
-    OP_REQUIRES_OK(context, context->allocate_output(0, TensorShape({size}),
-                                                     &trace_output_tensor));
-    auto trace_output = trace_output_tensor->vec<string>();
-    for (int i = 0; i < size; ++i) {
-      CHECK(traces[i].SerializeToString(&trace_output(i)));
-    }
-  }
-
-  TF_DISALLOW_COPY_AND_ASSIGN(GetComponentTrace);
-};
-
-REGISTER_KERNEL_BUILDER(Name("GetComponentTrace").Device(DEVICE_CPU),
-                        GetComponentTrace);
 
 }  // namespace dragnn
 }  // namespace syntaxnet

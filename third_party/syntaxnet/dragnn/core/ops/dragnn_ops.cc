@@ -44,14 +44,12 @@ handle: A handle to a ComputeSession that will be returned to the backing pool.
 
 REGISTER_OP("InitComponentData")
     .Input("handle: string")
-    .Input("beam_size: int32")
     .Attr("component: string")
     .Output("output_handle: string")
     .Doc(R"doc(
-Initialize a component with the given beam size for a given ComputeSession.
+Initialize a component for a given ComputeSession.
 
 handle: A handle to a ComputeSession.
-beam_size: The size of the beam to use on the component.
 component: The name of a Component instance, matching the ComponentSpec.name.
 output_handle: The handle to the same ComputeSession after initialization.
 )doc");
@@ -66,19 +64,6 @@ Given a ComputeSession and a component name,return the component batch size.
 handle: A handle to a ComputeSession.
 component: The name of a Component instance, matching the ComponentSpec.name.
 batch_size: The size of the given component's batch.
-)doc");
-
-REGISTER_OP("SetTracing")
-    .Input("handle: string")
-    .Input("tracing_on: bool")
-    .Attr("component: string = 'NOT_USED_FOR_THIS_OP'")
-    .Output("output_handle: string")
-    .Doc(R"doc(
-Given a ComputeSession, turns on or off tracing for all components.
-
-handle: A handle to a ComputeSession.
-tracing_on: Whether or not to record traces.
-output_handle: The handle to the same ComputeSession, with the tracing status changed.
 )doc");
 
 REGISTER_OP("AttachDataReader")
@@ -118,53 +103,28 @@ REGISTER_OP("AdvanceFromPrediction")
 Given a ComputeSession, a Component name, and a score tensor, advance the state.
 
 handle: A handle to a ComputeSession.
-scores: A tensor of scores, ordered by {batch_size, beam_size, num_actions}.
+scores: A tensor of scores, ordered by {batch_size, num_actions}.
 component: The name of a Component instance, matching the ComponentSpec.name.
 output_handle: A handle to the same ComputeSession after advancement.
-)doc");
-
-REGISTER_OP("DragnnEmbeddingInitializer")
-    .Output("embeddings: float")
-    .Attr("embedding_input: string")
-    .Attr("vocab: string")
-    .Attr("scaling_coefficient: float = 1.0")
-    .Attr("seed: int = 0")
-    .Attr("seed2: int = 0")
-    .Doc(R"doc(
-*** PLACEHOLDER OP - FUNCTIONALITY NOT YET IMPLEMENTED ***
-
-Read embeddings from an an input for every key specified in a text vocab file.
-
-embeddings: A tensor containing embeddings from the specified sstable.
-embedding_input: Path to location with embedding vectors.
-vocab: Path to list of keys corresponding to the input.
-scaling_coefficient: A scaling coefficient for the embedding matrix.
-seed: If either `seed` or `seed2` are set to be non-zero, the random number
-      generator is seeded by the given seed.  Otherwise, it is seeded by a
-      random seed.
-seed2: A second seed to avoid seed collision.
 )doc");
 
 REGISTER_OP("ExtractFixedFeatures")
     .Input("handle: string")
     .Output("indices: int32")
     .Output("ids: int64")
-    .Output("weights: float")
     .Attr("component: string")
     .Attr("channel_id: int")
     .Doc(R"doc(
 Given a ComputeSession, Component, and channel index, output fixed features.
 
-Fixed features returned as 3 vectors, 'indices', 'ids', and 'weights' of equal
-length. 'ids' specifies which rows should be looked up in the embedding
-matrix. 'weights' specifies a scale for each embedding vector. 'indices' is a
-sorted vector that assigns the same index to embedding vectors that should be
-summed together.
+Fixed features returned as 2 vectors, 'indices' and 'ids' of equal length.
+'ids' specifies which rows should be looked up in the embedding
+matrix. 'indices' is a sorted vector that assigns the same index to embedding vectors
+that should be summed together.
 
 handle: A handle to a ComputeSession.
 indices: The row to add the feature to.
 ids: The indices into embedding matrices for each feature.
-weights: The weight for each looked up feature.
 component: The name of a Component instance, matching the ComponentSpec.name.
 channel_id: The feature channel to extract features for.
 )doc");
@@ -178,7 +138,7 @@ REGISTER_OP("ExtractLinkFeatures")
     .Doc(R"doc(
 Given a ComputeSession, Component, and a channel index, outputs link features.
 
-Output indices have shape {batch_size * beam_size * channel_size}.
+Output indices have shape {batch_size * channel_size}.
 
 handle: A handle to a ComputeSession.
 step_idx: The step indices to read activations from.
@@ -195,7 +155,7 @@ REGISTER_OP("EmitOracleLabels")
 Given a ComputeSession and Component, emit a vector of gold labels.
 
 handle: A handle to a ComputeSession.
-gold_labels: A [batch_size * beam_size] vector of gold labels for the current
+gold_labels: A batch_size vector of gold labels for the current
              ComputeSession.
 component: The name of a Component instance, matching the ComponentSpec.name.
 )doc");
@@ -207,8 +167,7 @@ REGISTER_OP("EmitAllFinal")
     .Doc(R"doc(
 Given a ComputeSession and Component, returns whether the Component is final.
 
-A component is considered final when all elements in the batch have beams
-containing all final states.
+A component is deemed final if all elements in the batch contain final states.
 
 handle: A handle to a ComputeSession.
 all_final: Whether every element in the specified component is 'final'.
@@ -241,18 +200,6 @@ Predictions are given for each element in the final component's batch.
 
 handle: A handle to a ComputeSession.
 annotations: A vector of strings representing the annotated data.
-component: The name of a Component instance, matching the ComponentSpec.name.
-)doc");
-
-REGISTER_OP("GetComponentTrace")
-    .Input("handle: string")
-    .Output("trace: string")
-    .Attr("component: string")
-    .Doc(R"doc(
-Gets the raw MasterTrace proto for each batch, state, and beam slot.
-
-handle: A handle to a ComputeSession.
-trace: A vector of MasterTrace protos.
 component: The name of a Component instance, matching the ComponentSpec.name.
 )doc");
 

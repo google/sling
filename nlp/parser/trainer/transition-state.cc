@@ -31,8 +31,6 @@ SemparState::SemparState(SemparInstance *instance,
       << "Fingerprint-based checks not currently supported in "
       << "SemparTransitiontate.";
   score_ = 0;
-  current_beam_index_ = -1;
-  parent_beam_index_ = 0;
 
   if (!shift_only()) {
     allowed_.assign(action_table()->NumActions(), false);
@@ -48,31 +46,13 @@ SemparState::SemparState(SemparInstance *instance,
 
 SemparState::~SemparState() {
   delete parser_state_;
-  delete trace_;
-}
-
-void SemparState::Init(const TransitionState &parent) {
-  score_ = parent.GetScore();
-  parent_beam_index_ = parent.GetBeamIndex();
-}
-
-const int SemparState::ParentBeamIndex() const {
-  return parent_beam_index_;
-}
-
-const int SemparState::GetBeamIndex() const {
-  return current_beam_index_;
-}
-
-void SemparState::SetBeamIndex(const int index) {
-  current_beam_index_ = index;
 }
 
 const float SemparState::GetScore() const { return score_; }
 
 void SemparState::SetScore(const float score) { score_ = score; }
 
-string SemparState::HTMLRepresentation() const {
+string SemparState::DebugString() const {
   if (shift_only()) {
     int size = document()->num_tokens();
     return StrCat("steps_taken=", shift_only_state_.steps_taken,

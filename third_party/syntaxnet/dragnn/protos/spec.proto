@@ -13,10 +13,7 @@ package syntaxnet.dragnn;
 message MasterSpec {
   repeated ComponentSpec component = 1;
 
-  // Whether to extract debug traces.
-  optional bool debug_tracing = 4 [default = false];
-
-  reserved 2, 3, 5;
+  reserved 2, 3, 4, 5;
 }
 
 // Complete specification for a single task.
@@ -28,8 +25,7 @@ message ComponentSpec {
   // TransitionSystem to use.
   optional RegisteredModuleSpec transition_system = 2;
 
-  // Resources that this component depends on. These are copied to TaskInputs
-  // when calling SAFT code.
+  // Resources that this component depends on.
   repeated Resource resource = 3;
 
   // Feature space configurations.
@@ -52,12 +48,6 @@ message ComponentSpec {
   // Options for the ComponentBuilder. If this is empty, the regular
   // tf.while_loop based builder is assumed.
   optional RegisteredModuleSpec component_builder = 10;
-
-  // Default max number of active states for beam training.
-  optional int32 training_beam_size = 11 [default = 1];
-
-  // Default max number of active states for beam inference.
-  optional int32 inference_beam_size = 12 [default = 1];
 }
 
 // Super generic container for any registered sub-piece of DRAGNN.
@@ -65,14 +55,12 @@ message RegisteredModuleSpec {
   // Name of the registered class.
   optional string registered_name = 1;
 
-  // Parameters to set while initializing this system; these are copied to
-  // Parameters in a TaskSpec when calling SAFT code, or via kwargs in TF Python
-  // code.
+  // Parameters to set while initializing this system. These are copied to
+  // Parameters in a TaskSpec, or via kwargs in TF Python code.
   map<string, string> parameters = 2;
 }
 
-// Fixed resources that will be converted into TaskInput's when calling SAFT
-// code.
+// Fixed resources.
 message Resource {
   optional string name = 1;
   repeated Part part = 2;

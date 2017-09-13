@@ -13,8 +13,8 @@
 // limitations under the License.
 // =============================================================================
 
-#ifndef NLP_SAFT_OPENSOURCE_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_
-#define NLP_SAFT_OPENSOURCE_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_
+#ifndef SYNTAXNET_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_
+#define SYNTAXNET_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_
 
 #include <memory>
 
@@ -50,12 +50,9 @@ class ComputeSessionPool {
   }
 
  private:
-  friend class ComputeSessionImplTestPoolAccessor;
-  friend class ComputeSessionPoolTestPoolAccessor;
-
   // This is a creational injection setter. It should be used for tests
   // where we want our ComputeSessionPool to prepare and return
-  // MockComputeSessions instead of actual ComputeSessionImpls.
+  // MockComputeSessions instead of actual ComputeSessions.
   void SetComputeSessionBuilder(
       std::function<std::unique_ptr<ComputeSession>()> session_builder);
 
@@ -99,4 +96,4 @@ class ComputeSessionPool {
 }  // namespace dragnn
 }  // namespace syntaxnet
 
-#endif  // NLP_SAFT_OPENSOURCE_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_
+#endif  // SYNTAXNET_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_

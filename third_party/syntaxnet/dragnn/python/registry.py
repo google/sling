@@ -1,11 +1,8 @@
-"""A component registry, similar to nlp_saft::RegisteredClass<>.
+"""Component registry.
 
-Like nlp_saft::RegisteredClass<>, one does not need to explicitly import the
-module containing each subclass.  It is sufficient to add subclasses as build
-dependencies.
-
-Unlike nlp_saft::RegisteredClass<>, which allows subclasses to be registered
-under arbitrary names, subclasses must be looked up based on their type name.
+It allows one to not explicitly import the module containing each subclass.
+It is sufficient to add subclasses as build dependencies.
+Subclasses must be looked up based on their type name.
 This restriction allows the registry to dynamically import the module containing
 the desired subclass.
 
@@ -135,13 +132,12 @@ def _ResolveAndCreate(baseclass, path, subclass_name, *args, **kwargs):
   """Resolves the name of a subclass and creates an instance of it.
 
   The subclass is resolved with respect to a package path in an inside-out
-  manner.  For example, if |path| is 'google3.foo.bar' and |subclass_name| is
+  manner.  For example, if |path| is 'foo.bar' and |subclass_name| is
   'baz.ClassName', then attempts are made to create instances of the following
   fully-qualified class names:
 
-    'google3.foo.bar.baz.ClassName'
-    'google3.foo.baz.ClassName'
-    'google3.baz.ClassName'
+    'foo.bar.baz.ClassName'
+    'foo.baz.ClassName'
     'baz.ClassName'
 
   An instance corresponding to the first successful attempt is returned.

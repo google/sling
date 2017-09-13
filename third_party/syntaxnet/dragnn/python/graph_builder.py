@@ -186,7 +186,7 @@ class MasterBuilder(object):
         grid_point=self.hyperparams.SerializeToString(),
         name='GetSession')
 
-  def _get_session_with_reader(self, enable_tracing):
+  def _get_session_with_reader(self):
     """Utility to create ComputeSession management ops.
 
     Creates a new ComputeSession handle and provides the following
@@ -195,9 +195,6 @@ class MasterBuilder(object):
     ComputeSession/InputBatch -- a placeholder for attaching a string
       specification for AttachReader.
     ComputeSession/AttachReader -- the AttachReader op.
-
-    Args:
-      enable_tracing: bool, whether to enable tracing before attaching the data.
 
     Returns:
       handle: handle to a new ComputeSession returned by the AttachReader op.
@@ -209,8 +206,6 @@ class MasterBuilder(object):
 
       # Get the ComputeSession and chain some essential ops.
       handle = self._get_compute_session()
-      if enable_tracing:
-        handle = dragnn_ops.set_tracing(handle, True)
       handle = dragnn_ops.attach_data_reader(
           handle, input_batch, name='AttachReader')
 
@@ -246,9 +241,6 @@ class MasterBuilder(object):
 
   def build_training(self,
                      handle,
-                     compute_gradients=True,
-                     use_moving_average=False,
-                     advance_counters=True,
                      component_weights=None,
                      unroll_using_oracle=None,
                      max_index=-1):
@@ -256,14 +248,6 @@ class MasterBuilder(object):
 
     Args:
       handle: Handle tensor for the ComputeSession.
-      compute_gradients: Whether to generate gradients and an optimizer op.
-        When False, build_training will return a 'dry run' training op,
-        used normally only for oracle tracing.
-      use_moving_average: Whether or not to read from the moving
-        average variables instead of the true parameters. Note: it is not
-        possible to make gradient updates when this is True.
-      advance_counters: Whether or not this loop should increment the
-        per-component step counters.
       component_weights: If set, this is a list of relative weights
         each component's cost should get in the pipeline. Defaults to 1.0 for
         each component.
@@ -280,11 +264,7 @@ class MasterBuilder(object):
     Raises:
       IndexError: if max_index is positive but out of bounds.
     """
-    check.IsFalse(compute_gradients and use_moving_average,
-                  'It is not possible to make gradient updates when reading '
-                  'from the moving average variables.')
-
-    self.read_from_avg = use_moving_average
+    self.read_from_avg = False
     if max_index < 0:
       max_index = len(self.components)
     else:
@@ -321,8 +301,7 @@ class MasterBuilder(object):
       network_states[comp.name] = component.NetworkState()
 
       logging.info('Initializing data for component "%s"', comp.name)
-      handle = dragnn_ops.init_component_data(
-          handle, beam_size=comp.training_beam_size, component=comp.name)
+      handle = dragnn_ops.init_component_data(handle, component=comp.name)
       # TODO(googleuser): Phase out component.MasterState.
       master_state = component.MasterState(handle,
                                            dragnn_ops.batch_size(
@@ -346,9 +325,8 @@ class MasterBuilder(object):
         effective_batch += total
         metrics_list += [[total], [correct]]
 
-        if advance_counters:
-          with tf.control_dependencies([comp.advance_counters(total)]):
-            cost = tf.identity(cost)
+        with tf.control_dependencies([comp.advance_counters(total)]):
+          cost = tf.identity(cost)
 
         # Keep track of which parameters will be trained, and any moving
         # average updates to apply for these parameters.
@@ -359,30 +337,29 @@ class MasterBuilder(object):
     # Concatenate evaluation results
     metrics = tf.concat(metrics_list, 0)
 
-    # If gradient computation is requested, then:
+    # Now that the cost is computed:
     # 1. compute the gradients,
     # 2. add an optimizer to update the parameters using the gradients,
     # 3. make the ComputeSession handle depend on the optimizer.
-    if compute_gradients:
-      logging.info('Creating train op with %d variables:\n\t%s',
-                   len(params_to_train),
-                   '\n\t'.join([x.name for x in params_to_train]))
+    logging.info('Creating train op with %d variables:\n\t%s',
+                 len(params_to_train),
+                 '\n\t'.join([x.name for x in params_to_train]))
 
-      grads_and_vars = self.optimizer.compute_gradients(
-          cost, var_list=params_to_train)
-      clipped_gradients = [(self._clip_gradients(g), v)
-                           for g, v in grads_and_vars]
-      minimize_op = self.optimizer.apply_gradients(
-          clipped_gradients, global_step=self.master_vars['step'])
+    grads_and_vars = self.optimizer.compute_gradients(
+        cost, var_list=params_to_train)
+    clipped_gradients = [(self._clip_gradients(g), v)
+                         for g, v in grads_and_vars]
+    minimize_op = self.optimizer.apply_gradients(
+        clipped_gradients, global_step=self.master_vars['step'])
 
-      if self.hyperparams.use_moving_average:
-        with tf.control_dependencies([minimize_op]):
-          minimize_op = tf.group(*avg_ops)
-
-      # Make sure all the side-effectful minimizations ops finish before
-      # proceeding.
+    if self.hyperparams.use_moving_average:
       with tf.control_dependencies([minimize_op]):
-        handle = tf.identity(handle)
+        minimize_op = tf.group(*avg_ops)
+
+    # Make sure all the side-effectful minimizations ops finish before
+    # proceeding.
+    with tf.control_dependencies([minimize_op]):
+      handle = tf.identity(handle)
 
     # Restore that subsequent builds don't use average by default.
     self.read_from_avg = False
@@ -449,8 +426,7 @@ class MasterBuilder(object):
 
     for comp in self.components:
       network_states[comp.name] = component.NetworkState()
-      handle = dragnn_ops.init_component_data(
-          handle, beam_size=comp.inference_beam_size, component=comp.name)
+      handle = dragnn_ops.init_component_data(handle, component=comp.name)
       master_state = component.MasterState(handle,
                                            dragnn_ops.batch_size(
                                                handle, component=comp.name))
@@ -464,7 +440,6 @@ class MasterBuilder(object):
   def add_training_from_config(self,
                                target_config,
                                prefix='train-',
-                               trace_only=False,
                                **kwargs):
     """Constructs a training pipeline from a TrainTarget proto.
 
@@ -481,18 +456,10 @@ class MasterBuilder(object):
       train-target/metrics (per-decision metrics from gold oracles)
       train-target/cost (total cost across all components)
 
-    Enabling `trace_only` effectively creates a graph that is a 'dry run'.
-    There will be no side affects. In addition, the gradients won't be computed
-    and the model parameters will not be updated.
-
     Args:
       target_config: the TrainTarget proto.
       prefix: Preprends target_config.name with this to construct
         a unique identifier.
-      trace_only: Enabling this will result in:
-          1. Tracing will be enabled for the ComputeSession..
-          2. A 'traces' node will be added to the outputs.
-          3. Gradients will not be computed.
       **kwargs: Passed on to build_training() above.
 
     Returns:
@@ -503,68 +470,52 @@ class MasterBuilder(object):
                  ' from config: %s', target_config.name, str(target_config))
     scope_id = prefix + target_config.name
     with tf.name_scope(scope_id):
-      # Construct training targets. Disable tracing during training.
-      handle, input_batch = self._get_session_with_reader(trace_only)
+      # Construct training targets.
+      handle, input_batch = self._get_session_with_reader()
 
-      # If `trace_only` is True, the training graph shouldn't have any
-      # side effects. Otherwise, the standard training scenario should
-      # generate gradients and update counters.
       handle, outputs = self.build_training(
           handle,
-          compute_gradients=not trace_only,
-          advance_counters=not trace_only,
           component_weights=target_config.component_weights,
           unroll_using_oracle=target_config.unroll_using_oracle,
           max_index=target_config.max_index,
           **kwargs)
-      if trace_only:
-        outputs['traces'] = dragnn_ops.get_component_trace(
-            handle, component=self.spec.component[-1].name)
-      else:
-        # Standard training keeps track of the number of training steps.
-        outputs['target_step'] = tf.get_variable(
-            scope_id + '/TargetStep', [],
-            initializer=tf.zeros_initializer(),
-            dtype=tf.int32)
-        increment_target_step = tf.assign_add(
-            outputs['target_step'], 1, use_locking=True)
 
-        with tf.control_dependencies([increment_target_step]):
-          handle = tf.identity(handle)
+      # Standard training keeps track of the number of training steps.
+      outputs['target_step'] = tf.get_variable(
+          scope_id + '/TargetStep', [],
+          initializer=tf.zeros_initializer(),
+          dtype=tf.int32)
+      increment_target_step = tf.assign_add(
+          outputs['target_step'], 1, use_locking=True)
 
-      return self._outputs_with_release(handle, {'input_batch': input_batch},
-                                        outputs)
+      with tf.control_dependencies([increment_target_step]):
+        handle = tf.identity(handle)
 
-  def add_annotation(self, name_scope='annotation', enable_tracing=False):
+    return self._outputs_with_release(handle, {'input_batch': input_batch},
+                                      outputs)
+
+
+  def add_annotation(self, name_scope='annotation'):
     """Adds an annotation pipeline to the graph.
 
     This will create the following additional named targets by default, for use
     in C++ annotation code (as well as regular ComputeSession targets):
       annotation/ComputeSession/session_id (placeholder for giving unique id)
       annotation/EmitAnnotations (get annotated data)
-      annotation/GetComponentTrace (get trace data)
-      annotation/SetTracing (sets tracing based on annotation/tracing_on)
 
     Args:
       name_scope: Scope for the annotation pipeline.
-      enable_tracing: Enabling this will result in two things:
-          1. Tracing will be enabled during inference.
-          2. A 'traces' node will be added to the outputs.
 
     Returns:
       A dictionary of input and output nodes.
     """
     with tf.name_scope(name_scope):
-      handle, input_batch = self._get_session_with_reader(enable_tracing)
+      handle, input_batch = self._get_session_with_reader()
       handle = self.build_inference(handle, use_moving_average=True)
 
       annotations = dragnn_ops.emit_annotations(
           handle, component=self.spec.component[-1].name)
       outputs = {'annotations': annotations}
-
-      if enable_tracing:
-        outputs['traces'] = dragnn_ops.get_component_trace(
-            handle, component=self.spec.component[-1].name)
 
       return self._outputs_with_release(handle, {'input_batch': input_batch},
                                         outputs)

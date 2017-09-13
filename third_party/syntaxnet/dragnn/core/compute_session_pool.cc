@@ -18,7 +18,7 @@
 #include <utility>
 
 #include "dragnn/core/component_registry.h"
-#include "dragnn/core/compute_session_impl.h"
+#include "dragnn/core/compute_session.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace syntaxnet {
@@ -43,11 +43,11 @@ ComputeSessionPool::ComputeSessionPool(const MasterSpec &master_spec,
   };
 
   // Create a default session builder function. This function returns a
-  // ComputeSessionImpl that uses the currently set component_builder_
+  // ComputeSession that uses the currently set component_builder_
   // function to create its components.
   session_builder_ = [this]() {
     return std::unique_ptr<ComputeSession>(
-        new ComputeSessionImpl(num_unique_sessions_, this->component_builder_));
+        new ComputeSession(num_unique_sessions_, this->component_builder_));
   };
 }
 

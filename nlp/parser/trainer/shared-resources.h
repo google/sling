@@ -22,7 +22,6 @@ namespace sling {
 namespace nlp {
 
 // Container for resources that are typically shared (e.g. across features).
-// TODO: This can be extended more generally by adding a WorkspaceSet.
 struct SharedResources {
   ActionTable table;
   Store *global = nullptr;  // owned
