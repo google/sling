@@ -47,12 +47,24 @@ cc_library(
 )
 
 cc_library(
+  name = "roles",
+  srcs = ["roles.cc"],
+  hdrs = ["roles.h"],
+  deps = [
+    ":action-table",
+    ":parser-state",
+    "//frame:object",
+  ],
+)
+
+cc_library(
   name = "parser",
   srcs = ["parser.cc"],
   hdrs = ["parser.h"],
   deps = [
     ":action-table",
     ":parser-state",
+    ":roles",
     "//base",
     "//frame:serialization",
     "//frame:store",
@@ -61,6 +73,7 @@ cc_library(
     "//myelin/kernel:dragnn",
     "//myelin/kernel:tensorflow",
     "//nlp/document",
+    "//nlp/document:features",
     "//nlp/document:lexicon",
   ],
 )
