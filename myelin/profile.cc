@@ -121,6 +121,7 @@ string Profile::ASCIIReport() const {
   if (jit::CPU::Enabled(jit::SSE3)) report.append(" SSE3");
   if (jit::CPU::Enabled(jit::SSE4_1)) report.append(" SSE4.1");
   if (jit::CPU::Enabled(jit::SSE4_2)) report.append(" SSE4.2");
+  if (jit::CPU::Enabled(jit::F16C)) report.append(" F16C");
   if (jit::CPU::Enabled(jit::AVX)) report.append(" AVX");
   if (jit::CPU::Enabled(jit::AVX2)) report.append(" AVX2");
   if (jit::CPU::Enabled(jit::FMA3)) report.append(" FMA3");

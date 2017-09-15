@@ -94,6 +94,7 @@ ProcessorInformation::ProcessorInformation() {
     has_ssse3_ = (cpu_info[2] & 0x00000200) != 0;
     has_sse41_ = (cpu_info[2] & 0x00080000) != 0;
     has_sse42_ = (cpu_info[2] & 0x00100000) != 0;
+    has_f16c_ = (cpu_info[2] & 0x20000000) != 0;
     has_popcnt_ = (cpu_info[2] & 0x00800000) != 0;
     has_osxsave_ = (cpu_info[2] & 0x08000000) != 0;
     has_avx_ = (cpu_info[2] & 0x10000000) != 0;
@@ -229,6 +230,7 @@ void CPU::Initialize() {
   if (cpu.has_sse3()) features |= 1u << SSE3;
   if (cpu.has_ssse3()) features |= 1u << SSSE3;
   if (cpu.has_sse41()) features |= 1u << SSE4_1;
+  if (cpu.has_f16c()) features |= 1u << F16C;
   if (cpu.has_sahf()) features |= 1u << SAHF;
 
   if (cpu.has_osxsave() && os_has_avx_support()) {

@@ -70,6 +70,7 @@ class ProcessorInformation {
   bool has_ssse3() const { return has_ssse3_; }
   bool has_sse41() const { return has_sse41_; }
   bool has_sse42() const { return has_sse42_; }
+  bool has_f16c() const { return has_f16c_; }
   bool has_osxsave() const { return has_osxsave_; }
   bool has_avx() const { return has_avx_; }
   bool has_avx2() const { return has_avx2_; }
@@ -101,6 +102,7 @@ class ProcessorInformation {
   bool has_ssse3_ = false;
   bool has_sse41_ = false;
   bool has_sse42_ = false;
+  bool has_f16c_ = false;
   bool has_osxsave_ = false;
   bool has_avx_ = false;
   bool has_avx2_ = false;
@@ -122,6 +124,7 @@ enum CpuFeature {
   SSSE3,
   SSE4_1,
   SSE4_2,
+  F16C,
   AVX,
   AVX2,
   FMA3,
