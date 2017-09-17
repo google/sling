@@ -309,29 +309,29 @@ class BasicConcat : public Kernel {
       int size = step->input(i)->size();
       if (size > 0 && size < 16) {
         __ LoadTensorAddress(in, step->input(i));
-        int disp = offset;
+        int disp = 0;
         int left = size;
         while (left >= 8) {
           __ movq(acc, Operand(in, disp));
-          __ movq(Operand(out, disp), acc);
+          __ movq(Operand(out, offset + disp), acc);
           disp += 8;
           left -= 8;
         }
         while (left >= 4) {
           __ movl(acc, Operand(in, disp));
-          __ movl(Operand(out, disp), acc);
+          __ movl(Operand(out, offset + disp), acc);
           disp += 4;
           left -= 4;
         }
         while (left >= 2) {
           __ movw(acc, Operand(in, disp));
-          __ movw(Operand(out, disp), acc);
+          __ movw(Operand(out, offset + disp), acc);
           disp += 2;
           left -= 2;
         }
         while (left >= 1) {
           __ movb(acc, Operand(in, disp));
-          __ movb(Operand(out, disp), acc);
+          __ movb(Operand(out, offset + disp), acc);
           disp += 1;
           left -= 1;
         }
@@ -639,4 +639,3 @@ void RegisterArrayKernels(Library *library) {
 
 }  // namespace myelin
 }  // namespace sling
-
