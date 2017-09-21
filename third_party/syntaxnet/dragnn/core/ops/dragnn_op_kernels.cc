@@ -244,26 +244,22 @@ REGISTER_KERNEL_BUILDER(Name("AdvanceFromPrediction").Device(DEVICE_CPU),
                         AdvanceFromPrediction);
 
 // Given a handle to a ComputeSession and a channel index, outputs fixed
-// features.
-// Fixed features are returned as 3 vectors or equal length:
-//   - ids: specifies ids of rows to be looked up in the embedding matrix,
-//   - indices: sorted vector that assigns the same index to embedding
-//     vectors that should be summed together.
+// features for that channel. Recall that a channel can only have a single
+// feature implementation, but that feature can output up to a prespecified
+// maximum number of ids.
 //
-// For example if we have 3 features, for a given channel, we might have:
-//   feature a: 5
-//   feature b: 5, 6
-//   feature c: 7
-// In this case:
-//   indices should look like: [0, 1, 1, 2]
-//   ids should be [5, 5, 6, 7]
+// Fixed features ids are output in a preallocated tensor of size
+// batch_size * max_num_ids. Therefore the ids for the first batch element
+// are in output in the first max_num_ids elements of the tensor and so on.
+// Unused elements in the tensor are set to -1.
 class ExtractFixedFeatures : public ComputeSessionOp {
  public:
   explicit ExtractFixedFeatures(OpKernelConstruction *context)
       : ComputeSessionOp(context) {
     OP_REQUIRES_OK(context, context->GetAttr("channel_id", &channel_id_));
+    OP_REQUIRES_OK(context, context->GetAttr("max_num_ids", &max_num_ids_));
     OP_REQUIRES_OK(context, context->MatchSignature(
-                                {DT_STRING}, {DT_INT32, DT_INT64}));
+        {DT_STRING, DT_INT32}, {DT_INT64}));
   }
 
   bool OutputsHandle() const override { return false; }
@@ -271,27 +267,18 @@ class ExtractFixedFeatures : public ComputeSessionOp {
 
   void ComputeWithState(OpKernelContext *context,
                         ComputeSession *session) override {
-    // Allocates output tensors.
-    auto indices_allocator = [context](int num_elements) {
-      Tensor *output;
-      CHECK(context->allocate_output(0, TensorShape({num_elements}), &output)
-                .ok());
-      return output->vec<int32>().data();
-    };
-    auto ids_allocator = [context](int num_elements) {
-      Tensor *ids_tensor;
-      CHECK(
-          context->allocate_output(1, TensorShape({num_elements}), &ids_tensor)
-              .ok());
-      return ids_tensor->vec<int64>().data();
-    };
-    int num_features = session->GetInputFeatures(
-        component_name(), indices_allocator, ids_allocator, channel_id_);
-    VLOG(2) << "Extracted " << num_features;
+    int batch_size = context->input(1).scalar<int>()();
+    int output_size = batch_size * max_num_ids_;
+    Tensor *ids;
+    CHECK(context->allocate_output(0, TensorShape({output_size}), &ids).ok());
+
+    int64 *output = ids->vec<int64>().data();
+    session->GetInputFeatures(component_name(), channel_id_, output);
   }
 
  private:
   int channel_id_;
+  int max_num_ids_;
   TF_DISALLOW_COPY_AND_ASSIGN(ExtractFixedFeatures);
 };
 

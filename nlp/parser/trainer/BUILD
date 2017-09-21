@@ -1,9 +1,9 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
-  name = "gold-transition-generator",
-  srcs = ["gold-transition-generator.cc"],
-  hdrs = ["gold-transition-generator.h"],
+  name = "transition-generator",
+  srcs = ["transition-generator.cc"],
+  hdrs = ["transition-generator.h"],
   deps = [
     "//base",
     "//nlp/document",
@@ -19,7 +19,7 @@ cc_library(
   srcs = ["action-table-generator.cc"],
   hdrs = ["action-table-generator.h"],
   deps = [
-    ":gold-transition-generator",
+    ":transition-generator",
     "//base",
     "//nlp/parser:action-table",
     "//nlp/parser:parser-state",
@@ -37,9 +37,7 @@ cc_binary(
   srcs = ["generate-master-spec.cc"],
   deps = [
     ":action-table-generator",
-    ":fixed-features",
-    ":feature",
-    ":link-features",
+    ":feature-extractor",
     ":shared-resources",
     "//base",
     "//file:posix",
@@ -48,17 +46,11 @@ cc_binary(
     "//frame:store",
     "//nlp/document:document",
     "//nlp/document:document-source",
+    "//nlp/document:features",
     "//string:strcat",
     "//third_party/syntaxnet",
-  ],
-)
-
-cc_library(
-  name = "workspace",
-  hdrs = ["workspace.h"],
-  srcs = ["workspace.cc"],
-  deps = [
-    "//base",
+    "//third_party/zlib:miniunzip",
+    "//third_party/zlib:zlib",
   ],
 )
 
@@ -66,7 +58,6 @@ cc_library(
   name = "sempar-instance",
   hdrs = ["sempar-instance.h"],
   deps = [
-    ":workspace",
     "//frame:store",
     "//nlp/document:document",
     "//third_party/syntaxnet",
@@ -79,7 +70,6 @@ cc_library(
   srcs = ["document-batch.cc"],
   deps = [
     ":sempar-instance",
-    ":workspace",
     "//frame:object",
     "//frame:serialization",
     "//frame:store",
@@ -93,14 +83,16 @@ cc_library(
   hdrs = ["transition-state.h"],
   srcs = ["transition-state.cc"],
   deps = [
-    ":gold-transition-generator",
+    ":transition-generator",
     ":sempar-instance",
     ":shared-resources",
     ":transition-system-type",
     "//frame:store",
     "//nlp/document:document",
+    "//nlp/document:features",
     "//nlp/parser:parser-action",
     "//nlp/parser:parser-state",
+    "//nlp/parser:roles",
     "//third_party/syntaxnet",
   ],
 )
@@ -110,9 +102,13 @@ cc_library(
   hdrs = ["shared-resources.h"],
   srcs = ["shared-resources.cc"],
   deps = [
+    "//file",
     "//frame:serialization",
     "//frame:store",
+    "//nlp/document:lexicon",
     "//nlp/parser:action-table",
+    "//nlp/parser:roles",
+    "//third_party/syntaxnet:syntaxnet",
   ],
 )
 
@@ -122,45 +118,15 @@ cc_library(
 )
 
 cc_library(
-  name = "feature",
-  hdrs = ["feature.h"],
-  srcs = ["feature.cc"],
+  name = "feature-extractor",
+  hdrs = ["feature-extractor.h"],
+  srcs = ["feature-extractor.cc"],
   deps = [
     ":shared-resources",
     ":transition-state",
-    "//frame:serialization",
-    "//nlp/document:document-source",
-    "//string:numbers",
-    "//third_party/syntaxnet",
-  ],
-  alwayslink = 1,
-)
-
-cc_library(
-  name = "fixed-features",
-  srcs = ["fixed-features.cc"],
-  deps = [
-    ":feature",
-    ":shared-resources",
-    ":workspace",
-    "//file",
-    "//nlp/document:affix",
-    "//stream:file",
-    "//stream:file-input",
-    "//string:strcat",
-    "//third_party/syntaxnet",
-    "//util:unicode",
-  ],
-  alwayslink = 1,
-)
-
-cc_library(
-  name = "link-features",
-  hdrs = [],
-  srcs = ["link-features.cc"],
-  deps = [
-    ":feature",
-    "//string:strcat",
+    "//base",
+    "//nlp/document:features",
+    "//nlp/document:lexicon",
     "//third_party/syntaxnet",
   ],
   alwayslink = 1,
@@ -172,7 +138,7 @@ cc_library(
   srcs = ["sempar-component.cc"],
   deps = [
     ":document-batch",
-    ":feature",
+    ":feature-extractor",
     ":sempar-instance",
     ":transition-state",
     "//file",
@@ -189,8 +155,6 @@ cc_library(
 cc_binary(
   name = "sempar.so",
   deps = [
-    ":fixed-features",
-    ":link-features",
     ":sempar-component",
     "//base:libinit",
     "//file:posix",

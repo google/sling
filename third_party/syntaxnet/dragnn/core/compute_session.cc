@@ -139,18 +139,15 @@ void ComputeSession::AdvanceFromOracle(const string &component_name) {
 }
 
 void ComputeSession::AdvanceFromPrediction(const string &component_name,
-                                               const float score_matrix[],
-                                               int score_matrix_length) {
+                                           const float score_matrix[],
+                                           int score_matrix_length) {
   GetReadiedComponent(component_name)
       ->AdvanceFromPrediction(score_matrix, score_matrix_length);
 }
 
-int ComputeSession::GetInputFeatures(
-    const string &component_name, std::function<int32 *(int)> allocate_indices,
-    std::function<int64 *(int)> allocate_ids,
-    int channel_id) const {
-  return GetReadiedComponent(component_name)
-      ->GetFixedFeatures(allocate_indices, allocate_ids, channel_id);
+void ComputeSession::GetInputFeatures(
+    const string &component_name, int channel_id, int64 *output) const {
+  GetReadiedComponent(component_name)->GetFixedFeatures(channel_id, output);
 }
 
 std::vector<LinkFeatures> ComputeSession::GetTranslatedLinkFeatures(

@@ -371,7 +371,7 @@ void ParserState::GetFocus(int k, std::vector<int> *center) const {
 
 int ParserState::AttentionIndex(int index, int k) const {
   if (k < 0 || k > attention_.size()) k = attention_.size();
-  for (int i = 0; i < k; ++k) {
+  for (int i = 0; i < k; ++i) {
     if (Attention(i) == index) return i;
   }
   return -1;

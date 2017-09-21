@@ -22,12 +22,14 @@
 #include "dragnn/core/interfaces/transition_state.h"
 #include "frame/store.h"
 #include "nlp/document/document.h"
+#include "nlp/document/features.h"
 #include "nlp/parser/action-table.h"
 #include "nlp/parser/parser-action.h"
 #include "nlp/parser/parser-state.h"
-#include "nlp/parser/trainer/gold-transition-generator.h"
+#include "nlp/parser/roles.h"
 #include "nlp/parser/trainer/sempar-instance.h"
 #include "nlp/parser/trainer/shared-resources.h"
+#include "nlp/parser/trainer/transition-generator.h"
 #include "nlp/parser/trainer/transition-system-type.h"
 #include "string/strcat.h"
 
@@ -103,10 +105,10 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
     return parser_state_ == nullptr ? nullptr : parser_state_->store();
   }
 
-  const GoldTransitionGenerator *gold_transition_generator() const {
+  const TransitionGenerator *gold_transition_generator() const {
     return gold_transition_generator_;
   }
-  void set_gold_transition_generator(GoldTransitionGenerator *g) {
+  void set_gold_transition_generator(TransitionGenerator *g) {
     gold_transition_generator_ = g;
   }
 
@@ -146,6 +148,21 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
   int end() const {
     return shift_only() ? shift_only_state_.end : parser_state()->end();
   }
+
+  // Sets the lexical feature vector.
+  void set_document_features(DocumentFeatures *f) {
+    delete features_;
+    features_ = f;
+  }
+
+  // Returns the lexical features.
+  DocumentFeatures *features() const { return features_; }
+
+  // Returns the role graph.
+  const RoleGraph &role_graph() const { return role_graph_; }
+
+  // Sets frame limit for computing the role graph.
+  void set_role_frame_limit(int l) { role_frame_limit_ = l; }
 
  private:
   // Holds frame -> step information, i.e. at which step was a frame created or
@@ -213,6 +230,9 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
   // Step information.
   StepInformation step_info_;
 
+  // Lexical features. Owned.
+  DocumentFeatures *features_ = nullptr;
+
   // The current score of this state.
   float score_;
 
@@ -223,16 +243,22 @@ class SemparState : public syntaxnet::dragnn::TransitionState {
   static const int kMaxHistory = 10;
 
   // Gold transition generator. Not owned. Only used during training.
-  const GoldTransitionGenerator *gold_transition_generator_ = nullptr;
+  const TransitionGenerator *gold_transition_generator_ = nullptr;
 
   // Gold sequence for the token range. Only populated during training.
-  GoldTransitionSequence gold_sequence_;
+  TransitionSequence gold_sequence_;
 
   // Index of the next gold action to be output. Only used during training.
   int next_gold_index_ = 0;
 
   // Whether the state is being used to report gold transitions (i.e. training).
   mutable bool gold_transitions_required_ = false;
+
+  // Role graph.
+  RoleGraph role_graph_;
+
+  // Role frame limit.
+  int role_frame_limit_ = 0;
 };
 
 }  // namespace nlp

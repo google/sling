@@ -17,7 +17,6 @@
 #include "frame/object.h"
 #include "frame/serialization.h"
 #include "nlp/document/document.h"
-#include "nlp/parser/trainer/workspace.h"
 
 namespace sling {
 namespace nlp {
@@ -29,7 +28,6 @@ void DocumentBatch::SetData(const std::vector<string> &data) {
     auto &item = items_[i];
     item.encoded = data[i];
     item.document = nullptr;
-    item.workspaces = new WorkspaceSet();
   }
 }
 

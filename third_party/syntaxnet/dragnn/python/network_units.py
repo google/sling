@@ -149,31 +149,37 @@ def add_embeddings(channel_id, feature_spec, seed=None):
             stddev=1.0 / feature_spec.embedding_dim**.5, seed=seed))
 
 
-def embedding_lookup(embedding_matrix, indices, ids, size):
+def embedding_lookup(embedding_matrix, ids, batch_size):
   """Performs an embedding lookup followed by aggregation.
 
   Args:
     embedding_matrix: float Tensor from which to do the lookup.
-    indices: int Tensor for the output rows of the looked up vectors.
     ids: int Tensor vectors to look up in the embedding_matrix.
     size: int number of output rows. Needed since some output rows may be empty.
 
   Returns:
     Summed embedding vectors according to indices.
   """
+  num_cols = tf.shape(ids)[0] // batch_size
+
+  # Keep only valid (i.e. > -1) feature ids, and get their batch indices.
+  valid = tf.where(ids > -1)
+  ids = tf.gather(ids, valid)
+  batch_indices = tf.cast(valid, tf.int32) // num_cols
+
   embeddings = tf.nn.embedding_lookup([embedding_matrix], ids)
-  embeddings = tf.unsorted_segment_sum(embeddings, indices, size)
+  embeddings = tf.unsorted_segment_sum(embeddings, batch_indices, batch_size)
   return embeddings
 
 
-def fixed_feature_lookup(component, state, channel_id, stride):
+def fixed_feature_lookup(component, state, channel_id, batch_size):
   """Looks up fixed features and passes them through embeddings.
 
   Args:
     component: Component object in which to look up the fixed features.
     state: MasterState object for the live MasterState.
     channel_id: int id of the fixed feature to look up.
-    stride: int Tensor of current batch size.
+    batch_size: int Tensor of current batch size.
 
   Returns:
     NamedTensor object containing the embedding vectors.
@@ -181,15 +187,15 @@ def fixed_feature_lookup(component, state, channel_id, stride):
   feature_spec = component.spec.fixed_feature[channel_id]
   check.Gt(feature_spec.embedding_dim, 0,
            'Embeddings requested for non-embedded feature: %s' % feature_spec)
+  dim = feature_spec.embedding_dim
   embedding_matrix = component.get_variable(fixed_embeddings_name(channel_id))
 
   with tf.name_scope(
       name='fixed_embedding_' + feature_spec.name, values=[embedding_matrix]):
-    indices, ids = dragnn_ops.extract_fixed_features(
-        state.handle, component=component.name, channel_id=channel_id)
-    size = stride * feature_spec.size
-    embeddings = embedding_lookup(embedding_matrix, indices, ids, size)
-    dim = feature_spec.size * feature_spec.embedding_dim
+    ids = dragnn_ops.extract_fixed_features(
+        state.handle, batch_size, component=component.name,
+        channel_id=channel_id, max_num_ids=feature_spec.size)
+    embeddings = embedding_lookup(embedding_matrix, ids, batch_size)
     return NamedTensor(
         tf.reshape(embeddings, [-1, dim]), feature_spec.name, dim=dim)
 
@@ -214,7 +220,7 @@ def get_input_tensor(fixed_embeddings, linked_embeddings):
 
   # Concat_v2 takes care of optimizing away the concatenation
   # operation in the case when there is exactly one embedding input.
-  return tf.concat([e.tensor for e in embeddings], 1)
+  return tf.concat([e.tensor for e in embeddings], 1, name="feature_vector")
 
 
 def get_input_tensor_with_stride(fixed_embeddings, linked_embeddings, stride):
@@ -646,13 +652,12 @@ class NetworkUnitInterface(object):
     for channel_id, spec in enumerate(component.spec.fixed_feature):
       check.NotIn(spec.name, self._fixed_feature_dims,
                   'Duplicate fixed feature')
-      check.Gt(spec.size, 0, 'Invalid fixed feature size')
       if spec.embedding_dim > 0:
         fixed_dim = spec.embedding_dim
         self._params.append(add_embeddings(channel_id, spec))
       else:
         fixed_dim = 1  # assume feature ID extraction; only one ID per step
-      self._fixed_feature_dims[spec.name] = spec.size * fixed_dim
+      self._fixed_feature_dims[spec.name] = fixed_dim
 
     for channel_id, spec in enumerate(component.spec.linked_feature):
       check.NotIn(spec.name, self._linked_feature_dims,
@@ -690,52 +695,12 @@ class NetworkUnitInterface(object):
     tf.logging.info('component %s concat_input_dim %s', component.name,
                     self._concatenated_input_dim)
 
-    # Allocate attention parameters.
-    if self._component.spec.attention_component:
-      attention_source_component = self._component.master.lookup_component[
-          self._component.spec.attention_component]
-      attention_hidden_layer_sizes = map(
-          int, attention_source_component.spec.network_unit.parameters[
-              'hidden_layer_sizes'].split(','))
-      attention_hidden_layer_size = attention_hidden_layer_sizes[-1]
-
-      hidden_layer_sizes = map(int, component.spec.network_unit.parameters[
-          'hidden_layer_sizes'].split(','))
-      # The attention function is built on the last layer of hidden embeddings.
-      hidden_layer_size = hidden_layer_sizes[-1]
-      self._params.append(
-          tf.get_variable(
-              'attention_weights_pm_0',
-              [attention_hidden_layer_size, hidden_layer_size],
-              initializer=tf.random_normal_initializer(stddev=1e-4)))
-
-      self._params.append(
-          tf.get_variable(
-              'attention_weights_hm_0', [hidden_layer_size, hidden_layer_size],
-              initializer=tf.random_normal_initializer(stddev=1e-4)))
-
-      self._params.append(
-          tf.get_variable(
-              'attention_bias_0', [1, hidden_layer_size],
-              initializer=tf.zeros_initializer()))
-
-      self._params.append(
-          tf.get_variable(
-              'attention_bias_1', [1, hidden_layer_size],
-              initializer=tf.zeros_initializer()))
-
-      self._params.append(
-          tf.get_variable(
-              'attention_weights_pu',
-              [attention_hidden_layer_size, component.num_actions],
-              initializer=tf.random_normal_initializer(stddev=1e-4)))
 
   @abc.abstractmethod
   def create(self,
              fixed_embeddings,
              linked_embeddings,
              context_tensor_arrays,
-             attention_tensor,
              during_training,
              stride=None):
     """Constructs a feed-forward unit based on the features and context tensors.
@@ -745,7 +710,6 @@ class NetworkUnitInterface(object):
       linked_embeddings: list of NamedTensor objects
       context_tensor_arrays: optional list of TensorArray objects used for
           implicit recurrence.
-      attention_tensor: optional Tensor used for attention.
       during_training: whether to create a network for training (vs inference).
       stride: int scalar tensor containing the stride required for
           bulk computation.
@@ -807,38 +771,6 @@ class NetworkUnitInterface(object):
   def get_l2_regularized_weights(self):
     """Gets the weights that need to be regularized."""
     return self.regularized_weights
-
-  def attention(self, last_layer, attention_tensor):
-    """Compute the attention term for the network unit."""
-    h_tensor = attention_tensor
-
-    # Compute the attentions.
-    # Using feed-forward net to map the two inputs into the same dimension
-    focus_tensor = tf.nn.tanh(
-        tf.matmul(
-            h_tensor,
-            self._component.get_variable('attention_weights_pm_0'),
-            name='h_x_pm') + self._component.get_variable('attention_bias_0'))
-
-    context_tensor = tf.nn.tanh(
-        tf.matmul(
-            last_layer,
-            self._component.get_variable('attention_weights_hm_0'),
-            name='l_x_hm') + self._component.get_variable('attention_bias_1'))
-    # The tf.multiply in the following expression broadcasts along the 0 dim:
-    z_vec = tf.reduce_sum(tf.multiply(focus_tensor, context_tensor), 1)
-    p_vec = tf.nn.softmax(tf.reshape(z_vec, [1, -1]))
-    # The tf.multiply in the following expression broadcasts along the 1 dim:
-    r_vec = tf.expand_dims(
-        tf.reduce_sum(
-            tf.multiply(
-                h_tensor, tf.reshape(p_vec, [-1, 1]), name='time_together2'),
-            0),
-        0)
-    return tf.matmul(
-        r_vec,
-        self._component.get_variable('attention_weights_pu'),
-        name='time_together3')
 
 
 class FeedForwardNetwork(NetworkUnitInterface):
@@ -971,7 +903,6 @@ class FeedForwardNetwork(NetworkUnitInterface):
              fixed_embeddings,
              linked_embeddings,
              context_tensor_arrays,
-             attention_tensor,
              during_training,
              stride=None):
     """See base class."""
@@ -1016,9 +947,6 @@ class FeedForwardNetwork(NetworkUnitInterface):
       logits = tf.matmul(
           last_layer, self._component.get_variable(
               'weights_softmax')) + self._component.get_variable('bias_softmax')
-
-      if self._component.spec.attention_component:
-        logits += self.attention(last_layer, attention_tensor)
 
       logits = tf.identity(logits, name=self._layers[-1].name)
       tensors.append(logits)
@@ -1122,8 +1050,7 @@ class LSTMNetwork(NetworkUnitInterface):
     self._layers.extend(self._context_layers)
 
     self._layers.append(
-        Layer(
-            component, name='layer_0', dim=self._hidden_layer_sizes))
+        Layer(component, name='layer_0', dim=self._hidden_layer_sizes))
 
     self.params.append(tf.get_variable(
         'weights_softmax', [self._hidden_layer_sizes, component.num_actions],
@@ -1134,14 +1061,12 @@ class LSTMNetwork(NetworkUnitInterface):
             initializer=tf.zeros_initializer()))
 
     self._layers.append(
-        Layer(
-            component, name='logits', dim=component.num_actions))
+        Layer(component, name='logits', dim=component.num_actions))
 
   def create(self,
              fixed_embeddings,
              linked_embeddings,
              context_tensor_arrays,
-             attention_tensor,
              during_training,
              stride=None):
     """See base class."""
@@ -1166,8 +1091,8 @@ class LSTMNetwork(NetworkUnitInterface):
     bc = self._component.get_variable('bc')
 
     # i_h_tm1, i_c_tm1 = h_{t-1}, c_{t-1}
-    i_h_tm1 = context_tensor_arrays[0].read(length - 1)
-    i_c_tm1 = context_tensor_arrays[1].read(length - 1)
+    i_h_tm1 = context_tensor_arrays[0].read(length - 1, name="lstm_h_in")
+    i_c_tm1 = context_tensor_arrays[1].read(length - 1, name="lstm_c_in")
 
     # apply dropout according to http://arxiv.org/pdf/1409.2329v5.pdf
     if during_training and self._input_dropout_rate < 1:
@@ -1207,9 +1132,6 @@ class LSTMNetwork(NetworkUnitInterface):
 
     logits = tf.nn.xw_plus_b(ht, tf.get_variable('weights_softmax'),
                              tf.get_variable('bias_softmax'))
-
-    if self._component.spec.attention_component:
-      logits += self.attention(ht, attention_tensor)
 
     logits = tf.identity(logits, name='logits')
     # tensors will be consistent with the layers:

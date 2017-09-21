@@ -61,11 +61,10 @@ class ComputeSession {
 
   // Get the input features for the given component and channel. This passes
   // through to the relevant Component's GetFixedFeatures() call.
-  int GetInputFeatures(
+  void GetInputFeatures(
       const string &component_name,
-      std::function<int32 *(int num_items)> allocate_indices,
-      std::function<int64 *(int num_items)> allocate_ids,
-      int channel_id) const;
+      int channel_id,
+      int64 *output) const;
 
   // Get the input features for the given component and channel. This function
   // can return empty LinkFeatures protos, which represent unused padding slots

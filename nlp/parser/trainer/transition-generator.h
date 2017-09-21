@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NLP_PARSER_TRAINER_GOLD_TRANSITION_GENERATOR_H_
-#define NLP_PARSER_TRAINER_GOLD_TRANSITION_GENERATOR_H_
+#ifndef NLP_PARSER_TRAINER_TRANSITION_GENERATOR_H_
+#define NLP_PARSER_TRAINER_TRANSITION_GENERATOR_H_
 
 #include <string>
 #include <vector>
@@ -26,8 +26,8 @@
 namespace sling {
 namespace nlp {
 
-// A gold transition sequence is just an ordered list of actions.
-class GoldTransitionSequence {
+// A transition sequence is just an ordered list of actions.
+class TransitionSequence {
  public:
   // Appends 'action' to the sequence.
   void Add(const ParserAction &action) { actions_.emplace_back(action); }
@@ -50,7 +50,7 @@ class GoldTransitionSequence {
   std::vector<ParserAction> actions_;
 };
 
-// Generates gold transition sequences.
+// Generates transition sequences from document frames.
 //
 // Implements the following protocol:
 // - EVOKE: If frames F1 and F2 are evoked by spans S1 and S2 where S1 starts
@@ -69,9 +69,9 @@ class GoldTransitionSequence {
 //   It is output when the span's start token is reached.
 //
 // Note that EVOKE, EMBED, and ELABORATE can trigger more actions.
-class GoldTransitionGenerator {
+class TransitionGenerator {
  public:
-  // End result of generating the gold transition sequence.
+  // End result of generating the transition sequence.
   struct Report {
     // Maximum attention index used by CONNECT/EMBED/ELABORATE/ASSIGN/REFER.
     int max_attention_index = -1;
@@ -89,26 +89,26 @@ class GoldTransitionGenerator {
   // Looks up necessary global symbols in 'store'. Should be called only once.
   void Init(Store *store) { names_.Bind(store); }
 
-  // Generates in 'sequence' the gold transition sequence for the interpretation
+  // Generates in 'sequence' the transition sequence for the interpretation
   // in 'document'. Generation report is output in 'report'.
   void Generate(const Document &document,
-                GoldTransitionSequence *sequence,
+                TransitionSequence *sequence,
                 Report *report = nullptr) const;
 
-  // Generates in 'sequence' the gold transition sequence for the interpretation
+  // Generates in 'sequence' the transition sequence for the interpretation
   // in 'document' but limited to the range [begin, end). Any frame reachable
-  // from a span in [begin, end) is processed during gold sequence generation.
+  // from a span in [begin, end) is processed during sequence generation.
   // Generation report is output in 'report'.
   //
   // IMPORTANT NOTE:
   // This method is best used when the subgraph of frames reachable from the
   // spans in [begin, end) doesn't link to any other frames in 'document'.
-  // Otherwise all the other frames will be pulled into the gold sequence via
+  // Otherwise all the other frames will be pulled into the sequence via
   // EMBED or ELABORATE, since they are not evoked by any span in [begin, end).
   void Generate(const Document &document,
                 int begin,
                 int end,
-                GoldTransitionSequence *sequence,
+                TransitionSequence *sequence,
                 Report *report = nullptr) const;
 
  private:
@@ -153,9 +153,9 @@ class GoldTransitionGenerator {
     std::vector<Edge> edges;
   };
 
-  // Represents a gold action using FrameInfo structs of frames as arguments,
+  // Represents an action using FrameInfo structs of frames as arguments,
   // instead of attention indices.
-  struct GoldAction {
+  struct Action {
     // Type of the action.
     ParserAction::Type type;
 
@@ -176,9 +176,9 @@ class GoldTransitionGenerator {
     int length = 0;
 
     // Constructors.
-    explicit GoldAction(ParserAction::Type t) : type(t) {}
-    GoldAction(ParserAction::Type t, FrameInfo *f) : type(t), frame(f) {}
-    GoldAction(ParserAction::Type t, FrameInfo *f, int l) : type(t), frame(f) {
+    explicit Action(ParserAction::Type t) : type(t) {}
+    Action(ParserAction::Type t, FrameInfo *f) : type(t), frame(f) {}
+    Action(ParserAction::Type t, FrameInfo *f, int l) : type(t), frame(f) {
       length = l;
     }
   };
@@ -200,10 +200,10 @@ class GoldTransitionGenerator {
     }
 
     // Updates the index as per the consequence of 'action'.
-    void Update(const GoldAction &action);
+    void Update(const Action &action);
 
-    // Translates 'gold' into a ParserAction using attention index arguments.
-    ParserAction Translate(const Document &document, const GoldAction &gold);
+    // Translates 'action'' into a ParserAction using attention index arguments.
+    ParserAction Translate(const Document &document, const Action &action);
 
     // Returns the maximum attention index used so far in any Translate call.
     int MaxIndex() const { return max_index_; }
@@ -233,4 +233,4 @@ class GoldTransitionGenerator {
 }  // namespace nlp
 }  // namespace sling
 
-#endif  // NLP_PARSER_TRAINER_GOLD_TRANSITION_GENERATOR_H_
+#endif  // NLP_PARSER_TRAINER_TRANSITION_GENERATOR_H_

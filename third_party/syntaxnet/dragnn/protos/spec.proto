@@ -42,12 +42,11 @@ message ComponentSpec {
   // Number of possible actions from every state.
   optional int32 num_actions = 8;
 
-  // Specify the name of the lower level component on which it has attention.
-  optional string attention_component = 9 [default = ""];
-
   // Options for the ComponentBuilder. If this is empty, the regular
   // tf.while_loop based builder is assumed.
   optional RegisteredModuleSpec component_builder = 10;
+
+  reserved 9;
 }
 
 // Super generic container for any registered sub-piece of DRAGNN.
@@ -66,7 +65,7 @@ message Resource {
   repeated Part part = 2;
 }
 
-// The Parts here should be more or less compatible with TaskInput.
+// A single resource specification.
 message Part {
   optional string file_pattern = 1;
   optional string file_format = 2;
@@ -76,19 +75,22 @@ message Part {
 // ------------------------------------------------------------------------
 // Feature specifications.
 //
-// A *feature channel* is a named collection of feature templates that share an
-// embedding matrix. Thus all features in the channel are assumed to use the
-// same vocabulary: e.g., words, POS tags, hidden layer activations, etc. These
-// are extracted, embedded, and then concatenated together as a group.
+// A *fixed feature channel* is just a single feature that can output up to
+// a prespecified maximum number of feature ids in one extraction call.
+// Each id is from the range [0, vocabulary_size).
+//
+// When a feature outputs multiple ids in one extraction call, the embedding
+// vectors for those ids will be summed up and supplied to the input layer.
+// If a feature doesn't output any ids, then a zero vector will be supplied
+// to the input layer.
 
 // Specification for a feature channel that is a *fixed* function of the input.
 // NEXT_ID: 10
 message FixedFeatureChannel {
-  // Interpretable name for this feature channel. NN builders might depend on
-  // this to determine how to hook different channels up internally.
+  // Interpretable name for this channel.
   optional string name = 1;
 
-  // String describing the FML for this feature channel.
+  // String describing the feature function for this feature channel.
   optional string fml = 2;
 
   // Size of parameters for this space:
@@ -99,8 +101,8 @@ message FixedFeatureChannel {
   // No. of possible values returned.
   optional int32 vocabulary_size = 4;
 
-  // No. of different feature templates in the channel, i.e. the # of features
-  // that will be concatenated but share the embedding for this channel.
+  // Maximum number of ids output by the feature in one extraction call for
+  // one batch element.
   optional int32 size = 5;
 
   // Whether the embeddings for this channel should be held constant at their
@@ -110,45 +112,52 @@ message FixedFeatureChannel {
 
   // Resources for this space:
 
-  // Predicate map for compacting feature values.
-  optional string predicate_map = 6;
-
   // Pointer to a pretrained embedding matrix for this feature set.
+  // Currently only enabled for the word feature.
   optional Resource pretrained_embedding_matrix = 7;
 
-  // Vocab file, containing all vocabulary words one per line.
+  // Vocab file for loading the relevant subset of the pretrained embeddings.
+  // The vocab file should contain all vocabulary words one per line.
   optional Resource vocab = 8;
+
+  reserved 6;
 }
 
 // Specification for a feature channel that *links* to component
-// activations. Note that the "vocabulary" of these features is the activations
-// that they are linked to, so it is determined by the other components in the
-// spec.
+// activations. These don't have a fixed vocabulary size, since the
+// space of activations is determined dynamically.
+//
+// A linked channel:
+// - Allows multiple values of the same feature to fire, e.g. the LSTM
+//   activations of the last k tokens (so the feature would output k values).
+// - A missing feature value is equivalent to a value of -1.
+// - The ordering of values is important. So in the above example, we expect
+//   k output feature values, where ith value corresponds to ith token.
+// - The embeddings for the output values are concatenated instead of summed up.
+//   Therefore the output of a linked feature would produce, for example, a
+//   k * embedding_dim sized vector for the input layer.
 message LinkedFeatureChannel {
-  // Interpretable name for this feature channel. NN builders might depend on
-  // this to determine how to hook different channels up internally.
+  // Interpretable name for this feature channel.
   optional string name = 1;
 
-  // Feature function specification. Note: these should all be of type
-  // LinkedFeatureType.
+  // Feature function name.
   optional string fml = 2;
 
   // Embedding dimension, or -1 if the link should not be embedded.
   optional int32 embedding_dim = 3;
 
-  // No. of different feature templates in the channel, i.e. the # of features
-  // that will be concatenated but share the embedding for this channel.
+  // Number of feature values (k in the example above).
   optional int32 size = 4;
 
-  // Component to use for translation, e.g. "tagger"
+  // Component to use for translation, e.g. "lr_lstm".
   optional string source_component = 5;
 
-  // Translator target, e.g. "token" or "last_action", to translate raw feature
-  // values into indices. This must be interpretable by the Component referenced
-  // by source_component.
+  // Translator target, e.g. "current-token" or "history", to translate raw
+  // feature values into indices.
   optional string source_translator = 6;
 
-  // Layer that these features should connect to.
+  // Layer that these features should connect to. Typically zero for LSTMs
+  // and single hidden-layer FF units.
   optional string source_layer = 7;
 }
 

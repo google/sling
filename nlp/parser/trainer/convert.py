@@ -36,23 +36,20 @@ flags.DEFINE_string("input", "", "Tensorflow input model directory.")
 flags.DEFINE_string("output", "", "Myelin output model.")
 
 # DRAGNN op names.
-LSTM_H_IN = "TensorArrayReadV3"
+LSTM_H_IN = "lstm_h_in"
 LSTM_H_OUT = "lstm_h"
-LSTM_C_IN = "TensorArrayReadV3_1"
+LSTM_C_IN = "lstm_c_in"
 LSTM_C_OUT = "lstm_c"
-LSTM_FV = "concat"
+LSTM_FV = "feature_vector"
 
 FF_HIDDEN = "Relu"
 FF_OUTPUT = "logits"
-FF_FV = "concat"
+FF_FV = "feature_vector"
 
 FIXED_EMBEDDING = "/embedding_lookup/Enter"
 LINKED_EMBEDDING = "/MatMul/Enter"
 
 GET_SESSION = "annotation/ComputeSession/GetSession"
-
-# Fixed feature input sizes.
-feature_input_size = {"words": 1, "roles": 32}
 
 def read_file(filename):
   fin = open(filename, "r")
@@ -71,6 +68,9 @@ class Component:
     self.features = None
     self.connectors = connectors
     self.links = {}
+    self.feature_input_size = {}
+    for fixed in spec.fixed_feature:
+      self.feature_input_size[fixed.name] = fixed.size
 
   def path(self):
     return "annotation/inference_" + self.name + "/" + self.name
@@ -203,7 +203,7 @@ class Component:
 
   def extract_fixed_feature(self, feature):
     # Create feature input variable.
-    input_size = feature_input_size.get(feature.name, 1)
+    input_size = self.feature_input_size.get(feature.name, 1)
     input = self.flow.var(self.path() + "/" + feature.name)
     input.type = "int32"
     input.shape = [1, feature.size * input_size]

@@ -23,6 +23,10 @@ Object FromText(Store *store, Text text) {
   return reader.Read();
 }
 
+Object FromText(Store *store, const string &text) {
+  return FromText(store, Text(text));
+}
+
 string ToText(const Store *store, Handle handle, int indent) {
   StringPrinter printer(store);
   printer.printer()->set_indent(indent);

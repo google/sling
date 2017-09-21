@@ -71,13 +71,9 @@ class Component : public sling::Component<Component> {
   // Returns the current batch of states for this component.
   virtual std::vector<const TransitionState *> GetStates() = 0;
 
-  // Extracts and populates the vector of FixedFeatures for the specified
-  // channel. Each functor allocates storage space for the indices, the IDs, and
-  // the weights (respectively).
-  virtual int GetFixedFeatures(
-      std::function<int32 *(int num_elements)> allocate_indices,
-      std::function<int64 *(int num_elements)> allocate_ids,
-      int channel_id) const = 0;
+  // Extracts and populates into 'output' onwards the fixed features for the
+  // specified channel.
+  virtual void GetFixedFeatures(int channel_id, int64 *output) const = 0;
 
   // Extracts and returns the vector of LinkFeatures for the specified
   // channel. Note: these are NOT translated.

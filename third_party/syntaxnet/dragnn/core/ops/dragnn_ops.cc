@@ -110,23 +110,23 @@ output_handle: A handle to the same ComputeSession after advancement.
 
 REGISTER_OP("ExtractFixedFeatures")
     .Input("handle: string")
-    .Output("indices: int32")
+    .Input("batch_size: int32")
     .Output("ids: int64")
     .Attr("component: string")
     .Attr("channel_id: int")
+    .Attr("max_num_ids: int")
     .Doc(R"doc(
 Given a ComputeSession, Component, and channel index, output fixed features.
 
-Fixed features returned as 2 vectors, 'indices' and 'ids' of equal length.
-'ids' specifies which rows should be looked up in the embedding
-matrix. 'indices' is a sorted vector that assigns the same index to embedding vectors
-that should be summed together.
+Fixed features returned as an 'ids' tensor, which specifies which rows
+should be looked up in the embedding matrix.
 
 handle: A handle to a ComputeSession.
-indices: The row to add the feature to.
+batch_size: The current batch size.
 ids: The indices into embedding matrices for each feature.
 component: The name of a Component instance, matching the ComponentSpec.name.
 channel_id: The feature channel to extract features for.
+max_num_ids: An `int`. Maximum number of output feature ids per batch item.
 )doc");
 
 REGISTER_OP("ExtractLinkFeatures")

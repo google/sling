@@ -32,10 +32,11 @@ void RoleSet::Init(const ActionTable &actions) {
   }
 }
 
-RoleGraph::RoleGraph(const ParserState &state,
-                     int limit,
-                     const RoleSet &roles)
-    : limit_(limit), num_roles_(roles.size()) {
+void RoleGraph::Compute(const ParserState &state,
+                        int limit,
+                        const RoleSet &roles) {
+  limit_ = limit;
+  num_roles_ = roles.size();
   int k = limit_;
   if (k > state.AttentionSize()) k = state.AttentionSize();
   for (int source = 0; source < k; ++source) {

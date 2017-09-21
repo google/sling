@@ -46,6 +46,7 @@ SemparState::SemparState(SemparInstance *instance,
 
 SemparState::~SemparState() {
   delete parser_state_;
+  delete features_;
 }
 
 const float SemparState::GetScore() const { return score_; }
@@ -150,6 +151,11 @@ void SemparState::PerformAction(int action_index) {
 
   // Compute the set of allowed actions for the resulting state.
   ComputeAllowed();
+
+  // Update role graph.
+  if ((role_frame_limit_ > 0) && (action.type != ParserAction::SHIFT)) {
+    role_graph_.Compute(*parser_state(), role_frame_limit_, resources_->roles);
+  }
 }
 
 void SemparState::ComputeAllowed() {

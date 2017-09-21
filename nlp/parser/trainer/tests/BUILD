@@ -30,7 +30,8 @@ cc_binary(
     "//nlp/parser/trainer:sempar-component",
     "//nlp/parser/trainer:shared-resources",
     "//string:strcat",
-    "//third_party/dragnn:dragnn",
+    "//third_party/syntaxnet:dragnn-ops",
+    "//third_party/syntaxnet:syntaxnet",
   ],
 )
 

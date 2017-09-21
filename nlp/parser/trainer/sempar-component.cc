@@ -71,33 +71,27 @@ void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
     LOG(FATAL) << "Unknown/unsupported transition system: " << system;
   }
 
-  resources_.LoadGlobalStore(SemparFeature::GetResource(spec_, "commons"));
-  if (system_type_ == SEMPAR) {
-    resources_.LoadActionTable(
-        SemparFeature::GetResource(spec_, "action-table"));
-  } else {
-    for (const auto &param : spec_.transition_system().parameters()) {
-      const string &val = param.second;
-      if (param.first == "left_to_right") {
-        CHECK(val == "false" || val == "true") << val;
-        if (val == "false") left_to_right_ = false;
-      }
+  // Load shared resources.
+  resources_.Load(spec_);
+  const auto &lexicon = resources_.lexicon;
+  const string &name = spec.name();
+  LOG(INFO) << name << ": loaded " << lexicon.size() << " words";
+  LOG(INFO) << name << ": loaded " << lexicon.prefixes().size() << " prefixes";
+  LOG(INFO) << name << ": loaded " << lexicon.suffixes().size() << " suffixes";
+
+  // Determine if processing will be done left to right or not.
+  left_to_right_ = true;
+  for (const auto &param : spec_.transition_system().parameters()) {
+    const string &val = param.second;
+    if (param.first == "left_to_right") {
+      CHECK(val == "false" || val == "true") << val;
+      if (val == "false") left_to_right_ = false;
     }
   }
 
-  // Set up the fixed feature extractor.
-  for (const auto &fixed_channel : spec_.fixed_feature()) {
-    feature_extractor_.AddChannel(fixed_channel);
-  }
-  feature_extractor_.Init(spec_, &resources_);
-  feature_extractor_.RequestWorkspaces(&workspace_registry_);
-
-  // Set up link feature extractors.
-  for (const auto &linked_channel : spec_.linked_feature()) {
-    link_feature_extractor_.AddChannel(linked_channel);
-  }
+  // Set up the feature extractors.
+  fixed_feature_extractor_.Init(spec_, &resources_);
   link_feature_extractor_.Init(spec_, &resources_);
-  link_feature_extractor_.RequestWorkspaces(&workspace_registry_);
 
   // Initialize gold transition generator.
   gold_transition_generator_.Init(resources_.global);
@@ -155,7 +149,6 @@ std::function<int(int, int)> SemparComponent::GetStepLookupFunction(
 
 void SemparComponent::AdvanceFromPrediction(const float scores[],
                                             int transition_matrix_length) {
-  VLOG(2) << "Advancing from prediction.";
   int offset = 0;
   int num_actions = 1;
   if (!shift_only()) num_actions = resources_.table.NumActions();
@@ -200,63 +193,42 @@ std::vector<const TransitionState *> SemparComponent::GetStates() {
   return states;
 }
 
-int SemparComponent::GetFixedFeatures(
-    std::function<int32 *(int)> allocate_indices,
-    std::function<int64 *(int)> allocate_ids,
-    int channel_id) const {
-  SemparFeature::Args args;
+void SemparComponent::GetFixedFeatures(int channel_id, int64 *output) const {
+  int columns = fixed_feature_extractor_.MaxNumIds(channel_id);
+  int size = batch_.size() * columns;
+  for (int i = 0; i < size; ++i) output[i] = -1;
 
-  std::vector<int> segment_indices;
-  int next_segment_index = 0;
-  int channel_size = spec_.fixed_feature(channel_id).size();
   for (SemparState *state : batch_) {
-    args.state = state;
-    int old_size = args.output.size();
-    feature_extractor_.Extract(&args, channel_id);
-
-    for (int i = old_size; i < args.output.size(); ++i) {
-      segment_indices.emplace_back(
-          next_segment_index + args.output[i].feature_index);
-    }
-
-    next_segment_index += channel_size;
+    fixed_feature_extractor_.Extract(channel_id, state, output);
+    output += columns;
   }
-  int feature_count = args.output.size();
-  CHECK_EQ(feature_count, segment_indices.size());
-
-  int32 *indices_tensor = allocate_indices(feature_count);
-  int64 *ids_tensor = allocate_ids(feature_count);
-  for (int i = 0; i < feature_count; ++i) {
-    ids_tensor[i] = args.output[i].id;
-    indices_tensor[i] = segment_indices[i];
-  }
-
-  return feature_count;
 }
 
 std::vector<LinkFeatures> SemparComponent::GetRawLinkFeatures(
     int channel_id) const {
-  std::vector<string> feature_names;
+  std::vector<LinkFeatures> output;
+  std::vector<int> values;
+
   int channel_size = link_feature_extractor_.ChannelSize(channel_id);
-  std::vector<LinkFeatures> features;
-  features.resize(batch_.size() * channel_size);
-
-  SemparFeature::Args args;
+  int size = batch_.size() * channel_size;
+  values.resize(size, -1);
+  output.resize(size);
   for (int batch_idx = 0; batch_idx < batch_.size(); ++batch_idx) {
-    args.Clear();
-    args.state = batch_.at(batch_idx);
-    link_feature_extractor_.Extract(&args, channel_id);
-
-    // Add the raw feature values to the LinkFeatures proto.
+    SemparState *state = batch_[batch_idx];
     int base = batch_idx * channel_size;
-    for (int i = 0; i < args.output.size(); ++i) {
-      auto &f = features[base + args.output[i].feature_index];
-      f.set_feature_value(args.output[i].id);
-      f.set_batch_idx(batch_idx);
+    link_feature_extractor_.Extract(channel_id, state, values.data() + base);
+
+    for (int i = base; i < base + channel_size; ++i) {
+      output[i].set_batch_idx(batch_idx);
+      if (values[i] == -1) {
+        output[i].clear_feature_value();
+      } else {
+        output[i].set_feature_value(values[i]);
+      }
     }
   }
 
-  return features;
+  return output;
 }
 
 std::vector<int> SemparComponent::GetOracleLabels() const {
@@ -284,22 +256,12 @@ void SemparComponent::ResetComponent() {
 }
 
 SemparState *SemparComponent::CreateState(SemparInstance *instance) {
-  instance->workspaces->Reset(workspace_registry_);
   SemparState *state =
       new SemparState(instance, resources_, system_type_, left_to_right_);
   state->set_gold_transition_generator(&gold_transition_generator_);
-  feature_extractor_.Preprocess(state);
-  link_feature_extractor_.Preprocess(state);
+  fixed_feature_extractor_.Preprocess(state);
 
   return state;
-}
-
-bool SemparComponent::IsAllowed(SemparState *state, int action) const {
-  return state->Allowed(action);
-}
-
-bool SemparComponent::IsFinal(SemparState *state) const {
-  return state->IsFinal();
 }
 
 int SemparComponent::GetOracleLabel(SemparState *state) const {

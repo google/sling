@@ -14,6 +14,7 @@
 #include "nlp/parser/trainer/shared-resources.h"
 
 #include "base/macros.h"
+#include "file/file.h"
 #include "frame/serialization.h"
 
 namespace sling {
@@ -25,6 +26,7 @@ void SharedResources::LoadActionTable(const string &file) {
   Store temp(global);
   sling::LoadStore(file, &temp);
   table.Init(&temp);
+  roles.Init(table);
 }
 
 void SharedResources::LoadGlobalStore(const string &file) {
@@ -32,6 +34,36 @@ void SharedResources::LoadGlobalStore(const string &file) {
   global = new Store();
   sling::LoadStore(file, global);
   global->Freeze();
+}
+
+void SharedResources::Load(const syntaxnet::dragnn::ComponentSpec &spec) {
+  bool commons = false;
+  for (const auto &r : spec.resource()) {
+    if (r.name() == "commons") {
+      LoadGlobalStore(r.part(0).file_pattern());
+      commons = true;
+      break;
+    }
+  }
+
+  for (const auto &r : spec.resource()) {
+    string file = r.part(0).file_pattern();
+    string contents;
+    if (r.name() == "action-table") {
+      CHECK(commons);
+      LoadActionTable(file);
+      break;
+    } else if (r.name() == "word-vocab") {
+      CHECK(File::ReadContents(file, &contents));
+      lexicon.InitWords(contents.c_str(), contents.size());
+    } else if (r.name() == "prefix-table") {
+      CHECK(File::ReadContents(file, &contents));
+      lexicon.InitPrefixes(contents.c_str(), contents.size());
+    } else if (r.name() == "suffix-table") {
+      CHECK(File::ReadContents(file, &contents));
+      lexicon.InitSuffixes(contents.c_str(), contents.size());
+    }
+  }
 }
 
 }  // namespace nlp

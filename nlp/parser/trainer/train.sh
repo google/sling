@@ -53,12 +53,11 @@ SEM=$HOME/sempar_ontonotes
 COMMONS=${SEM}/commons
 OUTPUT_FOLDER=${SEM}/out
 TRAIN_FILEPATTERN=${SEM}/train.zip
-DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.ordered.zip
-DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.ordered.zip
+DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
+DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 WORD_EMBEDDINGS_DIM=32
 PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-embedding-bi-true-32.tf.recordio
 OOV_FEATURES=true
-SINGLE_ROLE_FEATURE=false
 FLOW=${SEM}/sempar.flow
 
 # Training hyperparameters.
@@ -143,10 +142,6 @@ case $i in
     ;;
     --oov_features=*|--oov_lstm_features=*)
     OOV_FEATURES="${i#*=}"
-    shift
-    ;;
-    --single_role_feature=*)
-    SINGLE_ROLE_FEATURE="${i#*=}"
     shift
     ;;
     --seed=*)
@@ -240,8 +235,7 @@ then
     --output_dir=${OUTPUT_FOLDER} \
     --word_embeddings=${PRETRAINED_WORD_EMBEDDINGS} \
     --word_embeddings_dim=${WORD_EMBEDDINGS_DIM} \
-    --oov_lstm_features=${OOV_FEATURES} \
-    --single_role_feature=${SINGLE_ROLE_FEATURE}
+    --oov_lstm_features=${OOV_FEATURES}
 fi
 
 if [[ "$DO_TRAINING" -eq 1 ]];

@@ -359,7 +359,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
       correctly predicted actions, and the total number of actions.
     """
     logging.info('Building component: %s', self.spec.name)
-    stride = state.current_batch_size
+    batch_size = state.current_batch_size
 
     cost = tf.constant(0.)
     correct = tf.constant(0)
@@ -377,7 +377,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
         # Get a copy of the network inside this while loop.
         updated_state = MasterState(handle, state.current_batch_size)
         network_tensors = self._feedforward_unit(
-            updated_state, arrays, network_states, stride, during_training=True)
+            updated_state, arrays, network_states, batch_size, during_training=True)
 
         # Every layer is written to a TensorArray, so that it can be backprop'd.
         next_arrays = update_tensor_arrays(network_tensors, arrays)
@@ -468,7 +468,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
       Handle to the state once inference is complete for this Component.
     """
     logging.info('Building component: %s', self.spec.name)
-    stride = state.current_batch_size
+    batch_size = state.current_batch_size
 
     def cond(handle, *_):
       all_final = dragnn_ops.emit_all_final(handle, component=self.name)
@@ -484,7 +484,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
             updated_state,
             arrays,
             network_states,
-            stride,
+            batch_size,
             during_training=during_training)
         next_arrays = update_tensor_arrays(network_tensors, arrays)
         with tf.control_dependencies([x.flow for x in next_arrays]):
@@ -500,7 +500,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
     with tf.name_scope(self.name + '/inference_state'):
       init_arrays = []
       for layer in self.network.layers:
-        init_arrays.append(layer.create_array(stride))
+        init_arrays.append(layer.create_array(batch_size))
     output = tf.while_loop(
         cond,
         body, [state.handle] + init_arrays,
@@ -517,7 +517,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
     with tf.control_dependencies([x.flow for x in arrays]):
       return tf.identity(state.handle)
 
-  def _feedforward_unit(self, state, arrays, network_states, stride,
+  def _feedforward_unit(self, state, arrays, network_states, batch_size,
                         during_training):
     """Constructs a single instance of a feed-forward cell.
 
@@ -532,7 +532,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
         other components are used for stack-prop style connections.
       network_states: NetworkState object containing the TensorArrays from
         *all* components.
-      stride: int Tensor with the current batch size.
+      batch_size: int Tensor with the current batch size.
       during_training: Whether to build a unit for training (vs inference).
 
     Returns:
@@ -542,7 +542,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
       fixed_embeddings = []
       for channel_id, feature_spec in enumerate(self.spec.fixed_feature):
         fixed_embedding = network_units.fixed_feature_lookup(
-            self, state, channel_id, stride)
+            self, state, channel_id, batch_size)
         if feature_spec.is_constant:
           fixed_embedding.tensor = tf.stop_gradient(fixed_embedding.tensor)
         fixed_embeddings.append(fixed_embedding)
@@ -557,7 +557,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
           linked_embeddings.append(
               network_units.activation_lookup_recurrent(
                   self, state, channel_id, source_array, source_layer_size,
-                  stride))
+                  batch_size))
         else:
           # Stackprop style feature: pull from another component's arrays.
           source = self.master.lookup_component[feature_spec.source_component]
@@ -575,19 +575,5 @@ class DynamicComponentBuilder(ComponentBuilderBase):
         index = self.network.get_layer_index(context_layer.name)
         context_tensor_arrays.append(arrays[index])
 
-      if self.spec.attention_component:
-        logging.info('%s component has attention over %s', self.name,
-                     self.spec.attention_component)
-        source = self.master.lookup_component[self.spec.attention_component]
-        network_state = network_states[self.spec.attention_component]
-        with tf.control_dependencies(
-            [tf.assert_equal(state.current_batch_size, 1)]):
-          attention_tensor = tf.identity(
-              network_state.activations['layer_0'].bulk_tensor)
-
-      else:
-        attention_tensor = None
-
       return self.network.create(fixed_embeddings, linked_embeddings,
-                                 context_tensor_arrays, attention_tensor,
-                                 during_training)
+                                 context_tensor_arrays, during_training)

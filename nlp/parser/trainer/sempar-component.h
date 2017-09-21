@@ -23,12 +23,11 @@
 #include "dragnn/core/interfaces/transition_state.h"
 #include "dragnn/protos/data.pb.h"
 #include "dragnn/protos/spec.pb.h"
-#include "nlp/parser/trainer/feature.h"
+#include "nlp/parser/trainer/feature-extractor.h"
 #include "nlp/parser/trainer/sempar-instance.h"
 #include "nlp/parser/trainer/shared-resources.h"
 #include "nlp/parser/trainer/transition-state.h"
 #include "nlp/parser/trainer/transition-system-type.h"
-#include "nlp/parser/trainer/workspace.h"
 
 namespace sling {
 namespace nlp {
@@ -80,10 +79,8 @@ class SemparComponent : public syntaxnet::dragnn::Component {
   // Returns the current states for this component.
   std::vector<const syntaxnet::dragnn::TransitionState *> GetStates() override;
 
-  // Extracts and populates the FixedFeatures vector for the specified channel.
-  int GetFixedFeatures(std::function<int32 *(int)> allocate_indices,
-                       std::function<int64 *(int)> allocate_ids,
-                       int channel_id) const override;
+  // Extracts and populates the fixed features for the specified channel.
+  void GetFixedFeatures(int channel_id, int64 *output) const override;
 
   // Extracts and returns the vector of LinkFeatures for the specified
   // channel. Note: these are NOT translated.
@@ -106,12 +103,6 @@ class SemparComponent : public syntaxnet::dragnn::Component {
   bool shift_only() const { return system_type_ == SHIFT_ONLY; }
 
  private:
-  // Permission function for this component.
-  bool IsAllowed(SemparState *state, int action) const;
-
-  // Returns true if this state is final
-  bool IsFinal(SemparState *state) const;
-
   // Oracle function for this component.
   int GetOracleLabel(SemparState *state) const;
 
@@ -131,16 +122,13 @@ class SemparComponent : public syntaxnet::dragnn::Component {
   SharedResources resources_;
 
   // Gold sequence generator (only used during training).
-  GoldTransitionGenerator gold_transition_generator_;
+  TransitionGenerator gold_transition_generator_;
 
-  // Extractor for fixed features
-  SemparFeatureExtractor feature_extractor_;
+  // Extractor for fixed features.
+  FixedFeatureExtractor fixed_feature_extractor_;
 
   // Extractor for linked features.
-  SemparFeatureExtractor link_feature_extractor_;
-
-  // Internal workspace registry for use in feature extraction.
-  WorkspaceRegistry workspace_registry_;
+  LinkFeatureExtractor link_feature_extractor_;
 
   // The ComponentSpec used to initialize this component.
   syntaxnet::dragnn::ComponentSpec spec_;

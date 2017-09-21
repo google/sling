@@ -15,8 +15,11 @@
 #ifndef NLP_PARSER_TRAINER_SHARED_RESOURCES_H_
 #define NLP_PARSER_TRAINER_SHARED_RESOURCES_H_
 
+#include "dragnn/protos/spec.pb.h"
 #include "frame/store.h"
+#include "nlp/document/lexicon.h"
 #include "nlp/parser/action-table.h"
+#include "nlp/parser/roles.h"
 
 namespace sling {
 namespace nlp {
@@ -25,14 +28,19 @@ namespace nlp {
 struct SharedResources {
   ActionTable table;
   Store *global = nullptr;  // owned
+  RoleSet roles;
+  Lexicon lexicon;
 
   ~SharedResources() { delete global; }
 
   // Loads global store from 'file'.
   void LoadGlobalStore(const string &file);
 
-  // Loads action table from 'file'.
+  // Loads action table from 'file', and initializes 'roles'.
   void LoadActionTable(const string &file);
+
+  // Loads resources from 'spec'.
+  void Load(const syntaxnet::dragnn::ComponentSpec &spec);
 };
 
 }  // namespace nlp

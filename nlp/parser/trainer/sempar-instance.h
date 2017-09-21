@@ -17,27 +17,23 @@
 
 #include "frame/store.h"
 #include "nlp/document/document.h"
-#include "nlp/parser/trainer/workspace.h"
 
 namespace sling {
 namespace nlp {
 
-// Container for holding a document, its local store, and workspaces for
-// feature extraction.
+// Container for holding a document and its local store.
 struct SemparInstance {
   ~SemparInstance() {
     delete document;
     delete store;
-    delete workspaces;
   }
 
   // Serialization of the document. Cleared once the document is decoded.
   string encoded;
 
-  // The document itself, its local store, and workspace set.
+  // The document itself and its local store.
   Document *document = nullptr;
   Store *store = nullptr;
-  WorkspaceSet *workspaces = nullptr;
 };
 
 }  // namespace nlp

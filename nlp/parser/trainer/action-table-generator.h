@@ -21,7 +21,7 @@
 #include "frame/store.h"
 #include "nlp/document/document.h"
 #include "nlp/parser/action-table.h"
-#include "nlp/parser/trainer/gold-transition-generator.h"
+#include "nlp/parser/trainer/transition-generator.h"
 
 namespace sling {
 namespace nlp {
@@ -70,7 +70,7 @@ class ActionTableGenerator {
   int coverage_percentile_ = 100;
 
   // Gold sequence generator.
-  GoldTransitionGenerator generator_;
+  TransitionGenerator generator_;
 
   // Unknown (i.e. non-global) symbol -> raw frequency.
   std::unordered_map<string, int> unknown_;

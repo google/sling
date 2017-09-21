@@ -319,6 +319,7 @@ class FileEncoder {
 };
 
 // Reads object in text format from string.
+Object FromText(Store *store, Text text);
 Object FromText(Store *store, const string &text);
 
 // Returns string with object in text format.

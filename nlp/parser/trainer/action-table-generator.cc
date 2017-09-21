@@ -96,8 +96,8 @@ void ActionTableGenerator::OutputUnknownSymbols(const string &filename) const {
 
 void ActionTableGenerator::Process(
     const Document &document, int start, int end) {
-  GoldTransitionSequence gold_sequence;
-  GoldTransitionGenerator::Report report;
+  TransitionSequence gold_sequence;
+  TransitionGenerator::Report report;
   generator_.Generate(
       document, start, end, &gold_sequence, &report);
 

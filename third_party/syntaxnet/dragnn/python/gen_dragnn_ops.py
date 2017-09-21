@@ -180,37 +180,38 @@ def emit_oracle_labels(handle, component, name=None):
 
 
 _ops.RegisterShape("EmitOracleLabels")(None)
-_extract_fixed_features_outputs = ["indices", "ids"]
+_extract_fixed_features_outputs = ["ids"]
 
 
 _ExtractFixedFeaturesOutput = _collections.namedtuple("ExtractFixedFeatures",
                                                       _extract_fixed_features_outputs)
 
 
-def extract_fixed_features(handle, component, channel_id, name=None):
+def extract_fixed_features(handle, batch_size, component,
+                           channel_id, max_num_ids, name=None):
   r"""Given a ComputeSession, Component, and channel index, output fixed features.
 
-  Fixed features returned as 2 vectors, 'indices', 'ids' of equal
-  length. 'ids' specifies which rows should be looked up in the embedding
-  matrix. 'indices' is a sorted vector that assigns the same index to embedding
-  vectors that should be summed together.
+  Fixed features returned as an 'ids' tensor, which specifies which rows
+  should be looked up in the embedding matrix.
 
   Args:
     handle: A `Tensor` of type `string`. A handle to a ComputeSession.
-    component: A `string`.
-      The name of a Component instance, matching the ComponentSpec.name.
+    batch_size: an `int`. The current batch size.
+    component: A `string`. The component name.
     channel_id: An `int`. The feature channel to extract features for.
+    max_num_ids: An `int`. Maximum number of output feature ids per batch item.
     name: A name for the operation (optional).
 
   Returns:
-    A tuple of `Tensor` objects (indices, ids).
-    indices: A `Tensor` of type `int32`. The row to add the feature to.
     ids: A `Tensor` of type `int64`. The indices into embedding matrices for each feature.
   """
   result = _op_def_lib.apply_op("ExtractFixedFeatures", handle=handle,
+                                batch_size=batch_size,
                                 component=component, channel_id=channel_id,
+                                max_num_ids=max_num_ids,
                                 name=name)
-  return _ExtractFixedFeaturesOutput._make(result)
+  #return _ExtractFixedFeaturesOutput._make(result)
+  return result
 
 
 _ops.RegisterShape("ExtractFixedFeatures")(None)
@@ -505,8 +506,8 @@ op {
     name: "handle"
     type: DT_STRING
   }
-  output_arg {
-    name: "indices"
+  input_arg {
+    name: "batch_size"
     type: DT_INT32
   }
   output_arg {
@@ -519,6 +520,10 @@ op {
   }
   attr {
     name: "channel_id"
+    type: "int"
+  }
+  attr {
+    name: "max_num_ids"
     type: "int"
   }
 }

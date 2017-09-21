@@ -54,8 +54,8 @@ class RoleGraph {
   // Feature emitter function.
   typedef std::function<void(int feature)> Emit;
 
-  // Initialize role graph from parser state.
-  RoleGraph(const ParserState &state, int limit, const RoleSet &roles);
+  // Compute role graph from parser state.
+  void Compute(const ParserState &state, int limit, const RoleSet &roles);
 
   // Emit (source, role) features.
   void out(Emit emit) const {
@@ -101,10 +101,10 @@ class RoleGraph {
   };
 
   // The maximum number of frame to use from the attention buffer.
-  int limit_;
+  int limit_ = 0;
 
   // Number of roles in role set.
-  int num_roles_;
+  int num_roles_ = 0;
 
   // Edges in the role graph.
   std::vector<Edge> edges_;
