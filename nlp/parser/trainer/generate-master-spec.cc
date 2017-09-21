@@ -273,8 +273,8 @@ void OutputResources(Artifacts *artifacts) {
       }
 
       // Add prefixes/suffixes for the current word.
-      prefixes.AddAffixesForWord(word);
-      suffixes.AddAffixesForWord(word);
+      prefixes.AddAffixesForWord(token.text());
+      suffixes.AddAffixesForWord(token.text());
     }
 
     count++;
