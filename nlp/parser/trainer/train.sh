@@ -168,7 +168,7 @@ case $i in
     GRAD_CLIP_NORM="${i#*=}"
     shift
     ;;
-    --dropout=*|--dropout_rate=*)
+    --dropout=*|--dropout_rate=*|--dropout_keep_rate=*)
     DROPOUT="${i#*=}"
     shift
     ;;
