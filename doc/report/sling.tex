@@ -1,0 +1,443 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[hyperref]{acl2017}
+\usepackage{url}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{float}
+
+\usepackage{svg}
+
+% Please remember to install inkscape include --shell-escape when
+% using pdflatex:
+% sudo apt-get install inkscape
+% pdflatex --shell-escape sling
+
+% Figures:
+% https://docs.google.com/a/ringgaard.com/presentation/d/1QlQnyeG5UbUDEi2x9rxxjCXRQ1Qz9qjaTz__NWX-n8o/edit?usp=sharing
+
+\floatstyle{boxed}
+\restylefloat{figure}
+
+%\aclfinalcopy
+\def\confidential{DRAFT COPY.  DO NOT DISTRIBUTE.}
+
+\title{SLING: A framework for frame semantic parsing}
+
+\author{
+Michael Ringgaard \\ Google Inc. \\ {\tt ringgaard@google.com} \\\And
+Rahul Gupta \\ Google Inc. \\ {\tt grahul@google.com} \\
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper describes SLING, which is a framework for building
+parsers for annotating text with semantic frames.
+The parser is a general transition-based frame semantic parser that uses
+bi-directional LSTMs for input encoding and a Transition Based Recurrent
+Unit (TBRU) for output decoding.
+It is a jointly trained model using only the text tokens as input and the
+transition system has been designed to output frame graphs directly without
+any intervening symbolic representation.
+The SLING framework includes an efficient and scalable frame store
+implementation as well as a neural network JIT compiler for fast parsing at
+runtime.
+The SLING framework is implemented in C++ and it is available for download
+on GitHub.
+\end{abstract}
+
+\section{Introduction}
+
+Recent advances in machines learning have enabled the use of deep learning to
+train recurrent multi-level neural network classifiers. This has allowed us to
+reconsider how to best design and implement systems for natural language
+understanding (NLU).
+
+Traditionally, natural language processing (NLP) systems have used a cascade of
+NLP modules for syntatic and semantic annotation of text.
+These systems typically first do part-of-speech (POS) tagging, followed by
+constituency or dependency parsing for syntactic analysis.
+Using the POS tags and parse trees as feature inputs, one could then do other
+NLP tasks like mention chunking, entity type tagging, coreference resolution,
+semantic role labeling (SRL), etc.
+
+Pipelined systems often use a simple 1-best feed forward strategy \cite{finkel2006}
+where they greedily take the best output of each stage and pass it on to the
+next stage.
+While it is simple to build such an architecture, errors can accumulate
+throughout the pipeline making it much harder for the system to perform
+correctly, e.g. F1 on SRL drops by more than 10\% when going from gold to
+automatic parse trees \cite{toutanova2005}.
+
+Often, applications do not need the intermediate annotations produced
+by the lower levels in the NLP stack, so it would be preferable if these systems
+could be trained jointly to optimize an objective based on the output
+annotations needed for a particular application.
+
+Classic NLP systems are also often trained using linear classifiers.
+Because of the simplicity of these, very complex and elaborate feature
+extraction with many different types of features as well as many kinds
+of combinations of these features are often required for good accuracy.
+With deep learning one can use embeddings, multiple layers, and recurrent
+network connections instead, and this often removes the need for complex
+feature design. The internal learned representations in the hidden layers of
+the models can be used instead of the hand-crafted intermediate representations
+in pipelined systems.
+
+
+We present the SLING parser that leverages deep learning to bypass the some of
+the limitations of classic pipelined systems.
+It is a transition-based parser that outputs frame graphs directly without any
+intervening symbolic representation (see Section~\ref{sec:ts}). Transition-based
+parsing is often associated with dependency parsing, but we have designed a
+specialized transition system that outputs frame graphs instead of dependency
+trees.
+
+We use a recurrent feed-forward unit for predicting the actions in the
+transition sequence, where the hidden activations from predicting each
+transition step are fed back into the subsequent steps.
+A bidirectional LSTM is used for encoding the input, where we have both a
+left-to-right and a right-to-left LSTM, see Figure~\ref{fig:network}.
+This neural network architecture has been implemented using DRAGNN \cite{dragnn}
+and Tensorflow \cite{tensorflow}.
+
+We have made the SLING parsing framework available as open source and the code
+for the parser described in this paper can be found on GitHub.\footnote{\url{https://github.com/google/sling}}
+
+In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, which is the
+underlying linguistic theory, as well as the SLING frame store, which is our
+C++ framework for representing and storing semantic frames compactly and
+efficiently.
+Section \ref{sec:att} introduces our attention mechanism and
+Section~\ref{sec:ts} describes the transition system used for producing the
+frame graphs. Section~\ref{sec:features} describes the features used by the
+parser.
+
+\begin{figure*}[t]
+  \centering
+  \includesvg{network}
+  \caption{Neural network architecture for SLING parser. The input is encoded by
+  a bi-directional LSTM and the LSTM encoding is then feed into a recurrent
+  feed-forward (FF) unit which predicts the actions for the transition system.
+  The hidden layer activations as well as the transition system state is used
+  for constructing the input feature vector for the next step. The FF unit is
+  run repeatedly until the transition system has reached a terminal state.}
+  \label{fig:network}
+\end{figure*}
+
+\section{Frame semantics}
+\label{sec:framesem}
+
+While frames in SLING are not tied to any particular frame semantic theory or
+knowledge ontology, they are inspired by \emph{frame semantics}, which is a
+theory of linguistic meaning developed by Charles Fillmore \cite{fillmore1982}.
+Frame semantics connects linguistic semantics to encyclopedic knowledge and the
+central idea is that understanding the meaning of a word requires access to all
+the essential knowledge that relates to that word. A word \emph{evokes} a frame
+representing the specific concept it refers to.
+
+A semantic frame is a set of facts that specify "characteristic
+features, attributes, and functions of a denotatum, and its characteristic
+interactions with things necessarily or typically associated with it." \cite{alan2001}.
+A semantic frame can also be vieved as a coherent structure of related concepts
+that are related such that knowledge of all of them is required to have
+complete knowledge of any one.
+
+Frame semantics is not only for individual concepts, but can be generalized
+to phrases, entities, constructions, and other larger and more complex linguistic
+and ontological units. Semantic frames can be also used in information modeling
+for constructing knowledge bases of world knowledge and common sense, and frame
+semantics can also form the basis for reasoning about metaphors, metonymy,
+actions, perspective, etc.
+
+\section{Frame in SLING}
+\label{sec:slingframes}
+
+At a more technical level, a SLING frame consists of a list of slots, where each
+slot has a name (role) and a value. The slot values can be literals like numbers
+and strings, or links to other frames. The frames essentially form a graph where
+the frames are the (typed) nodes and the slots are the labeled edges. A frame
+graph can also be viewed as a feature structure \cite{carpenter2005} and
+unification can be used for induction of new frames from existing frames.
+Sometimes it is also useful to use frames for representing more basic data
+structures like a C struct with fields, a JSON object, or a record in a
+database.
+
+SLING frames live inside a \emph{frame store}. A store is a container that
+tracks the all the frames that have been allocated in the store, and serves as a
+memory allocation arena for the allocated frames. When making a new frame, one
+specifies the store that the frame should be allocated in. The frame will live in
+this store until the store is deleted or the frame is garbage collected because
+there are more no references to it.\footnote{See the \href{https://github.com/google/sling/blob/master/frame/README.md}{SLING Guide}
+for a detailed description of the SLING frame store implementation.}
+
+The SLING text format is a superset of JSON that allows you to have references
+between frames (i.e. JSON objects) using the {\tt \#n} syntax. The frames can be
+assigned ids using the {\tt=\#n} syntax. SLING frames can have both numeric and
+named ids and both slot names and values can be frame references. Where JSON
+objects can only represent trees, SLING frames can be used for representing
+arbitrary graphs. SLING has special syntax for built-in slot names:
+
+\begin{table}[h!]
+\begin{tabular}{|l|l|l|}
+\hline
+Syntax & Symbol & RDF \\
+\hline
+=name & id:name & rdf:ID \\
+:name & isa:name & rdf:InstanceOf \\
++name & is:name & rdfs:subClassOf \\
+\hline
+\end{tabular}
+\end{table}
+
+Documents are also represented using frames, where the document frame has slots
+for the document text, the tokens, and the mention phrases and the frames they
+evoke. See Figure~\ref{fig:slingdoc} for an example.
+
+\begin{figure*}[t]
+  \begin{verbatim}
+{
+  :/s/document
+  /s/document/text: "John hit the ball"
+  /s/document/tokens: [
+    {/s/token/text: "John" /s/token/start: 0  /s/token/length: 4},
+    {/s/token/text: "hit"  /s/token/start: 5  /s/token/length: 3},
+    {/s/token/text: "the"  /s/token/start: 9  /s/token/length: 3},
+    {/s/token/text: "ball" /s/token/start: 13 /s/token/length: 4}
+  ]
+  /s/document/mention: {
+    :/s/phrase /s/phrase/begin: 0
+    /s/phrase/evokes: {=#1 :/s/person }
+  }
+  /s/document/mention: {
+    :/s/phrase /s/phrase/begin: 1
+    /s/phrase/evokes: {
+      :/pb/hit-01
+      /pb/arg0: #1
+      /pb/arg1: #2
+    }
+  }
+  /s/document/mention: {
+    :/s/phrase /s/phrase/begin: 3
+    /s/phrase/evokes: {=#2 :/s/consumer_good }
+  }
+}
+\end{verbatim}
+  \caption{The text ``John hit the ball" in SLING frame notation. The document
+  itself is represented by a frame that has the text, an array of tokens and
+  the mentions that evoke frames. There are three frames: a person frame (John),
+  a consumer good frame (bat) and a hit-01 frame. The hit frame has the person
+  frame as the agent (arg0) and the ball frame as the object (arg1).}
+  \label{fig:slingdoc}
+\end{figure*}
+
+\section{Attention}
+\label{sec:att}
+
+The SLING parser is essentially a sequence-to-sequence model where the LSTM
+encoder takes the input text and produces an internal representation of the
+stimuli, i.e. the input text.
+The decoder then takes this internal representation and uses a transition-based
+feed-forward unit to predict the sequence of actions for updating the transition
+system state (Figure~\ref{fig:network}).
+
+Sequence-to-sequence models often use an ``attention" mechanism to focus
+the decoder on the important parts of the input for producing the next output
+symbol. In this model, ``attention" refers to focusing on certain parts of the
+input as relevant for producing the next output.
+
+We use a somewhat different notion of \emph{attention} that is closer to
+recent neuroscience research on attention and awareness in the brain
+\cite{nelson2017} and \cite{graziano2013}.
+Our attention model is expressed in terms of the semantic frames inferred from
+the text so far.
+This is different from neural attention in sequence-to-sequence models
+since we model attention in terms of semantic frames evoked from the text rather
+than (encodings of) the text itself.
+
+As part of the transition system state, we maintain an \emph{attention buffer}.
+This is a prioritized list of semantic frames where the frames that are closest
+to the center of attention is at the front of the list. The transition actions
+maintains the attention buffer and moves frames to the front whenever a frame
+is evoked or re-evoked by the input text. When a new frame is evoked, it will
+merge the concept and its roles into a new coherent chunk of meaning, which is
+represented by the new frame and it relations to other frames, and this will
+become the new center of attention. The hypothesis is that by maintaining this
+attention mechanism, we only need to look at a few recent frames brought into
+attention in order to build up the desired frame graph.
+
+\section{Transition system}
+\label{sec:ts}
+
+In the parsing literature, \emph{transition systems} have been
+used to construct dependency parse trees from a sequence of state-action pairs
+$(s_i,a_i)$. A transition system takes a state $s_i$ and an action $a_i$ and
+constructs a new state $s_{i+1}$. This allows you to build a tree structure by
+predicting a sequence of actions. For example, the \emph{arc-standard}
+transition system \cite{nivre2006} uses {\bf SHIFT}, {\bf LEFT-ARC(label)}, and
+{\bf RIGHT-ARC(label)} actions to construct a dependency parse tree from a
+sequence of these actions.
+
+We are using the same core idea to construct a frame graph where frames can be
+evoked by phrases in the input. Instead of using a stack, we have an
+\emph{attention buffer}, which keeps track of the most salient frames in the
+discourse. The front of the attention buffer serves as the short-term memory of
+the parser and the parser actions operate on these frames. The actions in the
+transition system both builds up the frame graph as well as maintains the
+attention buffer. The transition system consists of the following actions:
+
+\begin{itemize}
+  \item {\bf SHIFT} -- Moves to next input token. Only valid when not at the
+        end of the input buffer.
+  \item {\bf STOP} -- Signals that we have reach the end of the parse. This is
+        only valid when at the end of the input buffer. Multiple STOP actions
+        can be added to the transition sequence, e.g. to make all sequences in a
+        beam have the same length. After a STOP is issued, no other actions are
+        permitted except more STOP actions.
+  \item {\bf EVOKE(type, n)} -- Evokes frame of with type {\bf type} from
+        the next {\bf n} tokens in the input. The evoked frame becomes the new
+        center of attention.
+  \item {\bf REFER(frame, n)} -- Makes a new mention of the next {\bf n} tokens
+        in the input evoking an existing frame in the attention buffer. This
+        frame will become the new center of attention.
+  \item {\bf CONNECT(source, role, target)} -- Adds slot to {\bf source} frame
+        in the attention buffer with name {\bf role} and value {\bf target}
+        where {\bf target} is an existing frame in the attention buffer. The
+        {\bf source} frame become the new center of attention.
+  \item {\bf ASSIGN(frame, role, value)} -- Adds slot to {\bf source} frame in
+        the attention buffer  with name {\bf role} and value {\bf value} and
+        moves the frame to the center of attention.
+  \item {\bf EMBED(target, role, type)} -- Creates a new frame with
+        type {\bf type} and add a slot to it with name {\bf role} and value
+        {\bf target} where {\bf target} is an existing frame in the attention
+        buffer. The new frame becomes the new center of attention.
+  \item {\bf ELABORATE(source, role, type)} -- Creates a new frame with type
+        {\bf type} and adds a slot to an existing frame {\bf source} in the
+        attention buffer with {\bf role} set to the new frame. The new frame
+        becomes the new center of attention.
+\end{itemize}
+
+In summary, {\bf EVOKE} and {\bf REFER} are used to evoke frames from text
+mentions, while {\bf ELABORATE} and {\bf EMBED} are used to create frames not
+directly evoked by text.
+
+This transition system can generate any connected frame graph where the frames
+are either directly on indirectly evoked by mention phrases in the text. A frame
+can be evoked by multiple mentions and the graph can have cycles.
+
+The transition system can potentially have an unbounded number of actions since
+it is parameterized by phrase length and attention buffer indices with can be
+arbitrarily large, so in the current implementation, we only consider the
+top $k$ frames in the attention buffer $(k=5)$ and do not consider phrases
+longer than those in the training copus.
+
+Multiple transition sequences can generate the same frame annotations, but we
+have implemented an oracle sequence generator that takes a document and converts
+it to a canonical transition sequence in a way similar to how this is done
+for transition-based dependency parsing \cite{nivre2006}, e.g. the sentence
+``John hit the ball" will generate the following transition sequence:
+\begin{verbatim}
+  EVOKE(/s/person, 1)
+  SHIFT
+  EVOKE(/s/hit-01, 1)
+  CONNECT(0, /pb/arg0, 1)
+  SHIFT
+  SHIFT
+  EVOKE(/s/consumer_good, 1)
+  CONNECT(1, /pb/arg1, 0)
+  SHIFT
+  STOP
+\end{verbatim}
+
+\section{Features}
+\label{sec:features}
+
+The LSTMs only uses lexical features based on the current input word:
+
+\begin{itemize}
+  \item The current word itself. During training we initialize the embeddings
+  for this feature with pre-trained word embeddings \cite{mikolov2013} for all
+  the words in the vocabulary collected from the training data.
+  \item The prefixes and suffixes of the current input word. We only use
+  prefixes up to three characters in our experiments.
+  \item Word shape features based on the characters in the current input word:
+  hyphenation, capitalization, punctuation, quotes, and digits. Each of these
+  features has its own embedding matrix.
+\end{itemize}
+
+The TBRU is a simple feed-forward unit with a single hidden layer.
+It takes the hidden activations from the LSTMs as well as the activations from
+the hidden layer from the previous steps as raw input features, and maps them
+through embedding matrices to get the input vector for the  hidden layer. The
+raw input features used are:
+
+\begin{itemize}
+  \item The hidden activations from the left-to-right and right-to-left LSTMs
+  for the current token in the parser state.
+  \item The attention feature looks at the top-5 frames in the attention buffer
+  and finds the phrases in the text (if any) that evoked them. The activations
+  from the left-to-right and right-to-left LSTMs for the last token in these
+  phrases are used as input features. These serve as the continuous lexical
+  representations of the top frames in the attention buffer.
+  \item The hidden layer activations of the transition steps which evoked or
+  brought into focus the top-5 frames in the attention buffer. These serves as a
+  continuous representation of the semantic context for these frames, i.e. a
+  representation of the state when these frames were evoked most recently.
+  \item The history feature uses the hidden activations in the feed-forward
+  unit from the previous five steps as feature inputs to the current step.
+  \item The roles features extract the role edges between the top-5 frames in
+  the attention buffer. These are triples of the form $(s_i, r_i, t_i)$ meaning
+  that the frame at position $s_i$ in the attention buffer has a role $r_i$ with
+  the frame at position $t_i$ in the attention buffer as its value. Back-off
+  features are added for the source roles $(s_i,r_i)$, target role $(r_i, t_i)$,
+  and unlabeled roles $(s_i,t_i)$.
+\end{itemize}
+
+\section{Experiments}
+
+We have used the OntoNotes corpus \cite{ontonotes2006} to construct a corpus
+with frame semantic annotations for evaluation the parser. We have taken the
+PropBank SRL layer \cite{palmer2005} and converted the predicate-argument
+structures into frame annotations. We have also annotated the corpus with
+entity mentions with entity types using a state-of-the-art entity tagger.
+We have determined the head token of each argument span and if this coincides
+with an entity mention, we have used this as the evoking span for the argument
+frame, otherwise we have just used the head token.
+
+\section{Evaluation}
+
+An annotated document consists of a number of connected frames and as well as
+phrases, i.e. token spans, evoking these frames. We evaluate the accuracy of the
+annotations by comparing the generated frames with the gold standard frame
+annotations from the evaluation corpus.
+
+The documents are matched by constructing a virtual graph where the document
+is the start node. The document node is then connected to the spans and the
+spans are connected to the frames that the spans evoke. This graph is then
+extended by following the frame-to-frame links from the roles. Accuracy is
+computed by aligning the golden and predicted graphs and computing precision,
+recall, and F1. The accuracy is computed for spans, frames, types, roles, and
+labels.
+
+\section{Parser runtime}
+
+Myelin is a neural network JIT compiler...
+
+At training time, we use Tensorflow for computing and updating the neural
+network.
+
+\section{Future work}
+
+% Cascading action classifier to speed up computations of logits... TBD
+
+% Knowledge-based inference... TBD
+
+\section{Acknowledgments}
+
+\bibliography{sling}
+\bibliographystyle{acl_natbib}
+
+\end{document}
+
