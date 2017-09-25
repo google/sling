@@ -4,6 +4,18 @@ SLING is a parser for annotating text with frame semantic annotations. It is
 trained on an annotated corpus using [Tensorflow](https://www.tensorflow.org/)
 and [Dragnn](https://github.com/tensorflow/models/blob/master/syntaxnet/g3doc/DRAGNN.md).
 
+The parser is a general transition-based frame semantic parser using
+bi-directional LSTMs for input encoding and a Transition Based Recurrent Unit
+(TBRU) for output decoding. It is a jointly trained model using only the text
+tokens as input and the transition system has been designed to output frame
+graphs directly without any intervening symbolic representation.
+
+![SLING neural network architecture.](./doc/report/network.svg)
+
+The SLING framework includes an efficient and scalable frame store
+implementation as well as a neural network JIT compiler for fast parsing at
+runtime.
+
 ## Installation
 
 The parser trainer uses Tensorflow for training. SLING uses the Python 2.7
