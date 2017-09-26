@@ -48,13 +48,14 @@ struct GraphOptions {
   bool types_in_labels = true;
   bool include_constants = true;
   bool cluster_functions = true;
-  int max_value_size = 16;
+  int max_value_size = 8;
   float edge_thickness_scalar = 0.0;
 
   // Options for operations, inputs, outputs, and constants.
   GraphNodeOptions ops;
   GraphNodeOptions inputs;
   GraphNodeOptions outputs;
+  GraphNodeOptions vars;
   GraphNodeOptions consts;
   GraphNodeOptions funcs;
 

@@ -1374,7 +1374,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
                      << " because input " << input->name
                      << " is missing type";
       }
-      if (!input->shape.defined()) {
+      if (input->shape.missing()) {
         missing = true;
         LOG(WARNING) << "Skipping type inference for " << op->name
                      << " because input " << input->name
@@ -1389,7 +1389,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
     // Check if any of the outputs are missing type or shape information.
     bool infer = false;
     for (Variable *output : op->outputs) {
-      if (output->type == DT_INVALID || !output->shape.defined()) infer = true;
+      if (output->type == DT_INVALID || output->shape.missing()) infer = true;
     }
     if (!infer) continue;
 
@@ -1408,7 +1408,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
         LOG(WARNING) << "Variable " << output->name << " is missing type";
         resolved = false;
       }
-      if (!output->shape.defined()) {
+      if (output->shape.missing()) {
         LOG(WARNING) << "Variable " << output->name << " is missing shape";
         resolved = false;
       }

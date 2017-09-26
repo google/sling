@@ -30,6 +30,16 @@
 namespace sling {
 namespace nlp {
 
+// Parallel corpus for evaluation.
+class ParallelCorpus {
+ public:
+  virtual ~ParallelCorpus() = default;
+
+  // Read next pair of documents. Return false when there are no more documents.
+  // Ownership of the store and documents is transferred to the caller.
+  virtual bool Next(Store **store, Document **golden, Document **predicted) = 0;
+};
+
 // Compute precision and recall for frame annotations in an annotated corpus
 // compared to a gold-standard corpus. This evaluation does not take thematic
 // frames into account yet.
@@ -139,6 +149,10 @@ class FrameEvaluation {
     int64 num_golden_frames = 0;
     int64 num_predicted_frames = 0;
   };
+
+  // Evaluates parallel corpus (gold and test) and returns the evaluation in
+  // 'output'.
+  static void Evaluate(ParallelCorpus *corpus, Output *output);
 
   // Evaluates two equal-sized corpora of files (gold and test) and returns
   // the evaluation in 'output'.

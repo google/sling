@@ -82,7 +82,12 @@ GraphOptions::GraphOptions() {
   outputs.shape = "ellipse";
   outputs.style = "filled";
   outputs.color = "#828A9A";
-  outputs.fillcolor = "#bbc6dd";
+  outputs.fillcolor = "#BBC6DD";
+
+  vars.shape = "ellipse";
+  vars.style = "filled";
+  vars.color = "#89998A";
+  vars.fillcolor = "#C4DAC5";
 
   consts.shape = "box";
   consts.style = "filled";
@@ -156,27 +161,15 @@ static void AppendVar(string *str,
       f->second.Append(str);
     } else if (var->data != nullptr) {
       options.consts.Append(str);
-    } else if (var->in) {
+    } else if (var->out && !var->in) {
+      options.outputs.Append(str);
+    } else if (var->in && !var->out) {
       options.inputs.Append(str);
     } else {
-      options.outputs.Append(str);
+      options.vars.Append(str);
     }
     str->append("];\n");
-  }
-  if (var->in) {
-    for (Flow::Operation *consumer : var->consumers) {
-      AppendVarId(str, var);
-      str->append(" -> ");
-      AppendOpId(str, consumer);
-      str->append(" [");
-      str->append("tooltip=\"");
-      str->append(var->name);
-      str->append("\" ");
-      AppendPenWidth(str, var, options);
-      str->append("];\n");
-    }
-  }
-  if (var->out) {
+
     if (var->producer != nullptr) {
       AppendOpId(str, var->producer);
       str->append(" -> ");
@@ -188,6 +181,7 @@ static void AppendVar(string *str,
       AppendPenWidth(str, var, options);
       str->append("];\n");
     }
+
     for (Flow::Operation *consumer : var->consumers) {
       AppendVarId(str, var);
       str->append(" -> ");

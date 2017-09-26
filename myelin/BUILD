@@ -94,3 +94,18 @@ cc_library(
   ],
 )
 
+cc_binary(
+  name = "analyze",
+  srcs = ["analyze.cc"],
+  deps = [
+    ":compute",
+    ":flow",
+    ":graph",
+    ":profile",
+    "//base",
+    "//file:posix",
+    "//myelin/kernel:dragnn",
+    "//myelin/kernel:tensorflow",
+  ],
+)
+

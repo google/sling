@@ -52,6 +52,9 @@ cc_library(
     "upstream/contrib/minizip/unzip.h",
     "upstream/contrib/minizip/ioapi.h",
   ],
+  deps = [
+    ":zlib",
+  ],
   copts = [
     "-O3",
     "-Wno-unused-variable",

@@ -197,6 +197,12 @@ class Shape {
     return true;
   }
 
+  // Check if shape is missing, .e.g. some dimensions are zero.
+  bool missing() const {
+    for (int d : dims_) if (d == 0) return true;
+    return false;
+  }
+
   // Return the number of outer elements relative to dimension.
   int outer(int d) const {
     int n = 1;

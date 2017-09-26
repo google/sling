@@ -24,6 +24,45 @@
 namespace sling {
 namespace nlp {
 
+// Parallel corpus for file-based document source.
+class FileParallelCorpus : public ParallelCorpus {
+ public:
+  // Open corpora.
+  FileParallelCorpus(Store *commons,
+                     const string &gold_file_pattern,
+                     const string &test_file_pattern) {
+    commons_ = commons;
+    gold_corpus_ = DocumentSource::Create(gold_file_pattern);
+    test_corpus_ = DocumentSource::Create(test_file_pattern);
+  }
+
+  // Close corpora.
+  ~FileParallelCorpus() override {
+    delete gold_corpus_;
+    delete test_corpus_;
+  }
+
+  // Read next document pair from corpora.
+  bool Next(Store **store, Document **golden, Document **predicted) override {
+    *store = new Store(commons_);
+    *golden = gold_corpus_->Next(*store);
+    *predicted = test_corpus_->Next(*store);
+    if (*golden == nullptr) {
+      CHECK(*predicted == nullptr);
+      delete *store;
+      return false;
+    } else {
+      CHECK(*predicted != nullptr);
+      return true;
+    }
+  }
+
+ private:
+  Store *commons_;               // commons store for documents
+  DocumentSource *gold_corpus_;  // corpus with gold annotations
+  DocumentSource *test_corpus_;  // corpus with predicted annotations
+};
+
 bool FrameEvaluation::Alignment::Map(Handle source, Handle target) {
   // Do not allow any previous mapping to be overwritten.
   if (!Lookup(source).IsNil()) return false;
@@ -43,10 +82,7 @@ Handle FrameEvaluation::Alignment::Lookup(Handle handle) const {
   return f == end() ? Handle::nil() : f->second;
 }
 
-void FrameEvaluation::Evaluate(Store *commons,
-                               const string &gold_file_pattern,
-                               const string &test_file_pattern,
-                               FrameEvaluation::Output *output) {
+void FrameEvaluation::Evaluate(ParallelCorpus *corpus, Output *output) {
   // Benchmarks.
   auto &mention = output->mention;
   auto &frame = output->frame;
@@ -60,23 +96,11 @@ void FrameEvaluation::Evaluate(Store *commons,
   output->num_golden_frames = 0;
   output->num_predicted_frames = 0;
 
-  // Compare predicted and golden documents.
-  DocumentSource *gold_corpus = DocumentSource::Create(gold_file_pattern);
-  DocumentSource *test_corpus = DocumentSource::Create(test_file_pattern);
-
-  while (true) {
-    // Get the next document pair.
-    Store store(commons);
-    Document *golden = gold_corpus->Next(&store);
-    Document *predicted = test_corpus->Next(&store);
-
-    if (golden == nullptr) {
-      CHECK(predicted == nullptr);
-      break;
-    }
-    CHECK(predicted != nullptr);
+  Store *store;
+  Document *golden;
+  Document *predicted;
+  while (corpus->Next(&store, &golden, &predicted)) {
     CHECK_EQ(golden->num_tokens(), predicted->num_tokens());
-
     Frame golden_top = golden->top();
     Frame predicted_top = predicted->top();
 
@@ -99,12 +123,12 @@ void FrameEvaluation::Evaluate(Store *commons,
     // Compute evoked frame alignment.
     Alignment g2p_frame_alignment;
     Alignment p2g_frame_alignment;
-    AlignEvokes(&store, g2p_mention_alignment, &g2p_frame_alignment);
-    AlignEvokes(&store, p2g_mention_alignment, &p2g_frame_alignment);
+    AlignEvokes(store, g2p_mention_alignment, &g2p_frame_alignment);
+    AlignEvokes(store, p2g_mention_alignment, &p2g_frame_alignment);
 
     // Align frames that are not directly evoked from a span.
-    AlignFrames(&store, &g2p_frame_alignment);
-    AlignFrames(&store, &p2g_frame_alignment);
+    AlignFrames(store, &g2p_frame_alignment);
+    AlignFrames(store, &p2g_frame_alignment);
 
     // Compute mention precision and recall.
     AlignmentAccuracy(g2p_mention_alignment, &mention.recall);
@@ -115,9 +139,9 @@ void FrameEvaluation::Evaluate(Store *commons,
     AlignmentAccuracy(p2g_frame_alignment, &frame.precision);
 
     // Compute role precision and recall.
-    RoleAccuracy(&store, g2p_frame_alignment,
+    RoleAccuracy(store, g2p_frame_alignment,
                  &type.recall, &role.recall, &label.recall);
-    RoleAccuracy(&store, p2g_frame_alignment,
+    RoleAccuracy(store, p2g_frame_alignment,
                  &type.precision, &role.precision, &label.precision);
 
     // Update statistics.
@@ -128,10 +152,8 @@ void FrameEvaluation::Evaluate(Store *commons,
 
     delete golden;
     delete predicted;
+    delete store;
   }
-
-  delete gold_corpus;
-  delete test_corpus;
 
   // Compute the slot score as the sum of the type, role, and label scores.
   auto &slot = output->slot;
@@ -146,6 +168,14 @@ void FrameEvaluation::Evaluate(Store *commons,
   combined.add(type);
   combined.add(role);
   combined.add(label);
+}
+
+void FrameEvaluation::Evaluate(Store *commons,
+                               const string &gold_file_pattern,
+                               const string &test_file_pattern,
+                               FrameEvaluation::Output *output) {
+  FileParallelCorpus corpus(commons, gold_file_pattern, test_file_pattern);
+  Evaluate(&corpus, output);
 }
 
 std::vector<string> FrameEvaluation::EvaluateAndSummarize(

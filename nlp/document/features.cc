@@ -53,19 +53,19 @@ void DocumentFeatures::Extract(const Document &document) {
     }
 
     // Categorize token.
-    const char *p = word.data();
-    const char *end = p + word.size();
     bool has_upper = false;
     bool has_lower = false;
     bool has_punctuation = false;
     bool all_punctuation = true;
     bool has_digit = false;
     bool all_digit = true;
+    const char *p = word.data();
+    const char *end = p + word.size();
     while (p < end) {
       int code = UTF8::Decode(p);
       int cat = Unicode::Category(code);
 
-      // Hypenation.
+      // Hyphenation.
       if (cat == CHARCAT_DASH_PUNCTUATION) {
         f.hyphen = HAS_HYPHEN;
       }

@@ -68,9 +68,6 @@ class Component:
     self.features = None
     self.connectors = connectors
     self.links = {}
-    self.feature_input_size = {}
-    for fixed in spec.fixed_feature:
-      self.feature_input_size[fixed.name] = fixed.size
 
   def path(self):
     return "annotation/inference_" + self.name + "/" + self.name
@@ -203,10 +200,9 @@ class Component:
 
   def extract_fixed_feature(self, feature):
     # Create feature input variable.
-    input_size = self.feature_input_size.get(feature.name, 1)
     input = self.flow.var(self.path() + "/" + feature.name)
     input.type = "int32"
-    input.shape = [1, feature.size * input_size]
+    input.shape = [1, feature.size]
 
     # Extract embedding matrix.
     prefix = "fixed_embedding_" + feature.name
@@ -220,14 +216,8 @@ class Component:
     lookup.add_input(input)
     lookup.add_input(embedding)
 
-    # Reshape embedded feature output.
-    shape = np.array([1, feature.size * feature.embedding_dim], dtype=np.int32)
-    reshape, reshaped = self.newop(feature.name + "/Reshape", "Reshape")
-    reshape.add_input(embedded)
-    reshape.add_input(self.newvar(feature.name + "/shape", "int32", [2], shape))
-
     # Add features to feature vector.
-    self.features.add_input(reshaped)
+    self.features.add_input(embedded)
 
   def extract_linked_feature(self, feature):
     # Create feature input variable.
