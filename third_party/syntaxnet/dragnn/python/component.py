@@ -568,7 +568,7 @@ class DynamicComponentBuilder(ComponentBuilderBase):
           linked_embeddings.append(
               network_units.activation_lookup_other(
                   self, state, channel_id, source_tensor.dynamic_tensor,
-                  source_layer_size))
+                  source_layer_size, batch_size))
 
       context_tensor_arrays = []
       for context_layer in self.network.context_layers:

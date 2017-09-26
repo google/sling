@@ -161,15 +161,6 @@ message LinkedFeatureChannel {
   optional string source_layer = 7;
 }
 
-// A vector of hyperparameter configurations to search over.
-message TrainingGridSpec {
-  // Grid points to search over.
-  repeated GridPoint grid_point = 1;
-
-  // Training targets to create in the graph builder stage.
-  repeated TrainTarget target = 2;
-}
-
 // A hyperparameter configuration for a training run.
 // NEXT ID: 22
 message GridPoint {

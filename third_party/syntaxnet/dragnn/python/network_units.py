@@ -304,7 +304,7 @@ def lookup_named_tensor(name, named_tensors):
 
 
 def activation_lookup_recurrent(component, state, channel_id, source_array,
-                                source_layer_size, stride):
+                                source_layer_size, batch_size):
   """Looks up activations from tensor arrays.
 
   If the linked feature's embedding_dim is set to -1, the feature vectors are
@@ -313,11 +313,11 @@ def activation_lookup_recurrent(component, state, channel_id, source_array,
   Args:
     component: Component object in which to look up the fixed features.
     state: MasterState object for the live MasterState.
-    channel_id: int id of the fixed feature to look up.
+    channel_id: int id of the linked feature to look up.
     source_array: TensorArray from which to fetch feature vectors, expected to
-        have size [steps + 1] elements of shape [stride, D] each.
+        have size [steps + 1] elements of shape [batch_size, D] each.
     source_layer_size: int length of feature vectors before embedding.
-    stride: int Tensor of current batch size.
+    batch_size: int Tensor of current batch size.
 
   Returns:
     NamedTensor object containing the embedding vectors.
@@ -329,7 +329,9 @@ def activation_lookup_recurrent(component, state, channel_id, source_array,
     # steps, and one indexing within the batch_size activation tensor
     # stored for a step.
     step_idx, idx = dragnn_ops.extract_link_features(
-        state.handle, component=component.name, channel_id=channel_id)
+        state.handle, batch_size,
+        component=component.name, channel_id=channel_id,
+        channel_size=feature_spec.size)
 
     # We take the [steps, batch_size, ...] tensor array, gather and concat
     # the steps we might need into a [some_steps*batch_size, ...] tensor,
@@ -349,7 +351,7 @@ def activation_lookup_recurrent(component, state, channel_id, source_array,
     act_block = source_array.gather(ta_range)
     act_block = tf.reshape(act_block,
                            tf.concat([[-1], tf.shape(act_block)[2:]], 0))
-    flat_idx = (step_idx - step_min) * stride + idx
+    flat_idx = (step_idx - step_min) * batch_size + idx
     act_block = tf.gather(act_block, flat_idx)
     act_block = tf.reshape(act_block, [-1, source_layer_size])
 
@@ -368,7 +370,7 @@ def activation_lookup_recurrent(component, state, channel_id, source_array,
 
 
 def activation_lookup_other(component, state, channel_id, source_tensor,
-                            source_layer_size):
+                            source_layer_size, batch_size):
   """Looks up activations from tensors.
 
   If the linked feature's embedding_dim is set to -1, the feature vectors are
@@ -377,13 +379,14 @@ def activation_lookup_other(component, state, channel_id, source_tensor,
   Args:
     component: Component object in which to look up the fixed features.
     state: MasterState object for the live MasterState.
-    channel_id: int id of the fixed feature to look up.
+    channel_id: int id of the linked feature to look up.
     source_tensor: Tensor from which to fetch feature vectors. Expected to have
-        have shape [steps + 1, stride, D].
+        have shape [steps + 1, batch_size, D].
     source_layer_size: int length of feature vectors before embedding (D). It
         would in principle be possible to get this dimension dynamically from
         the second dimension of source_tensor. However, having it statically is
         more convenient.
+    batch_size: int Tensor of current batch size.
 
   Returns:
     NamedTensor object containing the embedding vectors.
@@ -394,7 +397,9 @@ def activation_lookup_other(component, state, channel_id, source_tensor,
     # Linked features are returned as a pair of tensors, one indexing into
     # steps, and one indexing within the stride (batch_size) of each step.
     step_idx, idx = dragnn_ops.extract_link_features(
-        state.handle, component=component.name, channel_id=channel_id)
+        state.handle, batch_size,
+        component=component.name, channel_id=channel_id,
+        channel_size=feature_spec.size)
 
     # The first element of each tensor array is reserved for an
     # initialization variable, so we offset all step indices by +1.

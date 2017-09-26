@@ -696,7 +696,7 @@ Prefix     | Schema domain
 /proto/    | Protocol buffer message types
 /pb/       | PropBank
 /s/        | SLING document
-/saft/     | SAFT fine types
+/saft/     | Entity types
 /schema/   | Schema families
 /vn/       | VerbNet
 /wn/       | WordNet
@@ -782,7 +782,7 @@ also be used for projecting frames though mappings and doing subsumption
 checking.
 
 <!--
-TODO(ringgaard):
+TODO(googleuser):
   - Public and private ids
   - Internal architecture
 -->

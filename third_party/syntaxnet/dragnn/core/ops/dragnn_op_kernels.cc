@@ -21,7 +21,6 @@
 #include "dragnn/core/compute_session_pool.h"
 #include "dragnn/core/ops/compute_session_op.h"
 #include "dragnn/core/resource_container.h"
-#include "dragnn/protos/data.pb.h"
 #include "dragnn/protos/spec.pb.h"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -294,8 +293,10 @@ class ExtractLinkFeatures : public ComputeSessionOp {
   explicit ExtractLinkFeatures(OpKernelConstruction *context)
       : ComputeSessionOp(context) {
     OP_REQUIRES_OK(context, context->GetAttr("channel_id", &channel_id_));
+    OP_REQUIRES_OK(context, context->GetAttr("channel_size", &channel_size_));
     OP_REQUIRES_OK(context,
-                   context->MatchSignature({DT_STRING}, {DT_INT32, DT_INT32}));
+                   context->MatchSignature(
+                       {DT_STRING, DT_INT32}, {DT_INT32, DT_INT32}));
   }
 
   bool OutputsHandle() const override { return false; }
@@ -303,44 +304,29 @@ class ExtractLinkFeatures : public ComputeSessionOp {
 
   void ComputeWithState(OpKernelContext *context,
                         ComputeSession *session) override {
-    auto features =
-        session->GetTranslatedLinkFeatures(component_name(), channel_id_);
+    int batch_size = context->input(1).scalar<int>()();
+    int output_size = batch_size * channel_size_;
+    TensorShape shape({output_size});
 
-    // Computes output size.
-    const int64 num_indices = features.size();
+    // Allocate output tensors.
+    Tensor *step_idx;
+    Tensor *batch_idx;
+    OP_REQUIRES_OK(context, context->allocate_output(0, shape, &step_idx));
+    OP_REQUIRES_OK(context, context->allocate_output(1, shape, &batch_idx));
 
-    // Allocates output tensors.
-    Tensor *step_idx_output;
-    Tensor *idx_output;
-    OP_REQUIRES_OK(context,
-                   context->allocate_output(0, TensorShape({num_indices}),
-                                            &step_idx_output));
-    OP_REQUIRES_OK(context, context->allocate_output(
-                                1, TensorShape({num_indices}), &idx_output));
+    auto *steps = step_idx->vec<int32>().data();
+    auto *batch = batch_idx->vec<int32>().data();
 
-    // Clip step_idx for all features. If a feature is empty, set the step
-    // index to -1.
-    for (int i = 0; i < features.size(); ++i) {
-      if (!features[i].has_step_idx() || features[i].step_idx() < -1) {
-        features[i].set_step_idx(-1);
-      }
-    }
+    // Missing link features will have a step index of -1.
+    for (int i = 0; i < output_size; ++i) steps[i] = -1;
 
-    // Fills output tensors.
-    for (int i = 0; i < features.size(); ++i) {
-      // Sets the element to read from a tensor array of activations.
-      step_idx_output->vec<int32>()(i) = features[i].step_idx();
-
-      // Within the tensor array element the id has to account for batch index.
-      idx_output->vec<int32>()(i) = (features[i].step_idx() >= 0)
-              ? features[i].batch_idx() : 0;
-
-      VLOG(2) << "features[" << i << "]: " << features[i].ShortDebugString();
-    }
+    session->GetTranslatedLinkFeatures(
+        component_name(), channel_id_, output_size, steps, batch);
   }
 
  private:
   int channel_id_;
+  int channel_size_;
   TF_DISALLOW_COPY_AND_ASSIGN(ExtractLinkFeatures);
 };
 

@@ -59,18 +59,17 @@ class ComputeSession {
                              const float score_matrix[],
                              int score_matrix_length);
 
-  // Get the input features for the given component and channel. This passes
+  // Get the fixed features for the given component and channel. This passes
   // through to the relevant Component's GetFixedFeatures() call.
   void GetInputFeatures(
       const string &component_name,
       int channel_id,
       int64 *output) const;
 
-  // Get the input features for the given component and channel. This function
-  // can return empty LinkFeatures protos, which represent unused padding slots
-  // in the output weight tensor.
-  std::vector<LinkFeatures> GetTranslatedLinkFeatures(
-      const string &component_name, int channel_id);
+  // Get the linked features for the given component and channel.i
+  void GetTranslatedLinkFeatures(
+      const string &component_name, int channel_id, int output_size,
+      int *steps, int *batch);
 
   // Get the oracle labels for the given component.
   std::vector<int> EmitOracleLabels(const string &component_name);

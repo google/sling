@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='dragnn/protos/spec.proto',
   package='syntaxnet.dragnn',
   syntax='proto2',
-  serialized_pb=_b('\n\x18\x64ragnn/protos/spec.proto\x12\x10syntaxnet.dragnn\"p\n\nMasterSpec\x12\x32\n\tcomponent\x18\x01 \x03(\x0b\x32\x1f.syntaxnet.dragnn.ComponentSpec\x12\x1c\n\rdebug_tracing\x18\x04 \x01(\x08:\x05\x66\x61lseJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04J\x04\x08\x05\x10\x06\"\xb9\x04\n\rComponentSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x41\n\x11transition_system\x18\x02 \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12,\n\x08resource\x18\x03 \x03(\x0b\x32\x1a.syntaxnet.dragnn.Resource\x12<\n\rfixed_feature\x18\x04 \x03(\x0b\x32%.syntaxnet.dragnn.FixedFeatureChannel\x12>\n\x0elinked_feature\x18\x05 \x03(\x0b\x32&.syntaxnet.dragnn.LinkedFeatureChannel\x12<\n\x0cnetwork_unit\x18\x06 \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12\x37\n\x07\x62\x61\x63kend\x18\x07 \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12\x13\n\x0bnum_actions\x18\x08 \x01(\x05\x12\x1d\n\x13\x61ttention_component\x18\t \x01(\t:\x00\x12\x41\n\x11\x63omponent_builder\x18\n \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12\x1d\n\x12training_beam_size\x18\x0b \x01(\x05:\x01\x31\x12\x1e\n\x13inference_beam_size\x18\x0c \x01(\x05:\x01\x31\"\xae\x01\n\x14RegisteredModuleSpec\x12\x17\n\x0fregistered_name\x18\x01 \x01(\t\x12J\n\nparameters\x18\x02 \x03(\x0b\x32\x36.syntaxnet.dragnn.RegisteredModuleSpec.ParametersEntry\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\">\n\x08Resource\x12\x0c\n\x04name\x18\x01 \x01(\t\x12$\n\x04part\x18\x02 \x03(\x0b\x32\x16.syntaxnet.dragnn.Part\"H\n\x04Part\x12\x14\n\x0c\x66ile_pattern\x18\x01 \x01(\t\x12\x13\n\x0b\x66ile_format\x18\x02 \x01(\t\x12\x15\n\rrecord_format\x18\x03 \x01(\t\"\x86\x02\n\x13\x46ixedFeatureChannel\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0b\n\x03\x66ml\x18\x02 \x01(\t\x12\x15\n\rembedding_dim\x18\x03 \x01(\x05\x12\x17\n\x0fvocabulary_size\x18\x04 \x01(\x05\x12\x0c\n\x04size\x18\x05 \x01(\x05\x12\x13\n\x0bis_constant\x18\t \x01(\x08\x12\x15\n\rpredicate_map\x18\x06 \x01(\t\x12?\n\x1bpretrained_embedding_matrix\x18\x07 \x01(\x0b\x32\x1a.syntaxnet.dragnn.Resource\x12)\n\x05vocab\x18\x08 \x01(\x0b\x32\x1a.syntaxnet.dragnn.Resource\"\xa1\x01\n\x14LinkedFeatureChannel\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0b\n\x03\x66ml\x18\x02 \x01(\t\x12\x15\n\rembedding_dim\x18\x03 \x01(\x05\x12\x0c\n\x04size\x18\x04 \x01(\x05\x12\x18\n\x10source_component\x18\x05 \x01(\t\x12\x19\n\x11source_translator\x18\x06 \x01(\t\x12\x14\n\x0csource_layer\x18\x07 \x01(\t\"r\n\x10TrainingGridSpec\x12/\n\ngrid_point\x18\x01 \x03(\x0b\x32\x1b.syntaxnet.dragnn.GridPoint\x12-\n\x06target\x18\x02 \x03(\x0b\x32\x1d.syntaxnet.dragnn.TrainTarget\"\x99\x06\n\tGridPoint\x12\x1a\n\rlearning_rate\x18\x01 \x01(\x01:\x03\x30.1\x12\x15\n\x08momentum\x18\x02 \x01(\x01:\x03\x30.9\x12\x18\n\ndecay_base\x18\x10 \x01(\x01:\x04\x30.96\x12\x19\n\x0b\x64\x65\x63\x61y_steps\x18\x03 \x01(\x05:\x04\x31\x30\x30\x30\x12\x1d\n\x0f\x64\x65\x63\x61y_staircase\x18\x11 \x01(\x08:\x04true\x12\x0f\n\x04seed\x18\x04 \x01(\x05:\x01\x30\x12!\n\x0flearning_method\x18\x07 \x01(\t:\x08momentum\x12!\n\x12use_moving_average\x18\x08 \x01(\x08:\x05\x66\x61lse\x12\x1e\n\x0e\x61verage_weight\x18\t \x01(\x01:\x06\x30.9999\x12\x17\n\x0c\x64ropout_rate\x18\n \x01(\x01:\x01\x31\x12\"\n\x16recurrent_dropout_rate\x18\x14 \x01(\x01:\x02-1\x12\x1d\n\x12gradient_clip_norm\x18\x0b \x01(\x01:\x01\x30\x12T\n\x18\x63omposite_optimizer_spec\x18\x0c \x01(\x0b\x32\x32.syntaxnet.dragnn.GridPoint.CompositeOptimizerSpec\x12\x18\n\nadam_beta1\x18\r \x01(\x01:\x04\x30.01\x12\x1a\n\nadam_beta2\x18\x0e \x01(\x01:\x06\x30.9999\x12\x17\n\x08\x61\x64\x61m_eps\x18\x0f \x01(\x01:\x05\x31\x65-08\x12-\n\x1dl2_regularization_coefficient\x18\x12 \x01(\x01:\x06\x30.0001\x12\x1a\n\x0fself_norm_alpha\x18\x13 \x01(\x01:\x01\x30\x12#\n\x1bself_norm_components_filter\x18\x15 \x01(\t\x1a\x90\x01\n\x16\x43ompositeOptimizerSpec\x12,\n\x07method1\x18\x01 \x01(\x0b\x32\x1b.syntaxnet.dragnn.GridPoint\x12,\n\x07method2\x18\x02 \x01(\x0b\x32\x1b.syntaxnet.dragnn.GridPoint\x12\x1a\n\x12switch_after_steps\x18\x03 \x01(\x05J\x04\x08\x05\x10\x06J\x04\x08\x06\x10\x07\"j\n\x0bTrainTarget\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x11\x63omponent_weights\x18\x02 \x03(\x01\x12\x1b\n\x13unroll_using_oracle\x18\x03 \x03(\x08\x12\x15\n\tmax_index\x18\x04 \x01(\x05:\x02-1')
+  serialized_pb=_b('\n\x18\x64ragnn/protos/spec.proto\x12\x10syntaxnet.dragnn\"X\n\nMasterSpec\x12\x32\n\tcomponent\x18\x01 \x03(\x0b\x32\x1f.syntaxnet.dragnn.ComponentSpecJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04J\x04\x08\x04\x10\x05J\x04\x08\x05\x10\x06\"\xe1\x03\n\rComponentSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x41\n\x11transition_system\x18\x02 \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12,\n\x08resource\x18\x03 \x03(\x0b\x32\x1a.syntaxnet.dragnn.Resource\x12<\n\rfixed_feature\x18\x04 \x03(\x0b\x32%.syntaxnet.dragnn.FixedFeatureChannel\x12>\n\x0elinked_feature\x18\x05 \x03(\x0b\x32&.syntaxnet.dragnn.LinkedFeatureChannel\x12<\n\x0cnetwork_unit\x18\x06 \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12\x37\n\x07\x62\x61\x63kend\x18\x07 \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpec\x12\x13\n\x0bnum_actions\x18\x08 \x01(\x05\x12\x41\n\x11\x63omponent_builder\x18\n \x01(\x0b\x32&.syntaxnet.dragnn.RegisteredModuleSpecJ\x04\x08\t\x10\n\"\xae\x01\n\x14RegisteredModuleSpec\x12\x17\n\x0fregistered_name\x18\x01 \x01(\t\x12J\n\nparameters\x18\x02 \x03(\x0b\x32\x36.syntaxnet.dragnn.RegisteredModuleSpec.ParametersEntry\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\">\n\x08Resource\x12\x0c\n\x04name\x18\x01 \x01(\t\x12$\n\x04part\x18\x02 \x03(\x0b\x32\x16.syntaxnet.dragnn.Part\"H\n\x04Part\x12\x14\n\x0c\x66ile_pattern\x18\x01 \x01(\t\x12\x13\n\x0b\x66ile_format\x18\x02 \x01(\t\x12\x15\n\rrecord_format\x18\x03 \x01(\t\"\xf5\x01\n\x13\x46ixedFeatureChannel\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0b\n\x03\x66ml\x18\x02 \x01(\t\x12\x15\n\rembedding_dim\x18\x03 \x01(\x05\x12\x17\n\x0fvocabulary_size\x18\x04 \x01(\x05\x12\x0c\n\x04size\x18\x05 \x01(\x05\x12\x13\n\x0bis_constant\x18\t \x01(\x08\x12?\n\x1bpretrained_embedding_matrix\x18\x07 \x01(\x0b\x32\x1a.syntaxnet.dragnn.Resource\x12)\n\x05vocab\x18\x08 \x01(\x0b\x32\x1a.syntaxnet.dragnn.ResourceJ\x04\x08\x06\x10\x07\"\xa1\x01\n\x14LinkedFeatureChannel\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0b\n\x03\x66ml\x18\x02 \x01(\t\x12\x15\n\rembedding_dim\x18\x03 \x01(\x05\x12\x0c\n\x04size\x18\x04 \x01(\x05\x12\x18\n\x10source_component\x18\x05 \x01(\t\x12\x19\n\x11source_translator\x18\x06 \x01(\t\x12\x14\n\x0csource_layer\x18\x07 \x01(\t\"\x99\x06\n\tGridPoint\x12\x1a\n\rlearning_rate\x18\x01 \x01(\x01:\x03\x30.1\x12\x15\n\x08momentum\x18\x02 \x01(\x01:\x03\x30.9\x12\x18\n\ndecay_base\x18\x10 \x01(\x01:\x04\x30.96\x12\x19\n\x0b\x64\x65\x63\x61y_steps\x18\x03 \x01(\x05:\x04\x31\x30\x30\x30\x12\x1d\n\x0f\x64\x65\x63\x61y_staircase\x18\x11 \x01(\x08:\x04true\x12\x0f\n\x04seed\x18\x04 \x01(\x05:\x01\x30\x12!\n\x0flearning_method\x18\x07 \x01(\t:\x08momentum\x12!\n\x12use_moving_average\x18\x08 \x01(\x08:\x05\x66\x61lse\x12\x1e\n\x0e\x61verage_weight\x18\t \x01(\x01:\x06\x30.9999\x12\x17\n\x0c\x64ropout_rate\x18\n \x01(\x01:\x01\x31\x12\"\n\x16recurrent_dropout_rate\x18\x14 \x01(\x01:\x02-1\x12\x1d\n\x12gradient_clip_norm\x18\x0b \x01(\x01:\x01\x30\x12T\n\x18\x63omposite_optimizer_spec\x18\x0c \x01(\x0b\x32\x32.syntaxnet.dragnn.GridPoint.CompositeOptimizerSpec\x12\x18\n\nadam_beta1\x18\r \x01(\x01:\x04\x30.01\x12\x1a\n\nadam_beta2\x18\x0e \x01(\x01:\x06\x30.9999\x12\x17\n\x08\x61\x64\x61m_eps\x18\x0f \x01(\x01:\x05\x31\x65-08\x12-\n\x1dl2_regularization_coefficient\x18\x12 \x01(\x01:\x06\x30.0001\x12\x1a\n\x0fself_norm_alpha\x18\x13 \x01(\x01:\x01\x30\x12#\n\x1bself_norm_components_filter\x18\x15 \x01(\t\x1a\x90\x01\n\x16\x43ompositeOptimizerSpec\x12,\n\x07method1\x18\x01 \x01(\x0b\x32\x1b.syntaxnet.dragnn.GridPoint\x12,\n\x07method2\x18\x02 \x01(\x0b\x32\x1b.syntaxnet.dragnn.GridPoint\x12\x1a\n\x12switch_after_steps\x18\x03 \x01(\x05J\x04\x08\x05\x10\x06J\x04\x08\x06\x10\x07\"j\n\x0bTrainTarget\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x11\x63omponent_weights\x18\x02 \x03(\x01\x12\x1b\n\x13unroll_using_oracle\x18\x03 \x03(\x08\x12\x15\n\tmax_index\x18\x04 \x01(\x05:\x02-1')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -40,13 +40,6 @@ _MASTERSPEC = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
-    _descriptor.FieldDescriptor(
-      name='debug_tracing', full_name='syntaxnet.dragnn.MasterSpec.debug_tracing', index=1,
-      number=4, type=8, cpp_type=7, label=1,
-      has_default_value=True, default_value=False,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
   ],
   extensions=[
   ],
@@ -60,7 +53,7 @@ _MASTERSPEC = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=46,
-  serialized_end=158,
+  serialized_end=134,
 )
 
 
@@ -128,30 +121,9 @@ _COMPONENTSPEC = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='attention_component', full_name='syntaxnet.dragnn.ComponentSpec.attention_component', index=8,
-      number=9, type=9, cpp_type=9, label=1,
-      has_default_value=True, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='component_builder', full_name='syntaxnet.dragnn.ComponentSpec.component_builder', index=9,
+      name='component_builder', full_name='syntaxnet.dragnn.ComponentSpec.component_builder', index=8,
       number=10, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='training_beam_size', full_name='syntaxnet.dragnn.ComponentSpec.training_beam_size', index=10,
-      number=11, type=5, cpp_type=1, label=1,
-      has_default_value=True, default_value=1,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='inference_beam_size', full_name='syntaxnet.dragnn.ComponentSpec.inference_beam_size', index=11,
-      number=12, type=5, cpp_type=1, label=1,
-      has_default_value=True, default_value=1,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -167,8 +139,8 @@ _COMPONENTSPEC = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=161,
-  serialized_end=730,
+  serialized_start=137,
+  serialized_end=618,
 )
 
 
@@ -205,8 +177,8 @@ _REGISTEREDMODULESPEC_PARAMETERSENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=858,
-  serialized_end=907,
+  serialized_start=746,
+  serialized_end=795,
 )
 
 _REGISTEREDMODULESPEC = _descriptor.Descriptor(
@@ -242,8 +214,8 @@ _REGISTEREDMODULESPEC = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=733,
-  serialized_end=907,
+  serialized_start=621,
+  serialized_end=795,
 )
 
 
@@ -280,8 +252,8 @@ _RESOURCE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=909,
-  serialized_end=971,
+  serialized_start=797,
+  serialized_end=859,
 )
 
 
@@ -325,8 +297,8 @@ _PART = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=973,
-  serialized_end=1045,
+  serialized_start=861,
+  serialized_end=933,
 )
 
 
@@ -380,21 +352,14 @@ _FIXEDFEATURECHANNEL = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='predicate_map', full_name='syntaxnet.dragnn.FixedFeatureChannel.predicate_map', index=6,
-      number=6, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='pretrained_embedding_matrix', full_name='syntaxnet.dragnn.FixedFeatureChannel.pretrained_embedding_matrix', index=7,
+      name='pretrained_embedding_matrix', full_name='syntaxnet.dragnn.FixedFeatureChannel.pretrained_embedding_matrix', index=6,
       number=7, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='vocab', full_name='syntaxnet.dragnn.FixedFeatureChannel.vocab', index=8,
+      name='vocab', full_name='syntaxnet.dragnn.FixedFeatureChannel.vocab', index=7,
       number=8, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
@@ -412,8 +377,8 @@ _FIXEDFEATURECHANNEL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1048,
-  serialized_end=1310,
+  serialized_start=936,
+  serialized_end=1181,
 )
 
 
@@ -485,46 +450,8 @@ _LINKEDFEATURECHANNEL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1313,
-  serialized_end=1474,
-)
-
-
-_TRAININGGRIDSPEC = _descriptor.Descriptor(
-  name='TrainingGridSpec',
-  full_name='syntaxnet.dragnn.TrainingGridSpec',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='grid_point', full_name='syntaxnet.dragnn.TrainingGridSpec.grid_point', index=0,
-      number=1, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='target', full_name='syntaxnet.dragnn.TrainingGridSpec.target', index=1,
-      number=2, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto2',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=1476,
-  serialized_end=1590,
+  serialized_start=1184,
+  serialized_end=1345,
 )
 
 
@@ -568,8 +495,8 @@ _GRIDPOINT_COMPOSITEOPTIMIZERSPEC = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2230,
-  serialized_end=2374,
+  serialized_start=1985,
+  serialized_end=2129,
 )
 
 _GRIDPOINT = _descriptor.Descriptor(
@@ -724,8 +651,8 @@ _GRIDPOINT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1593,
-  serialized_end=2386,
+  serialized_start=1348,
+  serialized_end=2141,
 )
 
 
@@ -776,8 +703,8 @@ _TRAINTARGET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2388,
-  serialized_end=2494,
+  serialized_start=2143,
+  serialized_end=2249,
 )
 
 _MASTERSPEC.fields_by_name['component'].message_type = _COMPONENTSPEC
@@ -793,8 +720,6 @@ _REGISTEREDMODULESPEC.fields_by_name['parameters'].message_type = _REGISTEREDMOD
 _RESOURCE.fields_by_name['part'].message_type = _PART
 _FIXEDFEATURECHANNEL.fields_by_name['pretrained_embedding_matrix'].message_type = _RESOURCE
 _FIXEDFEATURECHANNEL.fields_by_name['vocab'].message_type = _RESOURCE
-_TRAININGGRIDSPEC.fields_by_name['grid_point'].message_type = _GRIDPOINT
-_TRAININGGRIDSPEC.fields_by_name['target'].message_type = _TRAINTARGET
 _GRIDPOINT_COMPOSITEOPTIMIZERSPEC.fields_by_name['method1'].message_type = _GRIDPOINT
 _GRIDPOINT_COMPOSITEOPTIMIZERSPEC.fields_by_name['method2'].message_type = _GRIDPOINT
 _GRIDPOINT_COMPOSITEOPTIMIZERSPEC.containing_type = _GRIDPOINT
@@ -806,7 +731,6 @@ DESCRIPTOR.message_types_by_name['Resource'] = _RESOURCE
 DESCRIPTOR.message_types_by_name['Part'] = _PART
 DESCRIPTOR.message_types_by_name['FixedFeatureChannel'] = _FIXEDFEATURECHANNEL
 DESCRIPTOR.message_types_by_name['LinkedFeatureChannel'] = _LINKEDFEATURECHANNEL
-DESCRIPTOR.message_types_by_name['TrainingGridSpec'] = _TRAININGGRIDSPEC
 DESCRIPTOR.message_types_by_name['GridPoint'] = _GRIDPOINT
 DESCRIPTOR.message_types_by_name['TrainTarget'] = _TRAINTARGET
 
@@ -866,13 +790,6 @@ LinkedFeatureChannel = _reflection.GeneratedProtocolMessageType('LinkedFeatureCh
   # @@protoc_insertion_point(class_scope:syntaxnet.dragnn.LinkedFeatureChannel)
   ))
 _sym_db.RegisterMessage(LinkedFeatureChannel)
-
-TrainingGridSpec = _reflection.GeneratedProtocolMessageType('TrainingGridSpec', (_message.Message,), dict(
-  DESCRIPTOR = _TRAININGGRIDSPEC,
-  __module__ = 'dragnn.protos.spec_pb2'
-  # @@protoc_insertion_point(class_scope:syntaxnet.dragnn.TrainingGridSpec)
-  ))
-_sym_db.RegisterMessage(TrainingGridSpec)
 
 GridPoint = _reflection.GeneratedProtocolMessageType('GridPoint', (_message.Message,), dict(
 

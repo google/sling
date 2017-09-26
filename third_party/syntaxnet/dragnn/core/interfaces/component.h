@@ -21,7 +21,6 @@
 #include "base/registry.h"
 #include "dragnn/core/input_batch_cache.h"
 #include "dragnn/core/interfaces/transition_state.h"
-#include "dragnn/protos/data.pb.h"
 #include "dragnn/protos/spec.pb.h"
 
 namespace syntaxnet {
@@ -75,10 +74,9 @@ class Component : public sling::Component<Component> {
   // specified channel.
   virtual void GetFixedFeatures(int channel_id, int64 *output) const = 0;
 
-  // Extracts and returns the vector of LinkFeatures for the specified
-  // channel. Note: these are NOT translated.
-  virtual std::vector<LinkFeatures> GetRawLinkFeatures(
-      int channel_id) const = 0;
+  // Returns the linked features for the specified channel.
+  virtual void GetRawLinkFeatures(int channel_id, int *steps, int *batch)
+      const = 0;
 
   // Returns a vector of oracle labels for each element in the batch.
   virtual std::vector<int> GetOracleLabels() const = 0;
