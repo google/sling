@@ -37,12 +37,11 @@
 # - Builds a complete MasterSpec proto.
 # - Builds a TF graph using the master spec and default hyperparameters.
 # - Trains a model using the graph above.
+# - Converts the trained model to a Myelin flow file for use in the runtime.
 
 # Tweaks:
 # - The features and component attributes (e.g. hidden layer size) are
 #   hard-coded in generate-master-spec.cc and can be changed there.
-# - Some training hyperparameters are hard-coded in this script and
-#   can be changed in $HYPERPARAMS below.
 
 set -eu
 
@@ -58,7 +57,6 @@ DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
 WORD_EMBEDDINGS_DIM=32
 PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-embedding-bi-true-32.tf.recordio
 OOV_FEATURES=true
-FLOW=${SEM}/out/sempar.flow
 
 # Training hyperparameters.
 BATCH_SIZE=8
@@ -219,6 +217,7 @@ HYPERPARAMS+="seed:${SEED} learning_method:'${METHOD}' "
 HYPERPARAMS+="use_moving_average:${MOVING_AVERAGE} dropout_rate:${DROPOUT} "
 HYPERPARAMS+="gradient_clip_norm:${GRAD_CLIP_NORM} adam_beta1:${ADAM_BETA1} "
 HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS}"
+FLOW=${OUTPUT_FOLDER}/sempar.flow
 
 mkdir -p "${OUTPUT_FOLDER}"
 
@@ -240,9 +239,9 @@ fi
 
 if [[ "$DO_TRAINING" -eq 1 ]];
 then
-  bazel build -c opt nlp/parser/trainer:evaluate-frames
+  bazel build -c opt nlp/parser/tools:evaluate-frames
   bazel build -c opt nlp/parser/trainer:sempar.so
-  python nlp/parser/trainer/train.py \
+  python nlp/parser/tools/train.py \
     --master_spec="${OUTPUT_FOLDER}/master_spec" \
     --hyperparams="${HYPERPARAMS}" \
     --output_folder=${OUTPUT_FOLDER} \

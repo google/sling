@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """Creates a DRAGNN Sempar graph from a MasterSpec and training with it.
-Although it can be called by itself, it is best invoked from train.sh
+Although it can be called by itself, it is best invoked from train.sh.
 """
 
 import glob
@@ -94,7 +94,7 @@ def evaluator(gold_docs, test_docs):
 
   try:
     output = subprocess.check_output(
-        ['bazel-bin/nlp/parser/trainer/evaluate-frames',
+        ['bazel-bin/nlp/parser/tools/evaluate-frames',
          '--gold_documents=' + gold_zip_name,
          '--test_documents=' + test_zip_name,
          '--commons=' + FLAGS.commons],

@@ -1,8 +1,8 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_binary(
-  name = "parser-test",
-  srcs = ["parser-test.cc"],
+  name = "parse",
+  srcs = ["parse.cc"],
   deps = [
     "//base",
     "//base:clock",
@@ -15,6 +15,18 @@ cc_binary(
     "//nlp/parser",
     "//nlp/parser/trainer:frame-evaluation",
     "//string:printf",
+  ],
+)
+
+cc_binary(
+  name = "evaluate-frames",
+  srcs = ["evaluate-frames.cc"],
+  deps = [
+    "//base",
+    "//file:posix",
+    "//nlp/parser/trainer:frame-evaluation",
+    "//third_party/zlib:miniunzip",
+    "//third_party/zlib:zlib",
   ],
 )
 

@@ -2,7 +2,7 @@
 
 SLING is a parser for annotating text with frame semantic annotations. It is
 trained on an annotated corpus using [Tensorflow](https://www.tensorflow.org/)
-and [Dragnn](https://github.com/tensorflow/models/blob/master/syntaxnet/g3doc/DRAGNN.md).
+and [Dragnn](https://github.com/tensorflow/models/blob/master/research/syntaxnet/g3doc/DRAGNN.md).
 
 The parser is a general transition-based frame semantic parser using
 bi-directional LSTMs for input encoding and a Transition Based Recurrent Unit
@@ -18,9 +18,18 @@ runtime.
 
 ## Installation
 
+First, make sure that the repository is cloned with `--recursive`, so that you
+get all the submodules.
+
+```shell
+git clone --recursive https://github.com/google/sling.git
+```
+
 The parser trainer uses Tensorflow for training. SLING uses the Python 2.7
 distribution of Tensorflow, so this needs to be installed. The installed version
-of protocol buffers needs to match the version used by Tensorflow.
+of protocol buffers needs to match the version used by Tensorflow. Finally,
+SLING uses [Bazel](https://bazel.build/) as the build system, so you need to
+install Bazel in order to build the SLING parser.
 
 ```shell
 sudo pip install -U protobuf==3.3.0
@@ -34,12 +43,19 @@ Languages: C++, Python 2.7, assembler<br>
 CPU: Intel x64 or compatible<br>
 Build system: Bazel<br>
 
-SLING uses [Bazel](https://bazel.build/) as build system, so you need to install
-Bazel in order to build the SLING parser.
+You can test your installation by building a few important targets.
 
 ```shell
-bazel build -c opt nlp/parser
+bazel build -c opt nlp/parser nlp/parser/tools:all
 ```
+
+**NOTE:** In case you get compile errors complaining about missing Tensorflow
+includes, try the following:
+*  Recreate [this soft
+   link](https://github.com/google/sling/blob/master/third_party/tensorflow/include) to point to your Tensorflow include folder.
+*  Change [this
+   dependency](https://github.com/google/sling/blob/04d6f28269bdc7d29c71d8dc24d74fe39641f589/third_party/tensorflow/BUILD#L21) to point to your Tensorflow's pywrap library.
+
 
 ## Training
 
@@ -169,12 +185,12 @@ Use the converter to create the following corpora:
   per document, and the file for a document is just its encoded document
   frame. An alternate format is to have a folder with one file per
   document. More formats can be added by modifying the reader code
-[here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/document/document-source.cc#L107) and [here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/parser/trainer/train.py#L57).
+[here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/document/document-source.cc#L107) and [here](https://github.com/google/sling/blob/master/nlp/parser/tools/train.py#L57).
 
 ### Specify training options and hyperparameters:
 
 Once the commons store and the corpora have been built, you are ready for training
-a model. For this, use the supplied [training script](https://github.com/google/sling/blob/master/nlp/parser/trainer/train.sh).
+a model. For this, use the supplied [training script](https://github.com/google/sling/blob/master/nlp/parser/tools/train.sh).
 The script provides various commandline arguments. The ones that specify
 the input data are:
 + `--commons`: File path of the commons store built in the previous step.
@@ -206,17 +222,24 @@ Then we have the various training options and hyperparameters:
 + `--seed`, `--seed2`: Randomization seeds used for initializing embedding matrices.
 
 The script comes with reasonable defaults for the hyperparameters for
-training a semantic parser model, but it would be a good idea to hard
-code your favorite arguments [directly in the
-script](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/parser/trainer/train.sh#L53)
+training a semantic parser model, but it would be a good idea to hardcode
+your favorite arguments [directly in the
+script](https://github.com/google/sling/blob/master/nlp/parser/tools/train.sh#L53)
 to avoid supplying them again and again on the commandline.
 
 ### Run the training script
+
+To test your training setup, you can kick off a small training run:
 ```shell
-./nlp/parser/trainer/train.sh --report_every=1000 --train_steps=100000
+./nlp/parser/tools/train.sh --report_every=500 --train_steps=1000
 ```
 
-As training proceeds, it produces a lot of useful
+This training run should be over in 10-20 minutes, and should checkpoint and
+evaluate after every 500 steps. For a full-training run, we suggest increasing
+the number of steps to something like 100,000 and decreasing the checkpoint
+frequency to something like every 2000-5000 steps.
+
+As training proceeds, the training script produces a lot of useful
 diagnostic information, which we describe below.
 
 * The script begins by constructing an action table, which is a list of all
@@ -299,7 +322,7 @@ diagnostic information, which we describe below.
 
   Note that graph matching is an intrinsic evaluation, so if you wish to swap
   it with an extrinsic evaluation, then just replace the binary
-  [here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/parser/trainer/train.py#L97) with your evaluation binary.
+  [here](https://github.com/google/sling/blob/master/nlp/parser/tools/train.py#L97) with your evaluation binary.
 
 * Finally, if `--flow` is specified, then the best performing checkpoint
   will be converted into a Myelin flow file (more on Myelin and its flows

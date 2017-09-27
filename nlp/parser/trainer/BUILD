@@ -180,15 +180,3 @@ cc_library(
   ],
 )
 
-cc_binary(
-  name = "evaluate-frames",
-  srcs = ["evaluate-frames.cc"],
-  deps = [
-    ":frame-evaluation",
-    "//base",
-    "//file:posix",
-    "//third_party/zlib:miniunzip",
-    "//third_party/zlib:zlib",
-  ],
-)
-

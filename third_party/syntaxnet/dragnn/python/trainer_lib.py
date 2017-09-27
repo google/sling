@@ -122,7 +122,7 @@ def run_training(sess, trainers, annotator, evaluator, pretrain_steps,
       tf.logging.info('Initial cost at step 0: %f', cost)
     if step > 0 and step % 100 == 0:
       tf.logging.info('cost at step %d: %f', step, cost)
-    if step % report_every == 0 and step > 0:
+    if (step + 1) % report_every == 0 or step + 1 == len(target_for_step):
       tf.logging.info('finished step: %d, actual: %d, cost : %f',
                       step, actual_step + step, cost)
       annotated = annotate_dataset(sess, annotator, eval_corpus)

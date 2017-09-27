@@ -184,7 +184,7 @@ class ActionTable {
     string xaxis_;
 
     // Bin -> Count. Assumes small bin values.
-    std::vector<int> counts_;
+    std::vector<int64> counts_;
 
     // Total count across bins.
     int total_ = 0;

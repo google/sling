@@ -27,27 +27,19 @@
 #include "nlp/document/document.h"
 #include "nlp/document/document-source.h"
 #include "nlp/parser/parser-action.h"
-#include "nlp/parser/trainer/feature.h"
 #include "nlp/parser/trainer/sempar-component.h"
 #include "nlp/parser/trainer/shared-resources.h"
 #include "string/strcat.h"
 #include "tensorflow/core/platform/protobuf.h"
 
 using sling::File;
-using sling::StrCat;
 using sling::nlp::Document;
 using sling::nlp::DocumentSource;
-using sling::nlp::ParserAction;
-using sling::nlp::SemparComponent;
-using sling::nlp::SemparFeature;
 using sling::nlp::SharedResources;
 
-using syntaxnet::dragnn::Component;
-using syntaxnet::dragnn::ComponentSpec;
 using syntaxnet::dragnn::ComputeSession;
 using syntaxnet::dragnn::ComputeSessionPool;
 using syntaxnet::dragnn::GridPoint;
-using syntaxnet::dragnn::InputBatchCache;
 using syntaxnet::dragnn::MasterSpec;
 
 using tensorflow::protobuf::TextFormat;
@@ -55,28 +47,6 @@ using tensorflow::protobuf::TextFormat;
 DEFINE_string(spec, "/tmp/sempar_out/master_spec", "Path to master spec.");
 DEFINE_string(documents, "/tmp/foobar/doc.?", "Train documents file pattern.");
 DEFINE_int32(num_documents, 10, "Number of training documents to process.");
-
-std::vector<int32> indices;
-std::vector<int64> ids;
-std::vector<float> weights;
-
-int32 *AllocateIndices(int n) {
-  indices.clear();
-  indices.resize(n);
-  return indices.data();
-}
-
-int64 *AllocateIds(int n) {
-  ids.clear();
-  ids.resize(n);
-  return ids.data();
-}
-
-float *AllocateWeights(int n) {
-  weights.clear();
-  weights.resize(n);
-  return weights.data();
-}
 
 int main(int argc, char **argv) {
   sling::InitProgram(&argc, &argv);
@@ -98,13 +68,12 @@ int main(int argc, char **argv) {
   string global_store_path;
   string action_table_path;
   for (const auto &component_spec : spec.component()) {
-    LOG(INFO) << "Making/initializing " << component_spec.name();
-    if (global_store_path.empty()) {
-      global_store_path = SemparFeature::GetResource(component_spec, "commons");
-    }
-    if (action_table_path.empty()) {
-      action_table_path =
-          SemparFeature::GetResource(component_spec, "action-table");
+    for (const auto &r : component_spec.resource()) {
+      if (r.name() == "commons") {
+        global_store_path = r.part(0).file_pattern();
+      } else if (r.name() == "action-table") {
+        action_table_path = r.part(0).file_pattern();
+      }
     }
   }
 
@@ -123,17 +92,24 @@ int main(int argc, char **argv) {
 
     LOG(INFO) << "Processing : " << name;
     session->SetInputData(input);
-    for (int cidx = 0; cidx < spec.component_size(); ++cidx) {
+    for (const auto &c: spec.component()) {
       int actions = 0;
-      const string &name = spec.component(cidx).name();
+      const string &name = c.name();
       session->InitializeComponentData(name);
       while (!session->IsTerminal(name)) {
-        for (int c = 0; c < spec.component(cidx).linked_feature_size(); ++c) {
-          session->GetTranslatedLinkFeatures(name, c);
+        int batch_size = session->BatchSize(name);
+        for (int i = 0; i < c.linked_feature_size(); ++i) {
+          int size = batch_size * c.linked_feature(i).size();
+          int *steps = new int[size];
+          int *batch = new int[size];
+          session->GetTranslatedLinkFeatures(name, i, size, steps, batch);
+          delete steps;
+          delete batch;
         }
-        for (int c = 0; c < spec.component(cidx).fixed_feature_size(); ++c) {
-          session->GetInputFeatures(
-              name, AllocateIndices, AllocateIds, AllocateWeights, c);
+        for (int i = 0; i < c.fixed_feature_size(); ++i) {
+          int64 *output = new int64[batch_size * c.fixed_feature(i).size()];
+          session->GetInputFeatures(name, i, output);
+          delete output;
         }
         session->AdvanceFromOracle(name);
         actions++;

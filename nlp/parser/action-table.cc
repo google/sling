@@ -697,7 +697,7 @@ void ActionTable::Histogram::ToTable(TableWriter *writer) const {
   writer->SetColumns(
       {"Bin", "Count", "Cumulative Count", "Percentile (rounded down)"});
 
-  int cumulative = 0;
+  int64 cumulative = 0;
   std::vector<int> special_percentiles = {99, 98, 95, 90};
   for (int i = 0; i < counts_.size(); ++i) {
     if (counts_[i] > 0) {

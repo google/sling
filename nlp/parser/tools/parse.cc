@@ -12,6 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Utility tool for using a trained parser. It loads a parser from a Myelin flow
+// file, and runs it in one of the following modes.
+// A. If --text is set to some text, it runs the model over that text, outputs
+//    the frames inferred from the text along with the processing speed.
+//    The output frames are printed in textual form, whose indentation is
+//    controlled by --indent.
+// B. If --benchmark is true, then it runs the parser over the corpus
+//    specified via --corpus, and reports the processing speed.
+// C. If --evaluate is true, then it takes gold documents via --corpus, runs
+//    the parser over them, and reports frame evaluation numbers.
+//
+// For B and C, --maxdocs can be used to limit the processing to the specified
+// number of documents.
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -30,16 +44,31 @@
 #include "nlp/parser/trainer/frame-evaluation.h"
 #include "string/printf.h"
 
-DEFINE_string(parser, "local/sempar.flow", "input file with flow model");
-DEFINE_string(text, "", "text to parse");
-DEFINE_int32(indent, 2, "indentation for SLING output");
-DEFINE_string(corpus, "", "input corpus");
-DEFINE_bool(benchmark, false, "benchmark parser");
-DEFINE_bool(evaluate, false, "evaluate parser");
-DEFINE_int32(maxdocs, -1, "maximum number of documents to process");
+DEFINE_string(parser, "", "Input file with flow model");
+DEFINE_string(text, "", "Text to parse");
+DEFINE_int32(indent, 2, "Indentation for SLING output");
+DEFINE_string(corpus, "", "Input corpus");
+DEFINE_bool(benchmark, false, "Benchmark parser");
+DEFINE_bool(evaluate, false, "Evaluate parser");
+DEFINE_int32(maxdocs, -1, "Maximum number of documents to process");
 
 using namespace sling;
 using namespace sling::nlp;
+
+Document *RemoveAnnotations(Document *document) {
+  Store *store = document->store();
+  Handle h_mention = store->Lookup("/s/document/mention");
+  Handle h_theme = store->Lookup("/s/document/theme");
+  Builder b(store);
+  for (const Slot &s : document->top()) {
+    if (s.name != Handle::id() &&
+        s.name != h_mention &&
+        s.name != h_theme) {
+      b.Add(s.name, s.value);
+    }
+  }
+  return new Document(b.Create());
+}
 
 // Parallel corpus for evaluating parser on golden corpus.
 class ParserEvaulationCorpus : public ParallelCorpus {
@@ -70,17 +99,7 @@ class ParserEvaulationCorpus : public ParallelCorpus {
     }
 
     // Create new document and remove annotations.
-    Handle h_mention = locals->Lookup("/s/document/mention");
-    Handle h_theme = locals->Lookup("/s/document/theme");
-    Builder b(locals);
-    for (const Slot &s : document->top()) {
-      if (s.name != Handle::id() &&
-          s.name != h_mention &&
-          s.name != h_theme) {
-        b.Add(s.name, s.value);
-      }
-    }
-    Document *parsed = new Document(b.Create());
+    Document *parsed = RemoveAnnotations(document);
 
     // Parse the document.
     parser_->Parse(parsed);
@@ -133,17 +152,19 @@ int main(int argc, char *argv[]) {
 
     std::cout << ToText(document.top(), FLAGS_indent) << "\n";
     LOG(INFO) << document.num_tokens() / clock.secs() << " tokens/sec";
+    return 0;
   }
 
   // Benchmark parser on corpus.
   if (FLAGS_benchmark) {
+    CHECK(!FLAGS_corpus.empty());
     LOG(INFO) << "Benchmarking parser on " << FLAGS_corpus;
     DocumentSource *corpus = DocumentSource::Create(FLAGS_corpus);
     int num_documents = 0;
     int num_tokens = 0;
     clock.start();
     for (;;) {
-      if (FLAGS_maxdocs != -1 && num_documents >= FLAGS_maxdocs) return false;
+      if (FLAGS_maxdocs != -1 && num_documents >= FLAGS_maxdocs) break;
 
       Store store(&commons);
       Document *document = corpus->Next(&store);
@@ -155,7 +176,6 @@ int main(int argc, char *argv[]) {
         std::cout << num_documents << " documents\r";
         std::cout.flush();
       }
-
       parser.Parse(document);
 
       delete document;
@@ -165,10 +185,12 @@ int main(int argc, char *argv[]) {
               << num_tokens << " tokens, "
               << num_tokens / clock.secs() << " tokens/sec";
     delete corpus;
+    return 0;
   }
 
   // Evaluate parser on gold corpus.
   if (FLAGS_evaluate) {
+    CHECK(!FLAGS_corpus.empty());
     LOG(INFO) << "Evaluating parser on " << FLAGS_corpus;
     ParserEvaulationCorpus corpus(&commons, &parser, FLAGS_corpus);
     FrameEvaluation::Output eval;
