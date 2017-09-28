@@ -182,7 +182,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
           if (p.first > end) break;
           const auto &mention = mentions_[p.second];
           if (mention.begin < current_) break;
-          if (mention.frame != frame_index) return false;
+          if (mention.frame == frame_index) return false;
         }
       }
 

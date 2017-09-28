@@ -185,7 +185,7 @@ Use the converter to create the following corpora:
   per document, and the file for a document is just its encoded document
   frame. An alternate format is to have a folder with one file per
   document. More formats can be added by modifying the reader code
-[here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/document/document-source.cc#L107) and [here](https://github.com/google/sling/blob/master/nlp/parser/tools/train.py#L57).
+[here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/document/document-source.cc#L107) and [here](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.py#L57).
 
 ### Specify training options and hyperparameters:
 
@@ -224,7 +224,7 @@ Then we have the various training options and hyperparameters:
 The script comes with reasonable defaults for the hyperparameters for
 training a semantic parser model, but it would be a good idea to hardcode
 your favorite arguments [directly in the
-script](https://github.com/google/sling/blob/master/nlp/parser/tools/train.sh#L53)
+script](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.sh#L51)
 to avoid supplying them again and again on the commandline.
 
 ### Run the training script
@@ -322,7 +322,7 @@ diagnostic information, which we describe below.
 
   Note that graph matching is an intrinsic evaluation, so if you wish to swap
   it with an extrinsic evaluation, then just replace the binary
-  [here](https://github.com/google/sling/blob/master/nlp/parser/tools/train.py#L97) with your evaluation binary.
+  [here](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.py#L97) with your evaluation binary.
 
 * Finally, if `--flow` is specified, then the best performing checkpoint
   will be converted into a Myelin flow file (more on Myelin and its flows
@@ -383,6 +383,162 @@ document.Update();
 
 // Output document annotations.
 std::cout << sling::ToText(document.top(), 2);
+```
+
+## Annotation Tools
+
+SLING comes with utility tools for annotating a corpus of documents with frames
+using a parser model, benchmarking this annotation process, and optionally
+evaluating the annotated frames against supplied gold frames.
+
+We provide two such tools -- a
+[tf-parse](https://github.com/google/sling/blob/master/nlp/parser/tools/tf-parse.py) Python script, and a [Myelin-based
+parser tool](https://github.com/google/sling/blob/master/nlp/parser/tools/parse.cc).
+Given the same trained parser model, both these tools should produce
+the same annotated frames and evaluation numbers. However the Myelin-based
+parser is significantly faster than Tensorflow-based tf-parse (3x-10x in our
+experiments).
+
+### Myelin-based parser tool
+
+This tool takes the following commandline arguments:
+
+*  `--parser` : This should point to a Myelin flow, e.g. one created by the
+   training script.
+*  If `--text` is specified then the parser is run over the supplied text, and
+   prints the annotated frame(s) in text mode. The indentation of the text
+   output can be controlled by `--indent`. E.g.
+   ```shell
+   bazel build -c opt nlp/parser/tools:parse
+   bazel-bin/nlp/parser/tools/parse -alsologtostderr \
+      --parser=<path to flow file> --text="John loves Mary" --indent=2
+
+   {=#1 
+     :/s/document
+     /s/document/text: "John loves Mary"
+     /s/document/tokens: [{=#2 
+       :/s/token
+       /s/token/index: 0
+       /s/token/text: "John"
+       /s/token/start: 0
+       /s/token/length: 4
+       /s/token/break: 0
+     }, {=#3 
+       :/s/token
+       /s/token/index: 1
+       /s/token/text: "loves"
+       /s/token/start: 5
+       /s/token/length: 5
+     }, {=#4 
+       :/s/token
+       /s/token/index: 2
+       /s/token/text: "Mary"
+       /s/token/start: 11
+       /s/token/length: 4
+     }]
+     /s/document/mention: {=#5 
+       :/s/phrase
+       /s/phrase/begin: 0
+       /s/phrase/evokes: {=#6 
+         :/saft/person
+       }
+     }
+     /s/document/mention: {=#7 
+       :/s/phrase
+       /s/phrase/begin: 1
+       /s/phrase/evokes: {=#8 
+         :/pb/love-01
+         /pb/arg0: #6
+         /pb/arg1: {=#9 
+           :/saft/person
+         }
+       }
+     }
+     /s/document/mention: {=#10 
+       :/s/phrase
+       /s/phrase/begin: 2
+       /s/phrase/evokes: #9
+     }
+   }
+   I0927 14:44:25.705880 30901 parse.cc:154] 823.732 tokens/sec
+   ```
+*  Instead if `--benchmark` is true then the parser is run on the document
+   corpus specified via `--corpus`. This corpus should be prepared similarly to
+   how the training/dev corpora were created. The processing can be limited to
+   the first N documents by specifying `--maxdocs=N`.
+
+   ```shell
+    bazel-bin/nlp/parser/tools/parse -alsologtostderr \
+      --parser=parser.flow --corpus=dev.gold.zip -benchmark --maxdocs=200
+
+    I0927 14:45:36.634670 30934 parse.cc:127] Load parser from parser.flow
+    I0927 14:45:37.307870 30934 parse.cc:135] 565.077 ms loading parser
+    I0927 14:45:37.307922 30934 parse.cc:161] Benchmarking parser on dev.gold.zip
+    I0927 14:45:39.059257 30934 parse.cc:184] 200 documents, 3369 tokens, 2289.91 tokens/sec
+   ```
+
+*  Instead if `--evaluate` is true then the tool expects `--corpora` to specify
+   a corpora with gold frames. It then runs the parser model over a frame-less
+   version of this corpora and evaluates the annotated frames vs the gold
+   frames. Again, one can use `--maxdocs` to limit the evaluation to the first N
+   documents.
+   ```shell
+   bazel-bin/nlp/parser/tools/parse -alsologtostderr \
+     --evaluate --parser=parser.flow --corpus=dev.gold.zip --maxdocs=200
+
+   I0927 14:51:39.542151 31336 parse.cc:127] Load parser from parser.flow
+   I0927 14:51:40.211920 31336 parse.cc:135] 562.249 ms loading parser
+   I0927 14:51:40.211973 31336 parse.cc:194] Evaluating parser on dev.gold.zip
+   SPAN_P+ 1442
+   SPAN_P- 93
+   SPAN_R+ 1442
+   SPAN_R- 133
+   SPAN_Precision  93.941368078175884
+   SPAN_Recall     91.555555555555557
+   SPAN_F1 92.733118971061089
+   ...
+   <snip>
+   ...
+   SLOT_F1 78.398993883366586
+   COMBINED_P+     4920
+   COMBINED_P-     633
+   COMBINED_R+     4923
+   COMBINED_R-     901
+   COMBINED_Precision      88.60075634792004
+   COMBINED_Recall 84.529532967032978
+   COMBINED_F1     86.517276488704127
+   ```
+
+### Tensorflow-based parser tool
+
+An alternative to running the Myelin-based parsing tool is to run the tf-parse
+Python script that executes the annotation part of the Tensorflow graph over the
+input documents. It takes the following arguments:
+
+*  `--input`: This should be the directory where the trained model is saved.
+*  `--commons`: Path to the commons store. Should be the same as the one used in training.
+*  `--corpus`: Corpus of frame-less documents that will be annotated with the model.
+*  `--batch`: Batch size. Higher batch sizes are efficient but only if all the batch
+    documents are roughly of similar length.
+*  `--threads` : Number of threads to use in Tensorflow. This drives Tensorflow's
+    inter-op and intra-op parallelism. Making this very high will lead to inefficiencies
+    due to inter-thread CPU contention.
+*  `--output`: (Optional) File name where the annotated corpus will be saved.
+*  `--eval`: (Optional) If true, then it will evaluate the annotated corpus vs
+    the gold corpus. If set, then it expects `--output` and `--gold` to be set as well.
+*  `--gold`: (Optional) Path to the gold corpus. Used if `--eval` is set.
+
+Sample Usage:
+```shell
+python nlp/parser/tools/tf-parse.py \
+  --input=/path/to/training/script/output/folder \
+  --commons=/path/to/commons \
+  --corpus=/path/to/frameless/document/corpus \
+  --batch=512 \
+  --threads=4 \
+  --output=annotated.zip \
+  --gold=/path/to/gold/frame/corpora \
+  --eval
 ```
 
 ## Credits
