@@ -260,20 +260,20 @@ attention to build up the desired frame graph.
 
 In the parsing literature, \emph{transition systems} have been
 used to construct dependency parse trees from a sequence of state-action pairs
-$(s_i,a_i)$. A transition system takes a state $s_i$ and an action $a_i$ and
+$(s_i,a_i)$. The transition system takes a state $s_i$ and an action $a_i$ and
 constructs a new state $s_{i+1}$. This allows you to build a tree structure by
 predicting a sequence of actions. For example, the \emph{arc-standard}
 transition system \cite{nivre2006} uses {\bf SHIFT}, {\bf LEFT-ARC(label)}, and
 {\bf RIGHT-ARC(label)} actions to construct a dependency parse tree from a
-sequence of these actions.
+sequence of those actions.
 
-We are using the same core idea to construct a frame graph where frames can be
-evoked by phrases in the input. Instead of using a stack, we have an
-\emph{attention buffer}, which keeps track of the most salient frames in the
-discourse. The front of the attention buffer serves as the short-term memory of
-the parser and the parser actions operate on these frames. The actions in the
-transition system both builds up the frame graph as well as maintains the
-attention buffer. The transition system consists of the following actions:
+We use the same idea to construct a frame graph where frames can be
+evoked by phrases in the input. Instead of using a stack, we have the attention buffer introducted
+in the previous section, which keeps track of the most salient frames in the
+discourse. The front of the attention buffer serves as the working memory for
+the parser, which operates on those frames. Transition system
+simultaneously build the frame graph and maintain the
+attention buffer. The current transition system consists of the following actions:
 
 \begin{itemize}
   \item {\bf SHIFT} -- Moves to next input token. Only valid when not at the
