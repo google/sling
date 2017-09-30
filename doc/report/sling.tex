@@ -33,12 +33,11 @@ Rahul Gupta \\ Google Inc. \\ {\tt grahul@google.com} \\
 \maketitle
 
 \begin{abstract}
-This paper describes SLING, which is a framework for building
-parsers for annotating text with semantic frames.
-The parser is a general transition-based frame semantic parser that uses
+We describe SLING, a framework for parsing natural language into
+semantic frames. SLING supports general transition-based, neural-network parsing with
 bi-directional LSTMs for input encoding and a Transition Based Recurrent
-Unit (TBRU) for output decoding.
-It is a jointly trained model using only the text tokens as input and the
+Unit (TBRU) for output decoding. The parsing model is 
+trained end-to-end using only the text tokens as input. The
 transition system has been designed to output frame graphs directly without
 any intervening symbolic representation.
 The SLING framework includes an efficient and scalable frame store
