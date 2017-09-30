@@ -230,37 +230,30 @@ evoke. See Figure~\ref{fig:slingdoc} for an example.
 \section{Attention}
 \label{sec:att}
 
-The SLING parser is essentially a sequence-to-sequence model where the LSTM
-encoder takes the input text and produces an internal representation of the
-stimuli, i.e. the input text.
-The decoder then takes this internal representation and uses a transition-based
-feed-forward unit to predict the sequence of actions for updating the transition
-system state (Figure~\ref{fig:network}).
+The SLING parser is a kind of sequence-to-sequence model that first encodes the
+input text token sequence with a biLSTM encoder and then runs the transition
+system on that encoding to produce a sequence of transitions, where each transition 
+updates the system state that combined with the input encoding form the input for 
+the transition feed-forward cell that predicts the next transition (Figure~\ref{fig:network}).
 
-Sequence-to-sequence models often use an ``attention" mechanism to focus
-the decoder on the important parts of the input for producing the next output
-symbol. In this model, ``attention" refers to focusing on certain parts of the
-input as relevant for producing the next output.
+Sequence-to-sequence models often rely on an ``attention" mechanism to focus
+the decoder on the parts of the input most relevant for producing the next output
+symbol. In this work, however, we use a somewhat difference attention mechanism,
+loosely inspired on neuroscience models of attention and awareness
+~\cite{nelson2017,graziano2013}. In our model, attention focuses on parts of the frame
+representation that the parser has created so far, rather than focusing on (encodings of)
+input tokens as is common for other sequence-to-sequence attention mechanisms.
 
-We use a somewhat different notion of \emph{attention} that is closer to
-recent neuroscience research on attention and awareness in the brain
-\cite{nelson2017} and \cite{graziano2013}.
-Our attention model is expressed in terms of the semantic frames inferred from
-the text so far.
-This is different from neural attention in sequence-to-sequence models
-since we model attention in terms of semantic frames evoked from the text rather
-than (encodings of) the text itself.
-
-As part of the transition system state, we maintain an \emph{attention buffer}.
-This is a prioritized list of semantic frames where the frames that are closest
-to the center of attention is at the front of the list. The transition actions
-maintains the attention buffer and moves frames to the front whenever a frame
+We maintain an \emph{attention buffer} as part of the transition system stage.
+This an ordered list of frames, where the order represents closeness to the center
+of attention. Transition actions maintain the attention buffer, bringing a frame
+to the front when the frame
 is evoked or re-evoked by the input text. When a new frame is evoked, it will
 merge the concept and its roles into a new coherent chunk of meaning, which is
-represented by the new frame and it relations to other frames, and this will
-become the new center of attention. The hypothesis is that by maintaining this
+represented by the new frame and its relations to other frames, and this will
+become the new center of attention. Our hypothesis is that by maintaining this
 attention mechanism, we only need to look at a few recent frames brought into
-attention in order to build up the desired frame graph.
+attention to build up the desired frame graph.
 
 \section{Transition system}
 \label{sec:ts}
