@@ -68,24 +68,24 @@ throughout the pipeline making it much harder for the system to perform
 accurately. For instance, F1 on SRL drops by more than 10\% when going from gold to
 system parse trees~\cite{toutanova2005}.
 
-Often, applications do not need the intermediate annotations produced
-by the lower levels in the NLP stack, so it would be preferable if these systems
-could be trained jointly to optimize an objective based on the output
+However, applications may not need the intermediate annotations produced
+by the earlier stages of a NLU pipeline, so it would be preferable if all stages
+could be trained together to optimize an objective based on the output
 annotations needed for a particular application.
 
-Classic NLP systems are also often trained using linear classifiers.
-Because of the simplicity of these, very complex and elaborate feature
-extraction with many different types of features as well as many kinds
-of combinations of these features are often required for good accuracy.
-With deep learning one can use embeddings, multiple layers, and recurrent
-network connections instead, and this often removes the need for complex
-feature design. The internal learned representations in the hidden layers of
-the models can be used instead of the hand-crafted intermediate representations
+Earlier NLU pipelines often used linear classifiers for each stage.
+Linear classifiers achieve simplicity and training efficiency at the expense of
+feature complexity, requiring elaborate feature
+extraction, many different feature types, and 
+feature combinations to achieve reasonable accuracy.
+With deep learning, we can use embeddings, multiple layers, and recurrent
+network connections to reduce the need for complex
+feature design. The internal learned representations in model hidden layers
+replace the hand-crafted feature combinations and intermediate representations
 in pipelined systems.
 
 
-We present the SLING parser that leverages deep learning to bypass the some of
-the limitations of classic pipelined systems.
+The SLING parser exploits deep learning to bypass those limitations of classic pipelined systems.
 It is a transition-based parser that outputs frame graphs directly without any
 intervening symbolic representation (see Section~\ref{sec:ts}). Transition-based
 parsing is often associated with dependency parsing, but we have designed a
@@ -94,33 +94,31 @@ trees.
 
 We use a recurrent feed-forward unit for predicting the actions in the
 transition sequence, where the hidden activations from predicting each
-transition step are fed back into the subsequent steps.
-A bidirectional LSTM is used for encoding the input, where we have both a
-left-to-right and a right-to-left LSTM, see Figure~\ref{fig:network}.
-This neural network architecture has been implemented using DRAGNN \cite{dragnn}
-and Tensorflow \cite{tensorflow}.
+transition step are fed back into subsequent steps.
+A bidirectional LSTM is used for encoding the input (Figure~\ref{fig:network}).
+This neural network architecture has been implemented using DRAGNN~\cite{dragnn}
+and TensorFlow~\cite{tensorflow}.
 
-We have made the SLING parsing framework available as open source and the code
-for the parser described in this paper can be found on GitHub.\footnote{\url{https://github.com/google/sling}}
+The SLING framework and a semantic parser built in it are now available as open-source code in GitHub.\footnote{\url{https://github.com/google/sling}}
 
-In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, which is the
-underlying linguistic theory, as well as the SLING frame store, which is our
+In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, the linguistic theory that
+inspired SLING, as well as the SLING frame store, a
 C++ framework for representing and storing semantic frames compactly and
 efficiently.
-Section \ref{sec:att} introduces our attention mechanism and
-Section~\ref{sec:ts} describes the transition system used for producing the
+Section \ref{sec:att} introduces the parser's frame-semantics-oriented attention mechanism, and
+Section~\ref{sec:ts} describes the transition system used for producing
 frame graphs. Section~\ref{sec:features} describes the features used by the
 parser.
 
 \begin{figure*}[t]
   \centering
   \includesvg{network}
-  \caption{Neural network architecture for SLING parser. The input is encoded by
-  a bi-directional LSTM and the LSTM encoding is then feed into a recurrent
-  feed-forward (FF) unit which predicts the actions for the transition system.
-  The hidden layer activations as well as the transition system state is used
-  for constructing the input feature vector for the next step. The FF unit is
-  run repeatedly until the transition system has reached a terminal state.}
+  \caption{Neural network architecture of the SLING parser. The input is encoded by
+  a bi-directional LSTM and fed into a recurrent
+  feed-forward (FF) unit that proposes transition system actions.
+  The hidden layer activations and the transition system state are combined to create
+  the input feature vector for the next step. The FF unit is
+  run repeatedly until the transition system has reached a final state.}
   \label{fig:network}
 \end{figure*}
 
