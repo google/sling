@@ -151,25 +151,25 @@ actions, or perspective~\cite{???}.
 
 At a more technical level, a SLING frame consists of a list of slots, where each
 slot has a name (role) and a value. The slot values can be literals like numbers
-and strings, or links to other frames. The frames essentially form a graph where
+and strings, or links to other frames. The frames essentially form a directed graph where
 the frames are the (typed) nodes and the slots are the labeled edges. A frame
-graph can also be viewed as a feature structure \cite{carpenter2005} and
+graph can also be viewed as a feature structure~\cite{carpenter2005} and
 unification can be used for induction of new frames from existing frames.
 Sometimes it is also useful to use frames for representing more basic data
 structures like a C struct with fields, a JSON object, or a record in a
 database.
 
 SLING frames live inside a \emph{frame store}. A store is a container that
-tracks the all the frames that have been allocated in the store, and serves as a
-memory allocation arena for the allocated frames. When making a new frame, one
-specifies the store that the frame should be allocated in. The frame will live in
+tracks all the frames that have been allocated in the store, and serves as a
+memory allocation arena them. When making a new frame, one
+specifies the store where the frame should be allocated. The frame will live in
 this store until the store is deleted or the frame is garbage collected because
-there are more no references to it.\footnote{See the \href{https://github.com/google/sling/blob/master/frame/README.md}{SLING Guide}
+there no remaining references to it.\footnote{See the \href{https://github.com/google/sling/blob/master/frame/README.md}{SLING Guide}
 for a detailed description of the SLING frame store implementation.}
 
-The SLING text format is a superset of JSON that allows you to have references
-between frames (i.e. JSON objects) using the {\tt \#n} syntax. The frames can be
-assigned ids using the {\tt=\#n} syntax. SLING frames can have both numeric and
+SLING frames are externally represented in a superset of JSON that allows references
+between frames (JSON objects) with the {\tt \#n} syntax. Frames can be
+assigned identifiers (\emph{ids}) using the {\tt=\#n} syntax. SLING frames can have both numeric and
 named ids and both slot names and values can be frame references. Where JSON
 objects can only represent trees, SLING frames can be used for representing
 arbitrary graphs. SLING has special syntax for built-in slot names:
