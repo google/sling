@@ -35,40 +35,38 @@ Rahul Gupta \\ Google Inc. \\ {\tt grahul@google.com} \\
 \begin{abstract}
 We describe SLING, a framework for parsing natural language into
 semantic frames. SLING supports general transition-based, neural-network parsing with
-bi-directional LSTMs for input encoding and a Transition Based Recurrent
+bi-directional LSTM input encoding and a Transition Based Recurrent
 Unit (TBRU) for output decoding. The parsing model is 
 trained end-to-end using only the text tokens as input. The
 transition system has been designed to output frame graphs directly without
 any intervening symbolic representation.
 The SLING framework includes an efficient and scalable frame store
-implementation as well as a neural network JIT compiler for fast parsing at
-runtime.
-The SLING framework is implemented in C++ and it is available for download
+implementation as well as a neural network JIT compiler for fast inference during parsing.
+SLING is implemented in C++ and it is available for download
 on GitHub.
 \end{abstract}
 
 \section{Introduction}
 
-Recent advances in machines learning have enabled the use of deep learning to
-train recurrent multi-level neural network classifiers. This has allowed us to
-reconsider how to best design and implement systems for natural language
-understanding (NLU).
+Recent advances in machine learning make it practical to train
+recurrent multi-level neural network classifiers, allowing us to rethink the
+design and implementation of natural language
+understanding (NLU) systems.
 
-Traditionally, natural language processing (NLP) systems have used a cascade of
-NLP modules for syntatic and semantic annotation of text.
-These systems typically first do part-of-speech (POS) tagging, followed by
+Earlier machine-learned NLU systems were commonly organized as pipelines of
+separately trained stages for syntatic and semantic annotation of text.
+A typical  pipeline would start with part-of-speech (POS) tagging, followed by
 constituency or dependency parsing for syntactic analysis.
-Using the POS tags and parse trees as feature inputs, one could then do other
-NLP tasks like mention chunking, entity type tagging, coreference resolution,
-semantic role labeling (SRL), etc.
+Using the POS tags and parse trees as feature inputs, later stages in the pipeline could then
+derive semantically relevant annotations such as entity and concept mentions, entity types, coreference relationships,
+and semantic roles (SRL).
 
-Pipelined systems often use a simple 1-best feed forward strategy \cite{finkel2006}
-where they greedily take the best output of each stage and pass it on to the
-next stage.
-While it is simple to build such an architecture, errors can accumulate
+For simplicity and efficiency, each stage in a practical NLU pipeline would just output its best hypothesis
+and pass it on to the next stage~\cite{finkel2006}.
+Obviously, errors could then accumulate
 throughout the pipeline making it much harder for the system to perform
-correctly, e.g. F1 on SRL drops by more than 10\% when going from gold to
-automatic parse trees \cite{toutanova2005}.
+accurately. For instance, F1 on SRL drops by more than 10\% when going from gold to
+system parse trees~\cite{toutanova2005}.
 
 Often, applications do not need the intermediate annotations produced
 by the lower levels in the NLP stack, so it would be preferable if these systems
