@@ -30,11 +30,14 @@ class Profile {
   // Sort order for steps.
   enum Order {POSITION, TIME, GFLOPS, COMPLEXITY, KERNEL, NAME, TASK};
 
+  // Initialize profile for summary.
+  Profile(ProfileSummary *summary, Order order = POSITION);
+
   // Initialize profile for cell instance.
   Profile(Instance *instance, Order order = POSITION);
 
   // Cell for profiled instance.
-  const Cell *cell() const { return instance_->cell(); }
+  const Cell *cell() const { return cell_; }
 
   // Check if profiling has been enabled.
   bool enabled() const { return timing_ != nullptr; }
@@ -126,12 +129,14 @@ class Profile {
   static int64 Complexity(const Step *step);
 
  private:
+  // Initialize profile.
+  void Initialize(int64 *data, Order order);
+
   // Tasks have start and wait cycle counts.
   struct TaskTiming {
     int64 start;
     int64 wait;
   };
-
 
   // Step information.
   struct StepInfo {
@@ -150,24 +155,24 @@ class Profile {
     }
   };
 
-  // Instance for profile.
-  Instance *instance_;
+  // Cell for profile.
+  const Cell *cell_ = nullptr;
 
   // Number of invocations.
-  int64 invocations_;
+  int64 invocations_ = 0;
 
   // Total number of cycles for computation.
-  int64 total_;
+  int64 total_ = 0;
 
   // Total number of operations for computation.
-  int64 total_complexity_;
+  int64 total_complexity_ = 0;
 
   // Array of clock cycle counts for each step or null if profiling is not
   // enabled.
-  int64 *timing_;
+  int64 *timing_ = nullptr;
 
   // Array of clock cycle counts for each task.
-  TaskTiming *tasks_;
+  TaskTiming *tasks_ = nullptr;
 
   // Sorted step information.
   std::vector<StepInfo> steps_;

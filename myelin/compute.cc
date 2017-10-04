@@ -558,6 +558,17 @@ void Channel::reserve(int n) {
   data_ = buffer;
 }
 
+ProfileSummary::ProfileSummary(Cell *cell) : cell_(cell) {
+  CHECK(cell->profile() != nullptr);
+  int size = cell->profile()->elements();
+  data_ = new int64[size];
+  for (int i = 0; i < size; ++i) data_[i] = 0;
+}
+
+ProfileSummary::~ProfileSummary() {
+  delete [] data_;
+}
+
 Instance::Instance(const Cell *cell) : cell_(cell) {
   cell_->runtime()->AllocateInstance(this);
 }
@@ -756,7 +767,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       tensor->data_ = var->data;
     } else {
       parameters_.push_back(tensor);
-      tensor->required_order_ = parameter_element_order_;
+      tensor->required_order_ = options_.parameter_element_order;
     }
     tensor->name_ = var->name;
     names_[var->name] = tensor;
@@ -935,7 +946,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   }
 
   // Add tensors for profiling.
-  if (profiling_) {
+  if (options_.profiling) {
     for (Cell *cell : cells_) {
       // Allocate tensor for storing profiling information. The tensor is an
       // int64 vector where the first element is the invocation counter followed
@@ -949,6 +960,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       profile->type_ = DT_INT64;
       profile->shape_.assign(size);
       profile->size_ = profile->space_ = size * sizeof(int64);
+      profile->ref_ = options_.external_profiler;
       profile->aligned_ = profile->shape_;
       profile->minalign_.assign(sizeof(int64));
       profile->stride_.assign(sizeof(int64));
@@ -1182,7 +1194,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     InstanceAllocator host_allocator(cell, HOST);
     InstanceAllocator device_allocator(cell, DEVICE);
     int e = 0;
-    int l = dynamic_allocation_ ? 0 : leave.size();
+    int l = options_.dynamic_allocation ? 0 : leave.size();
     int s = 0;
     while (e < enter.size() || l < leave.size()) {
       // Allocate space for new variables produced by step.
@@ -1238,24 +1250,21 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   // Compile each cell computation.
   for (Cell *cell : cells_) {
     // Create macro assembler for code generation.
-    MacroAssembler masm(nullptr, 0);
+    MacroAssembler masm(nullptr, 0, options_);
     masm.set_runtime(runtime_);
 
     // Declare the number of registers needed by the cell.
     if (!masm.rr().usage(cell->register_usage_)) return false;
 
-    // Enable timing measurement instrumentation if profiling is active.
-    if (profiling_) masm.set_timing(true);
-
     // Insert break point in the beginning of the generated code in debug mode.
-    if (debug_) masm.Breakpoint();
+    if (options_.debug) masm.Breakpoint();
 
     // Generate prologue for main cell computation.
     masm.Prologue();
     runtime_->GeneratePrologue(cell, &masm);
 
     // Increment the invocation counter.
-    if (profiling_) {
+    if (options_.profiling) {
       // Invocation counter is the first element of the timing block.
       masm.IncrementInvocations(cell->profile()->offset());
 
@@ -1303,10 +1312,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
             t.state = COMPLETED;
 
             // Profile task wait.
-            if (profiling_) {
+            if (options_.profiling) {
               int timing = cell->profile()->offset();
               int slot = 1 + cell->steps_.size() + tidx * 2 + 1;
-              masm.TimeStep(timing + slot * sizeof(int64));
+              masm.TimeStep(timing, slot * sizeof(int64));
             }
           }
         }
@@ -1347,9 +1356,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         }
 
         // Profile step.
-        if (profiling_ && !step->noop_) {
+        if (options_.profiling && !step->noop_) {
           int timing = cell->profile()->offset();
-          masm.TimeStep(timing + (stepnum + 1) * sizeof(int64));
+          masm.TimeStep(timing, (stepnum + 1) * sizeof(int64));
         }
       } else {
         // Parallel step.
@@ -1368,10 +1377,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
           t.state = ACTIVE;
 
           // Profile task start.
-          if (profiling_) {
+          if (options_.profiling) {
             int timing = cell->profile()->offset();
             int slot = 1 + cell->steps_.size() + tidx * 2;
-            masm.TimeStep(timing + slot * sizeof(int64));
+            masm.TimeStep(timing, slot * sizeof(int64));
           }
         }
 
@@ -1406,7 +1415,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Stop runtime profiler.
-    if (profiling_) {
+    if (options_.profiling) {
       masm.CallInstanceFunction(runtime_->StopProfilerFunc());
     }
 
@@ -1452,9 +1461,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
           }
 
           // Profile step.
-          if (profiling_ && !step->noop_) {
+          if (options_.profiling && !step->noop_) {
             int timing = cell->profile()->offset();
-            masm.TimeStep(timing + (stepnum + 1) * sizeof(int64));
+            masm.TimeStep(timing, (stepnum + 1) * sizeof(int64));
           }
         }
         stepnum++;

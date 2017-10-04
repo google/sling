@@ -181,8 +181,9 @@ void StaticData::Generate(MacroAssembler *masm) {
   for (uint8 byte : data_) masm->db(byte);
 }
 
-MacroAssembler::MacroAssembler(void *buffer, int buffer_size)
-    : Assembler(buffer, buffer_size) {}
+MacroAssembler::MacroAssembler(void *buffer, int buffer_size,
+                               const Options &options)
+    : Assembler(buffer, buffer_size), options_(options) {}
 
 MacroAssembler::~MacroAssembler() {
   for (auto *d : data_blocks_) delete d;
@@ -200,7 +201,7 @@ void MacroAssembler::Prologue() {
   }
 
   // Reserve timestamp register.
-  if (timing_) {
+  if (options_.profiling) {
     rr_.reserve(tsreg);
     rr_.use(tsreg);
   }
@@ -217,7 +218,7 @@ void MacroAssembler::Prologue() {
   if (rr_.saved(r15)) pushq(r15);
 
   // Get initial timestamp counter if timing instrumentation is active.
-  if (timing_) {
+  if (options_.profiling) {
     rdtsc();
     shlq(rdx, Immediate(32));
     orq(rax, rdx);
@@ -246,7 +247,7 @@ void MacroAssembler::Epilogue() {
   ret(0);
 
   // Release timing register.
-  if (timing_) {
+  if (options_.profiling) {
     rr_.release(tsreg);
     rr_.free(tsreg);
   }
@@ -273,7 +274,6 @@ void MacroAssembler::GenerateDataBlocks() {
 }
 
 void MacroAssembler::LoopStart(jit::Label *label) {
-  //CodeTargetAlign();
   bind(label);
 }
 
@@ -471,12 +471,18 @@ void MacroAssembler::CallInstanceFunction(void (*func)(void *)) {
 }
 
 void MacroAssembler::IncrementInvocations(int offset) {
-  incq(Operand(datareg, offset));
+  if (options_.external_profiler) {
+    CHECK(!rr_.used(rdi));
+    movq(rdi, Operand(datareg, offset));
+    incq(Operand(rdi));
+  } else {
+    incq(Operand(datareg, offset));
+  }
 }
 
-void MacroAssembler::TimeStep(int offset) {
+void MacroAssembler::TimeStep(int offset, int disp) {
   // Timing instrumentation must be active.
-  CHECK(timing_);
+  CHECK(options_.profiling);
   CHECK(!rr_.used(rax));
   CHECK(!rr_.used(rdx));
 
@@ -490,7 +496,13 @@ void MacroAssembler::TimeStep(int offset) {
   subq(rdx, tsreg);
 
   // Add elapsed time to timing block.
-  addq(Operand(datareg, offset), rdx);
+  if (options_.external_profiler) {
+    CHECK(!rr_.used(rdi));
+    movq(rdi, Operand(datareg, offset));
+    addq(Operand(rdi, disp), rdx);
+  } else {
+    addq(Operand(datareg, offset + disp), rdx);
+  }
 
   // Store new timestamp.
   movq(tsreg, rax);
@@ -499,7 +511,7 @@ void MacroAssembler::TimeStep(int offset) {
 void MacroAssembler::ResetRegisterUsage() {
   rr_.reset();
   mm_.reset();
-  if (timing_) rr_.use(tsreg);
+  if (options_.profiling) rr_.use(tsreg);
 }
 
 }  // namespace myelin

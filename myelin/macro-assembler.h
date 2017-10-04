@@ -203,7 +203,7 @@ class StaticData {
 // Macro assembler for generating code for computations.
 class MacroAssembler : public jit::Assembler {
  public:
-  MacroAssembler(void *buffer, int buffer_size);
+  MacroAssembler(void *buffer, int buffer_size, const Options &options);
   ~MacroAssembler();
 
   // Generate function prologue.
@@ -280,7 +280,7 @@ class MacroAssembler : public jit::Assembler {
   void IncrementInvocations(int offset);
 
   // Generate timing for step and update instance block.
-  void TimeStep(int offset);
+  void TimeStep(int offset, int disp);
 
   // Start task.
   void StartTask(int offset, int32 id, int32 index, jit::Label *entry);
@@ -300,9 +300,8 @@ class MacroAssembler : public jit::Assembler {
   // Returns the instance data register.
   jit::Register instance() const;
 
-  // Timing measurement instrumentation.
-  bool timing() const { return timing_; }
-  void set_timing(bool timing) { timing_ = timing; }
+  // Compiler options.
+  const Options &options() const { return options_; }
 
   // Runtime support functions.
   Runtime *runtime() const { return runtime_; }
@@ -316,8 +315,8 @@ class MacroAssembler : public jit::Assembler {
   // Static data blocks.
   std::vector<StaticData *> data_blocks_;
 
-  // Timing measurements using timestamp counter.
-  bool timing_ = false;
+  // Compiler options.
+  const Options &options_;
 
   // Runtime support functions.
   Runtime *runtime_ = nullptr;

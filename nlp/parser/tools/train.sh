@@ -90,10 +90,6 @@ case $i in
     OUTPUT_FOLDER="${i#*=}"
     shift
     ;;
-    --flow=*)
-    FLOW="${i#*=}"
-    shift
-    ;;
     --train=*|--train_corpus=*)
     TRAIN_FILEPATTERN="${i#*=}"
     shift
@@ -217,7 +213,6 @@ HYPERPARAMS+="seed:${SEED} learning_method:'${METHOD}' "
 HYPERPARAMS+="use_moving_average:${MOVING_AVERAGE} dropout_rate:${DROPOUT} "
 HYPERPARAMS+="gradient_clip_norm:${GRAD_CLIP_NORM} adam_beta1:${ADAM_BETA1} "
 HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS}"
-FLOW=${OUTPUT_FOLDER}/sempar.flow
 
 mkdir -p "${OUTPUT_FOLDER}"
 
@@ -245,7 +240,7 @@ then
     --master_spec="${OUTPUT_FOLDER}/master_spec" \
     --hyperparams="${HYPERPARAMS}" \
     --output_folder=${OUTPUT_FOLDER} \
-    --flow=${FLOW} \
+    --flow=${OUTPUT_FOLDER}/sempar.flow \
     --commons=${COMMONS} \
     --train_corpus=${TRAIN_FILEPATTERN} \
     --dev_corpus=${DEV_GOLD_FILEPATTERN} \

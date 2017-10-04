@@ -70,6 +70,7 @@ cc_library(
     "//frame:store",
     "//myelin:compute",
     "//myelin:flow",
+    "//myelin:profile",
     "//myelin/kernel:dragnn",
     "//myelin/kernel:tensorflow",
     "//nlp/document",

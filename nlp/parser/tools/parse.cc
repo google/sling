@@ -50,6 +50,7 @@ DEFINE_int32(indent, 2, "Indentation for SLING output");
 DEFINE_string(corpus, "", "Input corpus");
 DEFINE_bool(benchmark, false, "Benchmark parser");
 DEFINE_bool(evaluate, false, "Evaluate parser");
+DEFINE_bool(profile, false, "Profile parser");
 DEFINE_int32(maxdocs, -1, "Maximum number of documents to process");
 
 using namespace sling;
@@ -129,6 +130,7 @@ int main(int argc, char *argv[]) {
   clock.start();
   Store commons;
   Parser parser;
+  if (FLAGS_profile) parser.EnableProfiling();
   parser.Load(&commons, FLAGS_parser);
   commons.Freeze();
   clock.stop();
@@ -152,7 +154,6 @@ int main(int argc, char *argv[]) {
 
     std::cout << ToText(document.top(), FLAGS_indent) << "\n";
     LOG(INFO) << document.num_tokens() / clock.secs() << " tokens/sec";
-    return 0;
   }
 
   // Benchmark parser on corpus.
@@ -185,7 +186,6 @@ int main(int argc, char *argv[]) {
               << num_tokens << " tokens, "
               << num_tokens / clock.secs() << " tokens/sec";
     delete corpus;
-    return 0;
   }
 
   // Evaluate parser on gold corpus.
@@ -205,6 +205,18 @@ int main(int argc, char *argv[]) {
     eval.slot.ToText("SLOT", &report);
     eval.combined.ToText("COMBINED", &report);
     for (const auto &l : report) std::cout << l << "\n";
+  }
+
+  // Output profile report.
+  if (FLAGS_profile) {
+    myelin::Profile lr(&parser.profile()->lr);
+    std::cout << lr.ASCIIReport() << "\n";
+
+    myelin::Profile rl(&parser.profile()->rl);
+    std::cout << lr.ASCIIReport() << "\n";
+
+    myelin::Profile ff(&parser.profile()->ff);
+    std::cout << ff.ASCIIReport() << "\n";
   }
 
   return 0;

@@ -38,6 +38,7 @@ class TensorData;
 class CUDADevice;
 class CustomKernel;
 class InstanceAllocator;
+class ProfileSummary;
 
 // Element order.
 enum Order {ANY_ORDER, ROW_MAJOR, COLUMN_MAJOR, CONFLICTING_ORDER};
@@ -806,6 +807,26 @@ class TensorData {
   Tensor *format_;  // tensor format
 };
 
+// A profile summary stores the profiling data for a cell and can be used for
+// external profiling where the profiling data is collected from different
+// instances. This requires that the network has been compiled for external
+// profiling.
+class ProfileSummary {
+ public:
+  ProfileSummary(Cell *cell);
+  ~ProfileSummary();
+
+  // Cell being profiled.
+  Cell *cell() const { return cell_; }
+
+  // Pointer to profile buffer.
+  int64 *data() const { return data_; }
+
+ private:
+  Cell *cell_;              // cell being profiled
+  int64 *data_ = nullptr;   // profile data
+};
+
 // An instance holds all the input, output, and intermediate parameters of a
 // cell.
 class Instance {
@@ -861,14 +882,17 @@ class Instance {
     *reinterpret_cast<char **>(data_ + param->offset()) = channel->at(index);
   }
 
-  // Sets a reference parameter to an address.  Caller is responsible for
+  // Sets a reference parameter to an address. Caller is responsible for
   // ensuring proper alignment and any other constraints.
-  void SetReference(Tensor *param, char *address) {
+  void SetReference(Tensor *param, void *address) {
     DCHECK(param != nullptr);
     DCHECK(!param->IsConstant()) << param->name();
     DCHECK(param->ref()) << param->name();
-    *reinterpret_cast<char **>(data_ + param->offset()) = address;
+    *reinterpret_cast<void **>(data_ + param->offset()) = address;
   }
+
+  // Set profiling summary for collecting profiling data for instance.
+  inline void set_profile(ProfileSummary *summary);
 
   // Return tensor data object for parameter in instance.
   TensorData operator[](Tensor *param) {
@@ -1015,6 +1039,15 @@ class Cell {
   friend class InstanceAllocator;
 };
 
+// Compiler options.
+struct Options {
+  Order parameter_element_order = ROW_MAJOR; // element order for parameters
+  bool debug = false;                        // insert breakpoint in cell
+  bool profiling = false;                    // enable profiling
+  bool external_profiler = false;            // external profiling buffer
+  bool dynamic_allocation = false;           // dynamic instance allocation
+};
+
 // A network is a collection of cells and variables that are compiled as a unit.
 class Network {
  public:
@@ -1043,20 +1076,25 @@ class Network {
   Runtime *runtime() const { return runtime_; }
   void set_runtime(Runtime *runtime) { runtime_ = runtime; }
 
+  // Compiler options.
+  Options &options() { return options_; }
+
   // Set element order for parameters.
   void set_parameter_element_order(Order order) {
-    parameter_element_order_ = order;
+    options_.parameter_element_order = order;
   }
 
   // Enable debugging by inserting a break point in the generated code.
-  void set_debug(bool debug) { debug_ = debug; }
+  void set_debug(bool debug) { options_.debug = debug; }
 
   // Enable profiling by instrumenting code with timestamp timing code.
-  void set_profiling(bool profiling) { profiling_ = profiling; }
+  void set_profiling(bool profiling) { options_.profiling = profiling; }
 
   // Enable dynamic instance allocation which allows instance variables to
   // overlap in the instance data block.
-  void set_dynamic_allocation(bool dynamic) { dynamic_allocation_ = dynamic; }
+  void set_dynamic_allocation(bool dynamic) {
+    options_.dynamic_allocation = dynamic;
+  }
 
   // Network cells.
   const std::vector<Cell *> cells() const { return cells_; }
@@ -1102,10 +1140,7 @@ class Network {
   Runtime *runtime_;
 
   // Compiler options.
-  Order parameter_element_order_ = ROW_MAJOR; // element order for parameters
-  bool debug_ = false;                        // insert breakpoint in cell
-  bool profiling_ = false;                    // enable profiling
-  bool dynamic_allocation_ = false;           // dynamic instance allocation
+  Options options_;
 
   friend class Instance;
 };
@@ -1177,6 +1212,11 @@ inline size_t Instance::size() const {
 
 inline int Instance::alignment() const {
   return cell_->instance_alignment();
+}
+
+inline void Instance::set_profile(ProfileSummary *summary) {
+  DCHECK(cell_->profile() != nullptr);
+  SetReference(cell_->profile(), summary->data());
 }
 
 inline TensorData Instance::operator[](const string &name) {

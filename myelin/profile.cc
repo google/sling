@@ -43,57 +43,59 @@ static string TimeStr(float us) {
   }
 }
 
-Profile::Profile(Instance *instance, Order order) : instance_(instance) {
-  if (cell()->profile() != nullptr) {
-    // First element is evocation count followed by one cycle counter for each
-    // step.
-    int64 *data = instance_->Get<int64>(cell()->profile());
-    invocations_ = *data;
-    timing_ = data + 1;
-    total_ = 0;
-    total_complexity_ = 0;
-    tasks_ = reinterpret_cast<TaskTiming *>(timing_ + steps());
+Profile::Profile(ProfileSummary *summary, Order order)
+    : cell_(summary->cell()) {
+  Initialize(summary->data(), order);
+}
 
-    steps_.resize(cell()->steps().size());
-    for (int i = 0; i < steps(); ++i) {
-      const Step *step = cell()->steps()[i];
-      StepInfo &s = steps_[i];
-      s.index = i;
-      s.step = step;
-      switch (order) {
-        case POSITION:
-          break;
-        case TIME:
-          s.sort_value = time(i);
-          break;
-        case GFLOPS:
-          s.sort_value = gigaflops(i);
-          break;
-        case COMPLEXITY:
-          s.sort_value = complexity(i);
-          break;
-        case KERNEL:
-          s.sort_name = step->type() +  step->GetAttr("expr") + step->variant();
-          break;
-        case NAME:
-          s.sort_name = step->name();
-          break;
-        case TASK:
-          s.sort_value = step->task_index();
-          break;
-      }
-
-      total_ += timing_[i];
-      total_complexity_ += complexity(i);
-    }
-    sort(steps_.begin(), steps_.end());
-  } else {
-    invocations_ = 0;
-    total_ = 0;
-    total_complexity_ = 0;
-    timing_ = nullptr;
-    tasks_ = nullptr;
+Profile::Profile(Instance *instance, Order order) : cell_(instance->cell()) {
+  if (cell_->profile() != nullptr) {
+    Initialize(instance->Get<int64>(cell_->profile()), order);
   }
+}
+
+void Profile::Initialize(int64 *data, Order order) {
+  // First element is evocation count followed by one cycle counter for each
+  // step.
+  invocations_ = *data;
+  timing_ = data + 1;
+  total_ = 0;
+  total_complexity_ = 0;
+  tasks_ = reinterpret_cast<TaskTiming *>(timing_ + steps());
+
+  steps_.resize(cell()->steps().size());
+  for (int i = 0; i < steps(); ++i) {
+    const Step *step = cell()->steps()[i];
+    StepInfo &s = steps_[i];
+    s.index = i;
+    s.step = step;
+    switch (order) {
+      case POSITION:
+        break;
+      case TIME:
+        s.sort_value = time(i);
+        break;
+      case GFLOPS:
+        s.sort_value = gigaflops(i);
+        break;
+      case COMPLEXITY:
+        s.sort_value = complexity(i);
+        break;
+      case KERNEL:
+        s.sort_name = step->type() +  step->GetAttr("expr") + step->variant();
+        break;
+      case NAME:
+        s.sort_name = step->name();
+        break;
+      case TASK:
+        s.sort_value = step->task_index();
+        break;
+    }
+
+    total_ += timing_[i];
+    total_complexity_ += complexity(i);
+  }
+  sort(steps_.begin(), steps_.end());
 }
 
 string Profile::ASCIIReport() const {
@@ -106,7 +108,7 @@ string Profile::ASCIIReport() const {
   StringAppendF(&report,
       "Profile for %lld invocations of %s with %lld operations\n",
       invocations_,
-      instance_->cell()->name().c_str(),
+      cell()->name().c_str(),
       complexity());
   StringAppendF(&report, "CPU model: %s\n", cpu.brand());
   StringAppendF(&report,
@@ -126,7 +128,7 @@ string Profile::ASCIIReport() const {
   if (jit::CPU::Enabled(jit::AVX2)) report.append(" AVX2");
   if (jit::CPU::Enabled(jit::FMA3)) report.append(" FMA3");
   report.append("\n");
-  string runtime_info = instance_->cell()->runtime()->Description();
+  string runtime_info = cell()->runtime()->Description();
   if (!runtime_info.empty()) {
     report.append("Runtime: ");
     report.append(runtime_info);
@@ -190,7 +192,7 @@ string Profile::ASCIIReport() const {
       total_start += start_time(i);
       total_wait += wait_time(i);
       StringAppendF(&report, "| %5d | %s | %s |\n",
-                    instance_->cell()->task(i),
+                    cell()->task(i),
                     TimeStr(start_time(i)).c_str(),
                     TimeStr(wait_time(i)).c_str());
     }

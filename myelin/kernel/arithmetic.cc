@@ -479,7 +479,7 @@ class Calculate : public Kernel {
     Type type = step->output(0)->type();
     if (type == DT_FLOAT || type == DT_DOUBLE) {
       // Perform dry-run to estimate the number of SIMD registers needed.
-      MacroAssembler dryrun_masm(nullptr, 0);
+      MacroAssembler dryrun_masm(nullptr, 0, masm->options());
       Expression dryrun_expr(step, &dryrun_masm, 0);
       CHECK(dryrun_expr.AllocateRegisters()) << "Register overflow";
 

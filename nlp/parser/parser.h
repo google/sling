@@ -26,6 +26,7 @@
 #include "frame/store.h"
 #include "myelin/compute.h"
 #include "myelin/flow.h"
+#include "myelin/profile.h"
 #include "nlp/document/document.h"
 #include "nlp/document/features.h"
 #include "nlp/document/lexicon.h"
@@ -41,11 +42,32 @@ class ParserInstance;
 // Frame semantics parser model.
 class Parser {
  public:
+  // Profile summary for each cell.
+  struct Profile {
+    Profile(Parser *parser)
+      : lr(parser->lr_.cell), rl(parser->rl_.cell), ff(parser->ff_.cell) {}
+
+    myelin::ProfileSummary lr;                // profile summary for LR LSTM
+    myelin::ProfileSummary rl;                // profile summary for RL LSTM
+    myelin::ProfileSummary ff;                // profile summary for FF
+  };
+
+  ~Parser() { delete profile_; }
+
   // Load and initialize parser model.
   void Load(Store *store, const string &filename);
 
   // Parse document.
   void Parse(Document *document) const;
+
+  // Enable profiling. Must be called before Load().
+  void EnableProfiling() {
+    network_.options().profiling = true;
+    network_.options().external_profiler = true;
+  }
+
+  // Return profile summary for parser.
+  Profile *profile() const { return profile_; }
 
  private:
   // LSTM cell.
@@ -53,6 +75,7 @@ class Parser {
     // Cell.
     myelin::Cell *cell;                       // LSTM cell
     bool reverse;                             // LSTM direction
+    myelin::Tensor *profile;                  // LSTM profiling block
 
     // Connectors.
     myelin::Connector *control;               // LSTM control layer
@@ -79,6 +102,7 @@ class Parser {
   struct FF {
     myelin::Cell *cell;                       // feed-forward cell
     myelin::Connector *step;                  // FF step hidden activations
+    myelin::Tensor *profile;                  // FF profiling block
 
     // Features.
     myelin::Tensor *lr_focus_feature;         // LR LSTM input focus feature
@@ -131,6 +155,9 @@ class Parser {
   LSTM lr_;                                   // left-to-right LSTM cell
   LSTM rl_;                                   // right-to-left LSTM cell
   FF ff_;                                     // feed-forward cell
+
+  // Profile summary.
+  Profile *profile_ = nullptr;
 
   // Number of output actions.
   int num_actions_;

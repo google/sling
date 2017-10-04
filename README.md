@@ -68,8 +68,19 @@ detail.
 
 The first step consists of preparing the commons store (also called global store). This has frame and
 schema definitions for all types and roles of interest, e.g.
-`/s/person` or `/pb/love-01` or `/pb/arg0`. More details on store
-creation can be found [here (TBD)](TBD).
+`/s/person` or `/pb/love-01` or `/pb/arg0`. In order to build the commons store
+for the OntoNotes-based parser you need to checkout PropBank in a directory
+parallel to the SLING directory:
+
+```shell
+cd ..
+git clone https://github.com/propbank/propbank-frames.git propbank
+cd sling
+nlp/parser/tools/build-commons.sh
+```
+
+This will build a SLING store with all the schemas needed and put it into 
+`/tmp/commons`.
 
 Next, write a converter to convert documents in your existing format to
 [SLING documents](https://github.com/google/sling/blob/master/nlp/document/document.h). A SLING document is just a
@@ -338,27 +349,26 @@ diagnostic information, which we describe below.
 
 ## Parsing
 
-The parser needs a frame store and a parser model. The [frame store](frame/README.md)
-contains the the schemas for the frames and an action table produced by the
-parser trainer. The parser model contains the trained neural network for the
-model. The parser model is stored in a [Myelin](myelin/README.md) flow file.
+The trained parser model is stored in a [Myelin](myelin/README.md) flow file,
+e.g. `sempar.flow`. It contains all the information needed for parsing text:
+* The neural network units (LR, RL, FF) with the parameters learned from
+training.
+* Feature maps for the lexicon and affixes.
+* The commons store is a [SLING store](frame/README.md) with the schemas for the
+frames.
+* The action table with all the transition actions.
 
 The model can be loaded and initialized in the following way:
 
 ```c++
 #include "frame/store.h"
-#include "frame/serialization.h"
 #include "nlp/document/document-tokenizer.h"
 #include "nlp/parser/parser.h"
 
-// Initialize global frame store.
-sling::Store commons;
-sling::FileDecoder decoder(&commons, "/tmp/parser.sling");
-decoder.DecodeAll();
-
 // Load parser model.
+sling::Store commons;
 sling::nlp::Parser parser;
-parser.Load(&commons, "/tmp/parser.flow");
+parser.Load(&commons, "/tmp/sempar.flow");
 commons.Freeze();
 
 // Create document tokenizer.
@@ -410,7 +420,7 @@ This tool takes the following commandline arguments:
    output can be controlled by `--indent`. E.g.
    ```shell
    bazel build -c opt nlp/parser/tools:parse
-   bazel-bin/nlp/parser/tools/parse -alsologtostderr \
+   bazel-bin/nlp/parser/tools/parse --logtostderr \
       --parser=<path to flow file> --text="John loves Mary" --indent=2
 
    {=#1 
@@ -462,13 +472,13 @@ This tool takes the following commandline arguments:
    }
    I0927 14:44:25.705880 30901 parse.cc:154] 823.732 tokens/sec
    ```
-*  Instead if `--benchmark` is true then the parser is run on the document
+*  If `--benchmark` is specified then the parser is run on the document
    corpus specified via `--corpus`. This corpus should be prepared similarly to
    how the training/dev corpora were created. The processing can be limited to
    the first N documents by specifying `--maxdocs=N`.
 
    ```shell
-    bazel-bin/nlp/parser/tools/parse -alsologtostderr \
+    bazel-bin/nlp/parser/tools/parse --logtostderr \
       --parser=parser.flow --corpus=dev.gold.zip -benchmark --maxdocs=200
 
     I0927 14:45:36.634670 30934 parse.cc:127] Load parser from parser.flow
@@ -477,13 +487,17 @@ This tool takes the following commandline arguments:
     I0927 14:45:39.059257 30934 parse.cc:184] 200 documents, 3369 tokens, 2289.91 tokens/sec
    ```
 
-*  Instead if `--evaluate` is true then the tool expects `--corpora` to specify
+   If `--profile` is specified, the parser will run with profiling 
+   instrumentation enabled and output a detailed profile report with execution
+   timing for each operation in the neural network.
+
+*  If `--evaluate` is specified then the tool expects `--corpora` to specify
    a corpora with gold frames. It then runs the parser model over a frame-less
    version of this corpora and evaluates the annotated frames vs the gold
    frames. Again, one can use `--maxdocs` to limit the evaluation to the first N
    documents.
    ```shell
-   bazel-bin/nlp/parser/tools/parse -alsologtostderr \
+   bazel-bin/nlp/parser/tools/parse --logtostderr \
      --evaluate --parser=parser.flow --corpus=dev.gold.zip --maxdocs=200
 
    I0927 14:51:39.542151 31336 parse.cc:127] Load parser from parser.flow
