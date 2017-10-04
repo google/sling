@@ -335,10 +335,8 @@ diagnostic information, which we describe below.
   it with an extrinsic evaluation, then just replace the binary
   [here](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.py#L97) with your evaluation binary.
 
-* Finally, if `--flow` is specified, then the best performing checkpoint
-  will be converted into a Myelin flow file (more on Myelin and its flows
-  in the next section).
-  This will enable its use in a fast Myelin-based parser runtime.
+* Finally, the best performing checkpoint will be converted into a Myelin flow file
+  in `$OUTPUT_FOLDER/sempar.flow`.
 
   **NOTE:** A common use-case is that one often wants to play around with
   different training options without really wanting to change the spec,
