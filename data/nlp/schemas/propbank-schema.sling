@@ -1,0 +1,149 @@
+; Schema definition for PropBank.
+
+{=/pb/roleset +schema
+  name: "PropBank roleset"
+  family: /schema/pb_meta
+}
+
+{=/pb/frame :/pb/roleset
+  name: "PropBank frame"
+  family: /schema/pb_meta
+
+  role: {=/pb/arg0 :slot
+    name: "ARG0"
+    description: "agent"
+    source: /pb/frame
+    abstract: 1
+  }
+  role: {=/pb/arg1 :slot
+    name: "ARG1"
+    description: "patient"
+    source: /pb/frame
+    abstract: 1
+  }
+  role: {=/pb/arg2 :slot
+    name: "ARG2"
+    description: "instrument"
+    source: /pb/frame
+    abstract: 1
+  }
+  role: {=/pb/arg3 :slot
+    name: "ARG3"
+    description: "attribute"
+    source: /pb/frame
+    abstract: 1
+  }
+  role: {=/pb/arg4 :slot
+    name: "ARG4"
+    source: /pb/frame
+    abstract: 1
+  }
+  role: {=/pb/arg5 :slot
+    name: "ARG5"
+    source: /pb/frame
+    abstract: 1
+  }
+
+  role: {=/pb/argm-com :slot
+    name: "ARGM-COM"
+    description: "comitative"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-loc :slot
+    name: "ARGM-LOC"
+    description: "location"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-dir :slot
+    name: "ARGM-DIR"
+    description: "direction"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-gol :slot
+    name: "ARGM-GOL"
+    description: "goal"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-mnr :slot
+    name: "ARGM-MNR"
+    description: "manner"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-tmp :slot
+    name: "ARGM-TMP"
+    description: "time"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-ext :slot
+    name: "ARGM-EXT"
+    description: "extent"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-rec :slot
+    name: "ARGM-REC"
+    description: "reciprocal"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-prd :slot
+    name: "ARGM-PRD"
+    description: "predication"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-prp :slot
+    name: "ARGM-PRP"
+    description: "purpose"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-prr :slot
+    name: "ARGM-PRR"
+    description: "predicating relation"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-cau :slot
+    name: "ARGM-CAU"
+    description: "cause"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-dis :slot
+    name: "ARGM-DIS"
+    description: "discourse marker"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-mod :slot
+    name: "ARGM-MOD"
+    description: "modal"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-neg :slot
+    name: "ARGM-NEG"
+    description: "negation"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-dsp :slot
+    name: "ARGM-DSP"
+    description: "direct speech"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-lvb :slot
+    name: "ARGM-LVB"
+    description: "light verb"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-adv :slot
+    name: "ARGM-ADV"
+    description: "adverbial"
+    source: /pb/frame
+  }
+  role: {=/pb/argm-adj :slot
+    name: "ARGM-ADJ"
+    description: "adjectival"
+    source: /pb/frame
+  }
+}
+
+; Propbank meta schema family
+{=/schema/pb_meta :schema_family
+  name: "PropBank meta schemas"
+  member_schema: /pb/roleset
+  member_schema: /pb/frame
+}

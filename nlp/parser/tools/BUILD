@@ -30,3 +30,14 @@ cc_binary(
   ],
 )
 
+cc_binary(
+  name = "build-store",
+  srcs = ["build-store.cc"],
+  deps = [
+    "//base",
+    "//file:posix",
+    "//frame:object",
+    "//frame:serialization",
+  ],
+)
+

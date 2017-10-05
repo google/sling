@@ -1,0 +1,649 @@
+; Schema definitions for SAFT fine types.
+
+{=/saft :schema
+  name: "saft"
+  family: /schema/saft
+}
+
+{=/saft/art :schema
+  +/saft
+  name: "art"
+  description: "Visual art, performance art, or any art not covered in the subtypes"
+  family: /schema/saft
+}
+{=/saft/art/broadcast :schema
+  +/saft/art
+  name: "broadcast"
+  description: "Television and radio show"
+  family: /schema/saft
+}
+{=/saft/art/film :schema
+  +/saft/art
+  name: "film"
+  description: "Feature-length film, or any other video not part of a tv show"
+  family: /schema/saft
+}
+{=/saft/art/music :schema
+  +/saft/art
+  name: "music"
+  description: "Song, album, musical composition, etc."
+  family: /schema/saft
+}
+{=/saft/art/stage :schema
+  +/saft/art
+  name: "stage"
+  description: "Play, musical, opera, ballet, dance performance, etc."
+  family: /schema/saft
+}
+{=/saft/art/writing :schema
+  +/saft/art
+  name: "writing"
+  description: "Book, short story, newspaper, magazine, etc."
+  family: /schema/saft
+}
+
+{=/saft/consumer_good :schema
+  +/saft
+  name: "consumer good"
+  description: "Any product that does not fit into the more specific subcategories"
+  family: /schema/saft
+}
+{=/saft/consumer_good/electronics :schema
+  +/saft/consumer_good
+  name: "electronics"
+  description: "Camera, computer, phone, etc."
+  family: /schema/saft
+}
+{=/saft/consumer_good/software :schema
+  +/saft/consumer_good
+  name: "software"
+  description: "Computer software"
+  family: /schema/saft
+}
+{=/saft/consumer_good/vehicle :schema
+  +/saft/consumer_good
+  name: "vehicle"
+  description: "Car"
+  family: /schema/saft
+}
+{=/saft/consumer_good/weapon :schema
+  +/saft/consumer_good
+  name: "weapon"
+  description: "Weapon"
+  family: /schema/saft
+}
+
+{=/saft/event :schema
+  +/saft
+  name: "event"
+  description: "Concert, music festival, award ceremony, conference, etc. Also, any event that does not fit into the more specific subcategories"
+  family: /schema/saft
+}
+{=/saft/event/accident :schema
+  +/saft/event
+  name: "accident"
+  description: "Car crash, plane crash, other types of accidents"
+  family: /schema/saft
+}
+{=/saft/event/election :schema
+  +/saft/event
+  name: "election"
+  description: "Election, election campaign, etc."
+  family: /schema/saft
+}
+{=/saft/event/natural_disaster :schema
+  +/saft/event
+  name: "natural disaster"
+  description: "Flood, tornado, forest fire, earthquake, etc."
+  family: /schema/saft
+}
+{=/saft/event/performance :schema
+  +/saft/event
+  name: "performance"
+  description: "Concert, show, performance, etc."
+  family: /schema/saft
+}
+{=/saft/event/protest :schema
+  +/saft/event
+  name: "protest"
+  description: "Political rally, labor strike, political revolution, etc."
+  family: /schema/saft
+}
+{=/saft/event/sports_event :schema
+  +/saft/event
+  name: "sports event"
+  description: "Sporting event"
+  family: /schema/saft
+}
+{=/saft/event/violent_conflict :schema
+  +/saft/event
+  name: "violent conflict"
+  description: "Conflict, battle, siege, campaign, war, etc. Also includes armed violence against civilian or non-resisting targets."
+  family: /schema/saft
+}
+
+{=/saft/location :schema
+  +/saft
+  name: "location"
+  description: "Any location that does not fit into the more specific subcategories"
+  family: /schema/saft
+}
+{=/saft/location/celestial :schema
+  +/saft/location
+  name: "celestial"
+  description: "Asteroid, comet, planet, star, galaxy, etc."
+  family: /schema/saft
+}
+{=/saft/location/city :schema
+  +/saft/location
+  name: "city"
+  description: "City, town, municipality, etc."
+  family: /schema/saft
+}
+{=/saft/location/country :schema
+  +/saft/location
+  name: "country"
+  description: "Country or nation state"
+  family: /schema/saft
+}
+{=/saft/location/geography :schema
+  +/saft/location
+  name: "geography"
+  description: "Any geographical location that doesn't fit into the subcategories (region, continent, etc.)"
+  family: /schema/saft
+}
+{=/saft/location/geography/body_of_water :schema
+  +/saft/location/geography
+  name: "body of water"
+  description: "Ocean, lake, river, canal, etc."
+  family: /schema/saft
+}
+{=/saft/location/geography/island :schema
+  +/saft/location/geography
+  name: "island"
+  description: "Island (country usually takes precedence over island)"
+  family: /schema/saft
+}
+{=/saft/location/geography/mountain :schema
+  +/saft/location/geography
+  name: "mountain"
+  description: "Mountain, mountain range"
+  family: /schema/saft
+}
+{=/saft/location/state_or_province :schema
+  +/saft/location
+  name: "state or province"
+  description: "State or province"
+  family: /schema/saft
+}
+{=/saft/location/structure :schema
+  +/saft/location
+  name: "structure"
+  description: "Any structure not defined in the subcategories"
+  family: /schema/saft
+}
+{=/saft/location/structure/airport :schema
+  +/saft/location/structure
+  name: "airport"
+  description: "Airport"
+  family: /schema/saft
+}
+{=/saft/location/structure/government :schema
+  +/saft/location/structure
+  name: "government"
+  description: "Government building or complex"
+  family: /schema/saft
+}
+{=/saft/location/structure/hospital :schema
+  +/saft/location/structure
+  name: "hospital"
+  description: "Hospital"
+  family: /schema/saft
+}
+{=/saft/location/structure/hotel :schema
+  +/saft/location/structure
+  name: "hotel"
+  description: "Hotel, hostel, bed and breakfast"
+  family: /schema/saft
+}
+{=/saft/location/structure/restaurant :schema
+  +/saft/location/structure
+  name: "restaurant"
+  description: "Any installation devoted to serving food"
+  family: /schema/saft
+}
+{=/saft/location/structure/sports_facility :schema
+  +/saft/location/structure
+  name: "sports facility"
+  description: "Sports facility"
+  family: /schema/saft
+}
+{=/saft/location/structure/theater :schema
+  +/saft/location/structure
+  name: "theater"
+  description: "Movie theater, Broadway theater location, playhouse, opera house, etc."
+  family: /schema/saft
+}
+{=/saft/location/transit :schema
+  +/saft/location
+  name: "transit"
+  description: "Structure designed or used for transportation (bridge, railway, ferry port, etc.)"
+  family: /schema/saft
+}
+{=/saft/location/transit/road :schema
+  +/saft/location/transit
+  name: "road"
+  description: "Surface transit in a city (road, street, bus route, etc.)"
+  family: /schema/saft
+}
+
+{=/saft/organization :schema
+  +/saft
+  name: "organization"
+  description: "Non-profit organization, activist organization, religious organization, trade union, etc., or any other type of organization that does not fit into the more specific subcategories."
+  family: /schema/saft
+}
+{=/saft/organization/company :schema
+  +/saft/organization
+  name: "company"
+  description: "Includes manufacturers, architecture firms, law firms, film production companies, record labels, book publishers, and any other type of company/organization"
+  family: /schema/saft
+}
+{=/saft/organization/company/broadcast :schema
+  +/saft/organization/company
+  name: "broadcast"
+  description: "Radio or television station"
+  family: /schema/saft
+}
+{=/saft/organization/company/news :schema
+  +/saft/organization/company
+  name: "news"
+  description: "News reporting organization"
+  family: /schema/saft
+}
+{=/saft/organization/education :schema
+  +/saft/organization
+  name: "education"
+  description: "Educational institution or department. Includes universities, colleges, high schools, elementary schools, etc.; also parent-teacher associations and other organizations associated with a school if they do not fall into another subtype."
+  family: /schema/saft
+}
+{=/saft/organization/government :schema
+  +/saft/organization
+  name: "government"
+  description: "Government of a nation, state, or community, or a governmental organization within such a group."
+  family: /schema/saft
+}
+{=/saft/organization/military :schema
+  +/saft/organization
+  name: "military"
+  description: "Law enforcement agency, military organization, terrorist organization, etc."
+  family: /schema/saft
+}
+{=/saft/organization/music :schema
+  +/saft/organization
+  name: "music"
+  description: "Band, musical group, orchestra, opera company, etc. Does not include individual musicians."
+  family: /schema/saft
+}
+{=/saft/organization/political_party :schema
+  +/saft/organization
+  name: "political party"
+  description: "Political party"
+  family: /schema/saft
+}
+{=/saft/organization/religious :schema
+  +/saft/organization
+  name: "religious"
+  description: "Religious organization (church, cult, diocese, etc.)"
+  family: /schema/saft
+}
+{=/saft/organization/sports :schema
+  +/saft/organization
+  name: "sports"
+  description: "Sports league, sports team (professional, amateur, school, etc.)"
+  family: /schema/saft
+}
+{=/saft/organization/transit :schema
+  +/saft/organization
+  name: "transit"
+  description: "Organization that provides transit, such as a municipal bus system, train system, passenger or cargo airliner, etc."
+  family: /schema/saft
+}
+
+{=/saft/other :schema
+  +/saft
+  name: "other"
+  description: "Any entity that fails to match other types"
+  family: /schema/saft
+}
+{=/saft/other/award :schema
+  +/saft/other
+  name: "award"
+  description: "Award (does not include award ceremonies)"
+  family: /schema/saft
+}
+{=/saft/other/body_part :schema
+  +/saft/other
+  name: "body part"
+  description: "Anatomical part of a human or animal"
+  family: /schema/saft
+}
+{=/saft/other/food :schema
+  +/saft/other
+  name: "food"
+  description: "Food and beverage (including tea and alcohol)"
+  family: /schema/saft
+}
+{=/saft/other/health :schema
+  +/saft/other
+  name: "health"
+  description: "Any health-related entity that does not fit into the more specific subcategories."
+  family: /schema/saft
+}
+{=/saft/other/health/malady :schema
+  +/saft/other/health
+  name: "malady"
+  description: "Disease or medical condition"
+  family: /schema/saft
+}
+{=/saft/other/health/treatment :schema
+  +/saft/other/health
+  name: "treatment"
+  description: "Medicine, drug, remedy, or medical treatment"
+  family: /schema/saft
+}
+{=/saft/other/heritage :schema
+  +/saft/other
+  name: "heritage"
+  description: "Ethnicity, ethnic group, racial group, cultural group, geopolitical identity, etc."
+  family: /schema/saft
+}
+{=/saft/other/internet :schema
+  +/saft/other
+  name: "internet"
+  description: "Website, URL, email address, Twitter handles & hashtags, etc."
+  family: /schema/saft
+}
+{=/saft/other/language :schema
+  +/saft/other
+  name: "language"
+  description: "Human language"
+  family: /schema/saft
+}
+{=/saft/other/legal :schema
+  +/saft/other
+  name: "legal"
+  description: "Other legal"
+  family: /schema/saft
+}
+{=/saft/other/legal/applied :schema
+  +/saft/other/legal
+  name: "applied"
+  description: "Refers to documents, acts, and other miscellanea in the judicial branch of a government"
+  family: /schema/saft
+}
+{=/saft/other/legal/legislative :schema
+  +/saft/other/legal
+  name: "legislative"
+  description: "Refers to documents, acts, and other miscellanea in the legislative branch of a government"
+  family: /schema/saft
+}
+{=/saft/other/living_thing :schema
+  +/saft/other
+  name: "living thing"
+  description: "Any non-animal, non-human living organism"
+  family: /schema/saft
+}
+{=/saft/other/living_thing/animal :schema
+  +/saft/other/living_thing
+  name: "animal"
+  description: "Any non-human animal"
+  family: /schema/saft
+}
+{=/saft/other/mental_or_emotional_state :schema
+  +/saft/other
+  name: "mental or emotional state"
+  description: "Happiness, apathy, attitude, etc."
+  family: /schema/saft
+}
+{=/saft/other/money :schema
+  +/saft/other
+  name: "money"
+  description: "Currency"
+  family: /schema/saft
+}
+{=/saft/other/religion :schema
+  +/saft/other
+  name: "religion"
+  description: "Religion"
+  family: /schema/saft
+}
+{=/saft/other/scientific :schema
+  +/saft/other
+  name: "scientific"
+  description: "Any scientific entity that does not fit into the more specific subcategories, including math and algorithms"
+  family: /schema/saft
+}
+{=/saft/other/sports :schema
+  +/saft/other
+  name: "sports"
+  description: "A game, sport, or leisure activity. Does NOT include sports events, sports teams, or sports leagues."
+  family: /schema/saft
+}
+
+{=/saft/person :schema
+  +/saft
+  name: "person"
+  description: "Any person that does not fit into the more specific subcategories. Includes fashion models, magicians, chefs, etc."
+  family: /schema/saft
+}
+{=/saft/person/artist :schema
+  +/saft/person
+  name: "artist"
+  description: "Any artist that does not fit into the more specific subcategories. This includes: visual artist, fashion designer, film editor, film/tv/music producer, martial artist, dancer, etc."
+  family: /schema/saft
+}
+{=/saft/person/artist/actor :schema
+  +/saft/person/artist
+  name: "actor"
+  description: "An actor or actress. Includes film actor, TV actor, theater actor, comedian, etc."
+  family: /schema/saft
+}
+{=/saft/person/artist/author :schema
+  +/saft/person/artist
+  name: "author"
+  description: "Writer, song writer, columnist, blogger, etc."
+  family: /schema/saft
+}
+{=/saft/person/artist/director :schema
+  +/saft/person/artist
+  name: "director"
+  description: "Film director, theater director, music video director, etc."
+  family: /schema/saft
+}
+{=/saft/person/artist/music :schema
+  +/saft/person/artist
+  name: "music"
+  description: "Musician, composer, conductor, singer, etc."
+  family: /schema/saft
+}
+{=/saft/person/athlete :schema
+  +/saft/person
+  name: "athlete"
+  description: "Professional and amateur athlete, in traditional and non-traditional sports"
+  family: /schema/saft
+}
+{=/saft/person/business :schema
+  +/saft/person
+  name: "business"
+  description: "Business person, spokesperson for a business, etc."
+  family: /schema/saft
+}
+{=/saft/person/coach :schema
+  +/saft/person
+  name: "coach"
+  description: "Coach or manager for a sports team or athlete"
+  family: /schema/saft
+}
+{=/saft/person/doctor :schema
+  +/saft/person
+  name: "doctor"
+  description: "Medical doctor: physician, surgeon, neurologist, etc."
+  family: /schema/saft
+}
+{=/saft/person/education :schema
+  +/saft/person
+  name: "education"
+  description: "Any person associated with education or an educational institute who is not a student or teacher. Includes principals, educational administrators, hall monitors, etc."
+  family: /schema/saft
+}
+{=/saft/person/education/student :schema
+  +/saft/person/education
+  name: "student"
+  description: "Student"
+  family: /schema/saft
+}
+{=/saft/person/education/teacher :schema
+  +/saft/person/education
+  name: "teacher"
+  description: "Teacher, professor, teaching assistant, etc."
+  family: /schema/saft
+}
+{=/saft/person/journalist :schema
+  +/saft/person
+  name: "journalist"
+  description: "Journalist, reporter, etc."
+  family: /schema/saft
+}
+{=/saft/person/legal :schema
+  +/saft/person
+  name: "legal"
+  description: "Lawyer, judge, etc. Does NOT include law enforcement officers."
+  family: /schema/saft
+}
+{=/saft/person/military :schema
+  +/saft/person
+  name: "military"
+  description: "Infantryman, general, admiral, terrorist, police officer, spy, etc."
+  family: /schema/saft
+}
+{=/saft/person/political_figure :schema
+  +/saft/person
+  name: "political figure"
+  description: "President, prime minister, senator, Member of Parliament, city council member, presidential candidate, etc."
+  family: /schema/saft
+}
+{=/saft/person/religious_leader :schema
+  +/saft/person
+  name: "religious leader"
+  description: "Priest, imam, rabbi, shaman, prophet, etc."
+  family: /schema/saft
+}
+{=/saft/person/supernatural :schema
+  +/saft/person
+  name: "supernatural"
+  description: "God, supernatural being, or mythical creature"
+  family: /schema/saft
+}
+{=/saft/person/title :schema
+  +/saft/person
+  name: "title"
+  description: "Academic title, judicial title, professional title, religious title, etc."
+  family: /schema/saft
+}
+
+; SAFT schema family
+{=/schema/saft :schema_family
+  name: "SAFT schemas"
+  member_schema: /saft
+  member_schema: /saft/art
+  member_schema: /saft/art/broadcast
+  member_schema: /saft/art/film
+  member_schema: /saft/art/music
+  member_schema: /saft/art/stage
+  member_schema: /saft/art/writing
+  member_schema: /saft/consumer_good
+  member_schema: /saft/consumer_good/electronics
+  member_schema: /saft/consumer_good/software
+  member_schema: /saft/consumer_good/vehicle
+  member_schema: /saft/consumer_good/weapon
+  member_schema: /saft/event
+  member_schema: /saft/event/accident
+  member_schema: /saft/event/election
+  member_schema: /saft/event/natural_disaster
+  member_schema: /saft/event/performance
+  member_schema: /saft/event/protest
+  member_schema: /saft/event/sports_event
+  member_schema: /saft/event/violent_conflict
+  member_schema: /saft/location
+  member_schema: /saft/location/celestial
+  member_schema: /saft/location/city
+  member_schema: /saft/location/country
+  member_schema: /saft/location/geography
+  member_schema: /saft/location/geography/body_of_water
+  member_schema: /saft/location/geography/island
+  member_schema: /saft/location/geography/mountain
+  member_schema: /saft/location/state_or_province
+  member_schema: /saft/location/structure
+  member_schema: /saft/location/structure/airport
+  member_schema: /saft/location/structure/government
+  member_schema: /saft/location/structure/hospital
+  member_schema: /saft/location/structure/hotel
+  member_schema: /saft/location/structure/restaurant
+  member_schema: /saft/location/structure/sports_facility
+  member_schema: /saft/location/structure/theater
+  member_schema: /saft/location/transit
+  member_schema: /saft/location/transit/road
+  member_schema: /saft/organization
+  member_schema: /saft/organization/company
+  member_schema: /saft/organization/company/broadcast
+  member_schema: /saft/organization/company/news
+  member_schema: /saft/organization/education
+  member_schema: /saft/organization/government
+  member_schema: /saft/organization/military
+  member_schema: /saft/organization/music
+  member_schema: /saft/organization/political_party
+  member_schema: /saft/organization/religious
+  member_schema: /saft/organization/sports
+  member_schema: /saft/organization/transit
+  member_schema: /saft/other
+  member_schema: /saft/other/award
+  member_schema: /saft/other/body_part
+  member_schema: /saft/other/food
+  member_schema: /saft/other/health
+  member_schema: /saft/other/health/malady
+  member_schema: /saft/other/health/treatment
+  member_schema: /saft/other/heritage
+  member_schema: /saft/other/internet
+  member_schema: /saft/other/language
+  member_schema: /saft/other/legal
+  member_schema: /saft/other/legal/applied
+  member_schema: /saft/other/legal/legislative
+  member_schema: /saft/other/living_thing
+  member_schema: /saft/other/living_thing/animal
+  member_schema: /saft/other/mental_or_emotional_state
+  member_schema: /saft/other/money
+  member_schema: /saft/other/religion
+  member_schema: /saft/other/scientific
+  member_schema: /saft/other/sports
+  member_schema: /saft/person
+  member_schema: /saft/person/artist
+  member_schema: /saft/person/artist/actor
+  member_schema: /saft/person/artist/author
+  member_schema: /saft/person/artist/director
+  member_schema: /saft/person/artist/music
+  member_schema: /saft/person/athlete
+  member_schema: /saft/person/business
+  member_schema: /saft/person/coach
+  member_schema: /saft/person/doctor
+  member_schema: /saft/person/education
+  member_schema: /saft/person/education/student
+  member_schema: /saft/person/education/teacher
+  member_schema: /saft/person/journalist
+  member_schema: /saft/person/legal
+  member_schema: /saft/person/military
+  member_schema: /saft/person/political_figure
+  member_schema: /saft/person/religious_leader
+  member_schema: /saft/person/supernatural
+  member_schema: /saft/person/title
+}
