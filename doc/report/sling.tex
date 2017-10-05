@@ -104,7 +104,7 @@ In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, the linguisti
 inspired SLING, as well as the SLING frame store, a
 C++ framework for representing and storing semantic frames compactly and
 efficiently.
-Section \ref{sec:att} introduces the parser's frame-semantics-oriented attention mechanism, and
+Section~\ref{sec:att} introduces the parser's frame-semantics-oriented attention mechanism, and
 Section~\ref{sec:ts} describes the transition system used for producing
 frame graphs. Section~\ref{sec:features} describes the features used by the
 parser.
@@ -205,7 +205,7 @@ evoke. See Figure~\ref{fig:slingdoc} for an example.
   ]
   /s/document/mention: {
     :/s/phrase /s/phrase/begin: 0
-    /s/phrase/evokes: {=#1 :/s/person }
+    /s/phrase/evokes: {=#1 :/saft/person }
   }
   /s/document/mention: {
     :/s/phrase /s/phrase/begin: 1
@@ -217,7 +217,7 @@ evoke. See Figure~\ref{fig:slingdoc} for an example.
   }
   /s/document/mention: {
     :/s/phrase /s/phrase/begin: 3
-    /s/phrase/evokes: {=#2 :/s/consumer_good }
+    /s/phrase/evokes: {=#2 :/saft/consumer_good }
   }
 }
 \end{verbatim}
@@ -330,13 +330,13 @@ it to a canonical transition sequence in a way similar to how this is done
 for transition-based dependency parsing \cite{nivre2006}, e.g. the sentence
 ``John hit the ball" will generate the following transition sequence:
 \begin{verbatim}
-  EVOKE(/s/person, 1)
+  EVOKE(/saft/person, 1)
   SHIFT
-  EVOKE(/s/hit-01, 1)
+  EVOKE(/pb/hit-01, 1)
   CONNECT(0, /pb/arg0, 1)
   SHIFT
   SHIFT
-  EVOKE(/s/consumer_good, 1)
+  EVOKE(/saft/consumer_good, 1)
   CONNECT(1, /pb/arg1, 0)
   SHIFT
   STOP
@@ -388,16 +388,91 @@ raw input features used are:
 
 \section{Experiments}
 
-We have used the OntoNotes corpus \cite{ontonotes2006} to construct a corpus
-with frame semantic annotations for evaluation the parser. We have taken the
+We used the OntoNotes corpus \cite{ontonotes2006} to construct a corpus
+with frame semantic annotations for evaluating the parser. We took the
 PropBank SRL layer \cite{palmer2005} and converted the predicate-argument
-structures into frame annotations. We have also annotated the corpus with
-entity mentions with entity types using a state-of-the-art entity tagger.
-We have determined the head token of each argument span and if this coincides
-with an entity mention, we have used this as the evoking span for the argument
-frame, otherwise we have just used the head token.
+structures into frame annotations. We also annotated the corpus with
+entity frames with entity types using a state-of-the-art entity tagger.
+We determined the head token of each argument span and if this coincided
+with the span of an existing frame, then we used it as the evoking span for the argument
+frame, otherwise we just used the head token as the evoking span of the argument frame.
+
+The various frame types mentioned above are listed in
+Table~\ref{tab:types}. They include 7 conventional entity types,
+6 top-level non-entity types (e.g. date), 13 measurement types, and
+more than 5400 PropBank frame types. All the frame roles are collapsed onto
+/pb/arg0, /pb/arg1, and so on. Our training corpus size was $111,006$ sentences = $2,206,274$ tokens.
+
+\begin{table*}[t]
+\begin{tabular}{|l|p{11cm}|}
+\hline
+{\bf Type set} & {\bf Details} \\
+\hline
+Entity types & /saft/\{person, location, organization, art, consumer\_good, event, other\} \\
+\hline
+Top-level non-entity types & /s/\{thing, date, price, measure, time, number\} \\
+\hline
+Fine-grained measure types & /s/measure/\{area, data, duration, energy, frequency, fuel, length, mass, power, speed, temperate, voltage, volume\} \\
+\hline
+PropBank SRL types & 5426 types, e.g. /pb/write-01, /pb/tune-02 etc.  \\
+\hline
+\end{tabular}
+\caption{Details of the type-sets used in our experiments.}
+\label{tab:types}
+\end{table*}
+
+\begin{table}[ht]
+\begin{tabular}{|l|r|r|}
+\hline
+{\bf Action Type} & {\bf \# Unique Args} & {\bf Raw Count} \\
+\hline
+SHIFT & 1 & 2,206,274 \\
+\hline
+STOP & 1 & 111,006 \\
+\hline
+EVOKE & 5,532 & 1,080,365 \\
+\hline
+CONNECT & 1,421 & 635,734 \\
+\hline
+ASSIGN & 13 & 5,430 \\
+\hline
+{\bf Total} & 6,968 & 4,038,809 \\
+\hline
+\end{tabular}
+\caption{Per transition-type statistics of the transitions used to generate the gold
+frames in the OntoNotes training corpus.}
+\label{tab:action-table}
+\end{table}
+
+Table~\ref{tab:action-table} presents the statistics of the transitions required
+to generate the gold frames in the training corpus. As expected, we saw one SHIFT action
+per training token, and one STOP action per training sentence.
+We saw the EVOKE action take $5532$ unique (length, type) arguments in the corpus, for a
+raw count of roughly $1.08$ million. Overall our action space had $6968$ actions, which is also
+the size of the softmax layer of our TBRU decoder.
+
+
+\noindent{{\bf Hyperparameters:}} Our final set of hyperparameters after performing a grid search
+was: learning\_rate = $0.0005$, optimizer = Adam~\cite{kingma2014} with
+$\beta_1 = 0.01, \beta_2 = 0.999, \epsilon = 1e-5$, no dropout, gradient clipping at $1.0$,
+exponential moving average, no layer normalization, and a training batch size of $8$.
+
+We stopped training after $120,000$ steps, where each step corresponds to processing one training batch,
+and evaluated on the dev corpus ($15,084$ sentences) after every checkpoint (= $2,000$ steps). Figure~\ref{fig:dev-eval} shows the
+how the various evaluation metrics evolve as training progresses. Section~\ref{sec:eval} contains
+the details of these metrics are evaluated. We picked the checkpoint with the best `Slot F1`
+score.
+
+\begin{figure}
+\centering
+\includegraphics[width=\columnwidth]{dev-eval.pdf}
+  \caption{Various frame graph accuracies over the dev set as training progresses.
+	Training was stopped at $120,000$ iterations since we saw very little improvement after that.}
+  \label{fig:dev-eval}
+\end{figure}
 
 \section{Evaluation}
+\label{sec:eval}
 
 An annotated document consists of a number of connected frames and as well as
 phrases, i.e. token spans, evoking these frames. We evaluate the accuracy of the
@@ -407,10 +482,104 @@ annotations from the evaluation corpus.
 The documents are matched by constructing a virtual graph where the document
 is the start node. The document node is then connected to the spans and the
 spans are connected to the frames that the spans evoke. This graph is then
-extended by following the frame-to-frame links from the roles. Accuracy is
+extended by following the frame-to-frame links via the roles. Accuracy is
 computed by aligning the golden and predicted graphs and computing precision,
-recall, and F1. The accuracy is computed for spans, frames, types, roles, and
-labels.
+recall, and F1. These accuracies are separately computed for the spans, frames,
+types of those frame, roles that link to other frames (referred to as 'roles'),
+and roles that link to global constants (referred to as 'labels').
+
+We also report two aggregates of the accuracies above: (a) {\em Slot}, which is
+an aggregate of {\em Type}, {\em Role}, and {\em Label}, and (b) {\em Combined},
+which is an aggregate of {\em Span}, {\em Frame}, {\em Type}, {\em Role}, and
+{\em Label}.
+
+We rate the checkpoints using the Slot-F1 metric and select the checkpoint that
+has the best Slot-F1. Intuitively, a high {\em Slot} score reflects that the
+right type of frames are being evoked, along with the right set of slots and links
+to other frames.
+
+In Figure~\ref{fig:dev-eval}, we can see that as training progresses,
+the model learns to output the spans and frames evoked from those spans with a fairly
+high accuracy (SPAN F1 $\approx$ FRAME F1 $\approx$ $94\%$). It also gets the
+type of those frames right with a TYPE F1 of $= 86.26\%$. Our ROLE F1 though
+is lower at just $68.98\%$. ROLE F1 measures the accuracy of correctly getting
+the frame-frame link, including the label of the link. Some error analysis is required
+to ascertain the aspect(s) of frame-frame links missed by the model. Also note that
+currently the {\em roles} feature is the only one that captures inter-frame link information.
+Augmenting this with more features should help improve ROLE accuracy, and we shall
+consider investigating this in our future work. 
+
+Finally, we take the best checkpoint (with SLOT F1 $= 79.95\%$ at $110,000$ steps),
+and evaluate it over the test corpus. 
+Table~\ref{tab:eval} lists the accuracy of this model on the test and dev corpora.
+With the except of LABEL accuracies, all the other metrics exhibit less than half a percent
+difference between the test and dev corpora. This illustrates that despite the lack of
+dropout, the model hasn't overfit and generalizes well to unseen text. As far the disparity
+on LABEL is concerned (LABEL F1 of $95.91$ on dev vs $93.82$ on test), we note that the LABEL
+accuracies are the slowest to improve while training.
+In Figure~\ref{fig:dev-eval}, we can see that LABEL F1 starts close to zero, and although it
+improves to $95.91$, it still shows signs of further improvement when training was stopped,
+in contrast to other metrics which practically plateau out.
+For example, between iterations 100,000 and 120,000, LABEL F1 improved by $0.4\%$, while
+TYPE F1 and FRAME F1 only improved by less than $0.05\%$.
+
+\begin{table}[ht]
+\begin{tabular}{|ll|r|r|}
+\hline
+{\bf Metric} & & {\bf Dev} & {\bf Test} \\
+\hline
+Num Tokens & & 291,746  & 216,473  \\
+\hline
+Num Sentences &   & 15,084 & 11,623  \\
+\hline
+\hline
+Span & Precision & 93.46  & 93.16 \\
+\hline
+& Recall & 94.15 & 94.35 \\
+\hline
+& F1 & 93.80 & 93.75 \\
+\hline
+Frame & Precision & 93.54 & 93.29 \\
+\hline
+& Recall & 94.07 & 94.02 \\
+\hline
+& F1 & 93.80 & 93.65\\
+\hline
+Type & Precision & 86.00  & 85.97 \\
+\hline
+& Recall & 86.51 & 86.65 \\
+\hline
+& F1 & 86.26 & 86.31 \\
+\hline
+Role & Precision & 69.75 & 69.35 \\
+\hline
+& Recall & 68.22 & 68.62 \\
+\hline
+& F1 & 68.98 &68.98 \\
+\hline
+Label & Precision & 96.63 &95.12 \\
+\hline
+& Recall & 95.19 & 92.56 \\
+\hline
+& F1 & 95.91 & 93.82 \\
+\hline
+Slot & Precision & 80.13 & 79.92 \\
+\hline
+& Recall & 79.77 & 80.00 \\
+\hline
+& F1 & 79.95 & 79.96 \\
+\hline
+Combined & Precision & 87.56 & 87.31 \\
+\hline
+& Recall & 87.70 & 87.85 \\
+\hline
+& F1 & 87.63 & 87.58 \\
+\hline
+\end{tabular}
+\caption{Evaluation of the model on the dev and test corpora. The model was chosen via the Slot-F1 metric over the dev corpus during training.}
+\label{tab:eval}
+\end{table}
+
 
 \section{Parser runtime}
 
