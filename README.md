@@ -68,7 +68,7 @@ detail.
 
 The first step consists of preparing the commons store (also called global store). This has frame and
 schema definitions for all types and roles of interest, e.g.
-`/s/person` or `/pb/love-01` or `/pb/arg0`. In order to build the commons store
+`/saft/person` or `/pb/love-01` or `/pb/arg0`. In order to build the commons store
 for the OntoNotes-based parser you need to checkout PropBank in a directory
 parallel to the SLING directory:
 
@@ -117,7 +117,7 @@ can be seen below. It is best to create one SLING document per input sentence.
   /s/document/mention: {=#1
     :/s/phrase
     /s/phrase/begin: 0
-    /s/phrase/evokes: {=#2 :/s/person }
+    /s/phrase/evokes: {=#2 :/saft/person }
   }
   /s/document/mention: {=#3
     :/s/phrase
@@ -125,7 +125,7 @@ can be seen below. It is best to create one SLING document per input sentence.
     /s/phrase/evokes: {=#4
       :/pb/love-01
       /pb/arg0: #2
-      /pb/arg1: {=#5 :/s/person }
+      /pb/arg1: {=#5 :/saft/person }
     }
   }
   /s/document/mention: {=#6
@@ -143,7 +143,7 @@ Store global;
 // Read global store from a file via LoadStore().
 
 // Lookup handles in advance.
-Handle h_person = global.Lookup("/s/person");
+Handle h_person = global.Lookup("/saft/person");
 Handle h_love01 = global.Lookup("/pb/love-01");
 Handle h_arg0 = global.Lookup("/pb/arg0");
 Handle h_arg1 = global.Lookup("/pb/arg1");
