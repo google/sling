@@ -91,6 +91,9 @@ class Parser {
     myelin::Tensor *quote_feature;            // quote feature
     myelin::Tensor *digit_feature;            // digit feature
 
+    int prefix_size = 0;                      // max prefix length
+    int suffix_size = 0;                      // max suffix length
+
     // Links.
     myelin::Tensor *c_in;                     // link to LSTM control input
     myelin::Tensor *c_out;                    // link to LSTM control output

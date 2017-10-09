@@ -38,6 +38,7 @@ void RoleGraph::Compute(const ParserState &state,
   limit_ = limit;
   num_roles_ = roles.size();
   int k = limit_;
+  edges_.clear();
   if (k > state.AttentionSize()) k = state.AttentionSize();
   for (int source = 0; source < k; ++source) {
     Handle handle = state.frame(state.Attention(source));

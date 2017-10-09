@@ -341,10 +341,6 @@ class MasterBuilder(object):
     # 1. compute the gradients,
     # 2. add an optimizer to update the parameters using the gradients,
     # 3. make the ComputeSession handle depend on the optimizer.
-    logging.info('Creating train op with %d variables:\n\t%s',
-                 len(params_to_train),
-                 '\n\t'.join([x.name for x in params_to_train]))
-
     grads_and_vars = self.optimizer.compute_gradients(
         cost, var_list=params_to_train)
     clipped_gradients = [(self._clip_gradients(g), v)
@@ -527,8 +523,6 @@ class MasterBuilder(object):
 
   def add_saver(self):
     """Adds a Saver for all variables in the graph."""
-    logging.info('Saving non-quantized variables:\n\t%s', '\n\t'.join(
-        [x.name for x in tf.global_variables() if 'quantized' not in x.name]))
     self.saver = tf.train.Saver(
         var_list=[
             x for x in tf.global_variables() if 'quantized' not in x.name

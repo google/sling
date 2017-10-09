@@ -104,6 +104,14 @@ void Parser::InitLSTM(const string &name, LSTM *lstm, bool reverse) {
   lstm->quote_feature = GetParam(name + "/quote", true);
   lstm->digit_feature = GetParam(name + "/digit", true);
 
+  // Get feature sizes.
+  if (lstm->prefix_feature != nullptr) {
+    lstm->prefix_size = lstm->prefix_feature->elements();
+  }
+  if (lstm->suffix_feature != nullptr) {
+    lstm->suffix_size = lstm->suffix_feature->elements();
+  }
+
   // Get links.
   lstm->c_in = GetParam(name + "/c_in");
   lstm->c_out = GetParam(name + "/c_out");
@@ -371,9 +379,13 @@ void ParserInstance::ExtractFeaturesLSTM(int token,
   if (lstm.prefix_feature) {
     Affix *affix = features.prefix(token);
     int *a = data->Get<int>(lstm.prefix_feature);
-    while (affix != nullptr) {
-      *a++ = affix->id();
-      affix = affix->shorter();
+    for (int n = 0; n < lstm.prefix_size; ++n) {
+      if (affix != nullptr) {
+        *a++ = affix->id();
+        affix = affix->shorter();
+      } else {
+        *a++ = -2;
+      }
     }
   }
 
@@ -381,9 +393,13 @@ void ParserInstance::ExtractFeaturesLSTM(int token,
   if (lstm.suffix_feature) {
     Affix *affix = features.suffix(token);
     int *a = data->Get<int>(lstm.suffix_feature);
-    while (affix != nullptr) {
-      *a++ = affix->id();
-      affix = affix->shorter();
+    for (int n = 0; n < lstm.suffix_size; ++n) {
+      if (affix != nullptr) {
+        *a++ = affix->id();
+        affix = affix->shorter();
+      } else {
+        *a++ = -2;
+      }
     }
   }
 

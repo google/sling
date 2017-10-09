@@ -28,7 +28,7 @@ namespace dragnn {
 // ComputeSession object that drives a DRAGNN session.
 class ComputeSession {
  public:
-  // Creates a ComputeSessionwith the provided component builder function.
+  // Creates a ComputeSession with the provided component builder function.
   ComputeSession(
       int id,
       std::function<std::unique_ptr<Component>(const string &component_name,

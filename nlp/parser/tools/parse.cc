@@ -48,6 +48,7 @@ DEFINE_string(parser, "", "Input file with flow model");
 DEFINE_string(text, "", "Text to parse");
 DEFINE_int32(indent, 2, "Indentation for SLING output");
 DEFINE_string(corpus, "", "Input corpus");
+DEFINE_bool(parse, false, "Parse input corpus");
 DEFINE_bool(benchmark, false, "Benchmark parser");
 DEFINE_bool(evaluate, false, "Evaluate parser");
 DEFINE_bool(profile, false, "Profile parser");
@@ -154,6 +155,32 @@ int main(int argc, char *argv[]) {
 
     std::cout << ToText(document.top(), FLAGS_indent) << "\n";
     LOG(INFO) << document.num_tokens() / clock.secs() << " tokens/sec";
+  }
+
+  // Parse input corpus.
+  if (FLAGS_parse) {
+    CHECK(!FLAGS_corpus.empty());
+    LOG(INFO) << "Parse " << FLAGS_corpus;
+    DocumentSource *corpus = DocumentSource::Create(FLAGS_corpus);
+    int num_documents = 0;
+    for (;;) {
+      if (FLAGS_maxdocs != -1 && num_documents >= FLAGS_maxdocs) break;
+
+      Store store(&commons);
+      Document *document = corpus->Next(&store);
+      if (document == nullptr) break;
+
+      num_documents++;
+
+      Document *parsed = RemoveAnnotations(document);
+      parser.Parse(parsed);
+      parsed->Update();
+      std::cout << ToText(parsed->top(), FLAGS_indent) << "\n";
+
+      delete document;
+      delete parsed;
+    }
+    delete corpus;
   }
 
   // Benchmark parser on corpus.

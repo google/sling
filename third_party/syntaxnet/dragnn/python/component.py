@@ -253,10 +253,8 @@ class ComponentBuilderBase(object):
       var_params = tf.get_variable(var_name)
 
     if self.moving_average and self.master.read_from_avg:
-      logging.info('Retrieving average for: %s', var_name)
       var_params = self.moving_average.average(var_params)
       assert var_params
-    logging.info('Returning: %s', var_params.name)
     return var_params
 
   def advance_counters(self, total):
@@ -289,8 +287,6 @@ class ComponentBuilderBase(object):
     l2_coeff = self.master.hyperparams.l2_regularization_coefficient
     if l2_coeff == 0.0:
       return cost
-    tf.logging.info('[%s] Regularizing parameters: %s', self.name,
-                    [w.name for w in regularized_weights])
     l2_costs = [tf.nn.l2_loss(p) for p in regularized_weights]
     return tf.add(cost, l2_coeff * tf.add_n(l2_costs), name='regularizer')
 
@@ -303,8 +299,6 @@ class ComponentBuilderBase(object):
     Returns:
       A no-op state.
     """
-    logging.info('Building default post restore hook for component: %s',
-                 self.spec.name)
     return tf.no_op(name='setup_%s' % self.spec.name)
 
   def attr(self, name):
