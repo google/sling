@@ -34,14 +34,15 @@ Fernando C. N. Pereira \\ Google Inc. \\ {\tt pereira@google.com} \\
 
 \begin{abstract}
 We describe SLING, a framework for parsing natural language into
-semantic frames. SLING supports general transition-based, neural-network parsing with
-bi-directional LSTM input encoding and a Transition Based Recurrent
+semantic frames. SLING supports general transition-based, neural-network parsing
+with bi-directional LSTM input encoding and a Transition Based Recurrent
 Unit (TBRU) for output decoding. The parsing model is
 trained end-to-end using only the text tokens as input. The
 transition system has been designed to output frame graphs directly without
 any intervening symbolic representation.
 The SLING framework includes an efficient and scalable frame store
-implementation as well as a neural network JIT compiler for fast inference during parsing.
+implementation as well as a neural network JIT compiler for fast inference
+during parsing.
 SLING is implemented in C++ and it is available for download on GitHub.
 \end{abstract}
 
@@ -53,19 +54,20 @@ design and implementation of natural language
 understanding (NLU) systems.
 
 Earlier machine-learned NLU systems were commonly organized as pipelines of
-separately trained stages for syntatic and semantic annotation of text.
+separately trained stages for syntactic and semantic annotation of text.
 A typical  pipeline would start with part-of-speech (POS) tagging, followed by
 constituency or dependency parsing for syntactic analysis.
-Using the POS tags and parse trees as feature inputs, later stages in the pipeline could then
-derive semantically relevant annotations such as entity and concept mentions, entity types, coreference relationships,
-and semantic roles (SRL).
+Using the POS tags and parse trees as feature inputs, later stages in the
+pipeline could then derive semantically relevant annotations such as entity and
+concept mentions, entity types, coreference relationships, and semantic roles
+(SRL).
 
-For simplicity and efficiency, each stage in a practical NLU pipeline would just output its best hypothesis
-and pass it on to the next stage~\cite{finkel2006}.
+For simplicity and efficiency, each stage in a practical NLU pipeline would just
+output its best hypothesis and pass it on to the next stage~\cite{finkel2006}.
 Obviously, errors could then accumulate
 throughout the pipeline making it much harder for the system to perform
-accurately. For instance, F1 on SRL drops by more than 10\% when going from gold to
-system parse trees~\cite{toutanova2005}.
+accurately. For instance, F1 on SRL drops by more than 10\% when going from gold
+to system parse trees~\cite{toutanova2005}.
 
 However, applications may not need the intermediate annotations produced
 by the earlier stages of a NLU pipeline, so it would be preferable if all stages
@@ -84,7 +86,8 @@ replace the hand-crafted feature combinations and intermediate representations
 in pipelined systems.
 
 
-The SLING parser exploits deep learning to bypass those limitations of classic pipelined systems.
+The SLING parser exploits deep learning to bypass those limitations of classic
+pipelined systems.
 It is a transition-based parser that outputs frame graphs directly without any
 intervening symbolic representation (see Section~\ref{sec:ts}). Transition-based
 parsing is often associated with dependency parsing, but we have designed a
@@ -98,25 +101,26 @@ A bidirectional LSTM is used for encoding the input (Figure~\ref{fig:network}).
 This neural network architecture has been implemented using DRAGNN~\cite{dragnn}
 and TensorFlow~\cite{tensorflow}.
 
-The SLING framework and a semantic parser built in it are now available as open-source code in GitHub.\footnote{\url{https://github.com/google/sling}}
+The SLING framework and a semantic parser built in it are now available as
+open-source code in GitHub.\footnote{\url{https://github.com/google/sling}}
 
-In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, the linguistic theory that
-inspired SLING, as well as the SLING frame store, a
+In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, the
+linguistic theory that inspired SLING, as well as the SLING frame store, a
 C++ framework for representing and storing semantic frames compactly and
 efficiently.
-Section~\ref{sec:att} introduces the parser's frame-semantics-oriented attention mechanism, and
-Section~\ref{sec:ts} describes the transition system used for producing
-frame graphs. Section~\ref{sec:features} describes the features used by the
-parser.
+Section~\ref{sec:att} introduces the parser's frame-semantics-oriented attention
+mechanism, and Section~\ref{sec:ts} describes the transition system used for
+producing frame graphs. Section~\ref{sec:features} describes the features used
+by the parser.
 
 \begin{figure*}[t]
   \centering
   \includesvg{network}
-  \caption{Neural network architecture of the SLING parser. The input is encoded by
-  a bi-directional LSTM and fed into a recurrent
-  feed-forward (FF) unit that proposes transition system actions.
-  The hidden layer activations and the transition system state are combined to create
-  the input feature vector for the next step. The FF unit is
+  \caption{Neural network architecture of the SLING parser. The input is encoded
+  by a bi-directional LSTM and fed into a recurrent feed-forward (FF) unit that
+  proposes transition system actions.
+  The hidden layer activations and the transition system state are combined to
+  create the input feature vector for the next step. The FF unit is
   run repeatedly until the transition system has reached a final state.}
   \label{fig:network}
 \end{figure*}
@@ -153,10 +157,10 @@ or perspective~\cite{chang2002}.
 
 At a more technical level, a SLING frame consists of a list of slots, where each
 slot has a name (role) and a value. The slot values can be literals like numbers
-and strings, or links to other frames. The frames essentially form a directed graph where
-the frames are the (typed) nodes and the slots are the labeled edges. A frame
-graph can also be viewed as a feature structure~\cite{carpenter2005} and
-unification can be used for induction of new frames from existing frames.
+and strings, or links to other frames. The frames essentially form a directed
+graph where the frames are the (typed) nodes and the slots are the labeled
+edges. A frame graph can also be viewed as a feature structure~\cite{carpenter2005}
+and unification can be used for induction of new frames from existing frames.
 Sometimes it is also useful to use frames for representing more basic data
 structures like a C struct with fields, a JSON object, or a record in a
 database.
@@ -169,12 +173,13 @@ this store until the store is deleted or the frame is garbage collected because
 there no remaining live references to it.\footnote{See the \href{https://github.com/google/sling/blob/master/frame/README.md}{SLING Guide}
 for a detailed description of the SLING frame store implementation.}
 
-SLING frames are externally represented in a superset of JSON that allows references
-between frames (JSON objects) with the {\tt \#n} syntax. Frames can be
-assigned identifiers (\emph{ids}) using the {\tt=\#n} syntax. SLING frames can have both numeric and
-named ids and both slot names and values can be frame references. Where JSON
-objects can only represent trees, SLING frames can be used for representing
-arbitrary graphs. SLING has special syntax for built-in slot names:
+SLING frames are externally represented in a superset of JSON that allows
+references between frames (JSON objects) with the {\tt \#n} syntax. Frames can
+be assigned identifiers (\emph{ids}) using the {\tt=\#n} syntax. SLING frames
+can  have both numeric and named ids and both slot names and values can be frame
+references. Where JSON objects can only represent trees, SLING frames can be
+used for representing arbitrary graphs. SLING has special syntax for built-in
+slot names:
 
 \begin{table}[h!]
 \begin{tabular}{|l|l|l|}
@@ -234,28 +239,30 @@ evoke. See Figure~\ref{fig:slingdoc} for an example.
 
 The SLING parser is a kind of sequence-to-sequence model that first encodes the
 input text token sequence with a biLSTM encoder and then runs the transition
-system on that encoding to produce a sequence of transitions, where each transition
-updates the system state that combined with the input encoding form the input for
-the transition feed-forward cell that predicts the next transition (Figure~\ref{fig:network}).
+system on that encoding to produce a sequence of transitions, where each
+transition updates the system state that combined with the input encoding form
+the input for the transition feed-forward cell that predicts the next
+transition (Figure~\ref{fig:network}).
 
 Sequence-to-sequence models often rely on an ``attention" mechanism to focus
-the decoder on the parts of the input most relevant for producing the next output
-symbol. In this work, however, we use a somewhat difference attention mechanism,
-loosely inspired on neuroscience models of attention and awareness
-~\cite{nelson2017,graziano2013}. In our model, attention focuses on parts of the frame
-representation that the parser has created so far, rather than focusing on (encodings of)
-input tokens as is common for other sequence-to-sequence attention mechanisms.
+the decoder on the parts of the input most relevant for producing the next
+output symbol. In this work, however, we use a somewhat difference attention
+mechanism, loosely inspired on neuroscience models of attention and awareness
+~\cite{nelson2017,graziano2013}. In our model, attention focuses on parts of the
+frame representation that the parser has created so far, rather than focusing
+on (encodings of) input tokens as is common for other sequence-to-sequence
+attention mechanisms.
 
 We maintain an \emph{attention buffer} as part of the transition system state.
-This an ordered list of frames, where the order represents closeness to the center
-of attention. Transition actions maintain the attention buffer, bringing a frame
-to the front when the frame
-is evoked or re-evoked by the input text. When a new frame is evoked, it will
-merge the concept and its roles into a new coherent chunk of meaning, which is
-represented by the new frame and its relations to other frames, and this will
-become the new center of attention. Our hypothesis is that by maintaining this
-attention mechanism, we only need to look at a few recent frames brought into
-attention to build up the desired frame graph.
+This an ordered list of frames, where the order represents closeness to the
+center of attention. Transition actions maintain the attention buffer, bringing
+a frame to the front when the frame is evoked or re-evoked by the input text.
+When a new frame is evoked, it will merge the concept and its roles into a new
+coherent chunk of meaning, which is represented by the new frame and its
+relations to other frames, and this will become the new center of attention.
+Our hypothesis is that by maintaining this attention mechanism, we only need to
+look at a few recent frames brought into attention to build up the desired
+frame graph.
 
 \section{Transition system}
 \label{sec:ts}
@@ -270,12 +277,18 @@ transition system \cite{nivre2006} uses {\bf SHIFT}, {\bf LEFT-ARC(label)}, and
 sequence of those actions.
 
 We use the same idea to construct a frame graph where frames can be
-evoked by phrases in the input. Instead of using a stack, we have the attention buffer introducted
-in the previous section, which keeps track of the most salient frames in the
-discourse. The front of the attention buffer serves as the working memory for
-the parser, which operates on those frames. The transition system simultaneously
-build the frame graph and maintain the attention buffer.
-The current transition system consists of the following actions:
+evoked by phrases in the input. Instead of using a stack, we have the attention
+buffer introduced in the previous section, which keeps track of the most salient
+frames in the discourse.
+
+The attention buffer is an prioritized list of all the
+frames evoked so far. The front of the attention buffer serves as the working
+memory for the parser, and the actions operates on those frames. The transition
+system simultaneously builds the frame graph and maintains the attention buffer
+by moving the frame involved involved in an action to the front of the attention
+buffer.
+
+The transition system consists of the following actions:
 
 \begin{itemize}
   \item {\bf SHIFT} -- Moves to next input token. Only valid when not at the
@@ -287,10 +300,12 @@ The current transition system consists of the following actions:
         permitted except more STOP actions.
   \item {\bf EVOKE(type, n)} -- Evokes frame of with type {\bf type} from
         the next {\bf n} tokens in the input. The evoked frame becomes the new
-        center of attention.
+        center of attention, i.e. is inserted at the front of the attention
+        buffer.
   \item {\bf REFER(frame, n)} -- Makes a new mention of the next {\bf n} tokens
         in the input evoking an existing frame in the attention buffer. This
-        frame will become the new center of attention.
+        frame is moved to the front of the attention buffer and will become the
+        new center of attention.
   \item {\bf CONNECT(source, role, target)} -- Adds slot to {\bf source} frame
         in the attention buffer with name {\bf role} and value {\bf target}
         where {\bf target} is an existing frame in the attention buffer. The
@@ -322,7 +337,7 @@ The transition system can potentially have an unbounded number of actions since
 it is parameterized by phrase length and attention buffer indices with can be
 arbitrarily large, so in the current implementation, we only consider the
 top $k$ frames in the attention buffer $(k=5)$ and do not consider phrases
-longer than those in the training copus.
+longer than those in the training corpus.
 
 Multiple transition sequences can generate the same frame annotations, but we
 have implemented an oracle sequence generator that takes a document and converts
@@ -394,14 +409,16 @@ PropBank SRL layer \cite{palmer2005} and converted the predicate-argument
 structures into frame annotations. We also annotated the corpus with
 entity frames with entity types using a state-of-the-art entity tagger.
 We determined the head token of each argument span and if this coincided
-with the span of an existing frame, then we used it as the evoking span for the argument
-frame, otherwise we just used the head token as the evoking span of the argument frame.
+with the span of an existing frame, then we used it as the evoking span for the
+argument frame, otherwise we just used the head token as the evoking span of the
+argument frame.
 
 The various frame types mentioned above are listed in
 Table~\ref{tab:types}. They include 7 conventional entity types,
 6 top-level non-entity types (e.g. date), 13 measurement types, and
 more than 5400 PropBank frame types. All the frame roles are collapsed onto
-/pb/arg0, /pb/arg1, and so on. Our training corpus size was $111,006$ sentences = $2,206,274$ tokens.
+/pb/arg0, /pb/arg1, and so on. Our training corpus size was $111,006$
+sentences = $2,206,274$ tokens.
 
 \begin{table*}[t]
 \begin{tabular}{|l|p{11cm}|}
@@ -439,35 +456,38 @@ ASSIGN & 13 & 5,430 \\
 {\bf Total} & 6,968 & 4,038,809 \\
 \hline
 \end{tabular}
-\caption{Per transition-type statistics of the transitions used to generate the gold
-frames in the OntoNotes training corpus.}
+\caption{Per transition-type statistics of the transitions used to generate
+the gold frames in the OntoNotes training corpus.}
 \label{tab:action-table}
 \end{table}
 
 Table~\ref{tab:action-table} presents the statistics of the transitions required
-to generate the gold frames in the training corpus. As expected, we saw one SHIFT action
-per training token, and one STOP action per training sentence.
-We saw the EVOKE action take $5532$ unique (length, type) arguments in the corpus, for a
-raw count of roughly $1.08$ million. Overall our action space had $6968$ actions, which is also
-the size of the softmax layer of our TBRU decoder.
+to generate the gold frames in the training corpus. As expected, we saw one
+SHIFT action per training token, and one STOP action per training sentence.
+We saw the EVOKE action take $5532$ unique (length, type) arguments in the
+corpus, for a raw count of roughly $1.08$ million. Overall our action space
+had $6968$ actions, which is also the size of the softmax layer of our TBRU
+decoder.
 
+\noindent{{\bf Hyperparameters:}} Our final set of hyperparameters after
+performing a grid search was: learning\_rate = $0.0005$,
+optimizer = Adam~\cite{kingma2014} with $\beta_1 = 0.01, \beta_2 = 0.999,
+\epsilon = 1e-5$, no dropout, gradient clipping at $1.0$, exponential moving
+average, no layer normalization, and a training batch size of $8$.
 
-\noindent{{\bf Hyperparameters:}} Our final set of hyperparameters after performing a grid search
-was: learning\_rate = $0.0005$, optimizer = Adam~\cite{kingma2014} with
-$\beta_1 = 0.01, \beta_2 = 0.999, \epsilon = 1e-5$, no dropout, gradient clipping at $1.0$,
-exponential moving average, no layer normalization, and a training batch size of $8$.
-
-We stopped training after $120,000$ steps, where each step corresponds to processing one training batch,
-and evaluated on the dev corpus ($15,084$ sentences) after every checkpoint (= $2,000$ steps). Figure~\ref{fig:dev-eval} shows the
-how the various evaluation metrics evolve as training progresses. Section~\ref{sec:eval} contains
-the details of these metrics are evaluated. We picked the checkpoint with the best `Slot F1`
-score.
+We stopped training after $120,000$ steps, where each step corresponds to
+processing one training batch, and evaluated on the dev corpus
+($15,084$ sentences) after every checkpoint (= $2,000$ steps).
+Figure~\ref{fig:dev-eval} shows the how the various evaluation metrics evolve
+as training progresses. Section~\ref{sec:eval} contains the details of these
+metrics are evaluated. We picked the checkpoint with the best `Slot F1` score.
 
 \begin{figure}
 \centering
 \includegraphics[width=\columnwidth]{dev-eval.pdf}
   \caption{Various frame graph accuracies over the dev set as training progresses.
-	Training was stopped at $120,000$ iterations since we saw very little improvement after that.}
+	Training was stopped at $120,000$ iterations since we saw very little
+	improvement after that.}
   \label{fig:dev-eval}
 \end{figure}
 
@@ -495,33 +515,38 @@ which is an aggregate of {\em Span}, {\em Frame}, {\em Type}, {\em Role}, and
 
 We rate the checkpoints using the Slot-F1 metric and select the checkpoint that
 has the best Slot-F1. Intuitively, a high {\em Slot} score reflects that the
-right type of frames are being evoked, along with the right set of slots and links
-to other frames.
+right type of frames are being evoked, along with the right set of slots and
+links to other frames.
 
 In Figure~\ref{fig:dev-eval}, we can see that as training progresses,
-the model learns to output the spans and frames evoked from those spans with a fairly
-high accuracy (SPAN F1 $\approx$ FRAME F1 $\approx$ $94\%$). It also gets the
-type of those frames right with a TYPE F1 of $= 86.26\%$. Our ROLE F1 though
-is lower at just $68.98\%$. ROLE F1 measures the accuracy of correctly getting
-the frame-frame link, including the label of the link. Some error analysis is required
-to ascertain the aspect(s) of frame-frame links missed by the model. Also note that
-currently the {\em roles} feature is the only one that captures inter-frame link information.
-Augmenting this with more features should help improve ROLE accuracy, and we shall
-consider investigating this in our future work. 
+the model learns to output the spans and frames evoked from those spans with
+a fairly high accuracy (SPAN F1 $\approx$ FRAME F1 $\approx$ $94\%$). It also
+gets the type of those frames right with a TYPE F1 of $= 86.26\%$. Our ROLE F1
+though is lower at just $68.98\%$. ROLE F1 measures the accuracy of correctly
+getting the frame-frame link, including the label of the link. Some error
+analysis is required to ascertain the aspect(s) of frame-frame links missed by
+the model. Also note that currently the {\em roles} feature is the only one
+that captures inter-frame link information.
+Augmenting this with more features should help improve ROLE accuracy, and we
+shall consider investigating this in our future work.
 
 Finally, we take the best checkpoint (with SLOT F1 $= 79.95\%$ at $110,000$ steps),
-and evaluate it over the test corpus. 
-Table~\ref{tab:eval} lists the accuracy of this model on the test and dev corpora.
-With the except of LABEL accuracies, all the other metrics exhibit less than half a percent
-difference between the test and dev corpora. This illustrates that despite the lack of
-dropout, the model hasn't overfit and generalizes well to unseen text. As far the disparity
-on LABEL is concerned (LABEL F1 of $95.91$ on dev vs $93.82$ on test), we note that the LABEL
-accuracies are the slowest to improve while training.
-In Figure~\ref{fig:dev-eval}, we can see that LABEL F1 starts close to zero, and although it
-improves to $95.91$, it still shows signs of further improvement when training was stopped,
-in contrast to other metrics which practically plateau out.
-For example, between iterations 100,000 and 120,000, LABEL F1 improved by $0.4\%$, while
-TYPE F1 and FRAME F1 only improved by less than $0.05\%$.
+and evaluate it over the test corpus.
+Table~\ref{tab:eval} lists the accuracy of this model on the test and dev
+corpora.
+With the except of LABEL accuracies, all the other metrics exhibit less than
+half a percent difference between the test and dev corpora. This illustrates
+that despite the lack of dropout, the model hasn't overfit and generalizes well
+to unseen text.
+As far the disparity on LABEL is concerned (LABEL F1 of $95.91$ on dev
+vs $93.82$ on test), we note that the LABEL accuracies are the slowest to
+improve while training.
+In Figure~\ref{fig:dev-eval}, we can see that LABEL F1 starts close to zero,
+and although it improves to $95.91$, it still shows signs of further improvement
+when training was stopped, in contrast to other metrics which practically
+plateau out.
+For example, between iterations 100,000 and 120,000, LABEL F1 improved by
+$0.4\%$, while TYPE F1 and FRAME F1 only improved by less than $0.05\%$.
 
 \begin{table}[ht]
 \begin{tabular}{|ll|r|r|}
@@ -576,17 +601,18 @@ Combined & Precision & 87.56 & 87.31 \\
 & F1 & 87.63 & 87.58 \\
 \hline
 \end{tabular}
-\caption{Evaluation of the model on the dev and test corpora. The model was chosen via the Slot-F1 metric over the dev corpus during training.}
+\caption{Evaluation of the model on the dev and test corpora. The model was
+chosen via the Slot-F1 metric over the dev corpus during training.}
 \label{tab:eval}
 \end{table}
 
 
 \section{Parser runtime}
 
-The SLING parser is trained using TensorFlow~\cite{tensorflow} but it also
+The SLING parser uses TensorFlow~\cite{tensorflow} for training but it also
 supports annotating text with frame annotations at runtime. It can take
 advantage of batching and multi-threading to speed up parsing. However, in
-practical applications of the parser, it is often not convenient to having to
+practical applications of the parser, it is often not convenient to have to
 batch documents for processing, so in order to have a realistic benchmark, we
 set the batch size to one at runtime. In this configuration, the
 TensorFlow-based SLING parser runs at 200 tokens per CPU second.
@@ -596,7 +622,7 @@ just-in-time compiler for neural networks. It compiles the network cells into
 x64 machine code at runtime. The generated code takes the CPU features of the
 machine into account when generating the code and can take advantage of
 specialized features like SSE, AVX, and FMA3.
-Also, at runtime, the tensor shapes as well as the parameters of the model are
+At runtime, the tensor shapes as well as the parameters of the model are
 fixed.
 This allows us to make transformations of the network, fold constants, unroll
 loops, pre-compute embeddings, etc. The JIT compiler can also fix the data
@@ -637,16 +663,20 @@ The Myelin-based SLING parser is independent of TensorFlow so it only needs to
 link with the Myelin runtime (less than 500 KB) instead of the TensorFlow
 runtime library (37 MB), and it is also much faster to initialize (0.5 seconds
 including compilation time) than the TensorFlow-based parser (10 seconds).
-
 Figure~\ref{fig:runtime} shows a breakdown of the CPU time for the Myelin-based
-parser runtime. Half the time is spent computing the logits for the output
+parser runtime.
+
+Half the time is spent computing the logits for the output
 actions. This is expensive because the OntoNotes-based corpus has 6968 actions,
-where the vast majority of the actions are of the form
-{\bf EVOKE(/pb/\textless{}predicate\textgreater, 1)}, one for each PropBank
-roleset predicate in the training data.
+where the vast majority of the actions are of a form like
+{\bf EVOKE(/pb/hit-01, 1)}, one for each PropBank roleset predicate in the
+training data. Table~\ref{tab:action-table} shows that only about 26\% of all the
+actions are EVOKE actions. The output layer of the FF unit could be turned into
+a cascaded classifier, where if the first classifier predicts a generic
+{\bf EVOKE(/pb/predicate, 1)} action, it would use a secondary classifier to
+predict the predicate type. This could almost double the speed of the parser.
 
 \bibliography{sling}
 \bibliographystyle{acl_natbib}
 
 \end{document}
-
