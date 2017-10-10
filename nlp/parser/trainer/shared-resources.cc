@@ -56,6 +56,8 @@ void SharedResources::Load(const syntaxnet::dragnn::ComponentSpec &spec) {
     } else if (r.name() == "word-vocab") {
       CHECK(File::ReadContents(file, &contents));
       lexicon.InitWords(contents.c_str(), contents.size());
+      lexicon.set_normalize_digits(true);
+      lexicon.set_oov(0);
     } else if (r.name() == "prefix-table") {
       CHECK(File::ReadContents(file, &contents));
       lexicon.InitPrefixes(contents.c_str(), contents.size());

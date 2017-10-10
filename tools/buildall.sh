@@ -9,6 +9,7 @@ bazel build -c opt \
   myelin/kernel:* \
   nlp/document:* \
   nlp/parser:* \
+  nlp/parser/tools:* \
   nlp/parser/trainer:* \
   stream:* \
   string:* \

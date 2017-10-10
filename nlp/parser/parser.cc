@@ -248,7 +248,7 @@ void Parser::Parse(Document *document) const {
       for (int a = 0; a < num_actions_; ++a) {
         if (output[a] > max_score) {
           const ParserAction &action = actions_.Action(a);
-          if (state.CanApply(action)) {
+          if (state.CanApply(action) && !actions_.Beyond(a)) {
             prediction = a;
             max_score = output[a];
           }
