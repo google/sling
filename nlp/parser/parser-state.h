@@ -45,9 +45,9 @@ class ParserState {
   // Returns current input token.
   int current() const { return current_; }
 
-  // Applies parser action to transition parser to new state. Returns false if
-  // the action is not valid in the current state.
-  bool Apply(const ParserAction &action);
+  // Applies parser action to transition parser to new state. Caller should
+  // ensure that 'action' is applicable using CanApply().
+  void Apply(const ParserAction &action);
 
   // Returns the length of the longest span that can be evoked starting at the
   // current token. This length is capped by the smallest of:

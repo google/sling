@@ -52,8 +52,7 @@ SEM=$HOME/sempar_ontonotes
 COMMONS=${SEM}/commons
 OUTPUT_FOLDER=${SEM}/out
 TRAIN_FILEPATTERN=${SEM}/train.zip
-DEV_GOLD_FILEPATTERN=${SEM}/dev.gold.zip
-DEV_NOGOLD_FILEPATTERN=${SEM}/dev.without-gold.zip
+DEV_FILEPATTERN=${SEM}/dev.gold.zip
 WORD_EMBEDDINGS_DIM=32
 PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-embedding-bi-true-32.tf.recordio
 OOV_FEATURES=true
@@ -95,11 +94,7 @@ case $i in
     shift
     ;;
     --dev=*|--dev_with_gold=*)
-    DEV_GOLD_FILEPATTERN="${i#*=}"
-    shift
-    ;;
-    --dev_without_gold=*)
-    DEV_NOGOLD_FILEPATTERN="${i#*=}"
+    DEV_FILEPATTERN="${i#*=}"
     shift
     ;;
     --spec_only|--only_spec)
@@ -191,14 +186,9 @@ then
   echo "Train corpus not specified. Use --train or --train_corpus."
   exit 1
 fi
-if [ -z "$DEV_GOLD_FILEPATTERN" ];
+if [ -z "$DEV_FILEPATTERN" ];
 then
   echo "Dev gold corpus not specified. Use --dev or --dev_with_gold."
-  exit 1
-fi
-if [ -z "$DEV_NOGOLD_FILEPATTERN" ];
-then
-  echo "Dev corpus without gold not specified. Use --dev_without_gold."
   exit 1
 fi
 
@@ -243,8 +233,7 @@ then
     --flow=${OUTPUT_FOLDER}/sempar.flow \
     --commons=${COMMONS} \
     --train_corpus=${TRAIN_FILEPATTERN} \
-    --dev_corpus=${DEV_GOLD_FILEPATTERN} \
-    --dev_corpus_without_gold=${DEV_NOGOLD_FILEPATTERN} \
+    --dev_corpus=${DEV_FILEPATTERN} \
     --batch_size=${BATCH_SIZE} \
     --report_every=${REPORT_EVERY} \
     --train_steps=${TRAIN_STEPS}

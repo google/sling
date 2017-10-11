@@ -103,7 +103,8 @@ void ComputeSession::Init(const MasterSpec &master_spec,
   VLOG(2) << "Initialization complete.";
 }
 
-void ComputeSession::InitializeComponentData(const string &component_name) {
+void ComputeSession::InitializeComponentData(const string &component_name,
+                                             bool clear_existing_annotations) {
   CHECK(input_data_ != nullptr) << "Attempted to access a component without "
                                    "providing input data for this session.";
   Component *component = GetComponent(component_name);
@@ -116,7 +117,7 @@ void ComputeSession::InitializeComponentData(const string &component_name) {
     CHECK(source->IsTerminal()) << "Source is not terminal for component '"
                                 << component_name << "'. Exiting.";
   }
-  component->InitializeData(input_data_.get());
+  component->InitializeData(input_data_.get(), clear_existing_annotations);
 }
 
 int ComputeSession::BatchSize(const string &component_name) const {

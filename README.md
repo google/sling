@@ -187,10 +187,6 @@ string encoded = Encode(doc.top());
 Use the converter to create the following corpora:
 + Training corpus of annotated SLING documents.
 + Dev corpus of annotated SLING documents.
-+ A version of the dev corpus without any annotations, i.e. a SLING
-  document in this corpus will only have token and text information.
-  The documents in this corpus should be in the same order as in the
-  annotated dev corpus.
 
   The default corpus format is zip, where the zip file contains one file
   per document, and the file for a document is just its encoded document
@@ -207,8 +203,6 @@ the input data are:
 + `--commons`: File path of the commons store built in the previous step.
 + `--train`: Path to the training corpus built in the previous step.
 + `--dev`: Path to the annotated dev corpus built in the previous step.
-+ `--dev_without_gold`: Path to the dev corpus without annotations built
-  in the previous step.
 + `--output` or `--output_dir`: Output folder where checkpoints, master spec,
   temporary files, and the final model will be saved.
 

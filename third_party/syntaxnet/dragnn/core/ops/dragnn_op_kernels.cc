@@ -400,6 +400,9 @@ class InitComponentData : public ComputeSessionOp {
  public:
   explicit InitComponentData(OpKernelConstruction *context)
       : ComputeSessionOp(context) {
+    OP_REQUIRES_OK(
+        context, context->GetAttr(
+            "clear_existing_annotations", &clear_existing_annotations_));
     OP_REQUIRES_OK(context,
                    context->MatchSignature({DT_STRING}, {DT_STRING}));
   }
@@ -410,8 +413,12 @@ class InitComponentData : public ComputeSessionOp {
 
   void ComputeWithState(OpKernelContext *context,
                         ComputeSession *session) override {
-    session->InitializeComponentData(component_name());
+    session->InitializeComponentData(
+        component_name(), clear_existing_annotations_);
   }
+
+ private:
+  bool clear_existing_annotations_ = false;
 };
 
 REGISTER_KERNEL_BUILDER(Name("InitComponentData").Device(DEVICE_CPU),

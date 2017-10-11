@@ -35,7 +35,7 @@ class Component : public sling::Component<Component> {
 
   // Initializes the component with data for the next batch.
   virtual void InitializeData(
-      InputBatchCache *input_data) = 0;
+      InputBatchCache *input_data, bool clear_existing_annotations) = 0;
 
   // Returns true if the component has had InitializeData called on it since
   // the last time it was reset.

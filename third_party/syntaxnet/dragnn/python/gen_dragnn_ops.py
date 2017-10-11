@@ -278,22 +278,27 @@ _ops.RegisterShape("GetSession")(None)
 _init_component_data_outputs = ["output_handle"]
 
 
-def init_component_data(handle, component, name=None):
+def init_component_data(
+    handle, component, clear_existing_annotations, name=None):
   r"""Initialize a component for a given ComputeSession.
 
   Args:
     handle: A `Tensor` of type `string`. A handle to a ComputeSession.
     component: A `string`.
       The name of a Component instance, matching the ComponentSpec.name.
+    clear_existing_annotations: Bool that says whether to clear existing
+      annotations in the input documents.
     name: A name for the operation (optional).
 
   Returns:
     A `Tensor` of type `string`.
     The handle to the same ComputeSession after initialization.
   """
-  result = _op_def_lib.apply_op("InitComponentData", handle=handle,
-                                component=component,
-                                name=name)
+  result = _op_def_lib.apply_op(
+      "InitComponentData", handle=handle,
+      component=component,
+      clear_existing_annotations=clear_existing_annotations,
+      name=name)
   return result
 
 
@@ -596,6 +601,10 @@ op {
   attr {
     name: "component"
     type: "string"
+  }
+  attr {
+    name: "clear_existing_annotations"
+    type: "bool"
   }
 }
 op {

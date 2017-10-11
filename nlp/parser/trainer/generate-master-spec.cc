@@ -109,6 +109,9 @@ struct Artifacts {
   int num_prefixes = 0;
   int num_suffixes = 0;
 
+  // OOV word id.
+  int lexicon_oov = 0;
+
   // Generated master spec and its file.
   MasterSpec spec;
   string spec_file;
@@ -251,10 +254,12 @@ void OutputResources(Artifacts *artifacts) {
 
   int count = 0;
   artifacts->train_corpus->Rewind();
+
   std::unordered_set<string> words;
   std::vector<string> id_to_word;
   words.insert("<UNKNOWN>");
   id_to_word.emplace_back("<UNKNOWN>");
+  artifacts->lexicon_oov = 0;
   while (true) {
     Store store(artifacts->global());
     Document *document = artifacts->train_corpus->Next(&store);
@@ -322,7 +327,10 @@ void OutputMasterSpec(Artifacts *artifacts) {
   // Left to right LSTM.
   auto *lr_lstm = AddComponent(
       "lr_lstm", "SemparComponent", "LSTMNetwork", "shift-only", artifacts);
-  SetParam(lr_lstm->mutable_transition_system(), "left_to_right", "true");
+  auto *system = lr_lstm->mutable_transition_system();
+  SetParam(system, "left_to_right", "true");
+  SetParam(system, "lexicon_oov", StrCat(artifacts->lexicon_oov));
+  SetParam(system, "lexicon_normalize_digits", "true");
   SetParam(lr_lstm->mutable_network_unit(), "hidden_layer_sizes", "256");
   lr_lstm->set_num_actions(1);
   AddResource(lr_lstm, "commons", artifacts->commons_filename);

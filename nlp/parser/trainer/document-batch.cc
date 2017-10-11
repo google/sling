@@ -41,7 +41,14 @@ const std::vector<string> DocumentBatch::GetSerializedData() const {
   return output;
 }
 
-void DocumentBatch::Decode(Store *global) {
+void DocumentBatch::Decode(Store *global, bool clear_existing_annotations) {
+  Handle h_mention = global->Lookup("/s/document/mention");
+  Handle h_theme = global->Lookup("/s/document/theme");
+
+  if (clear_existing_annotations) {
+    CHECK(!h_mention.IsNil());
+    CHECK(!h_theme.IsNil());
+  }
   for (int i = 0; i < size(); ++i) {
     if (items_[i].store != nullptr) continue;
 
@@ -53,6 +60,19 @@ void DocumentBatch::Decode(Store *global) {
       Object top = decoder.Decode();
       CHECK(!top.invalid());
       items_[i].document = new Document(top.AsFrame());
+      if (clear_existing_annotations) {
+        Document *original = items_[i].document;
+        Builder b(items_[i].store);
+        for (const Slot &s : original->top()) {
+          if (s.name != Handle::id() &&
+              s.name != h_mention &&
+              s.name != h_theme) {
+            b.Add(s.name, s.value);
+          }
+        }
+        items_[i].document = new Document(b.Create());
+        delete original;
+      }
     }
   }
 }

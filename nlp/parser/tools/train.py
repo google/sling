@@ -45,8 +45,6 @@ flags.DEFINE_string('output_folder', '', 'Full path of the output folder.')
 flags.DEFINE_string('commons', '', 'Path to commons.')
 flags.DEFINE_string('train_corpus', '', 'Training corpus.')
 flags.DEFINE_string('dev_corpus', '', 'Dev corpus with gold frames.')
-flags.DEFINE_string('dev_corpus_without_gold', '',
-                    'Dev corpus without gold frames.')
 flags.DEFINE_string('tf_master', '',
                     'TensorFlow execution engine to connect to.')
 flags.DEFINE_integer('train_steps', 200000, 'Number of training steps')
@@ -191,8 +189,7 @@ def main(unused_argv):
   # Read train and dev corpora.
   print "Reading corpora..."
   train_corpus = read_corpus(FLAGS.train_corpus)
-  dev_corpus_with_gold = read_corpus(FLAGS.dev_corpus)
-  dev_corpus_without_gold = read_corpus(FLAGS.dev_corpus_without_gold)
+  dev_corpus = read_corpus(FLAGS.dev_corpus)
 
   # Prepare checkpoint folder.
   checkpoint_path = os.path.join(FLAGS.output_folder, 'checkpoints/best')
@@ -207,8 +204,8 @@ def main(unused_argv):
     trainer_lib.run_training(
         sess, trainers, annotator,
         evaluator, [0], # pretrain_steps
-        [FLAGS.train_steps], train_corpus, dev_corpus_without_gold,
-        dev_corpus_with_gold, FLAGS.batch_size, summary_writer,
+        [FLAGS.train_steps], train_corpus, dev_corpus, dev_corpus,
+        FLAGS.batch_size, summary_writer,
         FLAGS.report_every, builder.saver, checkpoint_path)
 
     # Convert model to a Myelin flow.

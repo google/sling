@@ -58,6 +58,10 @@ void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
   LOG(INFO) << name << ": loaded " << lexicon.size() << " words";
   LOG(INFO) << name << ": loaded " << lexicon.prefixes().size() << " prefixes";
   LOG(INFO) << name << ": loaded " << lexicon.suffixes().size() << " suffixes";
+  if (lexicon.size() > 0) {
+    LOG(INFO) << "Lexicon OOV: " << lexicon.oov();
+    LOG(INFO) << "Lexicon normalize digits: " << lexicon.normalize_digits();
+  }
 
   // Determine if processing will be done left to right or not.
   left_to_right_ = true;
@@ -77,12 +81,13 @@ void SemparComponent::InitializeComponent(const ComponentSpec &spec) {
   gold_transition_generator_.Init(resources_.global);
 }
 
-void SemparComponent::InitializeData(InputBatchCache *input_data) {
+void SemparComponent::InitializeData(
+    InputBatchCache *input_data, bool clear_existing_annotations) {
   // Save off the input data object.
   input_data_ = input_data;
 
   DocumentBatch *input = input_data->GetAs<DocumentBatch>();
-  input->Decode(resources_.global);
+  input->Decode(resources_.global, clear_existing_annotations);
 
   // Get rid of the previous batch.
   for (SemparState *old : batch_) delete old;

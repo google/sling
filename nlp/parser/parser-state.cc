@@ -72,9 +72,7 @@ string ParserState::DebugString() const {
   return s;
 }
 
-bool ParserState::Apply(const ParserAction &action) {
-  if (!CanApply(action)) return false;
-
+void ParserState::Apply(const ParserAction &action) {
   switch (action.type) {
     case ParserAction::SHIFT:
       Shift();
@@ -108,8 +106,6 @@ bool ParserState::Apply(const ParserAction &action) {
       Elaborate(action.source, action.role, action.label);
       break;
   }
-
-  return true;
 }
 
 // Returns if 'frame' has a 'role' slot whose value is 'value'.

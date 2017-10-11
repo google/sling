@@ -115,11 +115,12 @@ void ActionTableGenerator::Process(
       fp = span->Fingerprint();
     }
     table_.Add(state, action, fp);
-    if (!state.Apply(action)) {
+    if (!state.CanApply(action)) {
       LOG(FATAL) << "Can't apply gold action: "
           << action.ToString(document.store()) << " at state:\n "
           << state.DebugString();
     }
+    state.Apply(action);
     if (action.type == ParserAction::SHIFT) {
       table_.set_max_actions_per_token(actions - shift_action);
       shift_action = actions;

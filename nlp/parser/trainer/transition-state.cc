@@ -136,9 +136,7 @@ void SemparState::PerformAction(int action_index) {
       << action.ToString(store()) << " at state:\n"
       << parser_state_->DebugString();
 
-  CHECK(parser_state_->Apply(action))
-      << action.ToString(store()) << " at state:\n"
-      << parser_state_->DebugString();
+  parser_state_->Apply(action);
 
   // Update history.
   history_.emplace_back(action_index);

@@ -56,8 +56,11 @@ void SharedResources::Load(const syntaxnet::dragnn::ComponentSpec &spec) {
     } else if (r.name() == "word-vocab") {
       CHECK(File::ReadContents(file, &contents));
       lexicon.InitWords(contents.c_str(), contents.size());
-      lexicon.set_normalize_digits(true);
-      lexicon.set_oov(0);
+      const auto &p = spec.transition_system().parameters();
+      CHECK_NE(p.count("lexicon_normalize_digits"), 0) << spec.DebugString();
+      CHECK_NE(p.count("lexicon_oov"), 0) << spec.DebugString();
+      lexicon.set_normalize_digits(p.at("lexicon_normalize_digits") == "true");
+      lexicon.set_oov(std::stoi(p.at("lexicon_oov")));
     } else if (r.name() == "prefix-table") {
       CHECK(File::ReadContents(file, &contents));
       lexicon.InitPrefixes(contents.c_str(), contents.size());

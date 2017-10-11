@@ -301,7 +301,8 @@ class MasterBuilder(object):
       network_states[comp.name] = component.NetworkState()
 
       logging.info('Initializing data for component "%s"', comp.name)
-      handle = dragnn_ops.init_component_data(handle, component=comp.name)
+      handle = dragnn_ops.init_component_data(handle, component=comp.name,
+                                              clear_existing_annotations=False)
       # TODO(googleuser): Phase out component.MasterState.
       master_state = component.MasterState(handle,
                                            dragnn_ops.batch_size(
@@ -403,7 +404,8 @@ class MasterBuilder(object):
         [comp.build_post_restore_hook() for comp in self.components]):
       return tf.no_op(name='post_restore_hook_master')
 
-  def build_inference(self, handle, use_moving_average=False):
+  def build_inference(self, handle, use_moving_average=False,
+                      clear_existing_annotations=False):
     """Builds an inference pipeline.
 
     This always uses the whole pipeline.
@@ -413,6 +415,8 @@ class MasterBuilder(object):
       use_moving_average: Whether or not to read from the moving
         average variables instead of the true parameters. Note: it is not
         possible to make gradient updates when this is True.
+      clear_existing_annotations: Whether or not existing annotations
+        should be cleared when processing a new batch.
 
     Returns:
       handle: Handle after annotation.
@@ -422,7 +426,9 @@ class MasterBuilder(object):
 
     for comp in self.components:
       network_states[comp.name] = component.NetworkState()
-      handle = dragnn_ops.init_component_data(handle, component=comp.name)
+      handle = dragnn_ops.init_component_data(
+          handle, component=comp.name,
+          clear_existing_annotations=clear_existing_annotations)
       master_state = component.MasterState(handle,
                                            dragnn_ops.batch_size(
                                                handle, component=comp.name))
@@ -507,7 +513,9 @@ class MasterBuilder(object):
     """
     with tf.name_scope(name_scope):
       handle, input_batch = self._get_session_with_reader()
-      handle = self.build_inference(handle, use_moving_average=True)
+      handle = self.build_inference(handle,
+                                    use_moving_average=True,
+                                    clear_existing_annotations=True)
 
       annotations = dragnn_ops.emit_annotations(
           handle, component=self.spec.component[-1].name)

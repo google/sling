@@ -45,12 +45,15 @@ handle: A handle to a ComputeSession that will be returned to the backing pool.
 REGISTER_OP("InitComponentData")
     .Input("handle: string")
     .Attr("component: string")
+    .Attr("clear_existing_annotations: bool")
     .Output("output_handle: string")
     .Doc(R"doc(
 Initialize a component for a given ComputeSession.
 
 handle: A handle to a ComputeSession.
 component: The name of a Component instance, matching the ComponentSpec.name.
+clear_existing_annotations: Bool that says whether to clear existing annotations
+    in the input documents.
 output_handle: The handle to the same ComputeSession after initialization.
 )doc");
 

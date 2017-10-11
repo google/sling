@@ -43,7 +43,8 @@ class SemparComponent : public syntaxnet::dragnn::Component {
 
   // Provides input data to the component.
   void InitializeData(
-      syntaxnet::dragnn::InputBatchCache *input_data) override;
+      syntaxnet::dragnn::InputBatchCache *input_data,
+      bool clear_existing_annotations) override;
 
   // Returns true if the component has had InitializeData called on it since
   // the last time it was reset.

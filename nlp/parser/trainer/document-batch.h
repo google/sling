@@ -40,8 +40,9 @@ class DocumentBatch : public syntaxnet::dragnn::InputBatch {
   SemparInstance *item(int i) { return &items_[i]; }
 
   // Decodes the documents in the batch. 'global' is used to construct the
-  // local stores.
-  void Decode(Store *global);
+  // local stores. If 'clear_existing_annotations' is true then existing
+  // frame annotations from the decoded document are cleared.
+  void Decode(Store *global, bool clear_existing_annotations);
 
  private:
   // Document batch.

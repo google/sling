@@ -43,7 +43,10 @@ class ComputeSession {
   // Initialize a component with data.
   // Note that attempting to initialize a component that depends on
   // another component that has not yet finished will cause a CHECK failure.
-  void InitializeComponentData(const string &component_name);
+  // If 'clear_existing_annotations' is true then the component should remove
+  // any existing (e.g. gold) annotations from the data.
+  void InitializeComponentData(
+      const string &component_name, bool clear_existing_annotations);
 
   // Return the batch size for the given component.
   int BatchSize(const string &component_name) const;
