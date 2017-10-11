@@ -9,20 +9,19 @@ proto_library(
   srcs = ["dragnn/protos/spec.proto"],
 )
 
-proto_library(
-  name = "embedding-proto",
-  srcs = ["dragnn/protos/embedding.proto"],
-)
-
 cc_proto_library(
   name = "spec",
   deps = ["spec-proto"],
 )
 
-cc_proto_library(
-  name = "embedding",
-  deps = ["embedding-proto"],
-)
+# Until Bazel supports python protocol buffer compilation, this step
+# needs to be done manually by running the following command:
+# bazel-out/host/bin/external/com_google_protobuf/protoc third_party/syntaxnet/dragnn/protos/spec.proto --python_out=.
+#
+#py_proto_library(
+#  name = "pyspec",
+#  deps = ["spec-proto"],
+#)
 
 cc_library(
   name = "syntaxnet",
@@ -35,10 +34,8 @@ cc_library(
     "dragnn/core/interfaces/component.h",
     "dragnn/core/interfaces/input_batch.h",
     "dragnn/core/interfaces/transition_state.h",
-    "dragnn/core/proto_io.h",
   ],
   deps = [
-    ":embedding",
     ":spec",
     "//base",
     "//base:registry",
@@ -70,6 +67,7 @@ cc_library(
     ":syntaxnet",
     "//base",
     "//third_party/tensorflow",
+    "//util:embeddings",
   ],
   alwayslink = 1,
 )

@@ -382,7 +382,6 @@ class MasterBuilder(object):
       Optionally clipped gradient.
     """
     if grad is not None and self.hyperparams.gradient_clip_norm > 0:
-      logging.info('Clipping gradient %s', grad)
       if isinstance(grad, tf.IndexedSlices):
         tmp = tf.clip_by_norm(grad.values, self.hyperparams.gradient_clip_norm)
         return tf.IndexedSlices(tmp, grad.indices, grad.dense_shape)

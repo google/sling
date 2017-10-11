@@ -54,7 +54,7 @@ OUTPUT_FOLDER=${SEM}/out
 TRAIN_FILEPATTERN=${SEM}/train.zip
 DEV_FILEPATTERN=${SEM}/dev.gold.zip
 WORD_EMBEDDINGS_DIM=32
-PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-embedding-bi-true-32.tf.recordio
+PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-32-embeddings.bin
 OOV_FEATURES=true
 
 # Training hyperparameters.

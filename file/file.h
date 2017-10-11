@@ -201,7 +201,7 @@ class FileSystem : public Singleton<FileSystem> {
 
 }  // namespace sling
 
-#define REGISTER_FILE_SYSTEM(name, component) \
+#define REGISTER_FILE_SYSTEM_TYPE(name, component) \
   REGISTER_SINGLETON_TYPE(sling::FileSystem, name, component)
 
 #endif  // FILE_FILE_H_

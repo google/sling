@@ -169,16 +169,14 @@ int main(int argc, char *argv[]) {
       Store store(&commons);
       Document *document = corpus->Next(&store);
       if (document == nullptr) break;
-
       num_documents++;
 
-      Document *parsed = RemoveAnnotations(document);
-      parser.Parse(parsed);
-      parsed->Update();
-      std::cout << ToText(parsed->top(), FLAGS_indent) << "\n";
+      document->ClearAnnotations();
+      parser.Parse(document);
+      document->Update();
+      std::cout << ToText(document->top(), FLAGS_indent) << "\n";
 
       delete document;
-      delete parsed;
     }
     delete corpus;
   }

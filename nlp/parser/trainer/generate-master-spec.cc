@@ -47,8 +47,7 @@
 #include "nlp/parser/trainer/shared-resources.h"
 #include "stream/file.h"
 #include "string/strcat.h"
-#include "dragnn/core/proto_io.h"
-#include "dragnn/protos/embedding.pb.h"
+#include "util/embeddings.h"
 
 using sling::File;
 using sling::FileDecoder;
@@ -56,6 +55,7 @@ using sling::Object;
 using sling::Store;
 using sling::StrAppend;
 using sling::StrCat;
+using sling::EmbeddingReader;
 using sling::nlp::ActionTable;
 using sling::nlp::AffixTable;
 using sling::nlp::ActionTableGenerator;
@@ -312,12 +312,9 @@ void OutputResources(Artifacts *artifacts) {
 void CheckWordEmbeddingsDimensionality() {
   if (FLAGS_word_embeddings.empty()) return;
 
-  syntaxnet::dragnn::ProtoRecordReader reader(FLAGS_word_embeddings);
-  syntaxnet::dragnn::TokenEmbedding embedding;
-  CHECK_EQ(reader.Read(&embedding), tensorflow::Status::OK());
-  int size = embedding.vector().values_size();
-  CHECK_EQ(size, FLAGS_word_embeddings_dim)
-      << "Pretrained embeddings have dim=" << size
+  EmbeddingReader reader(FLAGS_word_embeddings);
+  CHECK_EQ(reader.dim(), FLAGS_word_embeddings_dim)
+      << "Pretrained embeddings have dim=" << reader.dim()
       << ", but specified word embedding dim=" << FLAGS_word_embeddings_dim;
 }
 

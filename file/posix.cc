@@ -245,7 +245,7 @@ File *NewStdoutFile() {
   return NewFileFromDescriptor("stdout", dup(1));
 }
 
-REGISTER_FILE_SYSTEM("posix", PosixFileSystem);
+REGISTER_FILE_SYSTEM_TYPE("posix", PosixFileSystem);
 
 }  // namespace sling
 

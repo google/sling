@@ -319,6 +319,9 @@ class Document {
     return MentionRange(mentions_.equal_range(frame.handle()));
   }
 
+  // Clears annotations (mentions and themes) from document.
+  void ClearAnnotations();
+
  private:
   // Inserts the span in the span index. If the span already exists, the
   // existing span is returned. Returns null if the new span crosses an existing

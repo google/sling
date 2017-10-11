@@ -19,12 +19,10 @@ limitations under the License.
 #include <vector>
 
 #include "base/types.h"
-#include "dragnn/core/proto_io.h"
-#include "dragnn/protos/embedding.pb.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/lib/strings/stringprintf.h"
+#include "util/embeddings.h"
 
 using tensorflow::OpKernel;
 using tensorflow::OpKernelConstruction;
@@ -61,36 +59,22 @@ class WordEmbeddingInitializer : public OpKernel {
     std::unordered_map<string, int64> vocab;
     OP_REQUIRES_OK(context, LoadVocabulary(&vocab));
 
-    ProtoRecordReader reader(vectors_path_);
-
     // Load the embedding vectors into a matrix.  Since the |embedding_matrix|
     // output cannot be allocated until the embedding dimension is known, delay
     // allocation until the first iteration of the loop.
-    Tensor *embedding_matrix = nullptr;
-    TokenEmbedding embedding;
+    sling::EmbeddingReader reader(vectors_path_);
+    Tensor *embedding_matrix;
+    OP_REQUIRES_OK(context,
+                   InitRandomEmbeddingMatrix(vocab.size(), reader.dim(),
+                                             context, &embedding_matrix));
     int64 count = 0;
-    while (reader.Read(&embedding) == tensorflow::Status::OK()) {
-      if (embedding_matrix == nullptr) {
-        OP_REQUIRES_OK(context,
-                       InitRandomEmbeddingMatrix(vocab, embedding, context,
-                                                 &embedding_matrix));
-      }
-      if (vocab.find(embedding.token()) != vocab.end()) {
-        SetNormalizedRow(embedding.vector(), vocab[embedding.token()],
+    while (reader.Next()) {
+      if (vocab.find(reader.word()) != vocab.end()) {
+        SetNormalizedRow(reader.embedding(), vocab[reader.word()],
                          embedding_matrix);
         ++count;
       }
     }
-
-    // The vectors file might not contain any embeddings (perhaps due to read
-    // errors), in which case the |embedding_matrix| output is never allocated.
-    // Signal this error early instead of letting downstream ops complain about
-    // a missing input.
-    OP_REQUIRES(
-        context, embedding_matrix != nullptr,
-        InvalidArgument(tensorflow::strings::StrCat(
-            "found no pretrained embeddings in vectors=", vectors_path_,
-            " vocabulary=", vocabulary_path_, " vocab_size=", vocab.size())));
     LOG(INFO) << "Initialized with " << count << " pre-trained embedding "
               << "vectors out of a vocabulary of " << vocab.size();
   }
@@ -122,14 +106,13 @@ class WordEmbeddingInitializer : public OpKernel {
     return tensorflow::Status::OK();
   }
 
-  // Allocates the |embedding_matrix| based on the |vocabulary| and |embedding|
-  // and initializes it to random values, or returns non-OK on error.
+  // Allocates the |embedding_matrix| based on the vocabulary size and embedding
+  // dimension and initializes it to random values, or returns non-OK on error.
   tensorflow::Status InitRandomEmbeddingMatrix(
-      const std::unordered_map<string, int64> &vocabulary,
-      const TokenEmbedding &embedding, OpKernelContext *context,
+      int words, int dims, OpKernelContext *context,
       Tensor **embedding_matrix) const {
-    const int rows = vocabulary.size();
-    const int columns = embedding.vector().values_size();
+    const int rows = words;
+    const int columns = dims;
     TF_RETURN_IF_ERROR(context->allocate_output(0, TensorShape({rows, columns}),
                                                 embedding_matrix));
     auto matrix = (*embedding_matrix)->matrix<float>();
@@ -139,16 +122,16 @@ class WordEmbeddingInitializer : public OpKernel {
   }
 
   // Sets embedding_matrix[row] to a normalized version of the given vector.
-  void SetNormalizedRow(const TokenEmbedding::Vector &vector, const int row,
+  void SetNormalizedRow(const std::vector<float> &vector, const int row,
                         Tensor *embedding_matrix) {
     float norm = 0.0f;
-    for (int col = 0; col < vector.values_size(); ++col) {
-      float val = vector.values(col);
+    for (int col = 0; col < vector.size(); ++col) {
+      float val = vector[col];
       norm += val * val;
     }
     norm = sqrt(norm);
-    for (int col = 0; col < vector.values_size(); ++col) {
-      embedding_matrix->matrix<float>()(row, col) = vector.values(col) / norm;
+    for (int col = 0; col < vector.size(); ++col) {
+      embedding_matrix->matrix<float>()(row, col) = vector[col] / norm;
     }
   }
 

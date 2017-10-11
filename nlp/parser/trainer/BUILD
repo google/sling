@@ -51,6 +51,7 @@ cc_binary(
     "//third_party/syntaxnet",
     "//third_party/zlib:miniunzip",
     "//third_party/zlib:zlib",
+    "//util:embeddings",
   ],
 )
 

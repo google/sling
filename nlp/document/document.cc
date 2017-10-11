@@ -190,7 +190,7 @@ Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
 
 Document::~Document() {
   // Delete all spans. This also clears all references to the mention frames.
-  for (auto s : spans_) delete s;
+  for (auto *s : spans_) delete s;
 }
 
 void Document::Update() {
@@ -501,6 +501,14 @@ Span *Document::GetSpan(int begin, int end) const {
     span = span->parent_;
   }
   return nullptr;
+}
+
+void Document::ClearAnnotations() {
+  for (Token &t : tokens_) t.span_ = nullptr;
+  for (Span *s : spans_) delete s;
+  spans_.clear();
+  mentions_.clear();
+  themes_.clear();
 }
 
 }  // namespace nlp
