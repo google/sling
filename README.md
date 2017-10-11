@@ -208,9 +208,9 @@ the input data are:
 
 Then we have the various training options and hyperparameters:
 + `--oov_features`: Whether fallback lexical features should be used in the LSTMs.
-+ `--word_embeddings`: Empty or path to pretrained word embeddings in
-  Tensorflow's RecordIO format. If supplied, these are used to initialize
-  the embeddings for word features.
++ `--word_embeddings`: Empty, or path to pretrained word embeddings in
+  [Mikolov's word2vec format](https://github.com/tmikolov/word2vec/blob/master/word2vec.c).
+  If supplied, these are used to initialize the embeddings for word features.
 + `--word_embeddings_dim`: Dimensionality of embeddings for word features.
   Should be the same as the pretrained embeddings, if they are supplied.
 + `--batch`: Batch size used during training.
