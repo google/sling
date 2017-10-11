@@ -521,30 +521,28 @@ An alternative to running the Myelin-based parsing tool is to run the tf-parse
 Python script that executes the annotation part of the Tensorflow graph over the
 input documents. It takes the following arguments:
 
-*  `--input`: This should be the directory where the trained model is saved.
+*  `--parser_dir`: This should be the directory where the trained model is saved.
 *  `--commons`: Path to the commons store. Should be the same as the one used in training.
-*  `--corpus`: Corpus of frame-less documents that will be annotated with the model.
+*  `--corpus`: Corpus of documents that will be annotated with the model.
 *  `--batch`: Batch size. Higher batch sizes are efficient but only if all the batch
     documents are roughly of similar length.
 *  `--threads` : Number of threads to use in Tensorflow. This drives Tensorflow's
     inter-op and intra-op parallelism. Making this very high will lead to inefficiencies
     due to inter-thread CPU contention.
 *  `--output`: (Optional) File name where the annotated corpus will be saved.
-*  `--eval`: (Optional) If true, then it will evaluate the annotated corpus vs
-    the gold corpus. If set, then it expects `--output` and `--gold` to be set as well.
-*  `--gold`: (Optional) Path to the gold corpus. Used if `--eval` is set.
+*  `--evaluate`: (Optional) If true, then it will evaluate the annotated corpus vs
+    the gold corpus (specified via --corpus).
 
 Sample Usage:
 ```shell
 python nlp/parser/tools/tf-parse.py \
-  --input=/path/to/training/script/output/folder \
+  --parser_dir=/path/to/training/script/output/folder \
   --commons=/path/to/commons \
-  --corpus=/path/to/frameless/document/corpus \
+  --corpus=/path/to/gold/eval/corpus \
   --batch=512 \
   --threads=4 \
   --output=annotated.zip \
-  --gold=/path/to/gold/frame/corpora \
-  --eval
+  --evaluate
 ```
 
 ## Credits

@@ -33,14 +33,13 @@ tf.load_op_library('bazel-bin/nlp/parser/trainer/sempar.so')
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("input", "", "Tensorflow input model directory.")
+flags.DEFINE_string("parser_dir", "", "Directory containing Tensorflow model.")
 flags.DEFINE_string("commons", "", "Common store.")
 flags.DEFINE_string("corpus", "", "Evaluation / Benchmarking corpus.")
-flags.DEFINE_string("gold", "", "Gold corpus for evaluation.")
 flags.DEFINE_string("output", "", "Output zip file name for annotated corpus.")
 flags.DEFINE_integer("threads", 8, "Tensorflow's intra/inter-op parallelism.")
 flags.DEFINE_integer("batch_size", 1024, "Maximum batch size.")
-flags.DEFINE_bool("eval", False, "Perform evaluation.")
+flags.DEFINE_bool("evaluate", False, "Perform evaluation.")
 
 # Reads a serialized corpus into memory.
 def read_corpus(file_pattern):
@@ -68,7 +67,7 @@ def main(argv):
       inter_op_parallelism_threads=FLAGS.threads)
 
   master_spec = spec_pb2.MasterSpec()
-  master_spec_file = FLAGS.input + "/master_spec"
+  master_spec_file = FLAGS.parser_dir + "/master_spec"
   with file(master_spec_file, 'r') as fin:
     text_format.Parse(fin.read(), master_spec)
   fin.close()
@@ -87,7 +86,7 @@ def main(argv):
     sess.run(tf.global_variables_initializer())
 
     tf.logging.info('Loading from checkpoint...')
-    checkpoint = FLAGS.input + "/checkpoints/best"
+    checkpoint = FLAGS.parser_dir + "/checkpoints/best"
     sess.run('save/restore_all', {'save/Const:0': checkpoint})
 
     # Annotate the corpus.
@@ -105,25 +104,27 @@ def main(argv):
     tf.logging.info("Wall clock time for %s annotation: %f seconds",
                     len(annotated), annotation_time)
 
-  if FLAGS.eval:
-    assert len(FLAGS.output) != 0, "Need to provide --output for evaluation"
-    assert len(FLAGS.gold) != 0, "Need to provide --gold for evaluation"
+  output_file = FLAGS.output
+  if FLAGS.evaluate and len(FLAGS.output) == 0:
+    output_file = "/tmp/annotated.zip"
+    tf.logging.info('--output not provided, will write annotated docs to %s',
+                    output_file)
 
-  if len(FLAGS.output) != 0:
+  if FLAGS.evaluate or len(FLAGS.output) != 0:
     # Write the annotated corpus to disk as a zip file.
-    with zipfile.ZipFile(FLAGS.output, 'w') as outfile:
+    with zipfile.ZipFile(output_file, 'w') as outfile:
       for i in xrange(len(annotated)):
         outfile.writestr('test.' + str(i), annotated[i])
       tf.logging.info('Wrote %d annotated docs to %s',
-                      len(annotated), FLAGS.output)
+                      len(annotated), output_file)
 
-  if FLAGS.eval:
-    # Evaluate against the gold corpus.
+  if FLAGS.evaluate:
+    # Evaluate against gold annotations.
     try:
       eval_output_lines = subprocess.check_output(
           ['bazel-bin/nlp/parser/tools/evaluate-frames',
-           '--gold_documents=' + FLAGS.gold,
-           '--test_documents=' + FLAGS.output,
+           '--gold_documents=' + FLAGS.corpus,
+           '--test_documents=' + output_file,
            '--commons=' + FLAGS.commons],
           stderr=subprocess.STDOUT)
 
