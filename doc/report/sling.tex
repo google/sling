@@ -359,13 +359,13 @@ for transition-based dependency parsing~\cite{nivre2006}. For example, the sente
 \section{Features}
 \label{sec:features}
 
-The LSTMs only uses lexical features based on the current input word:
+The biLSTM uses only lexical features based on the current input word:
 
 \begin{itemize}
-  \item The current word itself. During training we initialize the embeddings
-  for this feature with pre-trained word embeddings \cite{mikolov2013} for all
-  the words in the vocabulary collected from the training data.
-  \item The prefixes and suffixes of the current input word. We only use
+  \item The current word itself. During training we initialize the embedding
+  for this feature from pre-trained word embeddings~\cite{mikolov2013} for all
+  the words in the the training data.
+  \item The prefixes and suffixes of the current input word. We use only
   prefixes up to three characters in our experiments.
   \item Word shape features based on the characters in the current input word:
   hyphenation, capitalization, punctuation, quotes, and digits. Each of these
@@ -373,31 +373,29 @@ The LSTMs only uses lexical features based on the current input word:
 \end{itemize}
 
 The TBRU is a simple feed-forward unit with a single hidden layer.
-It takes the hidden activations from the LSTMs as well as the activations from
+It takes the hidden activations from the biLSTM as well as the activations from
 the hidden layer from the previous steps as raw input features, and maps them
-through embedding matrices to get the input vector for the  hidden layer. The
-raw input features used are:
+through embedding matrices to get the input vector for the  hidden layer. More specifically,
+the inputs to the TBRU are as follows:
 
 \begin{itemize}
-  \item The hidden activations from the left-to-right and right-to-left LSTMs
+  \item The left-to-right and right-to-left LSTMs supply their activations
   for the current token in the parser state.
-  \item The attention feature looks at the top-5 frames in the attention buffer
+  \item The attention feature looks at the top-$k$ frames in the attention buffer
   and finds the phrases in the text (if any) that evoked them. The activations
-  from the left-to-right and right-to-left LSTMs for the last token in these
-  phrases are used as input features. These serve as the continuous lexical
-  representations of the top frames in the attention buffer.
+  from the left-to-right and right-to-left LSTMs for the last token of each of those
+  phrases are are included as TBRU inputs, serving as continuous lexical
+  representations of the top-$k$ frames in the attention buffer.
   \item The hidden layer activations of the transition steps which evoked or
-  brought into focus the top-5 frames in the attention buffer. These serves as a
-  continuous representation of the semantic context for these frames, i.e. a
-  representation of the state when these frames were evoked most recently.
+  brought into focus the top-$k$ frames in the attention buffer are also inputs to the TBRU,
+  providing a
+  continuous representation for the semantic frame contexts that evoked those frames most recently.
   \item The history feature uses the hidden activations in the feed-forward
-  unit from the previous five steps as feature inputs to the current step.
-  \item The roles features extract the role edges between the top-5 frames in
-  the attention buffer. These are triples of the form $(s_i, r_i, t_i)$ meaning
-  that the frame at position $s_i$ in the attention buffer has a role $r_i$ with
+  unit from the previous $k$ steps as feature inputs to the current step.
+  \item Embeddings of triples of the form $(s_i, r_i, t_i)$, $0<s_i,t_i\le k$ encode the fact that the frame at position $s_i$ in the attention buffer has a role $r_i$ with
   the frame at position $t_i$ in the attention buffer as its value. Back-off
   features are added for the source roles $(s_i,r_i)$, target role $(r_i, t_i)$,
-  and unlabeled roles $(s_i,t_i)$.
+  and unlabeled roles $(s_i,t_i)$. 
 \end{itemize}
 
 \section{Experiments}
