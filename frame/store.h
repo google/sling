@@ -873,7 +873,7 @@ class Store {
       maximum_heap_size = 128 * (1 << 20);
       initial_handles = 1024;
       map_buckets = 1024;
-      string_buckets = 1 << 20; //1 << 16;
+      string_buckets = 1 << 20;
       expansion_free_fraction = 20;
       symbol_rebinding = false;
       local = this;
