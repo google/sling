@@ -20,9 +20,9 @@ A more detailed description of the SLING parser can be found in this paper:
 
 <p style='margin-left:30px;'>
 Michael Ringgaard, Rahul Gupta, and Fernando C. N. Pereira. 2017.
-[_SLING: A framework for frame semantic parsing_](doc/report/sling.tex).
+<a href='doc/report/sling.tex'><em>SLING: A framework for frame semantic parsing</em></a>.
 To be publised in arXiv preprint.
-</p>
+</span>
 
 ## Installation
 
