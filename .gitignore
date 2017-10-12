@@ -12,6 +12,6 @@ local
 *.blg
 *.log
 *.out
-*.pdf
 *.pdf_tex
+doc/report/sling.pdf
 

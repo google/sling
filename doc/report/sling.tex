@@ -5,7 +5,8 @@
 \usepackage{latexsym}
 \usepackage{amsmath}
 \usepackage{float}
-\usepackage{svg}
+\usepackage{graphicx}
+\usepackage{framed}
 
 % Please remember to install inkscape and include --shell-escape when
 % using pdflatex:
@@ -15,7 +16,6 @@
 % Figures:
 % https://docs.google.com/a/ringgaard.com/presentation/d/1QlQnyeG5UbUDEi2x9rxxjCXRQ1Qz9qjaTz__NWX-n8o/edit?usp=sharing
 
-\floatstyle{boxed}
 \restylefloat{figure}
 
 %\aclfinalcopy
@@ -102,7 +102,7 @@ This neural network architecture has been implemented using DRAGNN~\cite{dragnn}
 and TensorFlow~\cite{tensorflow}.
 
 The SLING framework and a semantic parser built in it are now available as
-open-source code in GitHub.\footnote{\url{https://github.com/google/sling}}
+open-source code on GitHub.\footnote{\url{https://github.com/google/sling}}
 
 In Section~\ref{sec:framesem} we introduce \emph{frame semantics}, the
 linguistic theory that inspired SLING, as well as the SLING frame store, a
@@ -115,7 +115,7 @@ by the parser.
 
 \begin{figure*}[t]
   \centering
-  \includesvg{network}
+  \includegraphics[width=1.0\linewidth]{network.pdf}
   \caption{Neural network architecture of the SLING parser. The input is encoded
   by a bi-directional LSTM and fed into a recurrent feed-forward (FF) unit that
   proposes transition system actions.
@@ -198,7 +198,8 @@ for the document text, the tokens, and the mention phrases and the frames they
 evoke. See Figure~\ref{fig:slingdoc} for an example.
 
 \begin{figure*}[t]
-  \begin{verbatim}
+\begin{framed}
+\begin{verbatim}
 {
   :/s/document
   /s/document/text: "John hit the ball"
@@ -226,23 +227,24 @@ evoke. See Figure~\ref{fig:slingdoc} for an example.
   }
 }
 \end{verbatim}
-  \caption{The text ``John hit the ball" in SLING frame notation. The document
-  itself is represented by a frame that has the text, an array of tokens and
-  the mentions that evoke frames. There are three frames: a person frame (John),
-  a consumer good frame (bat) and a hit-01 frame. The hit frame has the person
-  frame as the agent (arg0) and the ball frame as the object (arg1).}
-  \label{fig:slingdoc}
+\end{framed}
+\caption{The text ``John hit the ball" in SLING frame notation. The document
+itself is represented by a frame that has the text, an array of tokens and
+the mentions that evoke frames. There are three frames: a person frame (John),
+a consumer good frame (bat) and a hit-01 frame. The hit frame has the person
+frame as the agent (arg0) and the ball frame as the object (arg1).}
+\label{fig:slingdoc}
 \end{figure*}
 
 \section{Attention}
 \label{sec:att}
 
 The SLING parser is a kind of sequence-to-sequence model that first encodes the
-input text token sequence with a biLSTM encoder and then runs the transition
-system on that encoding to produce a sequence of transitions, where each
-transition updates the system state that combined with the input encoding form
-the input for the transition feed-forward cell that predicts the next
-transition (Figure~\ref{fig:network}).
+input text token sequence with a bidirectional LSTM encoder and then runs
+the transition system on that encoding to produce a sequence of transitions,
+where each transition updates the system state that combined with the input
+encoding form the input for the transition feed-forward cell that predicts the
+next transition (Figure~\ref{fig:network}).
 
 Sequence-to-sequence models often rely on an ``attention" mechanism to focus
 the decoder on the parts of the input most relevant for producing the next
@@ -286,6 +288,7 @@ frames evoked so far. The front of the attention buffer serves as the working
 memory for the parser, and the actions operates on those frames. The transition
 system simultaneously builds the frame graph and maintains the attention buffer
 by moving the frame involved involved in an action to the front of the attention
+buffer. At any time, each evoked frame has a unique position in the attention
 buffer.
 
 The transition system consists of the following actions:
@@ -438,7 +441,7 @@ PropBank SRL types & 5426 types, e.g. /pb/write-01, /pb/tune-02 etc.  \\
 \label{tab:types}
 \end{table*}
 
-\begin{table}[ht]
+\begin{table}[t]
 \begin{tabular}{|l|r|r|}
 \hline
 {\bf Action Type} & {\bf \# Unique Args} & {\bf Raw Count} \\
@@ -534,7 +537,7 @@ Finally, we take the best checkpoint (with SLOT F1 $= 79.95\%$ at $110,000$ step
 and evaluate it over the test corpus.
 Table~\ref{tab:eval} lists the accuracy of this model on the test and dev
 corpora.
-With the except of LABEL accuracies, all the other metrics exhibit less than
+With the exception of LABEL accuracies, all the other metrics exhibit less than
 half a percent difference between the test and dev corpora. This illustrates
 that despite the lack of dropout, the model hasn't overfit and generalizes well
 to unseen text.
@@ -621,7 +624,7 @@ In order to speed up parsing at runtime, we have implemented \emph{Myelin}, a
 just-in-time compiler for neural networks. It compiles the network cells into
 x64 machine code at runtime. The generated code takes the CPU features of the
 machine into account when generating the code and can take advantage of
-specialized features like SSE, AVX, and FMA3.
+specialized features like SSE, AVX, and FMA3 if available on the CPU.
 At runtime, the tensor shapes as well as the parameters of the model are
 fixed.
 This allows us to make transformations of the network, fold constants, unroll
@@ -651,7 +654,7 @@ Speed is measured as tokens parsed per CPU second, i.e. user+sys in time(1).}
 
 \begin{figure}[t]
   \centering
-  \includesvg[width = 200pt]{runtime}
+  \includegraphics[width = 200pt]{runtime.pdf}
   \caption{Runtime profile for running the Myelin-based SLING parser with the
   left-to-right LSTM (LR LSTM), right-to-left LSTM (RL LSTM), Feed-forward
   excluding logits (FF), Logits for output actions (LOGITS), and transition
