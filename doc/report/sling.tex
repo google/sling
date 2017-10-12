@@ -268,23 +268,21 @@ frame graph.
 \section{Transition system}
 \label{sec:ts}
 
-In the parsing literature, \emph{transition systems} have been
-used to construct dependency parse trees from a sequence of state-action pairs
-$(s_i,a_i)$. The transition system takes a state $s_i$ and an action $a_i$ and
-constructs a new state $s_{i+1}$. This allows you to build a tree structure by
-predicting a sequence of actions. For example, the \emph{arc-standard}
-transition system \cite{nivre2006} uses {\bf SHIFT}, {\bf LEFT-ARC(label)}, and
-{\bf RIGHT-ARC(label)} actions to construct a dependency parse tree from a
-sequence of those actions.
+\emph{Transition systems} are widely
+used in parsing to build dependency parse trees as a side effect of performing a sequence \emph{state transitions}
+$(s_i,a_i)$ where $s_i$ is a \emph{state} and $a_i$ is an \emph{action}. Action $a_i$ computes the new state 
+$s_{i+1}$ from state $s_i$. For example, the \emph{arc-standard}
+transition system~\cite{nivre2006} uses a sequence of {\bf SHIFT}, {\bf LEFT-ARC(label)}, and
+{\bf RIGHT-ARC(label)} actions, operating on a state whose main component is a stack, to build a dependency parse tree.
 
 We use the same idea to construct a frame graph where frames can be
-evoked by phrases in the input. Instead of using a stack, we have the attention
-buffer introduced in the previous section, which keeps track of the most salient
+evoked by phrases in the input. But instead of using a stack in the state, we use the  attention
+buffer introduced in the previous section that keeps track of the most salient
 frames in the discourse.
 
-The attention buffer is an prioritized list of all the
-frames evoked so far. The front of the attention buffer serves as the working
-memory for the parser, and the actions operates on those frames. The transition
+The attention buffer is priority list of all the
+frames evoked so far. The front of the buffer serves as the working
+memory for the parser. Actions operate on the front of the buffer and in some cases other frames in the buffer. The transition
 system simultaneously builds the frame graph and maintains the attention buffer
 by moving the frame involved involved in an action to the front of the attention
 buffer. At any time, each evoked frame has a unique position in the attention
@@ -300,11 +298,10 @@ The transition system consists of the following actions:
         can be added to the transition sequence, e.g. to make all sequences in a
         beam have the same length. After a STOP is issued, no other actions are
         permitted except more STOP actions.
-  \item {\bf EVOKE(type, n)} -- Evokes frame of with type {\bf type} from
-        the next {\bf n} tokens in the input. The evoked frame becomes the new
-        center of attention, i.e. is inserted at the front of the attention
-        buffer.
-  \item {\bf REFER(frame, n)} -- Makes a new mention of the next {\bf n} tokens
+  \item {\bf EVOKE(type, n)} -- Evokes a frame of type {\bf type} from
+        the next {\bf n} tokens in the input. The evoked frame is inserted at the front of the attention
+        buffer, becoming the new center of attention.
+  \item {\bf REFER(frame, n)} -- Makes a new mention from the next {\bf n} tokens
         in the input evoking an existing frame in the attention buffer. This
         frame is moved to the front of the attention buffer and will become the
         new center of attention.
@@ -314,17 +311,17 @@ The transition system consists of the following actions:
         {\bf source} frame become the new center of attention.
   \item {\bf ASSIGN(source, role, value)} -- Adds slot to {\bf source} frame in
         the attention buffer with name {\bf role} and constant value {\bf value}
-        and moves the frame to the center of attention. The {\bf ASSIGN} action
-        is used for assigning a constant value to a slot in contrast to
+        and moves the frame to the front of the buffer. This action
+        is only used for assigning a constant value to a slot, in contrast to
         {\bf CONNECT} where the value is another frame in the attention buffer.
   \item {\bf EMBED(target, role, type)} -- Creates a new frame with
-        type {\bf type} and add a slot to it with name {\bf role} and value
+        type {\bf type} and adds a slot to it with name {\bf role} and value
         {\bf target} where {\bf target} is an existing frame in the attention
-        buffer. The new frame becomes the new center of attention.
+        buffer. The new frame becomes the center of attention.
   \item {\bf ELABORATE(source, role, type)} -- Creates a new frame with type
         {\bf type} and adds a slot to an existing frame {\bf source} in the
         attention buffer with {\bf role} set to the new frame. The new frame
-        becomes the new center of attention.
+        becomes the center of attention.
 \end{itemize}
 
 In summary, {\bf EVOKE} and {\bf REFER} are used to evoke frames from text
@@ -332,20 +329,20 @@ mentions, while {\bf ELABORATE} and {\bf EMBED} are used to create frames not
 directly evoked by text.
 
 This transition system can generate any connected frame graph where the frames
-are either directly on indirectly evoked by mention phrases in the text. A frame
+are either directly on indirectly evoked by phrases in the text. A frame
 can be evoked by multiple mentions and the graph can have cycles.
 
 The transition system can potentially have an unbounded number of actions since
-it is parameterized by phrase length and attention buffer indices with can be
-arbitrarily large, so in the current implementation, we only consider the
-top $k$ frames in the attention buffer $(k=5)$ and do not consider phrases
+it is parameterized by phrase length and attention buffer indices whih can be
+arbitrarily large. In the current implementation, we only consider the
+top $k$ frames in the attention buffer ($k=5$) and we do not consider any phrases
 longer than those in the training corpus.
 
 Multiple transition sequences can generate the same frame annotations, but we
 have implemented an oracle sequence generator that takes a document and converts
 it to a canonical transition sequence in a way similar to how this is done
-for transition-based dependency parsing \cite{nivre2006}, e.g. the sentence
-``John hit the ball" will generate the following transition sequence:
+for transition-based dependency parsing~\cite{nivre2006}. For example, the sentence
+``John hit the ball" generates the following transition sequence:
 \begin{verbatim}
   EVOKE(/saft/person, 1)
   SHIFT
