@@ -14,7 +14,13 @@ graphs directly without any intervening symbolic representation.
 
 The SLING framework includes an efficient and scalable frame store
 implementation as well as a neural network JIT compiler for fast parsing at
-runtime.
+runtime. 
+
+A more detailed description of the SLING parser can be found in this paper:
+
+* Michael Ringgaard, Rahul Gupta, and Fernando C. N. Pereira. 2017.
+  [_SLING: A framework for frame semantic parsing_](doc/report/sling.tex).
+  To be publised in arXiv preprint.
 
 ## Installation
 
