@@ -35,7 +35,7 @@ Fernando C. N. Pereira \\ Google Inc. \\ {\tt pereira@google.com} \\
 \begin{abstract}
 We describe SLING, a framework for parsing natural language into
 semantic frames. SLING supports general transition-based, neural-network parsing
-with bi-directional LSTM input encoding and a Transition Based Recurrent
+with bidirectional LSTM input encoding and a Transition Based Recurrent
 Unit (TBRU) for output decoding. The parsing model is
 trained end-to-end using only the text tokens as input. The
 transition system has been designed to output frame graphs directly without
@@ -97,7 +97,7 @@ trees.
 We use a recurrent feed-forward unit for predicting the actions in the
 transition sequence, where the hidden activations from predicting each
 transition step are fed back into subsequent steps.
-A bidirectional LSTM is used for encoding the input (Figure~\ref{fig:network}).
+A bidirectional LSTM (biLSTM) encodes the input into a sequence of vectors(Figure~\ref{fig:network}).
 This neural network architecture has been implemented using DRAGNN~\cite{dragnn}
 and TensorFlow~\cite{tensorflow}.
 
@@ -144,25 +144,24 @@ such that complete knowledge of one of them requires knowledge of all of them.
 
 Frame semantics is not just for individual concepts, but can be generalized
 to phrases, entities, constructions, and other larger and more complex linguistic
-and ontological units. Semantic frames can be also used in information modeling
-for constructing knowledge bases of world knowledge and common sense, and frame
-semantics can also form the basis for reasoning about
-metaphors~\cite{narayanan1999},
+and ontological units. Semantic frames can also model world knowledge and inferential relationships
+in common sense,
+metaphor~\cite{narayanan1999},
 metonymy,
-actions~\cite{narayanan1999reasoning},
-or perspective~\cite{chang2002}.
+action~\cite{narayanan1999reasoning},
+and perspective~\cite{chang2002}.
 
 \section{Frames in SLING}
 \label{sec:slingframes}
 
-At a more technical level, a SLING frame consists of a list of slots, where each
+SLING represents frames with data structures consisting of a list of slots, where each
 slot has a name (role) and a value. The slot values can be literals like numbers
-and strings, or links to other frames. The frames essentially form a directed
-graph where the frames are the (typed) nodes and the slots are the labeled
+and strings, or links to other frames. A collection of interlinked frames can thus be seen as a directed
+graph where the frames are the (typed) nodes and the slots are the (labeled)
 edges. A frame graph can also be viewed as a feature structure~\cite{carpenter2005}
 and unification can be used for induction of new frames from existing frames.
-Sometimes it is also useful to use frames for representing more basic data
-structures like a C struct with fields, a JSON object, or a record in a
+Frames can also be used to represent more basic data
+structures such as a C struct with fields, a JSON object, or a record in a
 database.
 
 SLING frames live inside a \emph{frame store}. A store is a container that
@@ -257,13 +256,13 @@ attention mechanisms.
 
 We maintain an \emph{attention buffer} as part of the transition system state.
 This an ordered list of frames, where the order represents closeness to the
-center of attention. Transition actions maintain the attention buffer, bringing
+center of attention. Transition system actions maintain the attention buffer, bringing
 a frame to the front when the frame is evoked or re-evoked by the input text.
 When a new frame is evoked, it will merge the concept and its roles into a new
 coherent chunk of meaning, which is represented by the new frame and its
 relations to other frames, and this will become the new center of attention.
 Our hypothesis is that by maintaining this attention mechanism, we only need to
-look at a few recent frames brought into attention to build up the desired
+look at a few recent frames brought into attention to build the desired
 frame graph.
 
 \section{Transition system}
