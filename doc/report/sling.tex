@@ -400,11 +400,10 @@ the inputs to the TBRU are as follows:
 
 \section{Experiments}
 
-We used the OntoNotes corpus \cite{ontonotes2006} to construct a corpus
-with frame semantic annotations for evaluating the parser. We took the
-PropBank SRL layer \cite{palmer2005} and converted the predicate-argument
+We derived a corpus annotated with semantic frames from the OntoNotes corpus~\cite{ontonotes2006}. We took the
+PropBank SRL layer~\cite{palmer2005} and converted the predicate-argument
 structures into frame annotations. We also annotated the corpus with
-entity frames with entity types using a state-of-the-art entity tagger.
+entity frames based on entity types from a state-of-the-art entity tagger.
 We determined the head token of each argument span and if this coincided
 with the span of an existing frame, then we used it as the evoking span for the
 argument frame, otherwise we just used the head token as the evoking span of the
@@ -415,7 +414,7 @@ Table~\ref{tab:types}. They include 7 conventional entity types,
 6 top-level non-entity types (e.g. date), 13 measurement types, and
 more than 5400 PropBank frame types. All the frame roles are collapsed onto
 /pb/arg0, /pb/arg1, and so on. Our training corpus size was $111,006$
-sentences = $2,206,274$ tokens.
+sentences, $2,206,274$ tokens.
 
 \begin{table*}[t]
 \begin{tabular}{|l|p{11cm}|}
@@ -428,10 +427,10 @@ Top-level non-entity types & /s/\{thing, date, price, measure, time, number\} \\
 \hline
 Fine-grained measure types & /s/measure/\{area, data, duration, energy, frequency, fuel, length, mass, power, speed, temperate, voltage, volume\} \\
 \hline
-PropBank SRL types & 5426 types, e.g. /pb/write-01, /pb/tune-02 etc.  \\
+PropBank SRL types & 5426 types, e.g. /pb/write-01, /pb/tune-02  \\
 \hline
 \end{tabular}
-\caption{Details of the type-sets used in our experiments.}
+\caption{Frame types used in the experiments.}
 \label{tab:types}
 \end{table*}
 
@@ -453,23 +452,23 @@ ASSIGN & 13 & 5,430 \\
 {\bf Total} & 6,968 & 4,038,809 \\
 \hline
 \end{tabular}
-\caption{Per transition-type statistics of the transitions used to generate
-the gold frames in the OntoNotes training corpus.}
+\caption{Action statistics for the transitions that generated
+the gold frames for the OntoNotes training corpus.}
 \label{tab:action-table}
 \end{table}
 
-Table~\ref{tab:action-table} presents the statistics of the transitions required
-to generate the gold frames in the training corpus. As expected, we saw one
+Table~\ref{tab:action-table} shows action statistics for the transition sequences that
+generate the gold frames in the training corpus. As expected, there is one
 SHIFT action per training token, and one STOP action per training sentence.
-We saw the EVOKE action take $5532$ unique (length, type) arguments in the
-corpus, for a raw count of roughly $1.08$ million. Overall our action space
-had $6968$ actions, which is also the size of the softmax layer of our TBRU
+The EVOKE action occurred with $5,532$ unique (length, type) arguments in the
+corpus, for a raw count of roughly $1.08$ million action tokens. Overall our action space
+had $6968$ action types, which is also the size of the softmax layer of our TBRU
 decoder.
 
 \noindent{{\bf Hyperparameters:}} Our final set of hyperparameters after
-performing a grid search was: learning\_rate = $0.0005$,
-optimizer = Adam~\cite{kingma2014} with $\beta_1 = 0.01, \beta_2 = 0.999,
-\epsilon = 1e-5$, no dropout, gradient clipping at $1.0$, exponential moving
+grid search with a dev corpus was: $\mboxlearning\_rate} = 0.0005$,
+$\mbox{optimizer} = \mbox{Adam}$~\cite{kingma2014} with $\beta_1 = 0.01$, $\beta_2 = 0.999$,
+$\epsilon = 1e-5$, no dropout, gradient clipping at $1.0$, exponential moving
 average, no layer normalization, and a training batch size of $8$.
 
 We stopped training after $120,000$ steps, where each step corresponds to
@@ -482,7 +481,7 @@ metrics are evaluated. We picked the checkpoint with the best `Slot F1` score.
 \begin{figure}
 \centering
 \includegraphics[width=\columnwidth]{dev-eval.pdf}
-  \caption{Various frame graph accuracies over the dev set as training progresses.
+  \caption{Frame graph quality metrics on dev set as training progresses.
 	Training was stopped at $120,000$ iterations since we saw very little
 	improvement after that.}
   \label{fig:dev-eval}
@@ -491,54 +490,54 @@ metrics are evaluated. We picked the checkpoint with the best `Slot F1` score.
 \section{Evaluation}
 \label{sec:eval}
 
-An annotated document consists of a number of connected frames and as well as
-phrases, i.e. token spans, evoking these frames. We evaluate the accuracy of the
-annotations by comparing the generated frames with the gold standard frame
+An annotated document consists of a number of connected frames as well as
+phrases (token spans) that evoked these frames. We evaluated
+annotation quality by comparing the generated frames with the gold standard frame
 annotations from the evaluation corpus.
 
-The documents are matched by constructing a virtual graph where the document
+Two documents are matched by constructing a virtual graph where the document
 is the start node. The document node is then connected to the spans and the
 spans are connected to the frames that the spans evoke. This graph is then
-extended by following the frame-to-frame links via the roles. Accuracy is
+extended by following the frame-to-frame links via the roles. Quality is
 computed by aligning the golden and predicted graphs and computing precision,
-recall, and F1. These accuracies are separately computed for the spans, frames,
-types of those frame, roles that link to other frames (referred to as 'roles'),
+recall, and F1. Those scores are separately computed for spans, frames,
+frame types, roles that link to other frames (referred to as 'roles'),
 and roles that link to global constants (referred to as 'labels').
 
-We also report two aggregates of the accuracies above: (a) {\em Slot}, which is
+We also report two aggregate quality scores: (a) {\em Slot}, which is
 an aggregate of {\em Type}, {\em Role}, and {\em Label}, and (b) {\em Combined},
 which is an aggregate of {\em Span}, {\em Frame}, {\em Type}, {\em Role}, and
 {\em Label}.
 
-We rate the checkpoints using the Slot-F1 metric and select the checkpoint that
-has the best Slot-F1. Intuitively, a high {\em Slot} score reflects that the
+We rated the checkpoints using the Slot-F1 metric and selected the checkpoint with
+the best Slot-F1. Intuitively, a high {\em Slot} score reflects that the
 right type of frames are being evoked, along with the right set of slots and
 links to other frames.
 
-In Figure~\ref{fig:dev-eval}, we can see that as training progresses,
+Figure~\ref{fig:dev-eval} shows that as training progresses,
 the model learns to output the spans and frames evoked from those spans with
-a fairly high accuracy (SPAN F1 $\approx$ FRAME F1 $\approx$ $94\%$). It also
-gets the type of those frames right with a TYPE F1 of $= 86.26\%$. Our ROLE F1
+fairly good quality (SPAN F1 $\approx$ FRAME F1 $\approx$ $94\%$). It also
+gets the type of those frames right with a TYPE F1 of $= 86.26\%$. ROLE F1
 though is lower at just $68.98\%$. ROLE F1 measures the accuracy of correctly
-getting the frame-frame link, including the label of the link. Some error
-analysis is required to ascertain the aspect(s) of frame-frame links missed by
+getting the frame-frame link, including the label of the link. Further error
+analysis will be required to understand how frame-frame links are missed by
 the model. Also note that currently the {\em roles} feature is the only one
 that captures inter-frame link information.
-Augmenting this with more features should help improve ROLE accuracy, and we
-shall consider investigating this in our future work.
+Augmenting this with more features should help improve ROLE quality, as we will
+investigate in future work.
 
-Finally, we take the best checkpoint (with SLOT F1 $= 79.95\%$ at $110,000$ steps),
-and evaluate it over the test corpus.
-Table~\ref{tab:eval} lists the accuracy of this model on the test and dev
+Finally, we took the best checkpoint, with SLOT F1 $= 79.95\%$ at $110,000$ steps),
+and evaluated it on the test corpus.
+Table~\ref{tab:eval} lists the quality of this model on the test and dev
 corpora.
 With the exception of LABEL accuracies, all the other metrics exhibit less than
 half a percent difference between the test and dev corpora. This illustrates
-that despite the lack of dropout, the model hasn't overfit and generalizes well
+that despite the lack of dropout, the model did not overfit and generalizes well
 to unseen text.
-As far the disparity on LABEL is concerned (LABEL F1 of $95.91$ on dev
-vs $93.82$ on test), we note that the LABEL accuracies are the slowest to
+As for the disparity on LABEL F1 ($95.91$ on dev
+against $93.82$ on test), we note that the LABEL accuracies are the slowest to
 improve while training.
-In Figure~\ref{fig:dev-eval}, we can see that LABEL F1 starts close to zero,
+In Figure~\ref{fig:dev-eval} se see that LABEL F1 starts close to zero,
 and although it improves to $95.91$, it still shows signs of further improvement
 when training was stopped, in contrast to other metrics which practically
 plateau out.
@@ -550,9 +549,9 @@ $0.4\%$, while TYPE F1 and FRAME F1 only improved by less than $0.05\%$.
 \hline
 {\bf Metric} & & {\bf Dev} & {\bf Test} \\
 \hline
-Num Tokens & & 291,746  & 216,473  \\
+Tokens & & 291,746  & 216,473  \\
 \hline
-Num Sentences &   & 15,084 & 11,623  \\
+Sentences &   & 15,084 & 11,623  \\
 \hline
 \hline
 Span & Precision & 93.46  & 93.16 \\
@@ -598,8 +597,8 @@ Combined & Precision & 87.56 & 87.31 \\
 & F1 & 87.63 & 87.58 \\
 \hline
 \end{tabular}
-\caption{Evaluation of the model on the dev and test corpora. The model was
-chosen via the Slot-F1 metric over the dev corpus during training.}
+\caption{Evaluation on dev and test corpora, model 
+chosen on the Slot-F1 metric on dev corpus.}
 \label{tab:eval}
 \end{table}
 
