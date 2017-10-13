@@ -519,9 +519,9 @@ links to other frames.
 
 Figure~\ref{fig:dev-eval} shows that as training progresses,
 the model learns to output the spans and frames evoked from those spans with
-fairly good quality (SPAN F1 $\approx$ FRAME F1 $\approx$ $94\%$). It also
-gets the type of those frames right with a TYPE F1 of $= 86.26\%$. ROLE F1
-though is lower at just $68.98\%$. ROLE F1 measures the accuracy of correctly
+fairly good quality (SPAN F1 $\approx$ FRAME F1 $\approx$ $93.81\%$). It also
+gets the type of those frames right with a TYPE F1 of $= 85.88\%$. ROLE F1
+though is lower at just $69.65\%$. ROLE F1 measures the accuracy of correctly
 getting the frame-frame link, including the label of the link. Further error
 analysis will be required to understand how frame-frame links are missed by
 the model. Also note that currently the {\em roles} feature is the only one
@@ -529,23 +529,19 @@ that captures inter-frame link information.
 Augmenting this with more features should help improve ROLE quality, as we will
 investigate in future work.
 
-Finally, we took the best checkpoint, with SLOT F1 $= 79.95\%$ at $110,000$ steps),
+Finally, we took the best checkpoint, with SLOT F1 $= 79.95\%$ at $118,000$ steps),
 and evaluated it on the test corpus.
 Table~\ref{tab:eval} lists the quality of this model on the test and dev
 corpora.
 With the exception of LABEL accuracies, all the other metrics exhibit less than
 half a percent difference between the test and dev corpora. This illustrates
-that despite the lack of dropout, the model did not overfit and generalizes well
-to unseen text.
-As for the disparity on LABEL F1 ($95.91$ on dev
-against $93.82$ on test), we note that the LABEL accuracies are the slowest to
-improve while training.
-In Figure~\ref{fig:dev-eval} we see that LABEL F1 starts close to zero,
-and although it improves to $95.91$, it still shows signs of further improvement
-when training was stopped, in contrast to other metrics which practically
-plateau out.
-For example, between iterations 100,000 and 120,000, LABEL F1 improved by
-$0.4\%$, while TYPE F1 and FRAME F1 only improved by less than $0.05\%$.
+that despite the lack of dropout, the model generalizes well to unseen text.
+As for the disparity on LABEL F1 ($95.73$ on dev
+against $92.79$ on test), we observe from Figure~\ref{fig:dev-eval}
+that the LABEL accuracies follow a different improvement pattern
+during training. On the dev set, LABEL F1 peaked at $96.18$ at $100,000$ steps,
+and started degrading slightly from there on to $95.73$ at $118,000$ steps,
+possibly showing signs of overfitting which are absent in the other metrics.
 
 \begin{table}[ht]
 \begin{tabular}{|ll|r|r|}
@@ -557,47 +553,47 @@ Tokens & & 291,746  & 216,473  \\
 Sentences &   & 15,084 & 11,623  \\
 \hline
 \hline
-Span & Precision & 93.46  & 93.16 \\
+Span & Precision & 93.42  & 92.93 \\
 \hline
-& Recall & 94.15 & 94.35 \\
+& Recall & 94.21 & 93.97 \\
 \hline
-& F1 & 93.80 & 93.75 \\
+& F1 & 93.81 & 93.45 \\
 \hline
-Frame & Precision & 93.54 & 93.29 \\
+Frame & Precision & 93.47 & 93.10 \\
 \hline
-& Recall & 94.07 & 94.02 \\
+& Recall & 94.16 & 93.71 \\
 \hline
-& F1 & 93.80 & 93.65\\
+& F1 & 93.81 & 93.40\\
 \hline
-Type & Precision & 86.00  & 85.97 \\
+Type & Precision & 85.56  & 85.52 \\
 \hline
-& Recall & 86.51 & 86.65 \\
+& Recall & 86.20 & 86.10 \\
 \hline
-& F1 & 86.26 & 86.31 \\
+& F1 & 85.88 & 85.81 \\
 \hline
-Role & Precision & 69.75 & 69.35 \\
+Role & Precision & 70.21 & 68.97 \\
 \hline
-& Recall & 68.22 & 68.62 \\
+& Recall & 69.11 & 68.55 \\
 \hline
-& F1 & 68.98 &68.98 \\
+& F1 & 69.65 & 68.76 \\
 \hline
-Label & Precision & 96.63 &95.12 \\
+Label & Precision & 96.51 & 93.87 \\
 \hline
-& Recall & 95.19 & 92.56 \\
+& Recall & 94.97 & 91.74 \\
 \hline
-& F1 & 95.91 & 93.82 \\
+& F1 & 95.73 & 92.79 \\
 \hline
-Slot & Precision & 80.13 & 79.92 \\
+Slot & Precision & 80.00 & 79.48 \\
 \hline
-& Recall & 79.77 & 80.00 \\
+& Recall & 79.90 & 79.62 \\
 \hline
-& F1 & 79.95 & 79.96 \\
+& F1 & 79.95 & 79.55 \\
 \hline
-Combined & Precision & 87.56 & 87.31 \\
+Combined & Precision & 87.46 & 86.99 \\
 \hline
-& Recall & 87.70 & 87.85 \\
+& Recall & 87.79 & 87.49 \\
 \hline
-& F1 & 87.63 & 87.58 \\
+& F1 & 87.63 & 87.24 \\
 \hline
 \end{tabular}
 \caption{Evaluation on dev and test corpora, model
