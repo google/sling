@@ -608,24 +608,22 @@ chosen on the Slot-F1 metric on dev corpus.}
 The SLING parser uses TensorFlow~\cite{tensorflow} for training but it also
 supports annotating text with frame annotations at runtime. It can take
 advantage of batching and multi-threading to speed up parsing. However, in
-practical applications of the parser, it is often not convenient to have to
-batch documents for processing, so in order to have a realistic benchmark, we
+practical applications of the parser, it may not be convenient to
+batch documents for processing, so to have a realistic benchmark, we
 set the batch size to one at runtime. In this configuration, the
 TensorFlow-based SLING parser runs at 200 tokens per CPU second.
 
-In order to speed up parsing at runtime, we have implemented \emph{Myelin}, a
-just-in-time compiler for neural networks. It compiles the network cells into
-x64 machine code at runtime. The generated code takes the CPU features of the
-machine into account when generating the code and can take advantage of
-specialized features like SSE, AVX, and FMA3 if available on the CPU.
-At runtime, the tensor shapes as well as the parameters of the model are
-fixed.
-This allows us to make transformations of the network, fold constants, unroll
-loops, pre-compute embeddings, etc. The JIT compiler can also fix the data
-instance layout at compile-time speeding up access to data at runtime.
+To speed up parsing, we have created \emph{Myelin}, a
+just-in-time compiler for neural networks that compiles network cells into
+x64 machine code at runtime. The generated code exploits such
+specialized CPU features as SSE, AVX, and FMA3, if available.
+Tensor shapes and model parameters are fixed at runtime.
+This allows us to optimize the network by folding constants, unrolling
+loops, and pre-computing embeddings, among other transformations. The JIT compiler can also fix the data
+instance layout at compile-time to speed up runtime data access.
 
-The Myelin-based SLING parser runs at 2500 tokens per CPU second, which is more
-than ten times faster than the TensorFlow-based SLING parser
+The Myelin-based SLING parser runs at 2500 tokens per CPU second, more
+than ten times faster than the TensorFlow-based version
 (Table~\ref{tab:runtime}).
 
 \begin{table}[!t]
@@ -639,7 +637,7 @@ TF         &  200 TPS  & 37.000 KB    & 10 secs   \\
 Myelin     & 2500 TPS  &    500 KB    & 0.5 secs  \\
 \hline
 \end{tabular}
-\caption{Comparison between TensorFlow-based SLING parser runtime and the
+\caption{Comparison between TensorFlow-based SLING parser runtime and 
 Myelin-based parser runtime using JIT compilation.
 Speed is measured as tokens parsed per CPU second, i.e. user+sys in time(1).}
 \label{tab:runtime}
