@@ -368,7 +368,7 @@ training.
 frames.
 * The action table with all the transition actions.
 
-A pre-trained model can be download from [here](http://www.jbox.dk/sling/sempar.flow) (NB: not final model!!!).
+A pre-trained model can be download from [here](http://www.jbox.dk/sling/sempar.flow).
 The model can be loaded and initialized in the following way:
 
 ```c++
