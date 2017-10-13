@@ -210,7 +210,9 @@ class Document {
   void SetText(Text text);
 
   // Add token to document.
-  void AddToken(int begin, int end, Text text, BreakType brk);
+  void AddToken(Text text,
+                int begin = -1, int end = -1,
+                BreakType brk = SPACE_BREAK);
 
   // Add new span to the document. The span is initialized with a mention frame
   // for the span. If the span already exists, the type is added to the mention

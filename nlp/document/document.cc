@@ -147,8 +147,13 @@ Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
       t.document_ = this;
       t.handle_ = h;
       t.index_ = i;
-      t.begin_ = start.AsInt();
-      t.end_ = t.begin_ + length.AsInt();
+      if (!start.IsNil() && !length.IsNil()) {
+        t.begin_ = start.AsInt();
+        t.end_ = t.begin_ + length.AsInt();
+      } else {
+        t.begin_ = -1;
+        t.end_ = -1;
+      }
       if (!text.IsNil()) {
         StringDatum *str = store()->GetString(text);
         t.text_.assign(str->data(), str->size());
@@ -209,8 +214,12 @@ void Document::Update() {
       token.AddIsA(n_token_);
       token.Add(n_token_index_, i);
       token.Add(n_token_text_, t.text_);
-      token.Add(n_token_start_, t.begin_);
-      token.Add(n_token_length_, t.end_ - t.begin_);
+      if (t.begin_ != -1) {
+        token.Add(n_token_start_, t.begin_);
+        if (t.end_ != -1) {
+          token.Add(n_token_length_, t.end_ - t.begin_);
+        }
+      }
       if (t.brk_ != SPACE_BREAK) {
         token.Add(n_token_break_, t.brk_);
       }
@@ -241,7 +250,7 @@ void Document::SetText(Text text) {
   tokens_changed_ = true;
 }
 
-void Document::AddToken(int begin, int end, Text text, BreakType brk) {
+void Document::AddToken(Text text, int begin, int end, BreakType brk) {
   // Expand token array.
   int index = tokens_.size();
   tokens_.resize(index + 1);
