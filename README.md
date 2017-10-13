@@ -353,10 +353,9 @@ trainer:
 ```
 curl -o /tmp/conll-2003-sempar.tar.gz http://www.jbox.dk/sling/conll-2003-sempar.tar.gz
 tar -xvf /tmp/conll-2003-sempar.tar.gz
-curl -o local/conll2003/word2vec-32-embeddings.bin http://www.jbox.dk/sling/word2vec-32-embeddings.bin
 ```
 
-See `local/conll2003/README.md` for instructions on how to train a parser.
+See [local/conll2003/README.md](local/conll2003/README.md) for instructions on how to train a parser.
 
 ## Parsing
 
