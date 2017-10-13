@@ -111,7 +111,9 @@ efficiently.
 Section~\ref{sec:att} introduces the parser's frame-semantics-oriented attention
 mechanism, and Section~\ref{sec:ts} describes the transition system used for
 producing frame graphs. Section~\ref{sec:features} describes the features used
-by the parser.
+by the parser. In sections~\ref{sec:experiments} and~\ref{sec:eval} we describe
+our experiments on OntoNotes, and section~\ref{sec:runtime} describes the
+fast parser runtime.
 
 \begin{figure*}[t]
   \centering
@@ -270,7 +272,7 @@ frame graph.
 
 \emph{Transition systems} are widely
 used in parsing to build dependency parse trees as a side effect of performing a sequence \emph{state transitions}
-$(s_i,a_i)$ where $s_i$ is a \emph{state} and $a_i$ is an \emph{action}. Action $a_i$ computes the new state 
+$(s_i,a_i)$ where $s_i$ is a \emph{state} and $a_i$ is an \emph{action}. Action $a_i$ computes the new state
 $s_{i+1}$ from state $s_i$. For example, the \emph{arc-standard}
 transition system~\cite{nivre2006} uses a sequence of {\bf SHIFT}, {\bf LEFT-ARC(label)}, and
 {\bf RIGHT-ARC(label)} actions, operating on a state whose main component is a stack, to build a dependency parse tree.
@@ -280,7 +282,7 @@ evoked by phrases in the input. But instead of using a stack in the state, we us
 buffer introduced in the previous section that keeps track of the most salient
 frames in the discourse.
 
-The attention buffer is priority list of all the
+The attention buffer is a priority list of all the
 frames evoked so far. The front of the buffer serves as the working
 memory for the parser. Actions operate on the front of the buffer and in some cases other frames in the buffer. The transition
 system simultaneously builds the frame graph and maintains the attention buffer
@@ -333,7 +335,7 @@ are either directly on indirectly evoked by phrases in the text. A frame
 can be evoked by multiple mentions and the graph can have cycles.
 
 The transition system can potentially have an unbounded number of actions since
-it is parameterized by phrase length and attention buffer indices whih can be
+it is parameterized by phrase length and attention buffer indices which can be
 arbitrarily large. In the current implementation, we only consider the
 top $k$ frames in the attention buffer ($k=5$) and we do not consider any phrases
 longer than those in the training corpus.
@@ -395,10 +397,11 @@ the inputs to the TBRU are as follows:
   \item Embeddings of triples of the form $(s_i, r_i, t_i)$, $0<s_i,t_i\le k$ encode the fact that the frame at position $s_i$ in the attention buffer has a role $r_i$ with
   the frame at position $t_i$ in the attention buffer as its value. Back-off
   features are added for the source roles $(s_i,r_i)$, target role $(r_i, t_i)$,
-  and unlabeled roles $(s_i,t_i)$. 
+  and unlabeled roles $(s_i,t_i)$.
 \end{itemize}
 
 \section{Experiments}
+\label{sec:experiments}
 
 We derived a corpus annotated with semantic frames from the OntoNotes corpus~\cite{ontonotes2006}. We took the
 PropBank SRL layer~\cite{palmer2005} and converted the predicate-argument
@@ -537,7 +540,7 @@ to unseen text.
 As for the disparity on LABEL F1 ($95.91$ on dev
 against $93.82$ on test), we note that the LABEL accuracies are the slowest to
 improve while training.
-In Figure~\ref{fig:dev-eval} se see that LABEL F1 starts close to zero,
+In Figure~\ref{fig:dev-eval} we see that LABEL F1 starts close to zero,
 and although it improves to $95.91$, it still shows signs of further improvement
 when training was stopped, in contrast to other metrics which practically
 plateau out.
@@ -597,13 +600,14 @@ Combined & Precision & 87.56 & 87.31 \\
 & F1 & 87.63 & 87.58 \\
 \hline
 \end{tabular}
-\caption{Evaluation on dev and test corpora, model 
+\caption{Evaluation on dev and test corpora, model
 chosen on the Slot-F1 metric on dev corpus.}
 \label{tab:eval}
 \end{table}
 
 
 \section{Parser runtime}
+\label{sec:runtime}
 
 The SLING parser uses TensorFlow~\cite{tensorflow} for training but it also
 supports annotating text with frame annotations at runtime. It can take
@@ -637,7 +641,7 @@ TF         &  200 TPS  & 37.000 KB    & 10 secs   \\
 Myelin     & 2500 TPS  &    500 KB    & 0.5 secs  \\
 \hline
 \end{tabular}
-\caption{Comparison between TensorFlow-based SLING parser runtime and 
+\caption{Comparison between TensorFlow-based SLING parser runtime and
 Myelin-based parser runtime using JIT compilation.
 Speed is measured as tokens parsed per CPU second, i.e. user+sys in time(1).}
 \label{tab:runtime}
