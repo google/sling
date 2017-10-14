@@ -417,8 +417,8 @@ We provide two such tools -- a
 parser tool](https://github.com/google/sling/blob/master/nlp/parser/tools/parse.cc).
 Given the same trained parser model, both these tools should produce
 the same annotated frames and evaluation numbers. However the Myelin-based
-parser is significantly faster than Tensorflow-based tf-parse (3x-10x in our
-experiments).
+parser is significantly faster than Tensorflow-based tf-parse ([3x-10x in our
+experiments](http://www.jbox.dk/sling/sempar-profile.htm)).
 
 ### Myelin-based parser tool
 
