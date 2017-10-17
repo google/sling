@@ -21,7 +21,6 @@ namespace sling {
 namespace nlp {
 
 void SharedResources::LoadActionTable(const string &file) {
-  table.set_action_checks(false);
   CHECK(global != nullptr);
   Store temp(global);
   sling::LoadStore(file, &temp);

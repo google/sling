@@ -219,7 +219,8 @@ then
     --output_dir=${OUTPUT_FOLDER} \
     --word_embeddings=${PRETRAINED_WORD_EMBEDDINGS} \
     --word_embeddings_dim=${WORD_EMBEDDINGS_DIM} \
-    --oov_lstm_features=${OOV_FEATURES}
+    --oov_lstm_features=${OOV_FEATURES} \
+    --logtostderr
 fi
 
 if [[ "$DO_TRAINING" -eq 1 ]];
@@ -236,7 +237,8 @@ then
     --dev_corpus=${DEV_FILEPATTERN} \
     --batch_size=${BATCH_SIZE} \
     --report_every=${REPORT_EVERY} \
-    --train_steps=${TRAIN_STEPS}
+    --train_steps=${TRAIN_STEPS} \
+    --logtostderr
 fi
 
 echo "Done."

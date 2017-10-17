@@ -142,7 +142,7 @@ void OutputActionTable(Artifacts *artifacts) {
 
     count++;
     generator.Add(*document);
-    if (count % 10000 == 1) LOG(INFO) << count << " documents processed.";
+    LOG_EVERY_N(INFO, 10000) << count << " documents processed.";
     delete document;
   }
   LOG(INFO) << "Processed " << count << " documents.";
@@ -283,9 +283,8 @@ void OutputResources(Artifacts *artifacts) {
     }
 
     count++;
-    if (count % 10000 == 1) {
-      LOG(INFO) << count << " documents processsed while building lexicons";
-    }
+    LOG_EVERY_N(INFO, 10000)
+        << count << " documents processsed while building lexicons";
     delete document;
   }
 

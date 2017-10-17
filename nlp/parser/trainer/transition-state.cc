@@ -27,9 +27,6 @@ SemparState::SemparState(SemparInstance *instance,
   instance_ = instance;
   resources_ = &resources;
   system_type_ = type;
-  CHECK(!action_table()->action_checks())
-      << "Fingerprint-based checks not currently supported in "
-      << "SemparTransitiontate.";
   score_ = 0;
 
   if (!shift_only()) {
@@ -178,7 +175,7 @@ void SemparState::ComputeAllowed() {
   }
 
   // Compute the rest of the allowed actions as per the action table.
-  action_table()->Allowed(*parser_state_, {} /* fingerprints */, &allowed_);
+  action_table()->Allowed(*parser_state_, &allowed_);
 }
 
 void SemparState::StepInformation::Update(const ParserAction &action,

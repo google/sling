@@ -25,9 +25,7 @@
 namespace sling {
 namespace nlp {
 
-void ActionTable::Add(const ParserState &state,
-                      const ParserAction &action,
-                      uint64 fingerprint) {
+void ActionTable::Add(const ParserAction &action) {
   // Add the action to the index if it is new.
   int index = Index(action);
   if (index == -1) {
@@ -44,42 +42,31 @@ void ActionTable::Add(const ParserState &state,
   uint8 target = action.target;
   switch (action.type) {
     case ParserAction::EVOKE:
-      fingerprint_[fingerprint].evoke.emplace(index);
       span_length_.Add(action.length);
       break;
     case ParserAction::REFER: {
-      ParserAction refer = action;
-      refer.label = state.type(target);
-      fingerprint_[fingerprint].refer.emplace(refer);
       span_length_.Add(action.length);
       break;
     }
     case ParserAction::ASSIGN:
       assign_source_.Add(source);
       overall_index_.Add(source);
-      type_[state.type(source)].assign.emplace(action.role, action.label);
       break;
     case ParserAction::CONNECT: {
       connect_source_.Add(source);
       connect_target_.Add(target);
       overall_index_.Add(source);
       overall_index_.Add(target);
-      Handle source_type = state.type(source);
-      type_[source_type].connect[state.type(target)].insert(action.role);
       break;
     }
     case ParserAction::EMBED: {
-      Handle target_type = state.type(target);
       embed_target_.Add(target);
       overall_index_.Add(target);
-      type_[target_type].embed.emplace(action.label, action.role);
       break;
     }
     case ParserAction::ELABORATE: {
       elaborate_source_.Add(source);
       overall_index_.Add(source);
-      Handle source_type = state.type(source);
-      type_[source_type].elaborate.emplace(action.label, action.role);
       break;
     }
     case ParserAction::SHIFT:
@@ -90,9 +77,7 @@ void ActionTable::Add(const ParserState &state,
 }
 
 void ActionTable::Allowed(
-    const ParserState &state,
-    const std::vector<uint64> &fingerprints,
-    std::vector<bool> *allowed) const {
+    const ParserState &state, std::vector<bool> *allowed) const {
   // See if SHIFT/STOP are allowed.
   if (state.done() || (state.current() == state.end())) {
     (*allowed)[StopIndex()] = true;
@@ -102,154 +87,15 @@ void ActionTable::Allowed(
   // If we are not at the end, we can always SHIFT.
   (*allowed)[ShiftIndex()] = true;
 
-  // If no additional checks are required then just allow all actions that the
-  // parser state permits, except the ones beyond the index bounds.
-  if (!action_checks()) {
-    for (int i = 0; i < actions_.size(); ++i) {
-      if (beyond_bounds_[i]) continue;
-      const auto &action = actions_[i];
-      if (state.CanApply(action)) {
-        (*allowed)[i] = true;
-      }
-    }
-    return;
-  }
-
-  // Output any EVOKE/REFER actions.
-  ParserAction refer;
-  refer.type = ParserAction::REFER;
-
-  int attention_size = state.AttentionSize();
-  int max_length = state.MaxEvokeLength(max_span_length_);
-
-  for (int f = 0; f < max_length && f < fingerprints.size(); ++f) {
-    uint64 fp = fingerprints[f];
-    const auto &it = fingerprint_.find(fp);
-    if (it == fingerprint_.end()) continue;
-
-    // Allow seen EVOKE actions for the fingerprint.
-    for (int action_index : it->second.evoke) {
-      if (state.CanApply(Action(action_index))) (*allowed)[action_index] = true;
-    }
-
-    // For every REFER action for that fingerprint, do an additional type check.
-    if (attention_size == 0) continue;  // no frames, so can't refer back
-    for (const ParserAction &action : it->second.refer) {
-      refer.length = action.length;
-      for (int i = 0; i <= max_refer_target_ && i < attention_size; ++i) {
-        if (state.type(i) != action.label) continue;
-        refer.target = i;
-        int index = Index(refer);
-        if (index != -1 && state.CanApply(refer)) {
-          (*allowed)[index] = true;
-        }
-      }
+  // Allow all actions that the parser state permits,
+  // except the ones beyond the index bounds.
+  for (int i = 0; i < actions_.size(); ++i) {
+    if (beyond_bounds_[i]) continue;
+    const auto &action = actions_[i];
+    if (state.CanApply(action)) {
+      (*allowed)[i] = true;
     }
   }
-
-  // Go over the rest of the actions.
-  for (int i = 0; i <= max_index_ && i < attention_size; ++i) {
-    const auto &it = type_.find(state.type(i));
-    if (it == type_.end()) continue;
-    const TypeConstraint &type_constraints = it->second;
-
-    // Output allowed ASSIGN actions.
-    if (i <= max_assign_source_) {
-      ParserAction action;
-      action.type = ParserAction::ASSIGN;
-      action.source = i;
-      for (const auto &role_value : type_constraints.assign) {
-        action.role = role_value.first;
-        action.label = role_value.second;
-        int index = Index(action);
-        if (index != -1 && state.CanApply(action)) (*allowed)[index] = true;
-      }
-    }
-
-    // Output allowed CONNECT actions.
-    if (i <= max_connect_source_) {
-      ParserAction action;
-      action.type = ParserAction::CONNECT;
-      action.source = i;
-      for (int j = 0; j <= max_connect_target_ && j < attention_size; ++j) {
-        const auto &it2 = type_constraints.connect.find(state.type(j));
-        if (it2 != type_constraints.connect.end()) {
-          action.target = j;
-          for (Handle role : it2->second) {
-            action.role = role;
-            int index = Index(action);
-            if (index != -1 && state.CanApply(action)) (*allowed)[index] = true;
-          }
-        }
-      }
-    }
-
-    // Output allowed EMBED actions.
-    if (i <= max_embed_target_) {
-      ParserAction action;
-      action.type = ParserAction::EMBED;
-      action.target = i;
-      for (const auto &source_type_role : type_constraints.embed) {
-        action.label = source_type_role.first;
-        action.role = source_type_role.second;
-        int index = Index(action);
-        if (index != -1 && state.CanApply(action)) (*allowed)[index] = true;
-      }
-    }
-
-    // Output allowed ELABORATE actions.
-    if (i <= max_elaborate_source_) {
-      ParserAction action;
-      action.type = ParserAction::ELABORATE;
-      action.source = i;
-      for (const auto &target_type_role : type_constraints.elaborate) {
-        action.label = target_type_role.first;
-        action.role = target_type_role.second;
-        int index = Index(action);
-        if (index != -1 && state.CanApply(action)) (*allowed)[index] = true;
-      }
-    }
-  }
-}
-
-void ActionTable::Load(const Frame &frame,
-                       Handle slot,
-                       Handle subslot1,
-                       Handle subslot2,
-                       ActionTable::HandlePairSet *pairs) {
-  Array array = frame.Get(slot).AsArray();
-  if (!array.valid()) return;
-
-  for (int i = 0; i < array.length(); ++i) {
-    Frame f(frame.store(), array.get(i));
-    CHECK(f.valid());
-    Handle value1, value2;
-    for (const Slot &s : f) {
-      if (s.name == subslot1) value1 = s.value;
-      if (s.name == subslot2) value2 = s.value;
-    }
-    CHECK(!value1.IsNil());
-    CHECK(!value2.IsNil());
-    pairs->emplace(value1, value2);
-  }
-}
-
-void ActionTable::Save(const HandlePairSet &pairs,
-                       Handle slot,
-                       Handle subslot1,
-                       Handle subslot2,
-                       Builder *builder) const {
-  if (pairs.empty()) return;
-
-  Array array(builder->store(), pairs.size());
-  int i = 0;
-  for (const auto &p : pairs) {
-    Builder b(builder->store());
-    b.Add(subslot1, p.first);
-    b.Add(subslot2, p.second);
-    array.set(i++, b.Create().handle());
-  }
-  builder->Add(slot, array);
 }
 
 // Returns the handle to 'symbol', which should already exist.
@@ -361,86 +207,6 @@ void ActionTable::Init(Store *store) {
     }
     beyond_bounds_[i] = beyond_bounds;
   }
-
-  // Read fingerprint-based constraints.
-  Array fingerprint_constraints(store, top.GetHandle("/table/fp/constraints"));
-  CHECK(fingerprint_constraints.valid());
-
-  Handle fingerprint = GetSymbol(*store, "/table/fp");
-  Handle fingerprint_evoke = GetSymbol(*store, "/table/fp/evoke");
-  Handle fingerprint_refer = GetSymbol(*store, "/table/fp/refer");
-  for (int i = 0; i < fingerprint_constraints.length(); ++i) {
-    Frame constraint(store, fingerprint_constraints.get(i));
-    CHECK(constraint.valid());
-
-    // uint64 fingerprints are stored as strings.
-    string s = constraint.GetString(fingerprint);
-    CHECK(!s.empty());
-    uint64 fp;
-    CHECK(safe_strtou64(s, &fp)) << s;
-    ActionTable::FingerprintConstraint &fp_constraint = fingerprint_[fp];
-
-    Array evoke = constraint.Get(fingerprint_evoke).AsArray();
-    if (evoke.valid()) {
-      for (int j = 0; j < evoke.length(); ++j) {
-        fp_constraint.evoke.emplace(evoke.get(j).AsInt());
-      }
-    }
-
-    Array refer = constraint.Get(fingerprint_refer).AsArray();
-    if (refer.valid()) {
-      for (int j = 0; j < refer.length(); ++j) {
-        ParserAction action;
-        action.type = ParserAction::REFER;
-        Frame refer_frame(store, refer.get(i));
-        CHECK(refer_frame.valid());
-        action.length = refer_frame.GetInt(action_length);
-        if (action.length == 0) action.length = 1;
-        action.label = refer_frame.GetHandle(action_label);
-        fp_constraint.refer.emplace(action);
-      }
-    }
-  }
-
-  // Read type-based constraints.
-  Handle type_role = GetSymbol(*store, "/table/type/role");
-  Handle type_value = GetSymbol(*store, "/table/type/value");
-  Handle type_source = GetSymbol(*store, "/table/type/source");
-  Handle type_target = GetSymbol(*store, "/table/type/target");
-  Handle type_assign = GetSymbol(*store, "/table/type/assign");
-  Handle type_embed = GetSymbol(*store, "/table/type/embed");
-  Handle type_elaborate = GetSymbol(*store, "/table/type/elaborate");
-  Handle type_connect = GetSymbol(*store, "/table/type/connect");
-  Array type_constraints(store, top.GetHandle("/table/type/constraints"));
-  if (type_constraints.valid()) {
-    for (int i = 0; i < type_constraints.length(); ++i) {
-      Frame constraint(store, type_constraints.get(i));
-      CHECK(constraint.valid());
-      Handle type = constraint.GetHandle("/table/type");
-      CHECK(!type.IsNil());
-
-      ActionTable::TypeConstraint &tc = type_[type];
-      Load(constraint, type_assign, type_role, type_value, &tc.assign);
-      Load(constraint, type_embed, type_source, type_role, &tc.embed);
-      Load(constraint, type_elaborate, type_target, type_role, &tc.elaborate);
-
-      // Load CONNECT constraints.
-      Array connect = constraint.Get(type_connect).AsArray();
-      if (connect.valid()) {
-        for (int i = 0; i < connect.length(); ++i) {
-          Frame f(store, connect.get(i));
-          CHECK(f.valid());
-          Handle target = f.GetHandle(type_target);
-          Array roles = f.Get(type_role).AsArray();
-          CHECK(!target.IsNil());
-          CHECK(roles.valid());
-          for (int j = 0; j < roles.length(); ++j) {
-            tc.connect[target].insert(roles.get(j));
-          }
-        }
-      }
-    }
-  }
 }
 
 void ActionTable::Save(const Store *global,
@@ -507,89 +273,6 @@ string ActionTable::Serialize(const Store *global, int percentile) const {
   }
   top.Add("/table/actions", actions);
 
-  // Save fingerprint-based constraints.
-  Handle fingerprint = GetSymbol(&store, "/table/fp");
-  Handle fingerprint_evoke = GetSymbol(&store, "/table/fp/evoke");
-  Handle fingerprint_refer = GetSymbol(&store, "/table/fp/refer");
-  if (!fingerprint_.empty()) {
-    Array fingerprint_constraints(&store, fingerprint_.size());
-    index = 0;
-    for (const auto &kv : fingerprint_) {
-      Builder b(&store);
-      uint64 fp = kv.first;
-      b.Add(fingerprint, StrCat(fp));  // 64-bit numbers can't be saved as ints
-
-      const FingerprintConstraint &constraint = kv.second;
-
-      if (!constraint.evoke.empty()) {
-        Array evoke(&store, constraint.evoke.size());
-        int i = 0;
-        for (int action_index : constraint.evoke) {
-          evoke.set(i++, Handle::Integer(action_index));
-        }
-        b.Add(fingerprint_evoke, evoke);
-      }
-
-      if (!constraint.refer.empty()) {
-        Array refer(&store, constraint.refer.size());
-        int i = 0;
-        for (const ParserAction &action : constraint.refer) {
-          Builder b2(&store);
-          if (action.length > 1) {
-            b2.Add(action_length, static_cast<int>(action.length));
-          }
-          b2.Add(action_label, action.label);
-          refer.set(i++, b2.Create().handle());
-        }
-        b.Add(fingerprint_refer, refer);
-      }
-      fingerprint_constraints.set(index++, b.Create().handle());
-    }
-    top.Add("/table/fp/constraints", fingerprint_constraints);
-  }
-
-  // Save type-based constraints.
-  Handle type_role = GetSymbol(&store, "/table/type/role");
-  Handle type_value = GetSymbol(&store, "/table/type/value");
-  Handle type_source = GetSymbol(&store, "/table/type/source");
-  Handle type_target = GetSymbol(&store, "/table/type/target");
-  Handle type_assign = GetSymbol(&store, "/table/type/assign");
-  Handle type_embed = GetSymbol(&store, "/table/type/embed");
-  Handle type_elaborate = GetSymbol(&store, "/table/type/elaborate");
-  Handle type_connect = GetSymbol(&store, "/table/type/connect");
-  if (!type_.empty()) {
-    Array type_constraints(&store, type_.size());
-    index = 0;
-    for (const auto &kv : type_) {
-      Handle type = kv.first;
-      Builder b(&store);
-      b.Add("/table/type", type);
-
-      const ActionTable::TypeConstraint &constraint = kv.second;
-      Save(constraint.assign, type_assign, type_role, type_value, &b);
-      Save(constraint.embed, type_embed, type_source, type_role, &b);
-      Save(constraint.elaborate, type_elaborate, type_target, type_role, &b);
-
-      if (constraint.connect.size() > 0) {
-        Array array(&store, constraint.connect.size());
-        int i = 0;
-        for (const auto &connect_kv : constraint.connect) {
-          Builder b2(&store);
-          b2.Add(type_target, connect_kv.first);
-
-          Array roles(&store, connect_kv.second.size());
-          int j = 0;
-          for (Handle role : connect_kv.second) roles.set(j++, role);
-          b2.Add(type_role, roles);
-          array.set(i++, b2.Create().handle());
-        }
-        b.Add(type_connect, array);
-      }
-      type_constraints.set(index++, b.Create().handle());
-    }
-    top.Add("/table/type/constraints", type_constraints);
-  }
-
   // Add artificial links to symbols used in serialization. This is needed as
   // some action types might be unseen, so their corresponding symbols won't be
   // serialized. However we still want handles to them during Load().
@@ -597,10 +280,8 @@ string ActionTable::Serialize(const Store *global, int percentile) const {
   // the symbol /table/fp/refer for REFER won't be serialized unless the table
   // links to it.
   std::vector<Handle> symbols = {
-    action_type, action_length, action_source, action_target, action_role,
-    action_label, fingerprint, fingerprint_evoke, fingerprint_refer,
-    type_role, type_value, type_source, type_target, type_assign, type_embed,
-    type_elaborate, type_connect
+    action_type, action_length, action_source, action_target,
+    action_role, action_label
   };
   Array symbols_array(&store, symbols);
   top.Add("/table/symbols", symbols_array);
@@ -649,27 +330,9 @@ void ActionTable::OutputSummary(TableWriter *writer) const {
   connect_target_.ToTable(writer);
   assign_source_.ToTable(writer);
 
-  // Arguments summary.
-  writer->StartTable("Action Arguments Summary");
+  // Other statistics.
+  writer->StartTable("Other Action Statistics");
   writer->SetColumns({"Metric", "Value"});
-  writer->AddRow("Num unique phrase fp", static_cast<int>(fingerprint_.size()));
-  writer->AddRow("Fingerprint map load factor (as %)",
-                 fingerprint_.load_factor() * 100);
-  int max_evoke_size = 0;
-  HandleSet evoke_types;
-  for (const auto &kv : fingerprint_) {
-    if (kv.second.evoke.size() > max_evoke_size) {
-      max_evoke_size = kv.second.evoke.size();
-    }
-    for (int index : kv.second.evoke) {
-      evoke_types.insert(Action(index).label);
-    }
-  }
-  writer->AddRow("Maximum EVOKE actions for a fingerprint", max_evoke_size);
-  writer->AddRow("Total types involved in EVOKE actions",
-                 static_cast<int64>(evoke_types.size()));
-  writer->AddRow("Num types used as keys in constraints map",
-                 static_cast<int64>(type_.size()));
   writer->AddRow("Maximum actions per token", max_actions_per_token_);
 }
 

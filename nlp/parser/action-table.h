@@ -16,7 +16,6 @@
 #define NLP_PARSER_ACTION_TABLE_H_
 
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "base/types.h"
@@ -31,28 +30,17 @@ namespace nlp {
 
 // Stores the following information from a training corpus:
 // - Assignment of 0-based indices to ParserActions seen in the training data.
-// - For each training data phrase that evokes frame(s), a mapping to the
-//   corresponding EVOKE/REFER actions.
-// - For each type involved in the other types of actions, a mapping to the
-//   other arguments of the action. For example if type t participates in
-//   CONNECT(source frame type = t, target frame type = t', role = r), then
-//   the mapping for t would include (t', r). This is used to figure out what
-//   possible actions a frame of type t can participate in.
+// - Coverage-based bounds on the source/target arguments of the actions.
 //
 // Usage:
 // - While running over a training corpus, the caller needs to call
-//    Add(state, fingerprints, action) to register the action in the table.
+//    Add(action) to register the action in the table.
 // - This table can be queried via the Allowed() method, which returns the
 //   indices of ParserActions possible at the given state.
 class ActionTable {
  public:
-  // Adds to the table 'action' that was taken at 'state'. If 'action' is an
-  // EVOKE or REFER action, 'fp' should be the fingerprint of the span.
-  void Add(const ParserState &state, const ParserAction &action, uint64 fp = 0);
-
-  // Accessors/mutators for whether checks would be done on actions.
-  bool action_checks() const { return action_checks_; }
-  void set_action_checks(bool b) { action_checks_ = b; }
+  // Adds 'action' to the table.
+  void Add(const ParserAction &action);
 
   // Accessor/mutator for max_actions_per_token_. Note that this field needs
   // to be set explicitly and is not automatically computed.
@@ -61,14 +49,8 @@ class ActionTable {
     if (max_actions_per_token_ < m) max_actions_per_token_ = m;
   }
 
-  // Returns the indices of actions allowed for 'state'. 'fingerprints' has the
-  // list of fingerprints of possible spans that start at the current location,
-  // where the ith fingerprint corresponds to a span of length i.
-  // 'allowed' should already be big enough to hold all the actions, and be
-  // all false.
-  void Allowed(const ParserState &state,
-               const std::vector<uint64> &fingerprints,
-               std::vector<bool> *allowed) const;
+  // Sets the indices of only the allowed actions for 'state' to true.
+  void Allowed(const ParserState &state, std::vector<bool> *allowed) const;
 
   // Checks if actions is beyond bounds.
   bool Beyond(int index) const { return beyond_bounds_[index]; }
@@ -123,46 +105,6 @@ class ActionTable {
   void Init(Store *store);
 
  private:
-  // A pair of handles.
-  typedef std::pair<Handle, Handle> HandlePair;
-
-  // Hasher for a pair of handles.
-  struct HandlePairHash {
-    size_t operator()(const HandlePair &p) const {
-      HandleHash h;
-      return h(p.first) ^ h(p.second);
-    }
-  };
-
-  // Shorthand for a hashset keyed by a pair of handles.
-  typedef std::unordered_set<HandlePair, HandlePairHash> HandlePairSet;
-
-  // Given a phrase fingerprint, stores constraints on allowed actions that
-  // depend on the fingerprint.
-  struct FingerprintConstraint {
-    // Indices of all EVOKE actions allowed on this fingerprint.
-    std::unordered_set<int> evoke;
-
-    // All REFER actions allowed on this fingerprint. These refer actions also
-    // store the type of the frame that they refer to.
-    std::unordered_set<ParserAction, ParserActionHash> refer;
-  };
-
-  // Given a frame type t, stores constraints on allowed actions dependent on t.
-  struct TypeConstraint {
-    // (Role, Value) pairs for ASSIGN actions for frames of type t.
-    HandlePairSet assign;
-
-    // (Source type, role) for EMBED actions whose target frame type is t.
-    HandlePairSet embed;
-
-    // (Target type, role) for ELABORATE actions whose source frame type is t.
-    HandlePairSet elaborate;
-
-    // Target type -> Roles for CONNECT actions whose source frame type is t.
-    HandleMap<HandleSet> connect;
-  };
-
   // Represents a histogram where the bins are small integers.
   class Histogram {
    public:
@@ -192,29 +134,6 @@ class ActionTable {
     // Total count across bins.
     int total_ = 0;
   };
-
-  // Reads a set of handle pairs from 'slot' in 'frame'. The slot value is
-  // an array of nested frames, with each nested frame containing two slots
-  // 'subslot1' and 'subslot2'.
-  void Load(const Frame &frame,
-            Handle slot,
-            Handle subslot1,
-            Handle subslot2,
-            HandlePairSet *pairs);
-
-  // Saves a set of handle pairs as an array of nested frames with slots
-  // 'subslot{1,2}'. The array resides as the value of 'slot' in 'builder'.
-  void Save(const HandlePairSet &pairs,
-            Handle slot,
-            Handle subslot1,
-            Handle subslot2,
-            Builder *builder) const;
-
-  // Phrase fingerprint -> Allowed REFER/EVOKE actions.
-  std::unordered_map<uint64, FingerprintConstraint> fingerprint_;
-
-  // Frame type -> Information about various actions associated with frame type.
-  HandleMap<TypeConstraint> type_;
 
   // Mapping from ParserAction -> (0-based index, raw count).
   std::unordered_map<ParserAction, std::pair<int, int>, ParserActionHash>
@@ -261,9 +180,6 @@ class ActionTable {
   // Indices of STOP and SHIFT.
   int stop_index_ = 0;
   int shift_index_ = 0;
-
-  // Whether or not to use fingerprint/typechecks to compute allowed actions.
-  bool action_checks_ = false;
 };
 
 }  // namespace nlp

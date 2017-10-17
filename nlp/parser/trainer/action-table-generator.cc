@@ -106,15 +106,7 @@ void ActionTableGenerator::Process(
   int actions = 0;
   int shift_action = 0;
   for (const ParserAction &action : gold_sequence.actions()) {
-    uint64 fp = 0;
-    if (action.type == ParserAction::EVOKE ||
-        action.type == ParserAction::REFER) {
-      int current = state.current();
-      Span *span = document.GetSpan(current, current + action.length);
-      CHECK(span != nullptr) << current << " " << action.length;
-      fp = span->Fingerprint();
-    }
-    table_.Add(state, action, fp);
+    table_.Add(action);
     if (!state.CanApply(action)) {
       LOG(FATAL) << "Can't apply gold action: "
           << action.ToString(document.store()) << " at state:\n "
