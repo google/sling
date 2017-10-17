@@ -537,7 +537,7 @@ With the exception of LABEL accuracies, all the other metrics exhibit less than
 half a percent difference between the test and dev corpora. This illustrates
 that despite the lack of dropout, the model generalizes well to unseen text.
 As for the disparity on LABEL F1 ($95.73$ on dev
-against $92.79$ on test), we observe from Figure~\ref{fig:dev-eval}
+against $92.81$ on test), we observe from Figure~\ref{fig:dev-eval}
 that the LABEL accuracies follow a different improvement pattern
 during training. On the dev set, LABEL F1 peaked at $96.18$ at $100,000$ steps,
 and started degrading slightly from there on to $95.73$ at $118,000$ steps,
@@ -553,47 +553,47 @@ Tokens & & 291,746  & 216,473  \\
 Sentences &   & 15,084 & 11,623  \\
 \hline
 \hline
-Span & Precision & 93.42  & 92.93 \\
+Span & Precision & 93.42  & 93.04 \\
 \hline
-& Recall & 94.21 & 93.97 \\
+& Recall & 94.21 & 94.34 \\
 \hline
-& F1 & 93.81 & 93.45 \\
+& F1 & 93.81 & 93.69 \\
 \hline
-Frame & Precision & 93.47 & 93.10 \\
+Frame & Precision & 93.47 & 93.20 \\
 \hline
-& Recall & 94.16 & 93.71 \\
+& Recall & 94.16 & 94.08 \\
 \hline
-& F1 & 93.81 & 93.40\\
+& F1 & 93.81 & 93.64\\
 \hline
-Type & Precision & 85.56  & 85.52 \\
+Type & Precision & 85.56  & 85.67 \\
 \hline
-& Recall & 86.20 & 86.10 \\
+& Recall & 86.20 & 86.49 \\
 \hline
-& F1 & 85.88 & 85.81 \\
+& F1 & 85.88 & 86.08 \\
 \hline
-Role & Precision & 70.21 & 68.97 \\
+Role & Precision & 70.21 & 69.59 \\
 \hline
-& Recall & 69.11 & 68.55 \\
+& Recall & 69.11 & 69.20 \\
 \hline
-& F1 & 69.65 & 68.76 \\
+& F1 & 69.65 & 69.39 \\
 \hline
-Label & Precision & 96.51 & 93.87 \\
+Label & Precision & 96.51 & 95.02 \\
 \hline
-& Recall & 94.97 & 91.74 \\
+& Recall & 94.97 & 90.70 \\
 \hline
-& F1 & 95.73 & 92.79 \\
+& F1 & 95.73 & 92.81 \\
 \hline
-Slot & Precision & 80.00 & 79.48 \\
+Slot & Precision & 80.00 & 79.81 \\
 \hline
-& Recall & 79.90 & 79.62 \\
+& Recall & 79.90 & 80.10 \\
 \hline
-& F1 & 79.95 & 79.55 \\
+& F1 & 79.95 & 79.96 \\
 \hline
-Combined & Precision & 87.46 & 86.99 \\
+Combined & Precision & 87.46 & 87.20 \\
 \hline
-& Recall & 87.79 & 87.49 \\
+& Recall & 87.79 & 87.91 \\
 \hline
-& F1 & 87.63 & 87.24 \\
+& F1 & 87.63 & 87.55 \\
 \hline
 \end{tabular}
 \caption{Evaluation on dev and test corpora, model
