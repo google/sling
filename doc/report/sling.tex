@@ -18,7 +18,7 @@
 
 \restylefloat{figure}
 
-%\aclfinalcopy
+\aclfinalcopy
 \def\confidential{DRAFT COPY.  DO NOT DISTRIBUTE.}
 
 \title{SLING: A framework for frame semantic parsing}
@@ -472,7 +472,9 @@ decoder.
 grid search with a dev corpus was: $\mbox{learning\_rate} = 0.0005$,
 $\mbox{optimizer} = \mbox{Adam}$~\cite{kingma2014} with $\beta_1 = 0.01$, $\beta_2 = 0.999$,
 $\epsilon = 1e-5$, no dropout, gradient clipping at $1.0$, exponential moving
-average, no layer normalization, and a training batch size of $8$.
+average, no layer normalization, and a training batch size of $8$. We use
+$32$ dimensional word embeddings, single layer LSTMs with $256$ dimensions,
+and a $128$ dimensional hidden layer in the feed-forward unit.
 
 We stopped training after $120,000$ steps, where each step corresponds to
 processing one training batch, and evaluated on the dev corpus
@@ -529,7 +531,7 @@ that captures inter-frame link information.
 Augmenting this with more features should help improve ROLE quality, as we will
 investigate in future work.
 
-Finally, we took the best checkpoint, with SLOT F1 $= 79.95\%$ at $118,000$ steps),
+Finally, we took the best checkpoint, with SLOT F1 $= 79.95\%$ at $118,000$ steps,
 and evaluated it on the test corpus.
 Table~\ref{tab:eval} lists the quality of this model on the test and dev
 corpora.
@@ -601,6 +603,8 @@ chosen on the Slot-F1 metric on dev corpus.}
 \label{tab:eval}
 \end{table}
 
+We have tried increasing the sizes of the LSTM dimensions, hidden layers,
+and embeddings, but this did not improve the results significantly.
 
 \section{Parser runtime}
 \label{sec:runtime}
@@ -669,6 +673,28 @@ actions are EVOKE actions. The output layer of the FF unit could be turned into
 a cascaded classifier, where if the first classifier predicts a generic
 {\bf EVOKE(/pb/predicate, 1)} action, it would use a secondary classifier to
 predict the predicate type. This could almost double the speed of the parser.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have described SLING, a framework for parsing natural language into
+semantic frames. Our experiments show that it is feasible to build a
+semantic parser that outputs frame graphs directly without any intervening
+symbolic representation, only using the tokens as inputs.
+We illustrated this on the joint task of predicting entity mentions, entity types,
+measures, and semantic role labeling.
+While the LSTMs and TBRUs are expensive to compute, we can achieve acceptable
+parsing speed using the Myelin JIT compiler.
+We hope to make use of SLING in the future for further exploration into
+semantic parsing.
+
+\section*{Acknowledgements}
+\label{sec:ack}
+
+We would like to thank Google for supporting us in this project and allowing us
+to make SLING available to the public community. We would also like to thank the
+Tensorflow and DRAGNN teams for making their systems publicly available.
+Without it, we could not have made SLING open source.
 
 \bibliography{sling}
 \bibliographystyle{acl_natbib}
