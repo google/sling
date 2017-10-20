@@ -18,10 +18,9 @@ runtime.
 
 A more detailed description of the SLING parser can be found in this paper:
 
-<p style='margin-left:30px;'>
-Michael Ringgaard, Rahul Gupta, and Fernando C. N. Pereira. 2017.
-<a href='doc/report/sling.tex'><em>SLING: A framework for frame semantic parsing</em></a>.
-To be publised in arXiv preprint.
+* Michael Ringgaard, Rahul Gupta, and Fernando C. N. Pereira. 2017.
+  *SLING: A framework for frame semantic parsing*. http://arxiv.org/abs/1710.07032.
+
 </span>
 
 ## Installation
