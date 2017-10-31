@@ -35,6 +35,38 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
   CHECK_EQ(file_->ReadOrDie(&eocd, sizeof(EOCDRecord)), sizeof(EOCDRecord));
   CHECK_EQ(eocd.signature, 0x06054b50);
   CHECK_LE(eocd.dirofs + eocd.dirsize, size);
+  uint64 num_records = eocd.numrecs;
+
+  // Read the 64-bit version of the record, if any. If found, this will
+  // supersede the ordinary record read above.
+  int locator_size = sizeof(EOCD64Locator);
+  uint64 locator_offset = size - sizeof(EOCDRecord) - locator_size;
+  if (locator_offset >= 0) {
+    CHECK(file_->Seek(locator_offset));
+    EOCD64Locator locator;
+    CHECK_EQ(file_->ReadOrDie(&locator, locator_size), locator_size);
+    if (locator.signature == 0x07064b50) {
+      // 64-bit locator is present. Get the offset of the EOCD64Record.
+      CHECK_EQ(locator.disknum, 0);
+      CHECK_EQ(locator.totaldisks, 1);
+      CHECK(file_->Seek(locator.eocd64offset));
+
+      // Read the 64-bit record.
+      EOCD64Record eocd64;
+      uint32 eocd64size = sizeof(EOCD64Record);
+      CHECK_EQ(file_->ReadOrDie(&eocd64, eocd64size), eocd64size);
+      CHECK_EQ(eocd64.signature, 0x06064b50);
+      CHECK_EQ(eocd64.eocd64size, eocd64size - sizeof(uint32) - sizeof(uint64));
+      CHECK_EQ(eocd64.disknum, 0);
+      CHECK_EQ(eocd64.dirdisk, 0);
+      CHECK_EQ(eocd64.dirofs, eocd.dirofs);
+      CHECK_EQ(eocd64.dirsize, eocd.dirsize);
+      CHECK_EQ(eocd64.diskrecs, eocd64.numrecs);
+
+      // Override the number of entries.
+      num_records = eocd64.numrecs;
+    }
+  }
 
   // Read file directory.
   char *directory = new char[eocd.dirsize];
@@ -42,8 +74,8 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
   CHECK_EQ(file_->ReadOrDie(directory, eocd.dirsize), eocd.dirsize);
   char *dirptr = directory;
   char *dirend = dirptr + eocd.dirsize;
-  files_.resize(eocd.numrecs);
-  for (int i = 0; i < eocd.numrecs; ++i) {
+  files_.resize(num_records);
+  for (int i = 0; i < num_records; ++i) {
     // Get next entry in directory.
     CHECK_LE(dirptr + sizeof(CDFile), dirend);
     CDFile *entry = reinterpret_cast<CDFile *>(dirptr);

@@ -21,7 +21,9 @@
 #include "file/file.h"
 #include "frame/object.h"
 #include "frame/serialization.h"
-#include "util/zip-iterator.h"
+#include "stream/input.h"
+#include "stream/stream.h"
+#include "stream/zipfile.h"
 
 namespace sling {
 namespace nlp {
@@ -58,25 +60,40 @@ class ZipDocumentSource : public DocumentSource {
  public:
   ZipDocumentSource(const string &file) {
     file_ = file;
-    iterator_ = new ZipIterator(file);
+    reader_ = new ZipFileReader(file);
+    current_ = 0;
   }
 
   ~ZipDocumentSource() override {
-    delete iterator_;
+    delete reader_;
   }
 
   bool NextSerialized(string *name, string *contents) override {
-    return iterator_->Next(name, contents);
+    if (current_ == reader_->files().size()) return false;
+
+    const auto &entry = reader_->files()[current_];
+    *name = entry.filename;
+
+    InputStream *stream = reader_->Read(entry);
+    Input input(stream);
+    char ch;
+    while (input.Next(&ch)) {
+      contents->push_back(ch);
+    }
+    delete stream;
+    ++current_;
+
+    return true;
   }
 
   void Rewind() override {
-    delete iterator_;
-    iterator_ = new ZipIterator(file_);
+    current_ = 0;
   }
 
  private:
-  ZipIterator *iterator_ = nullptr;
+  ZipFileReader *reader_ = nullptr;
   string file_;
+  int current_;
 };
 
 Document *DocumentSource::Next(Store *store) {

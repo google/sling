@@ -16,6 +16,7 @@
 """Runs a TF Sempar model on a corpus.
 """
 
+import io
 import subprocess
 import sys
 import tensorflow as tf
@@ -27,6 +28,7 @@ sys.path.insert(0, "third_party/syntaxnet")
 from dragnn.protos import spec_pb2
 from dragnn.python import graph_builder
 from google.protobuf import text_format
+from tensorflow.python.platform import gfile
 
 tf.load_op_library('bazel-bin/nlp/parser/trainer/sempar.so')
 
@@ -44,19 +46,33 @@ flags.DEFINE_bool("evaluate", False, "Perform evaluation.")
 # Reads a serialized corpus into memory.
 def read_corpus(file_pattern):
   docs = []
-  if zipfile.is_zipfile(file_pattern):
-    with zipfile.ZipFile(file_pattern, 'r') as zipreader:
-      docs = [None] * len(zipreader.namelist())
-      for index, fname in enumerate(zipreader.namelist()):
-        docs[index] = zipreader.read(fname)
+  if file_pattern.endswith(".zip"):
+    with gfile.GFile(file_pattern, 'r') as f:
+      buf = io.BytesIO(f.read())
+      with zipfile.ZipFile(buf, 'r') as zipreader:
+        docs = [None] * len(zipreader.namelist())
+        for index, fname in enumerate(zipreader.namelist()):
+          docs[index] = zipreader.read(fname)
   else:
-    filenames = glob.glob(file_pattern)
+    filenames = gfile.Glob(file_pattern)
     docs = [None] * len(filenames)
     for index, name in enumerate(filenames):
-      with open(name, 'r') as file:
-        docs[index] = file.read()
+      with gfile.GFile(name, 'r') as f:
+        docs[index] = f.read()
   print len(docs), "files in", file_pattern
   return docs
+
+
+def write_corpus(filename, prefix, data):
+  buf = io.BytesIO()
+  with zipfile.ZipFile(buf, 'w') as z:
+    for i in xrange(len(data)):
+      entry = prefix + str(i)
+      z.writestr(entry, data[i])
+  z.close()
+
+  with gfile.GFile(filename, 'w') as f:
+    f.write(buf.getvalue())
 
 
 def main(argv):
@@ -68,9 +84,8 @@ def main(argv):
 
   master_spec = spec_pb2.MasterSpec()
   master_spec_file = FLAGS.parser_dir + "/master_spec"
-  with file(master_spec_file, 'r') as fin:
+  with gfile.GFile(master_spec_file, 'r') as fin:
     text_format.Parse(fin.read(), master_spec)
-  fin.close()
 
   tf.logging.info('Building the graph')
   g = tf.Graph()
@@ -112,11 +127,9 @@ def main(argv):
 
   if FLAGS.evaluate or len(FLAGS.output) != 0:
     # Write the annotated corpus to disk as a zip file.
-    with zipfile.ZipFile(output_file, 'w') as outfile:
-      for i in xrange(len(annotated)):
-        outfile.writestr('test.' + str(i), annotated[i])
-      tf.logging.info('Wrote %d annotated docs to %s',
-                      len(annotated), output_file)
+    write_corpus(output_file, "test.", annotated);
+    tf.logging.info('Wrote %d annotated docs to %s',
+                    len(annotated), output_file)
 
   if FLAGS.evaluate:
     # Evaluate against gold annotations.

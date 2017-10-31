@@ -69,8 +69,10 @@ cc_library(
     "//frame:object",
     "//frame:serialization",
     "//frame:store",
+    "//stream:input",
+    "//stream:stream",
+    "//stream:zipfile",
     "//string",
-    "//util:zip-iterator",
   ],
 )
 

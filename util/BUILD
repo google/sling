@@ -61,18 +61,6 @@ cc_library(
 )
 
 cc_library(
-  name = "zip-iterator",
-  srcs = ["zip-iterator.cc"],
-  hdrs = ["zip-iterator.h"],
-  deps = [
-    "//base",
-    "//file:file",
-    "//file:posix",
-    "//third_party/zlib:miniunzip",
-  ],
-)
-
-cc_library(
   name = "vocabulary",
   srcs = ["vocabulary.cc"],
   hdrs = ["vocabulary.h"],

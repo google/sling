@@ -20,6 +20,7 @@ Convert tensorflow graphs to myelin flow files.
 
 import tensorflow as tf
 from struct import pack
+from tensorflow.python.platform import gfile
 
 def attr_str(value):
   """ Convert attribute to string value."""
@@ -52,7 +53,7 @@ class File:
 
   def __init__(self, filename):
     """Open flow file for writing."""
-    self.f = open(filename, 'wb')
+    self.f = gfile.GFile(filename, 'wb')
 
   def close(self):
     """Close flow file."""
@@ -87,7 +88,7 @@ class File:
       self.f.write(a)
     else:
       self.write_long(a.nbytes)
-      a.tofile(self.f)
+      self.write(a.tostring())
 
 
 class Variable:

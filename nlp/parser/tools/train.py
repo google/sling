@@ -16,7 +16,7 @@
 Although it can be called by itself, it is best invoked from train.sh.
 """
 
-import glob
+import io
 import os
 import subprocess
 import sys
@@ -25,13 +25,14 @@ import zipfile
 
 sys.path.insert(0, "third_party/syntaxnet")
 
+from convert import convert_model
 from dragnn.protos import spec_pb2
 from dragnn.python import dragnn_ops
 from dragnn.python import graph_builder
 from dragnn.python import trainer_lib
 from dragnn.python import check
 from google.protobuf import text_format
-from convert import convert_model
+from tensorflow.python.platform import gfile
 
 tf.load_op_library('bazel-bin/nlp/parser/trainer/sempar.so')
 
@@ -54,19 +55,33 @@ flags.DEFINE_string('flow', '', 'Myelin flow file for model output')
 
 def read_corpus(file_pattern):
   docs = []
-  if zipfile.is_zipfile(file_pattern):
-    with zipfile.ZipFile(file_pattern, 'r') as zipreader:
-      docs = [None] * len(zipreader.namelist())
-      for index, fname in enumerate(zipreader.namelist()):
-        docs[index] = zipreader.read(fname)
+  if file_pattern.endswith(".zip"):
+    with gfile.GFile(file_pattern, 'r') as f:
+      buf = io.BytesIO(f.read())
+      with zipfile.ZipFile(buf, 'r') as zipreader:
+        docs = [None] * len(zipreader.namelist())
+        for index, fname in enumerate(zipreader.namelist()):
+          docs[index] = zipreader.read(fname)
   else:
-    filenames = glob.glob(file_pattern)
+    filenames = gfile.Glob(file_pattern)
     docs = [None] * len(filenames)
     for index, name in enumerate(filenames):
-      with open(name, 'r') as file:
-        docs[index] = file.read()
+      with gfile.GFile(name, 'r') as f:
+        docs[index] = f.read()
   print len(docs), "files in", file_pattern
   return docs
+
+
+def write_corpus(filename, prefix, data):
+  buf = io.BytesIO()
+  with zipfile.ZipFile(buf, 'w') as z:
+    for i in xrange(len(data)):
+      entry = prefix + str(i)
+      z.writestr(entry, data[i])
+  z.close()
+
+  with gfile.GFile(filename, 'w') as f:
+    f.write(buf.getvalue())
 
 
 def evaluator(gold_docs, test_docs):
@@ -77,18 +92,8 @@ def evaluator(gold_docs, test_docs):
 
   gold_zip_name = os.path.join(folder, "dev.gold.zip")
   test_zip_name = os.path.join(folder, "dev.test.zip")
-
-  with zipfile.ZipFile(gold_zip_name,  'w') as gold:
-    for i in xrange(len(gold_docs)):
-      filename = "gold." + str(i)
-      gold.writestr(filename, gold_docs[i])
-    gold.close()
-
-  with zipfile.ZipFile(test_zip_name,  'w') as test:
-    for i in xrange(len(test_docs)):
-      filename = "test." + str(i)
-      test.writestr(filename, test_docs[i])
-    test.close()
+  write_corpus(gold_zip_name, "gold.", gold_docs)
+  write_corpus(test_zip_name, "test.", test_docs)
 
   try:
     output = subprocess.check_output(
@@ -116,11 +121,11 @@ def evaluator(gold_docs, test_docs):
 
 
 def empty_dir(folder):
-  if tf.gfile.IsDirectory(folder):
-    tf.gfile.DeleteRecursively(folder)
-  elif tf.gfile.Exists(folder):
-    tf.gfile.Remove(folder)
-  tf.gfile.MakeDirs(folder)
+  if gfile.IsDirectory(folder):
+    gfile.DeleteRecursively(folder)
+  elif gfile.Exists(folder):
+    gfile.Remove(folder)
+  gfile.MakeDirs(folder)
 
 
 def main(unused_argv):
@@ -131,13 +136,12 @@ def main(unused_argv):
   print hyperparam_config
   master_spec = spec_pb2.MasterSpec()
 
-  with file(FLAGS.master_spec, 'r') as fin:
+  with gfile.GFile(FLAGS.master_spec, 'r') as fin:
     text_format.Parse(fin.read(), master_spec)
-  fin.close()
 
   # Make output folder
-  if not os.path.isdir(FLAGS.output_folder):
-    os.makedirs(FLAGS.output_folder)
+  if not gfile.Exists(FLAGS.output_folder):
+    gfile.MakeDirs(FLAGS.output_folder)
 
   # Construct TF Graph.
   graph = tf.Graph()
