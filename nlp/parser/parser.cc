@@ -433,7 +433,7 @@ void ParserInstance::ExtractFeaturesFF(int step) {
   // Extract LSTM focus features.
   const Parser::FF &ff = parser_->ff_;
   int current = state_.current() - state_.begin();
-  if (current == state_.end()) current = -1;
+  if (state_.current() == state_.end()) current = -1;
   int *lr_focus = GetFF(ff.lr_focus_feature);
   int *rl_focus = GetFF(ff.rl_focus_feature);
   if (lr_focus != nullptr) *lr_focus = current;
