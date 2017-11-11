@@ -84,10 +84,12 @@ class Express {
     RECIPROCAL,  // reciprocal value, r=1/x
     SQUARE,      // square, r=x*x
 
-    LOG,         // logarithm, r=log(a)
-    EXP,         // exponential function, r=exp(a)
+    LOG,         // natural logarithm, r=log(a)
+    EXP,         // natural exponential function, r=exp(a)
     SIGMOID,     // sigmoid function, r=1/(1+exp(-a))
     TANH,        // hyperbolic tangent, r=tanh(a)
+    LOG2,        // base-2 logarithm, r=log2(a)
+    EXP2,        // base-2 exponential function, r=2^a
 
     MULADD132,   // fused multiply/add, r=a*c+b
     MULADD213,   // fused multiply/add, r=b*a+c
@@ -116,7 +118,7 @@ class Express {
 
   // System-defined numeric constants.
   enum ConstantNumber {
-    ZERO, ONE, HALF, TWO, N1, P9, N9, P127, NLN2,
+    ZERO, ONE, HALF, TWO, N1, P9, N9, P127, LN2, NLN2, LOG2E,
     MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
@@ -207,6 +209,9 @@ class Express {
     bool first_is_dest = false;   // first argument is also destination
   };
 
+  // Target platform.
+  enum Target {INTEL, NVIDIA};
+
   // Instruction model with instruction forms supported by target architecture
   // for rewriting expression operations.
   struct Model {
@@ -243,6 +248,7 @@ class Express {
     bool fm_reg_reg_mem = false;    // dst = op(dst, src, [mem])
   };
 
+  Express(Target target = INTEL) : target_(target) {}
   ~Express();
 
   // Parse an expression recipe and add it to the expression. Intrinsic
@@ -385,13 +391,15 @@ class Express {
 
   // Build expressions for composite functions.
   Var *MulAdd(Var *x, Var *y, Var *z) { return Add(Mul(x, y), z); }
-  Var *Neg(Var *x) { return Sub(Zero(), x); }
-  Var *Abs(Var *x) { return Max(x, Neg(x)); }
+  Var *Neg(Var *x) { return target_ == NVIDIA ? Do(NEG, x) : Sub(Zero(), x); }
+  Var *Abs(Var *x) { return target_ == NVIDIA ? Do(ABS, x) : Max(x, Neg(x)); }
   Var *Relu(Var *x) { return Max(x, Zero()); }
   Var *Softsign(Var *x) { return Div(x, Add(Abs(x), One())); }
   Var *Softplus(Var *x) { return Log(Add(Exp(x), One())); }
   Var *LogSigmoid(Var *x) { return Neg(Softplus(Neg(x))); }
-  Var *Reciprocal(Var *x) { return Div(One(), x); }
+  Var *Reciprocal(Var *x) {
+    return target_ == NVIDIA ? Do(RECIPROCAL, x) : Div(One(), x);
+  }
   Var *Square(Var *x) { return Mul(x, x); }
   Var *Sigmoid(Var *x) { return Reciprocal(Add(One(), Exp(Neg(x)))); }
 
@@ -431,6 +439,9 @@ class Express {
   // First operation in the body. All instructions before are loop invariant. If
   // body is 0 (the default), there are no loop invariant instructions.
   int body_ = 0;
+
+  // Target platform.
+  Target target_;
 
   // System-defined numeric constants.
   struct Constant { float flt; double dbl; };

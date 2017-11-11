@@ -53,6 +53,8 @@ DEFINE_bool(benchmark, false, "Benchmark parser");
 DEFINE_bool(evaluate, false, "Evaluate parser");
 DEFINE_bool(profile, false, "Profile parser");
 DEFINE_int32(maxdocs, -1, "Maximum number of documents to process");
+DEFINE_bool(fast_fallback, false, "Use fast fallback for parser predictions");
+DEFINE_bool(gpu, false, "Run parser on GPU");
 
 using namespace sling;
 using namespace sling::nlp;
@@ -131,7 +133,9 @@ int main(int argc, char *argv[]) {
   clock.start();
   Store commons;
   Parser parser;
+  if (FLAGS_fast_fallback) parser.EnableFastFallback();
   if (FLAGS_profile) parser.EnableProfiling();
+  if (FLAGS_gpu) parser.EnableGPU();
   parser.Load(&commons, FLAGS_parser);
   commons.Freeze();
   clock.stop();
@@ -238,7 +242,7 @@ int main(int argc, char *argv[]) {
     std::cout << lr.ASCIIReport() << "\n";
 
     myelin::Profile rl(&parser.profile()->rl);
-    std::cout << lr.ASCIIReport() << "\n";
+    std::cout << rl.ASCIIReport() << "\n";
 
     myelin::Profile ff(&parser.profile()->ff);
     std::cout << ff.ASCIIReport() << "\n";

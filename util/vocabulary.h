@@ -35,7 +35,7 @@ class Vocabulary {
   void Init(const char *data, size_t size, char terminator = 0);
 
   // Lookup word in dictionary. Returns - 1 if word is not found.
-  int64 Lookup(const char *data, size_t size) const;
+  int64 Lookup(const char *word, size_t size) const;
   int64 Lookup(const string &word) const {
     return Lookup(word.data(), word.size());
   }

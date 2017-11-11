@@ -165,6 +165,27 @@ void MultiProcessorRuntime::ClearInstance(Instance *instance) {
          instance->size() - instance->cell()->data_start());
 }
 
+char *MultiProcessorRuntime::AllocateChannel(char *data, size_t old_size,
+                                             size_t new_size, size_t alignment,
+                                             Placement placement) {
+  void *buffer;
+  CHECK_EQ(posix_memalign(&buffer, alignment, new_size), 0);
+  if (data != nullptr) {
+    memcpy(buffer, data, old_size);
+    free(data);
+  }
+  return reinterpret_cast<char *>(buffer);
+}
+
+void MultiProcessorRuntime::ClearChannel(char *data, size_t pos, size_t size,
+                                         Placement placement) {
+  memset(data + pos, 0, size);
+}
+
+void MultiProcessorRuntime::FreeChannel(char *data, Placement placement) {
+  free(data);
+}
+
 Runtime::TaskFunc MultiProcessorRuntime::StartTaskFunc() {
   return Worker::Start;
 }

@@ -534,6 +534,9 @@ class Flow {
   // Look up function by name.
   Function *Func(const string &name);
 
+  // Look up connector by name.
+  Connector *Cnx(const string &name);
+
   // Look up blob by name.
   Blob *DataBlock(const string &name);
 

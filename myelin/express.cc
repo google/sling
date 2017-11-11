@@ -46,6 +46,8 @@ static std::map<string, Express::OpType> optypes = {
   {"Exp", Express::EXP},
   {"Sigmoid", Express::SIGMOID},
   {"Tanh", Express::TANH},
+  {"Log2", Express::LOG2},
+  {"Exp2", Express::EXP2},
   {"MulAdd132", Express::MULADD132},
   {"MulAdd213", Express::MULADD213},
   {"MulAdd231", Express::MULADD231},
@@ -73,7 +75,7 @@ static const string opname[] = {
   "Min", "Max",
   "Neg", "Abs", "Relu", "Softsign", "Softplus", "LogSigmoid",
   "Reciprocal", "Square",
-  "Log", "Exp", "Sigmoid", "Tanh",
+  "Log", "Exp", "Sigmoid", "Tanh", "Log2", "Exp2",
   "MulAdd132", "MulAdd213", "MulAdd231",
   "MulSub132", "MulSub213", "MulSub231",
   "CmpEqOQ", "CmpLtOQ", "CmpGtOQ", "CmpNgeUQ",
@@ -347,7 +349,9 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(-9.0),   // N9
   FLTCONST(127.0),  // P127
 
+  FLTCONST(0.6931471805599453),    // LN2
   FLTCONST(-0.6931471805599453),   // NLN2
+  FLTCONST(1.442695021629333),     // LOG2E
 
   INTCONST(0x00800000, 0x0010000000000000LL),   // MIN_NORM_POS
   INTCONST(~0x7f800000, ~0x7FF0000000000000LL),  // INV_MANT_MASK
@@ -932,6 +936,7 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
   VariableMap varmap(rewritten);
 
   // Translate all ops to conform to target model.
+  rewritten->target_ = target_;
   bool success = true;
   for (Op *op : ops_) {
     // Get operation type, result, and arguments.
@@ -1417,61 +1422,66 @@ int Express::NumRegs() const {
 // Natural logarithm.
 // See also: http://gruntthepeon.free.fr/ssemath/sse_mathfun.h
 Express::Var *Express::Log(Var *x) {
-  // Make valid and zero mask.
-  Var *invalid_mask = Do(CMPNGEUQ, x, Number(ZERO));
+  if (target_ == NVIDIA) {
+    // Compute natural logarithm from base-2 logarithm.
+    return Mul(Do(LOG2, x), Number(LN2));
+  } else {
+    // Make valid and zero mask.
+    Var *invalid_mask = Do(CMPNGEUQ, x, Number(ZERO));
 
-  // Truncate input values to the minimum positive normal.
-  x = Max(x, Number(MIN_NORM_POS));
+    // Truncate input values to the minimum positive normal.
+    x = Max(x, Number(MIN_NORM_POS));
 
-  // Part 1: x = frexpf(x, e).
-  Var *emm0 = Do(SHR23, x);
-  emm0 = Do(SUBINT, emm0, Number(MAX_MANT));
-  Var *e = Add(Do(CVTINTFLT, emm0), Number(ONE));
+    // Part 1: x = frexpf(x, e).
+    Var *emm0 = Do(SHR23, x);
+    emm0 = Do(SUBINT, emm0, Number(MAX_MANT));
+    Var *e = Add(Do(CVTINTFLT, emm0), Number(ONE));
 
-  // Keep only the fractional part.
-  x = Do(AND, x, Number(INV_MANT_MASK));
-  x = Do(OR, x, Number(HALF));
+    // Keep only the fractional part.
+    x = Do(AND, x, Number(INV_MANT_MASK));
+    x = Do(OR, x, Number(HALF));
 
-  // Part 2: Shift the inputs from the range [0.5,1) to [sqrt(1/2),sqrt(2)) and
-  // shift by -1. The values are then centered around 0, which improves the
-  // stability of the polynomial evaluation.
-  //   if (x < SQRTHF) {
-  //     e -= 1;
-  //     x = x + x - 1.0;
-  //   } else {
-  //     x = x - 1.0;
-  //   }
-  Var *mask = Do(CMPLTOQ, x, Number(CEPHES_SQRTHF));
-  Var *tmp = Do(AND, x, mask);
-  x = Sub(x, Number(ONE));
-  e = Sub(e, Do(AND, Number(ONE), mask));
-  x = Add(x, tmp);
-  Var *z = Mul(x, x);
+    // Part 2: Shift the inputs from the range [0.5,1) to [sqrt(1/2),sqrt(2))
+    // and shift by -1. The values are then centered around 0, which improves
+    // the stability of the polynomial evaluation.
+    //   if (x < SQRTHF) {
+    //     e -= 1;
+    //     x = x + x - 1.0;
+    //   } else {
+    //     x = x - 1.0;
+    //   }
+    Var *mask = Do(CMPLTOQ, x, Number(CEPHES_SQRTHF));
+    Var *tmp = Do(AND, x, mask);
+    x = Sub(x, Number(ONE));
+    e = Sub(e, Do(AND, Number(ONE), mask));
+    x = Add(x, tmp);
+    Var *z = Mul(x, x);
 
-  // Part 3: Compute the polynomial approximation.
-  Var *y = Number(CEPHES_LOG_P0);
-  y = MulAdd(y, x, Number(CEPHES_LOG_P1));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P2));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P3));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P4));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P5));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P6));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P7));
-  y = MulAdd(y, x, Number(CEPHES_LOG_P8));
-  y = Mul(y, x);
-  y = Mul(y, z);
+    // Part 3: Compute the polynomial approximation.
+    Var *y = Number(CEPHES_LOG_P0);
+    y = MulAdd(y, x, Number(CEPHES_LOG_P1));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P2));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P3));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P4));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P5));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P6));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P7));
+    y = MulAdd(y, x, Number(CEPHES_LOG_P8));
+    y = Mul(y, x);
+    y = Mul(y, z);
 
-  tmp = Mul(e, Number(CEPHES_LOG_Q1));
-  y = Add(y, tmp);
-  tmp = Mul(z, Number(HALF));
-  y = Sub(y, tmp);
-  tmp = Mul(e, Number(CEPHES_LOG_Q2));
-  x = Add(x, y);
-  x = Add(x, tmp);
+    tmp = Mul(e, Number(CEPHES_LOG_Q1));
+    y = Add(y, tmp);
+    tmp = Mul(z, Number(HALF));
+    y = Sub(y, tmp);
+    tmp = Mul(e, Number(CEPHES_LOG_Q2));
+    x = Add(x, y);
+    x = Add(x, tmp);
 
-  x = Do(OR, x, invalid_mask);  // negative arg will be NAN
+    x = Do(OR, x, invalid_mask);  // negative arg will be NAN
 
-  return x;
+    return x;
+  }
 }
 
 // Exponential function.
@@ -1480,35 +1490,40 @@ Express::Var *Express::Log(Var *x) {
 // range [-1,1).
 // See also: https://git.io/vHyVR
 Express::Var *Express::Exp(Var *x) {
-  // Clamp x.
-  Var *original_x = x;
-  x = Max(Min(x, Number(EXP_HI)), Number(EXP_LO));
+  if (target_ == NVIDIA) {
+    // Compute e^x = 2^(x * log2(e)).
+    return Do(EXP2, Mul(x, Number(LOG2E)));
+  } else {
+    // Clamp x.
+    Var *original_x = x;
+    x = Max(Min(x, Number(EXP_HI)), Number(EXP_LO));
 
-  // Express exp(x) as exp(m*ln(2) + r), start by extracting
-  // m = floor(x/ln(2) + 0.5).
-  Var *m = Do(FLOOR, MulAdd(x, Number(CEPHES_LOG2EF), Number(HALF)));
+    // Express exp(x) as exp(m*ln(2) + r), start by extracting
+    // m = floor(x/ln(2) + 0.5).
+    Var *m = Do(FLOOR, MulAdd(x, Number(CEPHES_LOG2EF), Number(HALF)));
 
-  // Compute r = x - m*ln(2).
-  Var *r = MulAdd(m, Number(NLN2), x);
+    // Compute r = x - m*ln(2).
+    Var *r = MulAdd(m, Number(NLN2), x);
 
-  // Compute r^2.
-  Var *r2 = Mul(r, r);
+    // Compute r^2.
+    Var *r2 = Mul(r, r);
 
-  // Compute polynomial.
-  Var *y = Number(CEPHES_EXP_P0);
-  y = MulAdd(y, r, Number(CEPHES_EXP_P1));
-  y = MulAdd(y, r, Number(CEPHES_EXP_P2));
-  y = MulAdd(y, r, Number(CEPHES_EXP_P3));
-  y = MulAdd(y, r, Number(CEPHES_EXP_P4));
-  y = MulAdd(y, r, Number(CEPHES_EXP_P5));
-  y = MulAdd(y, r2, r);
-  y = Add(y, Number(ONE));
+    // Compute polynomial.
+    Var *y = Number(CEPHES_EXP_P0);
+    y = MulAdd(y, r, Number(CEPHES_EXP_P1));
+    y = MulAdd(y, r, Number(CEPHES_EXP_P2));
+    y = MulAdd(y, r, Number(CEPHES_EXP_P3));
+    y = MulAdd(y, r, Number(CEPHES_EXP_P4));
+    y = MulAdd(y, r, Number(CEPHES_EXP_P5));
+    y = MulAdd(y, r2, r);
+    y = Add(y, Number(ONE));
 
-  // Build emm0 = 2^m.
-  Var *emm0 = Do(SHL23, Do(CVTFLTINT, Add(m, Number(P127))));
+    // Build emm0 = 2^m.
+    Var *emm0 = Do(SHL23, Do(CVTFLTINT, Add(m, Number(P127))));
 
-  // Return 2^m * exp(r).
-  return Max(Mul(y, emm0), original_x);
+    // Return 2^m * exp(r).
+    return Max(Mul(y, emm0), original_x);
+  }
 }
 
 // Hyperbolic tangent function.
@@ -1516,31 +1531,36 @@ Express::Var *Express::Exp(Var *x) {
 // ulp in the range [-9, 9], outside of which the fl(tanh(x)) = +/-1.
 // See: https://git.io/vHyiz
 Express::Var *Express::Tanh(Var *x) {
-  // Clamp the inputs to the range [-9, 9] since anything outside this range
-  // is +/-1.0.
-  x = Max(Min(x, Number(P9)), Number(N9));
+  if (target_ == NVIDIA) {
+    // Compute tanh(x) = 2*sigmoid(2*x) - 1.
+    return Sub(Mul(Sigmoid(Mul(x, Number(TWO))), Number(TWO)), Number(ONE));
+  } else {
+    // Clamp the inputs to the range [-9, 9] since anything outside this range
+    // is +/-1.0.
+    x = Max(Min(x, Number(P9)), Number(N9));
 
-  // Since the polynomials are odd/even, we need x^2.
-  Var *x2 = Mul(x, x);
+    // Since the polynomials are odd/even, we need x^2.
+    Var *x2 = Mul(x, x);
 
-  // Evaluate the numerator polynomial p.
-  Var *p = Number(ALPHA_1);
-  p = MulAdd(x2, p, Number(ALPHA_3));
-  p = MulAdd(x2, p, Number(ALPHA_5));
-  p = MulAdd(x2, p, Number(ALPHA_7));
-  p = MulAdd(x2, p, Number(ALPHA_9));
-  p = MulAdd(x2, p, Number(ALPHA_11));
-  p = MulAdd(x2, p, Number(ALPHA_13));
-  p = Mul(x, p);
+    // Evaluate the numerator polynomial p.
+    Var *p = Number(ALPHA_1);
+    p = MulAdd(x2, p, Number(ALPHA_3));
+    p = MulAdd(x2, p, Number(ALPHA_5));
+    p = MulAdd(x2, p, Number(ALPHA_7));
+    p = MulAdd(x2, p, Number(ALPHA_9));
+    p = MulAdd(x2, p, Number(ALPHA_11));
+    p = MulAdd(x2, p, Number(ALPHA_13));
+    p = Mul(x, p);
 
-  // Evaluate the denominator polynomial q.
-  Var *q = Number(BETA_0);
-  q = MulAdd(x2, q, Number(BETA_2));
-  q = MulAdd(x2, q, Number(BETA_4));
-  q = MulAdd(x2, q, Number(BETA_6));
+    // Evaluate the denominator polynomial q.
+    Var *q = Number(BETA_0);
+    q = MulAdd(x2, q, Number(BETA_2));
+    q = MulAdd(x2, q, Number(BETA_4));
+    q = MulAdd(x2, q, Number(BETA_6));
 
-  // Divide the numerator by the denominator.
-  return Div(p, q);
+    // Divide the numerator by the denominator.
+    return Div(p, q);
+  }
 }
 
 void Express::Var::Redirect(Var *other) {

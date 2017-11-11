@@ -154,6 +154,30 @@ struct Task {
   int32 index;
 };
 
+// Data transfer between host and device.
+struct Transfer {
+  Transfer(Tensor *tensor, int taskidx) : tensor(tensor), taskidx(taskidx) {}
+
+  Tensor *tensor;  // tensor to be transferred
+  int taskidx;     // index of task for performing the transfer
+};
+
+// List of data transfers between host and device.
+struct Transfers {
+  // Add transfer from host to device.
+  void add_host_to_device(Tensor *tensor, int taskidx) {
+    host_to_device.emplace_back(tensor, taskidx);
+  }
+
+  // Add transfer from device to host.
+  void add_device_to_host(Tensor *tensor, int taskidx) {
+    device_to_host.emplace_back(tensor, taskidx);
+  }
+
+  std::vector<Transfer> host_to_device;  // transfers from host to device
+  std::vector<Transfer> device_to_host;  // transfers from device to host
+};
+
 // Runtime support for network.
 class Runtime {
  public:
@@ -173,6 +197,21 @@ class Runtime {
 
   // Clear instance data.
   virtual void ClearInstance(Instance *instance) = 0;
+
+  // Allocate or reallocate channel.
+  virtual char *AllocateChannel(char *data,
+                                size_t old_size,
+                                size_t new_size,
+                                size_t alignment,
+                                Placement placement) = 0;
+
+  // Clear elements in channel.
+  virtual void ClearChannel(char *data, size_t pos,
+                            size_t size,
+                            Placement placement) = 0;
+
+  // Deallocate channel.
+  virtual void FreeChannel(char *data, Placement placement) = 0;
 
   // Generate prologue for cell function.
   virtual void GeneratePrologue(Cell *cell, MacroAssembler *masm) {}
@@ -203,17 +242,16 @@ class Runtime {
   // Remove constant tensor from device.
   virtual void RemoveTensorFromDevice(Tensor *tensor) {}
 
-  // Generate code for copying tensor from host to device.
-  virtual void EmitCopyTensorToDevice(Tensor *tensor,
-                                      Cell *cell,
-                                      int taskidx,
-                                      MacroAssembler *masm) {}
+  // Fetch copy of tensor from device. Caller takes ownership of the returned
+  // data buffer.
+  virtual char *FetchTensorFromDevice(const Instance *data, Tensor *tensor) {
+    return nullptr;
+  }
 
-  // Generate code for copying tensor from device to host.
-  virtual void EmitCopyTensorFromDevice(Tensor *tensor,
-                                        Cell *cell,
-                                        int taskidx,
-                                        MacroAssembler *masm) {}
+  // Generate code for transferring data between host and device.
+  virtual void EmitTensorTransfers(const Transfers &xfers,
+                                   Cell *cell,
+                                   MacroAssembler *masm) {}
 
   // Return CUDA device used by runtime.
   virtual CUDADevice *Device() { return nullptr; }
@@ -660,6 +698,7 @@ class Step {
 // connections.
 class Connector {
  public:
+  Connector(Network *network) : network_(network) {}
   ~Connector() { delete type_; }
 
   // Connector name.
@@ -674,10 +713,24 @@ class Connector {
   // Connector array alignment (in bytes).
   int alignment() const { return alignment_; }
 
+  // Return connector placement.
+  Placement placement() const { return placement_; }
+
+  // Add location for placement.
+  void AddPlace(Placement place) {
+    placement_ = static_cast<Placement>(placement_ | place);
+  }
+
   // Tensors linked to the connector.
   const std::vector<Tensor *> &links() const { return links_; }
 
+  // Network that connector belongs to.
+  Network *network() const { return network_; }
+
  private:
+  // Network that connector belongs to.
+  Network *network_;
+
   // Tensor for connector type.
   Tensor *type_ = nullptr;
 
@@ -686,6 +739,9 @@ class Connector {
 
   // Connector array alignment (in bytes).
   int alignment_ = kMinDataAlignment;
+
+  // Placement of connector.
+  Placement placement_ = NOWHERE;
 
   friend class Network;
 };
@@ -721,6 +777,9 @@ class Channel {
 
   // Return the number of elements in the channel.
   int size() const { return size_; }
+
+  // Return runtime for channel.
+  inline Runtime *runtime() const;
 
  private:
   // Data for the channel.
@@ -1046,6 +1105,7 @@ struct Options {
   bool profiling = false;                    // enable profiling
   bool external_profiler = false;            // external profiling buffer
   bool dynamic_allocation = false;           // dynamic instance allocation
+  bool sync_steps = false;                   // synchronize all steps
 };
 
 // A network is a collection of cells and variables that are compiled as a unit.
@@ -1192,6 +1252,10 @@ inline Runtime *Cell::runtime() const {
 
 inline Runtime *Instance::runtime() const {
   return cell_->runtime();
+}
+
+inline Runtime *Channel::runtime() const {
+  return connector_->network()->runtime();
 }
 
 inline void Instance::Compute() {

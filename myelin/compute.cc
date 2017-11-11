@@ -42,8 +42,15 @@ static const Order combined_order[4][4] = {
   {CONFLICTING_ORDER, CONFLICTING_ORDER, CONFLICTING_ORDER, CONFLICTING_ORDER},
 };
 
+// Element order names.
+const char *ordername[] = {
+  "unspecified", "row-major", "column-major", "conflicting"
+};
+
 // Placement names.
-const char *placename[] = {"nowhere", "host", "device", "host and device"};
+const char *placename[] = {
+  "nowhere", "host", "device", "host and device"
+};
 
 static int LeastCommonMultiple(int n, int m) {
   int a = n;
@@ -100,6 +107,25 @@ class BasicRuntime : public Runtime {
 
   void ClearInstance(Instance *instance) override {
     memset(instance->data(), 0, instance->size());
+  }
+
+  char *AllocateChannel(char *data, size_t old_size, size_t new_size,
+                        size_t alignment, Placement placement) override {
+    char *buffer = MemAlloc(new_size, alignment);
+    if (data != nullptr) {
+      memcpy(buffer, data, old_size);
+      MemFree(data);
+    }
+    return buffer;
+  }
+
+  void ClearChannel(char *data, size_t pos, size_t size,
+                    Placement placement) override {
+    memset(data + pos, 0, size);
+  }
+
+  void FreeChannel(char *data, Placement placement) override {
+    MemFree(data);
   }
 
   bool SupportsAsync() override {
@@ -519,7 +545,7 @@ string Tensor::TypeString() const {
 }
 
 Channel::~Channel() {
-  MemFree(data_);
+  runtime()->FreeChannel(data_, connector_->placement());
 }
 
 void Channel::resize(int n) {
@@ -533,7 +559,9 @@ void Channel::resize(int n) {
 
   // Clear new elements.
   if (n > size_) {
-    memset(at(size_), 0, (n - size_) * connector_->size());
+    size_t pos = size_ * connector_->size();
+    size_t bytes = (n - size_) * connector_->size();
+    runtime()->ClearChannel(data_, pos, bytes, connector_->placement());
   }
 
   // Change size.
@@ -545,17 +573,15 @@ void Channel::reserve(int n) {
   if (n < size_) return;
   if (n == capacity_) return;
 
-  // Allocate new data buffer.
-  char *buffer = MemAlloc(n * connector_->size(), connector_->alignment());
+  // Allocate or reallocate data buffer.
+  data_ = runtime()->AllocateChannel(data_,
+                                     size_ * connector_->size(),
+                                     n * connector_->size(),
+                                     connector_->alignment(),
+                                     connector_->placement());
 
-  // Copy existing data to new buffer.
-  if (data_ != nullptr) {
-    memcpy(buffer, data_, size_ * connector_->size());
-    MemFree(data_);
-  }
-
-  // Set new data buffer.
-  data_ = buffer;
+  // Change capacity.
+  capacity_ = n;
 }
 
 ProfileSummary::ProfileSummary(Cell *cell) : cell_(cell) {
@@ -583,12 +609,20 @@ void Instance::Clear() {
 
 string Instance::ToString(Tensor *param) const {
   // Locate parameter in instance.
-  char *p  = data_ + param->offset();
-  if (param->ref()) {
-    p = *reinterpret_cast<char **>(p);
-    if (p == nullptr) return "null";
-  }
   if (!param->shape().defined()) return "*";
+  char *p;
+  char *buffer = nullptr;
+  if (param->placement() == DEVICE) {
+    if (param->ref()) return "<<device ptr>>";
+    p = buffer = runtime()->FetchTensorFromDevice(this, param);
+  } else {
+    p  = data_ + param->offset();
+    if (param->ref()) {
+      if (param->placement() & DEVICE) return "<<device ref>>";
+      p = *reinterpret_cast<char **>(p);
+    }
+  }
+  if (p == nullptr) return "null";
 
   // Get type traits for elements.
   const TypeTraits &traits = TypeTraits::of(param->type());
@@ -623,6 +657,7 @@ string Instance::ToString(Tensor *param) const {
     str = "<<" + std::to_string(param->rank()) + "D tensor>>";
   }
 
+  free(buffer);
   return str;
 }
 
@@ -749,6 +784,8 @@ static bool CompareUsage(const std::pair<int, Tensor *> &a,
     for (auto *op : vb->consumers()) {
       if (op == va->producer()) return false;
     }
+    if (va->in() && !vb->in()) return true;
+    if (vb->in() && !va->in()) return false;
   }
   return a.first < b.first;
 }
@@ -803,7 +840,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Create new connector.
-    Connector *connector = new Connector();
+    Connector *connector = new Connector(this);
     connectors_.push_back(connector);
 
     // Create tensor for connector.
@@ -826,6 +863,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // Link tensors to connector.
     for (Flow::Variable *link : cnx->links) {
       CHECK(link->ref);
+      connector->links_.push_back(tensors[link]);
       tensors[link]->link_ = t;
     }
   }
@@ -916,11 +954,12 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         bool compatible = true;
         if (step->task_index_ != -1) {
           auto &task = cell->tasks_[step->task_index_];
+          Placement location = kernel->Location();
           if (task.placement == NOWHERE) {
             // Task has not been placed yet. Use the kernel location for
             // placement.
-            task.placement = kernel->Location();
-          } else if (task.placement != kernel->Location()) {
+            task.placement = location;
+          } else if (task.placement != location && location != NOWHERE) {
             // Kernel location is incompatible with task placement.
             VLOG(7) << kernel->Name() << " cannot run on "
                     << placename[task.placement];
@@ -949,11 +988,18 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   if (options_.profiling) {
     for (Cell *cell : cells_) {
       // Allocate tensor for storing profiling information. The tensor is an
-      // int64 vector where the first element is the invocation counter followed
-      // by one element for each step in the cell computation for storing the
-      // cycle counts. If the cell has parallel tasks, two additional cycle
-      // counters are stored for each task.
-      size_t size = 1 + cell->steps_.size() + 2 * cell->tasks_.size();
+      // int64 vector with the following layout:
+      //   struct TaskTiming {
+      //     int64 start;
+      //     int 64 wait;
+      //   };
+      //   struct CellTiming {
+      //     int64 invocations;
+      //     int64 overhead;
+      //     int64 steptime[#steps];
+      //     taskprofiling tasktime[#tasks];
+      //   };
+      size_t size = 2 + cell->steps_.size() + 2 * cell->tasks_.size();
       Tensor *profile = new Tensor();
       profile->name_ = "timing/" + cell->name_;
       profile->cell_ = cell;
@@ -979,7 +1025,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     step->kernel_->Adjust(step);
   }
 
-  // Propagate alignment between linked tensors.
+  // Propagate constraints between linked tensors.
   bool again = true;
   while (again) {
     // Keep propagating alignment constraints until there are no more
@@ -1038,6 +1084,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       }
       if (t->byte_alignment_ != align) {
         l->byte_alignment_ = align;
+        again = true;
+      }
+
+      // Propagate placement.
+      if (t->placement_ != l->placement_) {
+        t->AddPlace(l->placement_);
+        l->AddPlace(t->placement_);
         again = true;
       }
     }
@@ -1116,7 +1169,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
             << " aligned " << tensor->aligned_.ToString()
             << " size " << tensor->space_
             << " stride " << tensor->stride_.ToString()
-            << " order " << tensor->order_
+            << " order " << ordername[tensor->order_]
             << " on " << placename[tensor->placement_];
   }
 
@@ -1135,11 +1188,26 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
   }
 
-  // Compute alignment for connectors.
+  // Compute alignment and placement for connectors.
   for (Connector *connector : connectors_) {
     Tensor *t = connector->type_;
     EnsureAlignment(&connector->alignment_, t->byte_alignment_);
     EnsureAlignment(&connector->alignment_, jit::CPU::CacheLineSize());
+
+    for (Tensor *link : connector->links_) {
+      if (link->producer_ != nullptr) {
+        connector->AddPlace(link->producer_->placement());
+      }
+      for (Step *consumer : link->consumers_) {
+        connector->AddPlace(consumer->placement());
+      }
+    }
+
+    if (connector->placement_ == EVERYWHERE) {
+      LOG(ERROR) << "Connector " << connector->name()
+                 << " crosses host/device boundary";
+      return false;
+    }
 
     VLOG(5) << "Connector " << connector->name() << ": " << t->TypeString()
             << " min " << t->minalign_.ToString()
@@ -1147,7 +1215,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
             << " aligned " << t->aligned_.ToString()
             << " size " << t->size_
             << " stride " << t->stride_.ToString()
-            << " order " << t->order_;
+            << " order " << ordername[t->order_]
+            << " on " << placename[connector->placement_];
   }
 
   // Move all variables that are shared with a constant to the constant pool.
@@ -1232,10 +1301,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->AddNewPlace(DEVICE);
       }
     } else {
-      // Allocate aligned tensor and copy data.
-      tensor->data_ = AllocateTensor(tensor);
-      if (tensor->data_ == nullptr) return false;
-      tensor->AddNewPlace(HOST);
+      // Allocate aligned tensor.
+      char *data = AllocateTensor(tensor);
+      if (data == nullptr) return false;
 
       // Copy constant to device if needed.
       if (tensor->placement_ & DEVICE) {
@@ -1243,6 +1311,15 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->device_data_ = runtime_->CopyTensorToDevice(tensor);
         CHECK(tensor->device_data_ != DEVICE_NULL);
         tensor->AddNewPlace(DEVICE);
+      }
+
+      // Place constant on host if needed.
+      if (tensor->placement_ & HOST) {
+        tensor->data_ = data;
+        tensor->AddNewPlace(HOST);
+        memory_.push_back(data);
+      } else {
+        MemFree(data);
       }
     }
   }
@@ -1275,21 +1352,30 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // Copy input variables that do not have the placement required by the
     // consumers.
     bool sync = false;
+    Transfers xfers;
     for (Tensor *tensor : parameters_) {
       if (tensor->cell_ != cell) continue;
-      if (tensor->placement_ == EVERYWHERE) {
-        int task = tensor->ConsumerTask();
-        if (tensor->current_placement_ == HOST) {
-          // Copy parameter tensor from host to device.
-          runtime_->EmitCopyTensorToDevice(tensor, cell, task, &masm);
-          tensor->AddNewPlace(DEVICE);
-        } else if (tensor->current_placement_ == DEVICE) {
-          // Copy parameter tensor from device to host.
-          runtime_->EmitCopyTensorFromDevice(tensor, cell, task, &masm);
-          tensor->AddNewPlace(HOST);
-        }
+      if (!tensor->in_) continue;
+      if (tensor->placement_ != EVERYWHERE) continue;
+
+      int task = tensor->ConsumerTask();
+      if (tensor->current_placement_ == HOST) {
+        // Copy parameter tensor from host to device.
+        xfers.add_host_to_device(tensor, task);
+        tensor->AddNewPlace(DEVICE);
+      } else if (tensor->current_placement_ == DEVICE) {
+        // Copy parameter tensor from device to host.
+        xfers.add_device_to_host(tensor, task);
+        tensor->AddNewPlace(HOST);
         if (task == -1) sync = true;
       }
+    }
+    runtime_->EmitTensorTransfers(xfers, cell, &masm);
+
+    // Profile entry overhead.
+    if (options_.profiling) {
+      int timing = cell->profile()->offset();
+      masm.TimeStep(timing, 1 * sizeof(int64));
     }
 
     // Let kernels generate code for each step.
@@ -1314,21 +1400,25 @@ bool Network::Compile(const Flow &flow, const Library &library) {
             // Profile task wait.
             if (options_.profiling) {
               int timing = cell->profile()->offset();
-              int slot = 1 + cell->steps_.size() + tidx * 2 + 1;
+              int slot = 2 + cell->steps_.size() + tidx * 2 + 1;
               masm.TimeStep(timing, slot * sizeof(int64));
             }
           }
         }
 
         // Synchronize main task if needed before executing step.
-        if (sync && step->NeedsSynchronization()) {
+        if (options_.sync_steps || (sync && step->NeedsSynchronization())) {
+          VLOG(8) << "Sync main task";
           masm.CallInstanceFunction(runtime_->SyncMainFunc());
           sync = false;
         }
 
         // Generate code for step.
         auto pc = masm.pc_offset();
-        VLOG(8) << step->name() << " @ " << reinterpret_cast<uint64 *>(pc);
+        VLOG(8) << "Generate " << step->name() << " @ "
+                << reinterpret_cast<uint64 *>(pc)
+                << " with " << step->kernel_->Name()
+                << " on " << placename[step->placement()];
         step->kernel_->Generate(step, &masm);
         if (masm.pc_offset() == pc) step->noop_ = true;
 
@@ -1338,27 +1428,29 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
         // Copy outputs that do not have the placement required by the
         // consumers.
+        Transfers xfers;
         for (Tensor *output : step->outputs_) {
           output->AddNewPlace(step->placement());
           if (output->placement_ == EVERYWHERE) {
             int task = output->ConsumerTask();
             if (output->current_placement_ == HOST) {
               // Copy output from host to device.
-              runtime_->EmitCopyTensorToDevice(output, cell, task, &masm);
+              xfers.add_host_to_device(output, task);
               output->AddNewPlace(DEVICE);
             } else if (output->current_placement_ == DEVICE) {
               // Copy output from device to host.
-              runtime_->EmitCopyTensorFromDevice(output, cell, task, &masm);
+              xfers.add_device_to_host(output, task);
               output->AddNewPlace(HOST);
+              if (task == -1) sync = true;
             }
-            if (task == -1) sync = true;
           }
         }
+        runtime_->EmitTensorTransfers(xfers, cell, &masm);
 
         // Profile step.
         if (options_.profiling && !step->noop_) {
           int timing = cell->profile()->offset();
-          masm.TimeStep(timing, (stepnum + 1) * sizeof(int64));
+          masm.TimeStep(timing, (stepnum + 2) * sizeof(int64));
         }
       } else {
         // Parallel step.
@@ -1379,7 +1471,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
           // Profile task start.
           if (options_.profiling) {
             int timing = cell->profile()->offset();
-            int slot = 1 + cell->steps_.size() + tidx * 2;
+            int slot = 2 + cell->steps_.size() + tidx * 2;
             masm.TimeStep(timing, slot * sizeof(int64));
           }
         }
@@ -1390,10 +1482,14 @@ bool Network::Compile(const Flow &flow, const Library &library) {
           if (output->placement_ == EVERYWHERE) {
             if (output->current_placement_ == HOST) {
               // Set deferred copy from host to device.
+              VLOG(8) << "Deferred transfer " << output->name()
+                      << " from host to device";
               output->deferred_placement_ = DEVICE;
               output->AddNewPlace(DEVICE);
             } else if (output->current_placement_ == DEVICE) {
               // Set deferred copy from device to host.
+              VLOG(8) << "Deferred transfer " << output->name()
+                      << " from device to host";
               output->deferred_placement_ = HOST;
               output->AddNewPlace(HOST);
             }
@@ -1410,13 +1506,19 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         task.state = COMPLETED;
       }
     }
-    if (sync) {
-      masm.CallInstanceFunction(runtime_->SyncMainFunc());
-    }
+
+    // Synchronize main task.
+    masm.CallInstanceFunction(runtime_->SyncMainFunc());
 
     // Stop runtime profiler.
     if (options_.profiling) {
       masm.CallInstanceFunction(runtime_->StopProfilerFunc());
+    }
+
+    // Profile exit overhead.
+    if (options_.profiling) {
+      int timing = cell->profile()->offset();
+      masm.TimeStep(timing, 1 * sizeof(int64));
     }
 
     // Generate epilogue for main cell computation.
@@ -1448,22 +1550,22 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
           // Copy outputs that do not have the placement required by the
           // consumers.
+          Transfers xfers;
           for (Tensor *output : step->outputs_) {
             if (output->deferred_placement_ == DEVICE) {
               // Copy output from host to device.
-              runtime_->EmitCopyTensorToDevice(
-                  output, cell, task_index, &masm);
+              xfers.add_host_to_device(output, task_index);
             } else if (output->deferred_placement_ == HOST) {
               // Copy output from device to host.
-              runtime_->EmitCopyTensorFromDevice(
-                  output, cell, task_index, &masm);
+              xfers.add_device_to_host(output, task_index);
             }
           }
+          runtime_->EmitTensorTransfers(xfers, cell, &masm);
 
           // Profile step.
           if (options_.profiling && !step->noop_) {
             int timing = cell->profile()->offset();
-            masm.TimeStep(timing, (stepnum + 1) * sizeof(int64));
+            masm.TimeStep(timing, (stepnum + 2) * sizeof(int64));
           }
         }
         stepnum++;
@@ -1546,7 +1648,7 @@ char *Network::AllocateTensor(Tensor *tensor) {
   }
 
   // Allocate memory for tensor.
-  char *data = AllocateMemory(tensor->size_, alignment);
+  char *data = MemAlloc(tensor->size_, alignment);
   memset(data, 0, tensor->size_);
 
   // Copy data.
@@ -1620,7 +1722,11 @@ void Cell::WriteCodeToFile(const string &filename) const {
 }
 
 static bool CompareOffset(Tensor *t1, Tensor *t2) {
-  return t1->offset() < t2->offset();
+  if (t1->offset() != t2->offset()) {
+    return t1->offset() < t2->offset();
+  } else {
+    return t1->device_offset() < t2->device_offset();
+  }
 }
 
 static bool Contains(const std::vector<Tensor *> &v, Tensor *t) {
@@ -1629,7 +1735,11 @@ static bool Contains(const std::vector<Tensor *> &v, Tensor *t) {
 
 string Cell::ToString() const {
   string str;
-  StringAppendF(&str, "cell %s {  // size %lu\n", name_.c_str(), instance_size_);
+  StringAppendF(&str, "cell %s {  // size %lu", name_.c_str(), instance_size_);
+  if (device_instance_size_ > 0) {
+    StringAppendF(&str, ", device size %lu", device_instance_size_);
+  }
+  str.append("\n");
 
   // Output instance data fields.
   std::vector<Tensor *> fields;
@@ -1639,6 +1749,7 @@ string Cell::ToString() const {
   std::sort(fields.begin(), fields.end(), CompareOffset);
 
   int prev_offset = -1;
+  bool on_device = false;
   for (Tensor *t : fields) {
     if (t->placement() & HOST) {
       str.append("  ");
@@ -1656,24 +1767,29 @@ string Cell::ToString() const {
                     t->space());
       prev_offset = t->offset();
     }
+    if (t->placement() & DEVICE) on_device = true;
   }
 
-  prev_offset = -1;
-  for (Tensor *t : fields) {
-    if (t->placement() & DEVICE) {
-      if (t->device_offset() == prev_offset) {
-        str.append("  union ");
-      } else {
-        if (t->in()) str.append("input ");
-        if (t->out()) str.append("output ");
-        str.append("device var ");
+  if (on_device) {
+    str.append("\n");
+    prev_offset = -1;
+    for (Tensor *t : fields) {
+      if (t->placement() & DEVICE) {
+        str.append("  ");
+        if (t->device_offset() == prev_offset) {
+          str.append("  union ");
+        } else {
+          if (t->in()) str.append("input ");
+          if (t->out()) str.append("output ");
+          str.append("device var ");
+        }
+        StringAppendF(&str, "%s: %s  // offset %lu size %lu\n",
+                      t->name().c_str(),
+                      t->TypeString().c_str(),
+                      t->device_offset(),
+                      t->space());
+        prev_offset = t->device_offset();
       }
-      StringAppendF(&str, "%s: %s  // offset %lu size %lu\n",
-                    t->name().c_str(),
-                    t->TypeString().c_str(),
-                    t->device_offset(),
-                    t->space());
-      prev_offset = t->device_offset();
     }
   }
 

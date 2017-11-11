@@ -100,6 +100,17 @@ class Profile {
     return complexity() == 0 || time() == 0 ? 0 : complexity() / time() / 1e3;
   }
 
+  // Overhead time per invocation.
+  double overhead_time() const {
+    return invocations_ > 0 ? overhead_ / (Clock::mhz() * invocations_) : 0;
+  }
+
+  // Percentage of time used by overhead in cell computation.
+  double overhead_percent() const {
+    if (invocations_ == 0 || total_ == 0) return 0.0;
+    return overhead_time() / time() * 100;
+  }
+
   // Number of CPU cycles for starting task.
   int64 start_cycles(int tidx) const {
     return invocations_ ? tasks_[tidx].start / invocations_ : 0;
@@ -160,6 +171,9 @@ class Profile {
 
   // Number of invocations.
   int64 invocations_ = 0;
+
+  // Overhead.
+  int64 overhead_ = 0;
 
   // Total number of cycles for computation.
   int64 total_ = 0;

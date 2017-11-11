@@ -85,6 +85,23 @@ cc_library(
 )
 
 cc_library(
+  name = "cuda",
+  srcs = [
+    "cuda.cc",
+    "cuda-array.cc",
+    "cuda-matmul.cc",
+    "cuda-arithmetic.cc",
+  ],
+  hdrs = ["cuda.h"],
+  deps = [
+    ":arithmetic",
+    "//myelin:compute",
+    "//myelin:express",
+    "//myelin/cuda:cuda-kernel",
+  ],
+)
+
+cc_library(
   name = "dragnn",
   srcs = ["dragnn.cc"],
   hdrs = ["dragnn.h"],

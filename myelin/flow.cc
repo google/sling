@@ -74,7 +74,7 @@ std::vector<TypeTraits> typetraits = {
   {DT_UINT16, "uint16", sizeof(uint16_t), nullptr},
   {DT_QUINT16, "quint16", sizeof(uint16_t), nullptr},
   {DT_COMPLEX128, "complex128", 2 * sizeof(float), nullptr},
-  {DT_HALF, "float16", 2, nullptr},
+  {DT_HALF, "float16", 2, "f16"},
   {DT_RESOURCE, "resource", 1, nullptr},
 };
 
@@ -879,6 +879,9 @@ void Flow::InferInputsAndOutputs() {
   }
 
   for (Variable *var : vars_) {
+    // Constants are not considered inputs or outputs.
+    if (var->data != nullptr) continue;
+
     // Check the input and output attributes of the producing op.
     bool input_set = false;
     bool output_set = false;
@@ -1730,6 +1733,13 @@ Flow::Operation *Flow::Op(const string &name) {
 Flow::Function *Flow::Func(const string &name) {
   for (Function *func : funcs_) {
     if (func->name == name) return func;
+  }
+  return nullptr;
+}
+
+Flow::Connector *Flow::Cnx(const string &name) {
+  for (Connector *cnx : cnxs_) {
+    if (cnx->name == name) return cnx;
   }
   return nullptr;
 }

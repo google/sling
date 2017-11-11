@@ -388,7 +388,7 @@ class DragnnLookupUnrolled : public Kernel {
     int embedding_size = M->dim(0) - 1;
     int embedding_dims = v->dim(1);
 
-    // Get number input features.
+    // Get number of input features.
     int num_features = f->dim(1);
 
     // Allocate registers.

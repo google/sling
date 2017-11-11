@@ -37,6 +37,17 @@ class MultiProcessorRuntime : public Runtime {
   void FreeInstance(Instance *instance) override;
   void ClearInstance(Instance *instance) override;
 
+  // Channel allocation.
+  char *AllocateChannel(char *data,
+                        size_t old_size,
+                        size_t new_size,
+                        size_t alignment,
+                        Placement placement) override;
+  void ClearChannel(char *data, size_t pos,
+                    size_t size,
+                    Placement placement) override;
+  void FreeChannel(char *data, Placement placement) override;
+
   // Multi-processor runtime support.
   bool SupportsAsync() override { return true; }
   TaskFunc StartTaskFunc() override;

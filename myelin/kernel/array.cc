@@ -47,6 +47,8 @@ class Reshape : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
+  Placement Location() { return NOWHERE; }
+
   int64 Complexity(const Step *step) override {
     return 0;
   }
@@ -78,6 +80,8 @@ class Squeeze : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
+  Placement Location() { return NOWHERE; }
+
   int64 Complexity(const Step *step) override {
     return 0;
   }
@@ -108,6 +112,8 @@ class ExpandDims : public Kernel {
   void Generate(Step *step, MacroAssembler *masm) override {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
+
+  Placement Location() { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;
@@ -229,6 +235,8 @@ class Pack : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
+  Placement Location() { return NOWHERE; }
+
   int64 Complexity(const Step *step) override {
     return 0;
   }
@@ -258,6 +266,8 @@ class Unpack : public Kernel {
   void Generate(Step *step, MacroAssembler *masm) override {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
+
+  Placement Location() { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;

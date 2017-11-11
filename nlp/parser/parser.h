@@ -66,6 +66,12 @@ class Parser {
     network_.options().external_profiler = true;
   }
 
+  // Enable fast fallback. Must be called before Load().
+  void EnableFastFallback() { fast_fallback_ = true; }
+
+  // Run parser on GPU if available. Must be called before Load().
+  void EnableGPU();
+
   // Return profile summary for parser.
   Profile *profile() const { return profile_; }
 
@@ -137,6 +143,7 @@ class Parser {
     myelin::Tensor *steps;                    // link to FF step hidden layer
     myelin::Tensor *hidden;                   // link to FF hidden layer output
     myelin::Tensor *output;                   // link to FF logit layer output
+    myelin::Tensor *prediction;               // link to FF argmax
   };
 
   // Initialize LSTM cell.
@@ -179,6 +186,12 @@ class Parser {
 
   // Set of roles considered.
   RoleSet roles_;
+
+  // Fast fallback using argmax.
+  bool fast_fallback_ = false;
+
+  // Run parser on GPU.
+  bool use_gpu_ = false;
 
   // Symbols.
   Names names_;

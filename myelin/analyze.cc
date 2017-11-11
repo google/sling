@@ -19,9 +19,11 @@
 #include "base/flags.h"
 #include "base/logging.h"
 #include "base/types.h"
+#include "file/file.h"
 #include "myelin/compute.h"
 #include "myelin/flow.h"
 #include "myelin/graph.h"
+#include "myelin/profile.h"
 #include "myelin/kernel/dragnn.h"
 #include "myelin/kernel/tensorflow.h"
 
@@ -33,9 +35,11 @@ DEFINE_bool(tf, true, "Use Tensorflow kernel library");
 DEFINE_bool(dragnn, true, "Use DRAGNN kernel library");
 DEFINE_bool(check_consistency, false, "Check flow for consistency");
 DEFINE_bool(profile, false, "Profile network");
+DEFINE_bool(dynalloc, false, "Dynamic instance allocation");
 DEFINE_string(cell, "", "Network cell name");
 DEFINE_string(code, "", "Filename prefix for code");
-DEFINE_string(graph, "", "DOT file name");
+DEFINE_string(graph, "", "DOT file name for flow");
+DEFINE_string(datagraph, "", "DOT file name prefix for data profile");
 
 using namespace sling;
 using namespace sling::myelin;
@@ -85,7 +89,8 @@ int main(int argc, char *argv[]) {
     // Compile model.
     LOG(INFO) << "Compiling flow";
     Network network;
-    if (FLAGS_profile) network.set_profiling(true);
+    if (FLAGS_profile) network.options().profiling = true;
+    if (FLAGS_dynalloc) network.options().dynamic_allocation = true;
     if (!network.Compile(flow, library)) {
       std::cout << "Compilation of flow failed\n";
       return 1;
@@ -98,6 +103,15 @@ int main(int argc, char *argv[]) {
       // Dump cell.
       if (FLAGS_dump_cell) {
         std::cout << cell->ToString();
+      }
+
+      // Dump data profile.
+      if (!FLAGS_datagraph.empty()) {
+        string svgfn = FLAGS_datagraph + cell->name() + ".svg";
+        DataProfile dprof(cell);
+        LOG(INFO) << "Writing data profile for " << cell->name()
+                  << " to " << svgfn;
+        File::WriteContents(svgfn, dprof.AsSVG());
       }
 
       // Dump generated code to file. The file can be viewed with objdump:

@@ -12,26 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MYELIN_KERNEL_ARITHMETIC_H_
-#define MYELIN_KERNEL_ARITHMETIC_H_
-
 #include "myelin/compute.h"
-#include "myelin/express.h"
 
 namespace sling {
 namespace myelin {
 
-// Register arithmetic library.
-void RegisterArithmeticLibrary(Library *library);
+// cuda-matmul.cc
+void RegisterCUDAMatMulLibrary(Library *library);
 
-// Register arithmetic transforms.
-void RegisterArithmeticTransforms(Library *library);
+// cuda-arithmetic.cc
+void RegisterCUDAArithmeticLibrary(Library *library);
 
-// Initialize expression for step.
-void InitExpression(const Step *step, Express *expr, bool expand);
+// cuda-array.cc
+void RegisterCUDAArrayLibrary(Library *library);
+
+// Register CUDA kernels.
+void RegisterCUDALibrary(Library *library) {
+  RegisterCUDAMatMulLibrary(library);
+  RegisterCUDAArithmeticLibrary(library);
+  RegisterCUDAArrayLibrary(library);
+}
 
 }  // namespace myelin
 }  // namespace sling
-
-#endif  // MYELIN_KERNEL_ARITHMETIC_H_
 

@@ -123,7 +123,7 @@ static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
 }
 
 // Initialize expression for step.
-static void InitExpression(const Step *step, Express *expr, bool expand) {
+void InitExpression(const Step *step, Express *expr, bool expand) {
   if (step->type() == "Calculate") {
     // Build expression from expression recipe attribute on op.
     const string &recipe = step->GetAttr("expr");

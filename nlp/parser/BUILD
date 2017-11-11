@@ -71,6 +71,7 @@ cc_library(
     "//myelin:compute",
     "//myelin:flow",
     "//myelin:profile",
+    "//myelin/kernel:cuda",
     "//myelin/kernel:dragnn",
     "//myelin/kernel:tensorflow",
     "//nlp/document",

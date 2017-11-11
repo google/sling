@@ -372,6 +372,16 @@ class StandardTyper : public Typer {
       }
     }
 
+    // Infer shape for argmax operation.
+    if (op->type == "ArgMax") {
+      if (op->indegree() == 1 && op->outdegree() == 1) {
+        Flow::Variable *y = op->outputs[0];
+        if (y->type == DT_INVALID) y->type = DT_INT32;
+        y->shape.redim(0);
+        return true;
+      }
+    }
+
     return false;
   }
 };
