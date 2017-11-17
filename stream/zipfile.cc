@@ -41,6 +41,7 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
   // supersede the ordinary record read above.
   int locator_size = sizeof(EOCD64Locator);
   uint64 locator_offset = size - sizeof(EOCDRecord) - locator_size;
+  // locator_offset is defined as unsigned, condition is always true
   if (locator_offset >= 0) {
     CHECK(file_->Seek(locator_offset));
     EOCD64Locator locator;

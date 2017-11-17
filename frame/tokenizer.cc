@@ -273,6 +273,7 @@ int Tokenizer::ParseString() {
           NextChar();
           ch = HexToDigit(current_);
           NextChar();
+          // ch is defined as int (signed), undefined behavior could happen with '<<' operator here. 
           ch = (ch << 4) + HexToDigit(current_);
           NextChar();
           if (ch < 0) return Error("Invalid hex escape in string");

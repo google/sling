@@ -79,8 +79,9 @@ bool ArrayOutputStream::Next(void **data, int *size) {
   int left = size_ - position_;
   if (left == 0) {
     size_ = size_ > 0 ? size_ * 2 : block_size_;
-    data_ = static_cast<char *>(realloc(data_, size_));
-    if (data_ == nullptr) return false;
+    char *tmp_ptr = static_cast<char *>(realloc(data_, size_));
+    if (tmp_ptr == nullptr) return false;
+    data_ = tmp_ptr;
     left = size_ - position_;
   }
 

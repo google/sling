@@ -293,6 +293,7 @@ class RecipeParser {
     if (digits == 0) Error("Variable id expected in expression");
 
     // Return variable.
+    // type could be unitialized at this point
     return expr_->Variable(type, id);
   }
 
@@ -1342,8 +1343,7 @@ int Express::AllocateRegisters() {
       // Allocate destination register for move op.
       if (op->result->type == TEMP) {
         if (op->result->first == op) {
-          if (op->type == MOV &&
-              op->args[0]->type == TEMP &&
+          if (op->args[0]->type == TEMP &&
               op->args[0]->last == op) {
             // Steal register from source.
             op->dst = op->src = regs.Transfer(op->args[0], op->result);
