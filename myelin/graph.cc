@@ -133,7 +133,7 @@ static void AppendOp(string *str,
 static void AppendVar(string *str,
                       Flow::Variable *var,
                       const GraphOptions &options) {
-  if (var->in || var->out) {
+  if (var->in || var->out || var->data) {
     AppendVarId(str, var);
     str->append(" [");
     str->append("label=\"");

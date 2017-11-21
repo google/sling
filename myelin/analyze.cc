@@ -39,7 +39,9 @@ DEFINE_bool(dynalloc, false, "Dynamic instance allocation");
 DEFINE_string(cell, "", "Network cell name");
 DEFINE_string(code, "", "Filename prefix for code");
 DEFINE_string(graph, "", "DOT file name for flow");
+DEFINE_bool(consts, true, "Include constants in DOT graph");
 DEFINE_string(datagraph, "", "DOT file name prefix for data profile");
+DEFINE_int32(batch, 1, "Batch size");
 
 using namespace sling;
 using namespace sling::myelin;
@@ -55,6 +57,7 @@ int main(int argc, char *argv[]) {
   // Load flow.
   Flow flow;
   LOG(INFO) << "Loading flow from " << FLAGS_flow;
+  flow.set_batch_size(FLAGS_batch);
   CHECK(flow.Load(FLAGS_flow));
 
   if (!FLAGS_raw) {
@@ -82,6 +85,7 @@ int main(int argc, char *argv[]) {
   if (!FLAGS_graph.empty()) {
     LOG(INFO) << "Writing flow graph to " << FLAGS_graph;
     GraphOptions opts;
+    opts.include_constants = FLAGS_consts;
     FlowToDotGraphFile(flow, opts, FLAGS_graph);
   }
 

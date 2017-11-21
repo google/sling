@@ -628,7 +628,7 @@ class Flow {
   std::vector<char *> memory_;
 
   // Batch size.
-  int batch_size_ = -1;
+  int batch_size_ = 1;
 };
 
 // Component type for inferring types and shapes of operation outputs.

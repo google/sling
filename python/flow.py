@@ -354,12 +354,12 @@ class FlowBuilder:
         shape = var.get_shape()
         if shape.dims != None:
           undef = True
-          for d in shape.as_list():
-            if d is None:
-              v.shape.append(-1)
-            else:
-              v.shape.append(d)
+          for d in shape.dims:
+            if d.value != None:
+              v.shape.append(d.value)
               undef = False
+            else:
+              v.shape.append(-1)
           if undef: v.shape = [0] * len(shape.dims)
         else:
           v.shape = [0]
