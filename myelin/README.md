@@ -126,8 +126,8 @@ CHECK(nn.Compile("/tmp/mnist.flow", library));
 Cell *classifier = nn.GetCell("classifier");
 
 // Get classifier inputs and outputs.
-Tensor *x = classifier->GetParameter("x");
-Tensor *y = classifier->GetParameter("y");
+Tensor *x = classifier->GetParameter("x:0");
+Tensor *y = classifier->GetParameter("y:0");
 ```
 
 Myelin can load and compile a flow file into a `Network` object. This contains
