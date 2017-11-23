@@ -234,6 +234,12 @@ inline void *memrchr(const void *bytes, int find_char, size_t len) {
 // Tell the compiler that a given function never returns.
 #define ABSL_ATTRIBUTE_NORETURN __attribute__((noreturn))
 
+// Tells GCC that a function is hot or cold. GCC can use this information to
+// improve static analysis, i.e. a conditional branch to a cold function
+// is likely to be not-taken.
+#define ABSL_ATTRIBUTE_HOT __attribute__((hot))
+#define ABSL_ATTRIBUTE_COLD __attribute__((cold))
+
 // Tell the compiler to warn about unused return values for functions declared
 // with this macro. The macro should be used on function declarations following
 // the argument list.

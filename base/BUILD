@@ -3,7 +3,9 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
   name = "base",
   srcs = [
+    "flags.cc",
     "init.cc",
+    "logging.cc",
     "status.cc",
     "strtoint.cc",
   ],
@@ -18,14 +20,6 @@ cc_library(
     "status.h",
     "strtoint.h",
     "types.h",
-  ],
-  deps = [
-    "//external:gflags",
-    "//external:glog",
-  ],
-  copts = [
-    "-Wno-sign-compare",
-    "-Wno-deprecated",
   ],
   linkopts = [
     "-lpthread",
@@ -47,9 +41,6 @@ cc_library(
   hdrs = ["registry.h"],
   deps = [
     ":base",
-  ],
-  copts = [
-    "-Wno-sign-compare",
   ],
 )
 

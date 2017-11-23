@@ -41,9 +41,7 @@ FileSystem *default_file_system = nullptr;
 void InitializeFileSystems() {
   auto *registry = FileSystem::registry();
   for (auto *fs = registry->components; fs != nullptr; fs = fs->next()) {
-    // TODO: Do not use logging in initialization as it can currently crash
-    // when loaded in a shared library.
-    // VLOG(2) << "Initializing " << fs->type() << " file system";
+    VLOG(2) << "Initializing " << fs->type() << " file system";
     fs->object()->Init();
     if (fs->object()->IsDefaultFileSystem()) {
       default_file_system = fs->object();

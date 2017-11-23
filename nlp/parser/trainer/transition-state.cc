@@ -80,7 +80,7 @@ int SemparState::NextGoldAction() {
 
   const ParserAction &action = gold_sequence_.action(next_gold_index_);
   int index = action_table()->Index(action);
-  LOG_IF(FATAL, index == -1) << action.ToString(store());
+  CHECK_NE(index, -1) << action.ToString(store());
   gold_transitions_required_ = true;
 
   return index;
@@ -121,8 +121,8 @@ void SemparState::PerformAction(int action_index) {
     // it is possible that the gold action is not allowed as per the table.
     // If so, explicitly whitelist the action.
     if (!allowed_[action_index]) {
-      LOG_FIRST_N(WARNING, 50) << "Forcibly enabling disallowed gold action: "
-          << action.ToString(store());
+      VLOG(5) << "Forcibly enabling disallowed gold action: "
+              << action.ToString(store());
       allowed_[action_index] = true;
     }
     next_gold_index_++;

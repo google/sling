@@ -20,6 +20,10 @@
 #include "base/logging.h"
 #include "base/types.h"
 
+DEFINE_int32(v, 0, "Log level for VLOG");
+DEFINE_int32(loglevel, 0, "Discard messages logged at a lower severity");
+DEFINE_bool(logtostderr, true, "Log messages to stderr");
+
 namespace sling {
 
 // Linked list of module initializers.
@@ -33,44 +37,36 @@ ModuleInitializer::ModuleInitializer(const char *n, Handler h)
   last = this;
 }
 
-static void RunModuleInitializers(bool silent) {
+static void RunModuleInitializers() {
   ModuleInitializer *initializer = ModuleInitializer::first;
   while (initializer != nullptr) {
-    if (!silent) VLOG(2) << "Initializing " << initializer->name << " module";
+    VLOG(2) << "Initializing " << initializer->name << " module";
     initializer->handler();
     initializer = initializer->next;
   }
 }
 
 void InitProgram(int *argc, char ***argv) {
-  // Install signal handlers for dumping crash information.
-  google::InstallFailureSignalHandler();
-
-  // Initialize logging.
-  google::InitGoogleLogging(*argc == 0 ? "program" : (*argv)[0]);
-
   // Initialize command line flags.
   if (*argc > 0) {
     string usage;
     usage.append((*argv)[0]);
-    usage.append(" [OPTIONS]");
-    gflags::SetUsageMessage(usage);
-    gflags::ParseCommandLineFlags(argc, argv, true);
+    usage.append(" [OPTIONS]\n");
+    Flag::SetUsageMessage(usage);
+    if (Flag::ParseCommandLineFlags(argc, *argv, true) != 0) exit(1);
   }
 
+  // Initialize logging.
+  LogMessage::set_log_level(FLAGS_loglevel);
+  LogMessage::set_vlog_level(FLAGS_v);
+
   // Run module initializers.
-  RunModuleInitializers(false);
+  RunModuleInitializers();
 }
 
 void InitSharedLibrary() {
-  // Install signal handlers for dumping crash information.
-  google::InstallFailureSignalHandler();
-
-  // Initialize logging.
-  google::InitGoogleLogging("library");
-
   // Run module initializers.
-  RunModuleInitializers(true);
+  RunModuleInitializers();
 }
 
 }  // namespace sling
