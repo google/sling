@@ -137,7 +137,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
 
       // Check that phrase is inside the input buffer.
       int end = current_ + length;
-      if (length < 0 || end > end_) return false;
+      if (end > end_) return false;
 
       // Check that the proposed span doesn't cross any existing span.
       int max_end = nesting_.MaxEnd(end);
@@ -162,10 +162,10 @@ bool ParserState::CanApply(const ParserAction &action) const {
 
       // Check that phrase is inside input buffer.
       int end = current_ + length;
-      if (length < 0 || end > end_) return false;
+      if (end > end_) return false;
 
       // Check that 'index' is valid.
-      if (index < 0 || index >= attention_.size()) return false;
+      if (index >= attention_.size()) return false;
 
       // Check that the proposed span doesn't cross any existing span.
       int max_end = nesting_.MaxEnd(end);
@@ -191,7 +191,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
 
       // Check that source is a valid frame.
       int source = action.source;
-      if (source < 0 || source >= attention_.size()) return false;
+      if (source >= attention_.size()) return false;
 
       // Check that we haven't output this assignment in the past.
       Frame frame(store_, frames_[Attention(source)]);
@@ -205,8 +205,8 @@ bool ParserState::CanApply(const ParserAction &action) const {
       // Check that source and target are valid indices.
       int source = action.source;
       int target = action.target;
-      if (source < 0 || source >= attention_.size()) return false;
-      if (target < 0 || target >= attention_.size()) return false;
+      if (source >= attention_.size()) return false;
+      if (target >= attention_.size()) return false;
 
       // Check that we haven't output this connection before.
       Frame frame(store_, frames_[Attention(source)]);
@@ -219,7 +219,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
 
       // Check that target is a valid index into the attention buffer.
       int target = action.target;
-      if (target < 0 || target >= attention_.size()) return false;
+      if (target >= attention_.size()) return false;
 
       // Check that we haven't embedded the same frame the same way.
       int target_index = Attention(target);
@@ -236,7 +236,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
 
       // Check that source is a valid index into the attention buffer.
       int source = action.source;
-      if (source < 0 || source >= attention_.size()) return false;
+      if (source >= attention_.size()) return false;
 
       // Check that we haven't elaborated the same frame the same way.
       int source_index = Attention(source);
