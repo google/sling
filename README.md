@@ -1,5 +1,7 @@
 # SLING - A natural language frame semantics parser
 
+[![Build Status](https://travis-ci.org/google/sling.svg?branch=master)](https://travis-ci.org/google/sling)
+
 SLING is a parser for annotating text with frame semantic annotations. It is
 trained on an annotated corpus using [Tensorflow](https://www.tensorflow.org/)
 and [Dragnn](https://github.com/tensorflow/models/blob/master/research/syntaxnet/g3doc/DRAGNN.md).
@@ -14,7 +16,7 @@ graphs directly without any intervening symbolic representation.
 
 The SLING framework includes an efficient and scalable frame store
 implementation as well as a neural network JIT compiler for fast parsing at
-runtime. 
+runtime.
 
 A more detailed description of the SLING parser can be found in this paper:
 
@@ -86,7 +88,7 @@ cd sling
 nlp/parser/tools/build-commons.sh
 ```
 
-This will build a SLING store with all the schemas needed and put it into 
+This will build a SLING store with all the schemas needed and put it into
 `/tmp/commons`.
 
 Next, write a converter to convert documents in your existing format to
@@ -433,48 +435,48 @@ This tool takes the following commandline arguments:
    bazel-bin/nlp/parser/tools/parse --logtostderr \
       --parser=<path to flow file> --text="John loves Mary" --indent=2
 
-   {=#1 
+   {=#1
      :/s/document
      /s/document/text: "John loves Mary"
-     /s/document/tokens: [{=#2 
+     /s/document/tokens: [{=#2
        :/s/token
        /s/token/index: 0
        /s/token/text: "John"
        /s/token/start: 0
        /s/token/length: 4
        /s/token/break: 0
-     }, {=#3 
+     }, {=#3
        :/s/token
        /s/token/index: 1
        /s/token/text: "loves"
        /s/token/start: 5
        /s/token/length: 5
-     }, {=#4 
+     }, {=#4
        :/s/token
        /s/token/index: 2
        /s/token/text: "Mary"
        /s/token/start: 11
        /s/token/length: 4
      }]
-     /s/document/mention: {=#5 
+     /s/document/mention: {=#5
        :/s/phrase
        /s/phrase/begin: 0
-       /s/phrase/evokes: {=#6 
+       /s/phrase/evokes: {=#6
          :/saft/person
        }
      }
-     /s/document/mention: {=#7 
+     /s/document/mention: {=#7
        :/s/phrase
        /s/phrase/begin: 1
-       /s/phrase/evokes: {=#8 
+       /s/phrase/evokes: {=#8
          :/pb/love-01
          /pb/arg0: #6
-         /pb/arg1: {=#9 
+         /pb/arg1: {=#9
            :/saft/person
          }
        }
      }
-     /s/document/mention: {=#10 
+     /s/document/mention: {=#10
        :/s/phrase
        /s/phrase/begin: 2
        /s/phrase/evokes: #9
@@ -497,7 +499,7 @@ This tool takes the following commandline arguments:
     I0927 14:45:39.059257 30934 parse.cc:184] 200 documents, 3369 tokens, 2289.91 tokens/sec
    ```
 
-   If `--profile` is specified, the parser will run with profiling 
+   If `--profile` is specified, the parser will run with profiling
    instrumentation enabled and output a detailed profile report with execution
    timing for each operation in the neural network.
 

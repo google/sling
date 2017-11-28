@@ -1,0 +1,27 @@
+dist: trusty
+language:
+  - cpp
+  - python
+compiler: gcc
+python: "2.7"
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - wget
+      - pkg-config
+      - g++-4.8
+
+install:
+  - sudo pip install protobuf==3.4.0
+  - sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.4.0-cp27-none-linux_x86_64.whl
+
+before_install:
+  - wget https://github.com/bazelbuild/bazel/releases/download/0.8.0/bazel_0.8.0-linux-x86_64.deb
+  - sudo dpkg -i bazel_0.8.0-linux-x86_64.deb
+
+script:
+  - tools/buildall.sh
+
