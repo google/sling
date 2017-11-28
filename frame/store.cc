@@ -60,10 +60,9 @@ static inline uint64 HashBytes(const void *ptr, size_t len) {
 void Region::reserve(size_t bytes) {
   size_t used = size();
   DCHECK_LE(used, bytes);
-  Address tmp_ptr = static_cast<Address>(realloc(base_, bytes));
-  CHECK(tmp_ptr != nullptr || bytes == 0);
-  CHECK_EQ((reinterpret_cast<uintptr_t>(tmp_ptr) & (kObjectAlign - 1)), 0);
-  base_ = tmp_ptr;
+  base_ = static_cast<Address>(realloc(base_, bytes));
+  CHECK(base_ != nullptr || bytes == 0);
+  CHECK_EQ((reinterpret_cast<uintptr_t>(base_) & (kObjectAlign - 1)), 0);
   end_ = base_ + used;
   limit_ = base_ + bytes;
   DCHECK(end_ <= limit_);

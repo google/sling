@@ -29,13 +29,9 @@ Status::State *Status::CopyState(const State *s) {
   if (s == nullptr) return nullptr;
   int size = sizeof(State) + s->length + 1;
   State *result = static_cast<State *>(malloc(size));
-  if (result != nullptr) {
-    memcpy(result, s, size);
-    return result;
-  }
-  else {
-    return nullptr
-  }
+  CHECK(result != nullptr);
+  memcpy(result, s, size);
+  return result;
 }
 
 Status::Status(int code, const char *msg) {
@@ -43,11 +39,10 @@ Status::Status(int code, const char *msg) {
   int length = strlen(msg);
   int size = sizeof(State) + length + 1;
   state_ = static_cast<State *>(malloc(size));
-  if (state_ != nullptr) {
-    state_->length = length;
-    state_->code = code;
-    memcpy(state_->message(), msg, length + 1);
-  }
+  CHECK(state_ != nullptr);
+  state_->length = length;
+  state_->code = code;
+  memcpy(state_->message(), msg, length + 1);
 }
 
 Status::Status(int code, const char *msg1, const char *msg2)  {
@@ -57,15 +52,14 @@ Status::Status(int code, const char *msg1, const char *msg2)  {
   int length = length1 + length2 + 2;
   int size = sizeof(State) + length + 1;
   state_ = static_cast<State *>(malloc(size));
-  if (state_ != nullptr) {
-    state_->length = length;
-    state_->code = code;
-    char *msg = state_->message();
-    memcpy(msg, msg1, length1);
-    msg[length1] = ':';
-    msg[length1 + 1] = ' ';
-    memcpy(msg + length1 + 2, msg2, length2 + 1);
-  }
+  CHECK(state_ != nullptr);
+  state_->length = length;
+  state_->code = code;
+  char *msg = state_->message();
+  memcpy(msg, msg1, length1);
+  msg[length1] = ':';
+  msg[length1 + 1] = ' ';
+  memcpy(msg + length1 + 2, msg2, length2 + 1);
 }
 
 Status::Status(int code, const char *msg1, const string &msg2)

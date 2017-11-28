@@ -1343,8 +1343,7 @@ int Express::AllocateRegisters() {
       // Allocate destination register for move op.
       if (op->result->type == TEMP) {
         if (op->result->first == op) {
-          if (op->args[0]->type == TEMP &&
-              op->args[0]->last == op) {
+          if (op->args[0]->type == TEMP && op->args[0]->last == op) {
             // Steal register from source.
             op->dst = op->src = regs.Transfer(op->args[0], op->result);
           } else {
