@@ -15,6 +15,7 @@ cc_library(
   name = "tensorflow",
   includes = [
     "include",
+    "include/external/nsync/public",
   ],
   linkopts = [
     "-lpython2.7",

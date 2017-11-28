@@ -39,8 +39,8 @@ SLING uses [Bazel](https://bazel.build/) as the build system, so you need to
 install Bazel in order to build the SLING parser.
 
 ```shell
-sudo pip install -U protobuf==3.3.0
-sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.3.0-cp27-none-linux_x86_64.whl
+sudo pip install -U protobuf==3.4.0
+sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.4.0-cp27-none-linux_x86_64.whl
 ```
 
 ## Building

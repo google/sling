@@ -24,8 +24,6 @@
 namespace syntaxnet {
 namespace dragnn {
 
-using tensorflow::mutex_lock;
-
 ComputeSessionPool::ComputeSessionPool(const MasterSpec &master_spec,
                                        const GridPoint &hyperparams)
     : master_spec_(master_spec),
@@ -62,7 +60,7 @@ ComputeSessionPool::~ComputeSessionPool() {
 
 void ComputeSessionPool::SetComputeSessionBuilder(
     std::function<std::unique_ptr<ComputeSession>()> session_builder) {
-  mutex_lock lock(lock_);
+  std::lock_guard<std::mutex> lock(lock_);
   session_builder_ = std::move(session_builder);
 }
 
@@ -70,12 +68,12 @@ void ComputeSessionPool::SetComponentBuilder(
     std::function<std::unique_ptr<Component>(const string &component_name,
                                              const string &backend_type)>
         component_builder) {
-  mutex_lock lock(lock_);
+  std::lock_guard<std::mutex> lock(lock_);
   component_builder_ = std::move(component_builder);
 }
 
 std::unique_ptr<ComputeSession> ComputeSessionPool::GetSession() {
-  mutex_lock lock(lock_);
+  std::lock_guard<std::mutex> lock(lock_);
   std::unique_ptr<ComputeSession> session_ptr;
   if (sessions_.empty()) {
     // There are no available sessions, so create and initialize one.
@@ -96,7 +94,7 @@ std::unique_ptr<ComputeSession> ComputeSessionPool::GetSession() {
 
 void ComputeSessionPool::ReturnSession(
     std::unique_ptr<ComputeSession> session) {
-  mutex_lock lock(lock_);
+  std::lock_guard<std::mutex> lock(lock_);
   sessions_.push_back(std::move(session));
 }
 

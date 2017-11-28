@@ -17,10 +17,10 @@
 #define SYNTAXNET_DRAGNN_CORE_COMPUTE_SESSION_POOL_H_
 
 #include <memory>
+#include <mutex>
 
 #include "dragnn/core/compute_session.h"
 #include "dragnn/protos/spec.pb.h"
-#include "tensorflow/core/platform/mutex.h"
 
 namespace syntaxnet {
 namespace dragnn {
@@ -45,7 +45,7 @@ class ComputeSessionPool {
 
   // Returns the count of outstanding unique sessions.
   int num_outstanding_sessions() {
-    tensorflow::mutex_lock lock(lock_);
+    std::lock_guard<std::mutex> lock(lock_);
     return num_unique_sessions_ - sessions_.size();
   }
 
@@ -90,7 +90,7 @@ class ComputeSessionPool {
   int num_unique_sessions_;
 
   // Mutex that protects accesses to all members of this object.
-  tensorflow::mutex lock_;
+  std::mutex lock_;
 };
 
 }  // namespace dragnn
