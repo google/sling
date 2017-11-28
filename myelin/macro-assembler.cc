@@ -279,7 +279,7 @@ void MacroAssembler::LoopStart(jit::Label *label) {
 
 void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor) {
   if (tensor->IsConstant()) {
-    movp(dst, tensor->data());
+    load_extern(dst, tensor->data(), tensor->name());
     if (tensor->ref()) {
       movq(dst, Operand(dst));
     }
@@ -441,7 +441,8 @@ void MacroAssembler::StartTask(int offset, int32 id, int32 index,
   movl(Operand(arg_reg_1, offsetof(Task, index)), Immediate(index));
 
   // Call runtime to start task.
-  movp(acc, reinterpret_cast<void *>(runtime_->StartTaskFunc()));
+  load_extern(acc, reinterpret_cast<void *>(runtime_->StartTaskFunc()),
+              "MyelinStartTask");
   call(acc);
 
   rr_.release(acc);
@@ -455,16 +456,18 @@ void MacroAssembler::WaitForTask(int offset) {
   // Call runtime to wait for task to complete.
   Register acc = rr_.alloc();
   leaq(arg_reg_1, Operand(datareg, offset));
-  movp(acc, reinterpret_cast<void *>(runtime_->WaitTaskFunc()));
+  load_extern(acc, reinterpret_cast<void *>(runtime_->WaitTaskFunc()),
+              "MyelinWaitTask");
   call(acc);
   rr_.release(acc);
 }
 
-void MacroAssembler::CallInstanceFunction(void (*func)(void *)) {
+void MacroAssembler::CallInstanceFunction(void (*func)(void *),
+                                          const string &symbol) {
   if (func != nullptr) {
     Register acc = rr_.alloc();
     movq(arg_reg_1, datareg);
-    movp(acc, reinterpret_cast<void *>(func));
+    load_extern(acc, reinterpret_cast<void *>(func), symbol);
     call(acc);
     rr_.release(acc);
   }

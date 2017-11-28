@@ -82,3 +82,12 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "elf-writer",
+  srcs = ["elf-writer.cc"],
+  hdrs = ["elf-writer.h"],
+  copts = [
+    "-Wno-sign-compare",
+  ],
+)
+

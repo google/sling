@@ -274,7 +274,7 @@ class MacroAssembler : public jit::Assembler {
   void LoopStart(jit::Label *label);
 
   // Call function with instance as argument.
-  void CallInstanceFunction(void (*func)(void *));
+  void CallInstanceFunction(void (*func)(void *), const string &symbol);
 
   // Increment invocation counter.
   void IncrementInvocations(int offset);

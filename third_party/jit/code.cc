@@ -149,6 +149,26 @@ void CodeGenerator::bind_to(Label *l, int pos) {
   l->bind_to(pos);
 }
 
+void CodeGenerator::AddExtern(const string &symbol, Address address) {
+  // Try to find existing external reference.
+  int index = -1;
+  for (int i = 0; i < externs_.size(); ++i) {
+    if (address == externs_[i].address) {
+      index = i;
+      break;
+    }
+  }
+
+  // Add new external symbol.
+  if (index == -1) {
+    index = externs_.size();
+    externs_.emplace_back(symbol, address);
+  }
+
+  // Add reference to external symbol.
+  externs_[index].refs.push_back(pc_offset());
+}
+
 Code::Code(void *code, int size) : memory_(nullptr), size_(0) {
   Allocate(code, size);
 }

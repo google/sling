@@ -173,7 +173,7 @@ class AVXFltTanh : public Kernel {
     } else {
       __ LoadTensorAddress(output, step->output(0));
     }
-    __ movp(consts, static_cast<void *>(&tanh_const));
+    __ load_extern(consts, static_cast<void *>(&tanh_const), "tanh_const");
     __ xorq(ofs, ofs);
 
     // Loop over elements in tensor, eight floats at a time.
@@ -317,7 +317,7 @@ class AVXFltExpBase : public Kernel {
     } else {
       __ LoadTensorAddress(output, step->output(0));
     }
-    __ movp(consts, static_cast<void *>(&exp_const));
+    __ load_extern(consts, static_cast<void *>(&exp_const), "exp_const");
     __ xorq(ofs, ofs);
 
     // Initialize constants.

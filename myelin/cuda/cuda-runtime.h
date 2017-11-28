@@ -96,7 +96,14 @@ class CUDARuntime : public Runtime {
   // Emit code for CUDA status check. This is only done for debug builds.
   static void EmitStatusCheck(const char *msg, MacroAssembler *masm);
 
+  // Profiling support.
+  static void StartProfiler(void *data);
+  static void StopProfiler(void *data);
+  InstanceFunc StartProfilerFunc() override { return StartProfiler; }
+  InstanceFunc StopProfilerFunc() override { return StopProfiler; }
+
  private:
+
   // Instance data block.
   struct Block {
     size_t host_offset;

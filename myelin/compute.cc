@@ -24,6 +24,7 @@
 #include "base/types.h"
 #include "file/file.h"
 #include "myelin/macro-assembler.h"
+#include "string/printf.h"
 
 namespace sling {
 namespace myelin {
@@ -149,6 +150,20 @@ class BasicRuntime : public Runtime {
 };
 
 static BasicRuntime default_runtime;
+
+// Linker for JIT generation of code.
+class JITLinker : public Linker {
+ public:
+  void EndCell(Cell *cell,
+               jit::CodeGenerator *generator,
+               jit::Code *code,
+               int data_size) override {
+    // Allocate executable code object in memory.
+    code->Allocate(generator);
+  }
+};
+
+static JITLinker jit_linker;
 
 // An instance allocator allocates space for variables in an instance data
 // block. It keeps track of which parts of the block are in use and tries to
@@ -743,6 +758,7 @@ char *Step::AllocateKernelMemory(size_t size, int alignment) {
 
 Network::Network() {
   runtime_ = &default_runtime;
+  linker_ = &jit_linker;
 }
 
 Network::~Network() {
@@ -867,6 +883,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       tensors[link]->link_ = t;
     }
   }
+
+  // Let linker configure network before compilation.
+  linker_->BeginNetwork(this);
 
   // Find kernels for implementing each step.
   std::unordered_map<Flow::Function *, Cell *> cells;
@@ -1305,6 +1324,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       char *data = AllocateTensor(tensor);
       if (data == nullptr) return false;
 
+      // Add tensor data to linker.
+      linker_->AddData(tensor);
+
       // Copy constant to device if needed.
       if (tensor->placement_ & DEVICE) {
         VLOG(5) << "Copy tensor " << tensor->name() << " to device";
@@ -1326,6 +1348,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
   // Compile each cell computation.
   for (Cell *cell : cells_) {
+    // Start code generation for cell.
+    linker_->BeginCell(cell);
+
     // Create macro assembler for code generation.
     MacroAssembler masm(nullptr, 0, options_);
     masm.set_runtime(runtime_);
@@ -1346,7 +1371,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       masm.IncrementInvocations(cell->profile()->offset());
 
       // Start runtime profiler.
-      masm.CallInstanceFunction(runtime_->StartProfilerFunc());
+      masm.CallInstanceFunction(runtime_->StartProfilerFunc(),
+                                "MyelinStartProfiler");
     }
 
     // Copy input variables that do not have the placement required by the
@@ -1409,7 +1435,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         // Synchronize main task if needed before executing step.
         if (options_.sync_steps || (sync && step->NeedsSynchronization())) {
           VLOG(8) << "Sync main task";
-          masm.CallInstanceFunction(runtime_->SyncMainFunc());
+          masm.CallInstanceFunction(runtime_->SyncMainFunc(), "MyelinSyncMain");
           sync = false;
         }
 
@@ -1419,6 +1445,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
                 << reinterpret_cast<uint64 *>(pc)
                 << " with " << step->kernel_->Name()
                 << " on " << placename[step->placement()];
+        linker_->AddStep(step, pc);
         step->kernel_->Generate(step, &masm);
         if (masm.pc_offset() == pc) step->noop_ = true;
 
@@ -1460,7 +1487,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         if (t.state == PENDING) {
           // Flush asynchronous operations.
           if (sync) {
-            masm.CallInstanceFunction(runtime_->SyncMainFunc());
+            masm.CallInstanceFunction(runtime_->SyncMainFunc(),
+                                      "MyelinSyncMain");
             sync = false;
           }
 
@@ -1508,11 +1536,12 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Synchronize main task.
-    masm.CallInstanceFunction(runtime_->SyncMainFunc());
+    masm.CallInstanceFunction(runtime_->SyncMainFunc(), "MyelinSyncMain");
 
     // Stop runtime profiler.
     if (options_.profiling) {
-      masm.CallInstanceFunction(runtime_->StopProfilerFunc());
+      masm.CallInstanceFunction(runtime_->StopProfilerFunc(),
+                                "MyelinStopProfiler");
     }
 
     // Profile exit overhead.
@@ -1578,15 +1607,19 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Generate static data blocks.
+    auto code_size = masm.pc_offset();
     masm.GenerateDataBlocks();
 
-    // Allocate executable code object for generated code.
-    cell->code_.Allocate(&masm);
+    // Add generated code to linker.
+    linker_->EndCell(cell, &masm, &cell->code_, masm.pc_offset() - code_size);
     VLOG(5) << cell->name()
             << " entry address: " << cell->code_.entry()
             << " code size: " << cell->code_.size()
             << " data size: " << cell->instance_size();
   }
+
+  // Notify linker that compilation of network has completed.
+  linker_->EndNetwork(this);
 
   return true;
 }
@@ -1935,7 +1968,8 @@ void CustomKernel::Generate(Step *step, MacroAssembler *masm) {
     // Build input tensor data structure on stack.
     __ LoadTensorAddress(tmp, step->input(i));
     __ movq(Operand(rsp, offset), tmp);
-    __ movp(tmp, step->input(i));
+    __ load_extern(tmp, step->input(i),
+            StringPrintf("%s_input_%d", step->name().c_str(), i));
     __ movq(Operand(rsp, offset + sizeof(void *)), tmp);
 
     // Put address of input tensor data structure into argument register.
@@ -1946,7 +1980,9 @@ void CustomKernel::Generate(Step *step, MacroAssembler *masm) {
     // Build output tensor data structure on stack.
     __ LoadTensorAddress(tmp, step->output(i));
     __ movq(Operand(rsp, offset), tmp);
-    __ movp(tmp, step->output(i));
+    __ load_extern(tmp, step->output(i),
+                   StringPrintf("%s_output_%d", step->name().c_str(), i));
+
     __ movq(Operand(rsp, offset + sizeof(void *)), tmp);
 
     // Put address of output tensor data structure into argument register.
@@ -1955,7 +1991,7 @@ void CustomKernel::Generate(Step *step, MacroAssembler *masm) {
   }
 
   // Call kernel function.
-  __ movp(tmp, func_);
+  __ load_extern(tmp, func_, Name());
   __ call(tmp);
 
   // Remove kernel arguments from stack.

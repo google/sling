@@ -85,6 +85,17 @@ cc_library(
 )
 
 cc_library(
+  name = "elf-linker",
+  srcs = ["elf-linker.cc"],
+  hdrs = ["elf-linker.h"],
+  deps = [
+    ":compute",
+    "//base",
+    "//util:elf-writer",
+  ],
+)
+
+cc_library(
   name = "dictionary",
   srcs = ["dictionary.cc"],
   hdrs = ["dictionary.h"],
@@ -99,11 +110,14 @@ cc_binary(
   srcs = ["analyze.cc"],
   deps = [
     ":compute",
+    ":elf-linker",
     ":flow",
     ":graph",
     ":profile",
     "//base",
     "//file:posix",
+    "//myelin/cuda:cuda-runtime",
+    "//myelin/kernel:cuda",
     "//myelin/kernel:dragnn",
     "//myelin/kernel:tensorflow",
   ],

@@ -263,6 +263,36 @@ class Runtime {
   virtual InstanceFunc StopProfilerFunc() { return nullptr; }
 };
 
+// Linker interface for linking code and data in network.
+class Linker {
+ public:
+  virtual ~Linker() = default;
+
+  // Begin compilation of network.
+  virtual void BeginNetwork(Network *network) {}
+
+  // Compilation of network complete.
+  virtual void EndNetwork(Network *network) {}
+
+  // Start code generation for cell.
+  virtual void BeginCell(Cell *cell) {}
+
+  // Compilation of cell completed.
+  virtual void EndCell(Cell *cell,
+                       jit::CodeGenerator *generator,
+                       jit::Code *code,
+                       int data_size) {}
+
+  // Add entry point for step.
+  virtual void AddStep(Step *step, int offset) {}
+
+  // Add tensor data block to linker.
+  virtual void AddData(Tensor *data) {}
+
+  // Add device code for step.
+  virtual void AddDeviceCode(Step *step, const string &code) {}
+};
+
 // A tensor is a multi-dimensional array that can be used for constants and
 // parameters.
 class Tensor {
@@ -1136,6 +1166,10 @@ class Network {
   Runtime *runtime() const { return runtime_; }
   void set_runtime(Runtime *runtime) { runtime_ = runtime; }
 
+  // Linker.
+  Linker *linker() const { return linker_; }
+  void set_linker(Linker *linker) { linker_ = linker; }
+
   // Compiler options.
   Options &options() { return options_; }
 
@@ -1198,6 +1232,9 @@ class Network {
 
   // Runtime support.
   Runtime *runtime_;
+
+  // Linker for linking code and data.
+  Linker *linker_;
 
   // Compiler options.
   Options options_;

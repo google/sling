@@ -283,7 +283,8 @@ void CUDARuntime::EmitTensorTransfers(const Transfers &xfers,
 
       // Call cuMemcpyHtoDAsync(src, dst, size, stream).
       Register acc = masm->rr().alloc();
-      masm->movp(acc, reinterpret_cast<void *>(cuMemcpyHtoDAsync));
+      masm->load_extern(acc, reinterpret_cast<void *>(cuMemcpyHtoDAsync),
+                        "cuMemcpyHtoDAsync");
       masm->call(acc);
       masm->rr().release(acc);
       EmitStatusCheck("cuMemcpyHtoDAsync", masm);
@@ -324,7 +325,8 @@ void CUDARuntime::EmitTensorTransfers(const Transfers &xfers,
 
       // Call cuMemcpyDtoHAsync(src, dst, size, stream).
       Register acc = masm->rr().alloc();
-      masm->movp(acc, reinterpret_cast<void *>(cuMemcpyDtoHAsync));
+      masm->load_extern(acc, reinterpret_cast<void *>(cuMemcpyDtoHAsync),
+                        "cuMemcpyDtoHAsync");
       masm->call(acc);
       masm->rr().release(acc);
       EmitStatusCheck("cuMemcpyDtoHAsync", masm);
@@ -387,6 +389,14 @@ void CUDARuntime::EmitStatusCheck(const char *msg, MacroAssembler *masm) {
   masm->call(r10);
   masm->bind(&l);
 #endif
+}
+
+void CUDARuntime::StartProfiler(void *data) {
+  cuProfilerStart();
+}
+
+void CUDARuntime::StopProfiler(void *data) {
+  cuProfilerStop();
 }
 
 }  // namespace myelin

@@ -21,9 +21,12 @@
 #include "base/types.h"
 #include "file/file.h"
 #include "myelin/compute.h"
+#include "myelin/elf-linker.h"
 #include "myelin/flow.h"
 #include "myelin/graph.h"
 #include "myelin/profile.h"
+#include "myelin/cuda/cuda-runtime.h"
+#include "myelin/kernel/cuda.h"
 #include "myelin/kernel/dragnn.h"
 #include "myelin/kernel/tensorflow.h"
 
@@ -42,9 +45,43 @@ DEFINE_string(graph, "", "DOT file name for flow");
 DEFINE_bool(consts, true, "Include constants in DOT graph");
 DEFINE_string(datagraph, "", "DOT file name prefix for data profile");
 DEFINE_int32(batch, 1, "Batch size");
+DEFINE_string(o, "", "ELF object output file for generated code");
+DEFINE_bool(gendata, false, "Output tensor data to ELF object file");
+DEFINE_bool(gpu, false, "Run kernels on GPU");
+DEFINE_bool(argmax, false, "Use argmax for predictions");
 
 using namespace sling;
 using namespace sling::myelin;
+
+// CUDA runtime.
+static myelin::CUDARuntime cudart;
+
+// Stub for Dragnn initializer.
+class FixedDragnnInitializer : public Kernel {
+ public:
+  string Name() override { return "WordInitializerDummy"; }
+  string Operation() override { return "WordEmbeddingInitializer"; }
+
+  bool Supports(Step *step) override { return true; }
+
+  void Generate(Step *step, MacroAssembler *masm) override {}
+};
+
+// Type inference for Dragnn ops.
+class FixedDragnnTyper : public Typer {
+ public:
+  bool InferTypes(Flow::Operation *op) override {
+    if (op->type == "WordEmbeddingInitializer") {
+      if (op->outdegree() == 1) {
+        Flow::Variable *result = op->outputs[0];
+        result->type = DT_INT32;
+        result->shape.clear();
+      }
+    }
+
+    return false;
+  }
+};
 
 int main(int argc, char *argv[]) {
   InitProgram(&argc, &argv);
@@ -52,13 +89,30 @@ int main(int argc, char *argv[]) {
   // Set up kernel library.
   Library library;
   if (FLAGS_tf) RegisterTensorflowLibrary(&library);
-  if (FLAGS_dragnn) RegisterDragnnLibrary(&library);
+  if (FLAGS_dragnn) {
+    RegisterDragnnLibrary(&library);
+    library.Register(new FixedDragnnInitializer());
+    library.RegisterTyper(new FixedDragnnTyper());
+  }
+  if (FLAGS_gpu) RegisterCUDALibrary(&library);
 
   // Load flow.
   Flow flow;
   LOG(INFO) << "Loading flow from " << FLAGS_flow;
   flow.set_batch_size(FLAGS_batch);
   CHECK(flow.Load(FLAGS_flow));
+
+  if (FLAGS_argmax) {
+    for (auto *func : flow.funcs()) {
+      auto *output = flow.Var(func->name + "/output");
+      if (output != nullptr) {
+        auto *prediction = flow.AddVariable(func->name + "/prediction",
+                                            DT_INT32, {1});
+        flow.AddOperation(func, func->name + "/ArgMax", "ArgMax",
+                          {output}, {prediction});
+      }
+    }
+  }
 
   if (!FLAGS_raw) {
     // Analyze flow.
@@ -92,7 +146,17 @@ int main(int argc, char *argv[]) {
   if (!FLAGS_raw) {
     // Compile model.
     LOG(INFO) << "Compiling flow";
+    ElfLinker *linker = nullptr;
     Network network;
+    if (FLAGS_gpu) {
+      cudart.Connect();
+      network.set_runtime(&cudart);
+    }
+    if (!FLAGS_o.empty()) {
+      linker = new ElfLinker();
+      if (FLAGS_gendata) linker->set_generate_data(true);
+      network.set_linker(linker);
+    }
     if (FLAGS_profile) network.options().profiling = true;
     if (FLAGS_dynalloc) network.options().dynamic_allocation = true;
     if (!network.Compile(flow, library)) {
@@ -112,10 +176,10 @@ int main(int argc, char *argv[]) {
       // Dump data profile.
       if (!FLAGS_datagraph.empty()) {
         string svgfn = FLAGS_datagraph + cell->name() + ".svg";
-        DataProfile dprof(cell);
+        DataProfile data_profile(cell);
         LOG(INFO) << "Writing data profile for " << cell->name()
                   << " to " << svgfn;
-        File::WriteContents(svgfn, dprof.AsSVG());
+        File::WriteContents(svgfn, data_profile.AsSVG());
       }
 
       // Dump generated code to file. The file can be viewed with objdump:
@@ -126,6 +190,15 @@ int main(int argc, char *argv[]) {
         cell->WriteCodeToFile(binfn);
       }
     }
+
+    // Write ELF object file. The file can be viewed with objdump:
+    // objdump -xrtdw -M intel --no-show-raw-insn <ofn>
+    if (linker != nullptr) {
+      LOG(INFO) << "Write code and data to " << FLAGS_o;
+      linker->Link();
+      linker->Write(FLAGS_o.c_str());
+    }
+    delete linker;
   }
 
   return 0;

@@ -107,6 +107,7 @@ void CUDAKernel::Generate(Step *step, MacroAssembler *masm) {
   // Compile PTX into a CUDA module.
   CUDAModule *module = device->Compile(code.c_str());
   CUDAFunction func(*module, name.c_str());
+  step->cell()->network()->linker()->AddDeviceCode(step, code);
 
   VLOG(9) << step->name() << " PTX usage: "
           << func.shared_size() << " shared, "
@@ -190,7 +191,8 @@ void CUDAKernel::Generate(Step *step, MacroAssembler *masm) {
   __ pushq(Immediate(block_dim_z));
 
   // Call cuLaunchKernel.
-  __ movp(tmpreg, reinterpret_cast<void *>(cuLaunchKernel));
+  __ load_extern(tmpreg, reinterpret_cast<void *>(cuLaunchKernel),
+                 "cuLaunchKernel");
   __ call(tmpreg);
   __ addq(rsp, Immediate(7 * 8));
   CUDARuntime::EmitStatusCheck("cuLaunchKernel", masm);

@@ -37,8 +37,11 @@
 #define JIT_CODE_H_
 
 #include <deque>
+#include <string>
+#include <vector>
 
 #include "base/logging.h"
+#include "base/types.h"
 #include "third_party/jit/memory.h"
 
 namespace sling {
@@ -107,6 +110,17 @@ class Label {
   friend class CodeGenerator;
 };
 
+// An external symbol is a reference to code or data outside the code buffer
+// of the code generator.
+struct Extern {
+  Extern(const string &symbol, Address address)
+      : symbol(symbol), address(address) {}
+
+  string symbol;           // symbolic name of external reference
+  Address address;         // address of external reference
+  std::vector<int> refs;   // offsets of references to symbol in code buffer
+};
+
 // A code generator emits machine code instructons into a buffer. If the
 // provided buffer is null, the code generator allocates and grows its own
 // buffer, and buffer_size determines the initial buffer size. The buffer is
@@ -162,6 +176,12 @@ class CodeGenerator {
     *reinterpret_cast<uint32_t *>(addr_at(pos)) = x;
   }
 
+  // Add external reference.
+  void AddExtern(const string &symbol, Address address);
+
+  // List of external symbols in code buffer.
+  const std::vector<Extern> &externs() const { return externs_; }
+
   static const int kMinimalBufferSize = 4096;
   static const int kMaximumInstructionSize = 32;
 
@@ -179,6 +199,9 @@ class CodeGenerator {
   // GrowBuffer(); contains only those internal references whose labels
   // are already bound.
   std::deque<int> refs_;
+
+  // External symbols.
+  std::vector<Extern> externs_;
 };
 
 // Helper class that ensures that there is enough space for generating
@@ -241,6 +264,14 @@ class Code {
   // Execute code in code block.
   void Execute(void *arg) const {
     reinterpret_cast<void (*)(void *)>(entry())(arg);
+  }
+  uint64_t Execute(uint64_t arg1, uint64_t arg2) const {
+    return reinterpret_cast<uint64_t (*)(uint64_t, uint64_t)>(
+        entry())(arg1, arg2);
+  }
+  uint64_t Execute(const char *arg1, uint64_t arg2) const {
+    return reinterpret_cast<uint64_t (*)(const char *arg1, uint64_t)>(
+        entry())(arg1, arg2);
   }
 
  private:
