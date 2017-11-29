@@ -48,7 +48,7 @@ set -eu
 readonly COMMAND=`echo $0 $@`
 
 # Input resources and arguments.
-SEM=$HOME/sempar_ontonotes
+SEM=local/sempar
 COMMONS=${SEM}/commons
 OUTPUT_FOLDER=${SEM}/out
 TRAIN_FILEPATTERN=${SEM}/train.zip
