@@ -40,8 +40,8 @@
 #include <string>
 #include <vector>
 
-#include "base/logging.h"
-#include "base/types.h"
+#include "sling/base/logging.h"
+#include "sling/base/types.h"
 #include "third_party/jit/memory.h"
 
 namespace sling {

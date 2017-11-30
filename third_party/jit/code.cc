@@ -38,7 +38,7 @@
 
 #include "third_party/jit/code.h"
 
-#include "base/logging.h"
+#include "sling/base/logging.h"
 #include "third_party/jit/types.h"
 
 namespace sling {

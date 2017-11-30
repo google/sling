@@ -33,7 +33,7 @@
 
 #include "third_party/jit/cpu.h"
 
-#include "base/logging.h"
+#include "sling/base/logging.h"
 
 namespace sling {
 namespace jit {

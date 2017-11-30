@@ -37,8 +37,8 @@ cc_library(
   ],
   deps = [
     ":spec",
-    "//base",
-    "//base:registry",
+    "//sling/base",
+    "//sling/base:registry",
     "//third_party/tensorflow",
   ],
   includes = ["."],
@@ -65,9 +65,9 @@ cc_library(
   ],
   deps = [
     ":syntaxnet",
-    "//base",
+    "//sling/base",
+    "//sling/util:embeddings",
     "//third_party/tensorflow",
-    "//util:embeddings",
   ],
   alwayslink = 1,
 )

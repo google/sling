@@ -18,11 +18,11 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "base/types.h"
+#include "sling/base/types.h"
+#include "sling/util/embeddings.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
-#include "util/embeddings.h"
 
 using tensorflow::OpKernel;
 using tensorflow::OpKernelConstruction;

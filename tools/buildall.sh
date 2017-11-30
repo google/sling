@@ -1,19 +1,19 @@
 #!/bin/sh
 
 bazel build -c opt \
-  base:* \
-  file:* \
-  frame:* \
-  myelin:* \
-  myelin/kernel:* \
-  myelin/generator:* \
-  myelin/cuda:* \
-  nlp/document:* \
-  nlp/parser:* \
-  nlp/parser/tools:* \
-  nlp/parser/trainer:* \
-  stream:* \
-  string:* \
-  util:* \
-  web:* \
+  sling/base:* \
+  sling/file:* \
+  sling/frame:* \
+  sling/myelin:* \
+  sling/myelin/kernel:* \
+  sling/myelin/generator:* \
+  sling/myelin/cuda:* \
+  sling/nlp/document:* \
+  sling/nlp/parser:* \
+  sling/nlp/parser/tools:* \
+  sling/nlp/parser/trainer:* \
+  sling/stream:* \
+  sling/string:* \
+  sling/util:* \
+  sling/web:* \
 

@@ -22,7 +22,6 @@
 #include "dragnn/core/ops/compute_session_op.h"
 #include "dragnn/core/resource_container.h"
 #include "dragnn/protos/spec.pb.h"
-#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"

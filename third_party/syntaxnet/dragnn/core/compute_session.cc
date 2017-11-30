@@ -18,8 +18,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/registry.h"
 #include "dragnn/protos/spec.pb.h"
+#include "sling/base/registry.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace syntaxnet {

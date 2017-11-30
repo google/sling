@@ -35,8 +35,8 @@
 
 #include "third_party/jit/assembler.h"
 
-#include "base/logging.h"
-#include "base/macros.h"
+#include "sling/base/logging.h"
+#include "sling/base/macros.h"
 #include "third_party/jit/cpu.h"
 #include "third_party/jit/memory.h"
 #include "third_party/jit/types.h"

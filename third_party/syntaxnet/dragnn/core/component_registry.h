@@ -16,8 +16,8 @@
 #ifndef SYNTAXNET_DRAGNN_CORE_COMPONENT_REGISTRY_H_
 #define SYNTAXNET_DRAGNN_CORE_COMPONENT_REGISTRY_H_
 
-#include "base/registry.h"
 #include "dragnn/core/interfaces/component.h"
+#include "sling/base/registry.h"
 
 // Macro to add a component to the registry. This macro associates a class with
 // its class name as a string, so FooComponent would be associated with the

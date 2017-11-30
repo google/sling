@@ -36,7 +36,7 @@
 #ifndef JIT_REGISTERS_H_
 #define JIT_REGISTERS_H_
 
-#include "base/logging.h"
+#include "sling/base/logging.h"
 
 namespace sling {
 namespace jit {

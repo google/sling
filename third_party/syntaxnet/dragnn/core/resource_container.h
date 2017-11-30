@@ -18,7 +18,7 @@
 
 #include <memory>
 
-#include "base/types.h"
+#include "sling/base/types.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 
 namespace syntaxnet {

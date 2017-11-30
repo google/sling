@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "base/types.h"
+#include "sling/base/types.h"
 
 namespace syntaxnet {
 namespace dragnn {

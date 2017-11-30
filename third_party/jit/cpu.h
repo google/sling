@@ -32,7 +32,7 @@
 #ifndef JIT_CPU_H_
 #define JIT_CPU_H_
 
-#include "base/logging.h"
+#include "sling/base/logging.h"
 
 namespace sling {
 namespace jit {

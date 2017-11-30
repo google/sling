@@ -30,7 +30,7 @@
 
 #include <stdint.h>
 
-#include "base/logging.h"
+#include "sling/base/logging.h"
 
 namespace sling {
 namespace jit {

@@ -10,7 +10,7 @@ cc_library(
   name = "types",
   hdrs = ["types.h"],
   deps = [
-    "//base",
+    "//sling/base",
   ],
 )
 
@@ -19,7 +19,7 @@ cc_library(
   hdrs = ["memory.h"],
   deps = [
     ":types",
-    "//base",
+    "//sling/base",
   ],
 )
 
@@ -30,7 +30,7 @@ cc_library(
   deps = [
     ":memory",
     ":types",
-    "//base",
+    "//sling/base",
   ],
 )
 
@@ -39,7 +39,7 @@ cc_library(
   srcs = ["cpu.cc"],
   hdrs = ["cpu.h"],
   deps = [
-    "//base",
+    "//sling/base",
   ],
 )
 
@@ -56,7 +56,7 @@ cc_library(
     ":cpu",
     ":memory",
     ":types",
-    "//base",
+    "//sling/base",
   ],
 )
 

@@ -18,10 +18,10 @@
 
 #include <vector>
 
-#include "base/registry.h"
 #include "dragnn/core/input_batch_cache.h"
 #include "dragnn/core/interfaces/transition_state.h"
 #include "dragnn/protos/spec.pb.h"
+#include "sling/base/registry.h"
 
 namespace syntaxnet {
 namespace dragnn {
