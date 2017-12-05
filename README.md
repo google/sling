@@ -61,7 +61,7 @@ bazel build -c opt sling/nlp/parser sling/nlp/parser/tools:all
 **NOTE:** In case you get compile errors complaining about missing Tensorflow
 includes, try the following:
 *  Recreate [this soft
-   link](sling/third_party/tensorflow/include) to point to your Tensorflow include folder.
+   link](sling/blob/master/third_party/tensorflow/include) to point to your Tensorflow include folder.
 *  Change [this
    dependency](https://github.com/google/sling/blob/04d6f28269bdc7d29c71d8dc24d74fe39641f589/third_party/tensorflow/BUILD#L21) to point to your Tensorflow's pywrap library.
 
