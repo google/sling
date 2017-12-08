@@ -31,6 +31,9 @@ Encoder::Encoder(const Store *store, Output *output)
   references_[Handle::id()] = Reference(-WIRE_ID);
   references_[Handle::isa()] = Reference(-WIRE_ISA);
   references_[Handle::is()] = Reference(-WIRE_IS);
+
+  // Output binary encoding mark.
+  output_->WriteChar(WIRE_BINARY_MARKER);
 }
 
 void Encoder::EncodeAll() {

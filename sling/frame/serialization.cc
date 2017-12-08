@@ -15,8 +15,33 @@
 #include "sling/frame/serialization.h"
 
 #include "sling/base/logging.h"
+#include "sling/frame/wire.h"
 
 namespace sling {
+
+InputParser::InputParser(Store *store, InputStream *stream, bool force_binary)
+    : input_(stream) {
+  // If the input starts with a binary marker, use a binary decoder for reading
+  // the stream. Otherwise, the input is assumed to be in text format.
+  if (force_binary || input_.Peek() == WIRE_BINARY_MARKER) {
+    decoder_ = new Decoder(store, &input_);
+  } else {
+    reader_ = new Reader(store, &input_);
+  }
+}
+
+InputParser::~InputParser() {
+  delete decoder_;
+  delete reader_;
+}
+
+Object InputParser::Read() {
+  return binary() ? decoder_->Decode() : reader_->Read();
+}
+
+Object InputParser::ReadAll() {
+  return binary() ? decoder_->DecodeAll() : reader_->ReadAll();
+}
 
 Object FromText(Store *store, Text text) {
   StringReader reader(store, text);

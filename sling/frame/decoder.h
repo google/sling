@@ -29,8 +29,7 @@ class Decoder {
  public:
   // Initializes decoder with store where objects should be stored and input
   // where objects are read from.
-  Decoder(Store *store, Input *input)
-      : store_(store), input_(input), references_(store), stack_(store) {}
+  Decoder(Store *store, Input *input);
 
   // Decodes the next object from the input.
   Object Decode();

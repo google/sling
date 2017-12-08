@@ -36,11 +36,11 @@ static const Word kInitialHeap[] = {
   // is frame
   FRAME | NAMED  |  8, 0x18, 0x08, 0x30,
   // id symbol
-  SYMBOL         | 16, 0x20, 0x9fc5c532, 0, 0x38, 0x08,
+  SYMBOL         | 16, 0x20, 0x307A1C66, 0, 0x38, 0x08,
   // isa symbol
-  SYMBOL         | 16, 0x28, 0xf847db0a, 0, 0x40, 0x10,
+  SYMBOL         | 16, 0x28, 0x6966506A, 0, 0x40, 0x10,
   // is symbol
-  SYMBOL         | 16, 0x30, 0x4d55c812, 0, 0x48, 0x18,
+  SYMBOL         | 16, 0x30, 0xC089FC02, 0, 0x48, 0x18,
   // "id" string
   STRING         |  2, 0x38, 'i' | ('d' << 8), 0,
   // "isa" string

@@ -109,3 +109,13 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "unix-file",
+  srcs = ["unix-file.cc"],
+  hdrs = ["unix-file.h"],
+  deps = [
+    ":stream",
+    "//sling/base",
+  ],
+)
+

@@ -148,6 +148,12 @@ bool Input::ReadVarint64Fallback(uint64 *value) {
   return false;
 }
 
+int Input::Peek() {
+  if (current_ == limit_) Fill();
+  if (current_ == limit_) return -1;
+  return static_cast<uint8>(*current_);
+}
+
 bool Input::Fill() {
   // Check if we have already reached the end of the input.
   if (done_) return false;

@@ -16,8 +16,9 @@
 #define SLING_FRAME_OBJECT_H_
 
 #include <functional>
-#include <hash_map>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -67,8 +68,8 @@ class HandleSpace : public Space<Handle>, public External {
 };
 
 // Hash map and set keyed by handle.
-template<typename T> using HandleMap = hash_map<Handle, T, HandleHash>;
-typedef hash_set<Handle, HandleHash> HandleSet;
+template<typename T> using HandleMap = std::unordered_map<Handle, T, HandleHash>;
+typedef std::unordered_set<Handle, HandleHash> HandleSet;
 
 // Name with lazy lookup that can be initialized as static variables and
 // then later be resolved using a Names object, e.g.:

@@ -51,6 +51,9 @@ class StringReader {
   // Reads next object from input.
   Object Read() { return reader_.Read(); }
 
+  // Reads all objects from the input and returns the last value.
+  Object ReadAll() { return reader_.ReadAll(); }
+
   // Checks if all input has been read.
   bool done() const { return reader_.done(); }
 
@@ -187,6 +190,9 @@ class FileReader {
   // Reads next object from input.
   Object Read() { return reader_.Read(); }
 
+  // Reads all objects from the input and returns the last value.
+  Object ReadAll() { return reader_.ReadAll(); }
+
   // Checks if all input has been read.
   bool done() const { return reader_.done(); }
 
@@ -316,6 +322,44 @@ class FileEncoder {
   FileOutputStream stream_;
   Output output_;
   Encoder encoder_;
+};
+
+// Read objects from stream in either text or binary format.
+class InputParser {
+ public:
+  // Initializes reading objects from a stream.
+  InputParser(Store *store, InputStream *stream, bool force_binary = false);
+  ~InputParser();
+
+  // Reads next object from input.
+  Object Read();
+
+  // Reads all objects from the input and returns the last value.
+  Object ReadAll();
+
+  // Checks if all input has been read.
+  bool done() const { return binary() ? decoder_->done() : reader_->done(); }
+
+  // Returns true if errors were found while parsing input.
+  bool error() const { return !binary() && reader_->error(); }
+
+  // Returns current line and column.
+  int line() const { return binary() ? 0 : reader_->line(); }
+  int column() const { return binary() ? 0 : reader_->column(); }
+
+  // Returns last error message.
+  const string &error_message() const {
+    static const string empty;
+    return binary() ? empty : reader_->error_message();
+  }
+
+  // Checks if input is binary encoded.
+  bool binary() const { return decoder_ != nullptr; }
+
+ private:
+  Input input_;
+  Decoder *decoder_ = nullptr;
+  Reader *reader_ = nullptr;
 };
 
 // Reads object in text format from string.

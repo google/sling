@@ -114,6 +114,10 @@ class Input {
     }
   }
 
+  // Peeks at the next input byte. Returns the next input byte without removing
+  // it or returns -1 when there is no more input.
+  int Peek();
+
   // Returns true when all input has been read.
   bool done() { return empty() && !Fill(); }
 

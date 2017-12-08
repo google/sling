@@ -16,7 +16,6 @@
 #define SLING_FRAME_READER_H_
 
 #include <string>
-#include <hash_map>
 
 #include "sling/base/macros.h"
 #include "sling/frame/object.h"
@@ -37,6 +36,9 @@ class Reader : public Tokenizer {
 
   // Reads next object from input.
   Object Read();
+
+  // Reads all objects from the input and returns the last value.
+  Object ReadAll();
 
   // Reads next object from input and return a handle to it.
   Handle ReadObject();

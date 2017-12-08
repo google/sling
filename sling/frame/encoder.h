@@ -16,7 +16,6 @@
 #define SLING_FRAME_ENCODER_H_
 
 #include <string>
-#include <hash_map>
 
 #include "sling/base/macros.h"
 #include "sling/frame/object.h"

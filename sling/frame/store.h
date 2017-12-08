@@ -339,6 +339,12 @@ struct Handle {
     return Handle{static_cast<Word>(n << kIntShift) | kIndexMask};
   }
 
+  // A signalling NaN is used as an error value for handles.
+  static const Word kError = kFloatTag | 0xFFBFFF00;
+
+  // Checks if a handle is an error handle.
+  bool IsError() const { return bits == kError; }
+
   // Equality testing.
   bool operator ==(Handle other) const { return bits == other.bits; }
   bool operator !=(Handle other) const { return bits != other.bits; }
@@ -362,6 +368,7 @@ struct Handle {
   static constexpr Handle is() { return Handle{kIs}; }
   static constexpr Handle zero() { return Handle{kZero}; }
   static constexpr Handle one() { return Handle{kOne}; }
+  static constexpr Handle error() { return Handle{kError}; }
 
   // Handle is represented as an 32-bit unsigned integer where the lower bit are
   // used as tag bits to encode the handle type.
@@ -733,6 +740,9 @@ class Root {
  protected:
   friend class Store;
 
+  // Initialize root.
+  void InitRoot(Store *store, Handle handle);
+
   // Link root into root list.
   void Link(const Root *list) {
     prev_ = list;
@@ -1000,6 +1010,9 @@ class Store {
 
   // Returns handle for symbol table.
   Handle symbols() const { return symbols_; }
+
+  // Returns the number of symbols in the symbol table.
+  int num_symbols() const { return num_symbols_; }
 
   // Checks if this handle is owned by this store.
   bool Owned(Handle handle) const {
@@ -1304,8 +1317,35 @@ class Store {
   static const Options kDefaultOptions;
 };
 
+// Utility class for GC locking in store.
+class GCLock {
+ public:
+  // Lock GC in store.
+  GCLock(Store *store) : store_(store) { store->LockGC(); }
+
+  // Unlock GC in sttore.
+  ~GCLock() { store_->UnlockGC(); }
+
+ private:
+  // Locked store.
+  Store *store_;
+};
+
 // Adds root to store.
 inline Root::Root(Store *store, Handle handle) {
+  handle_ = handle;
+  if (store == nullptr ||
+      handle.IsNil() ||
+      !handle.IsRef() ||
+      !store->Owned(handle) ||
+      store->frozen()) {
+    next_ = prev_ = this;
+  } else {
+    Link(store->roots());
+  }
+}
+
+inline void Root::InitRoot(Store *store, Handle handle) {
   handle_ = handle;
   if (store == nullptr ||
       handle.IsNil() ||

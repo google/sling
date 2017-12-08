@@ -40,6 +40,15 @@ enum WireSpecial {
   WIRE_RESOLVE  = 7,  // resolve link, followed by slots and replacement index
 };
 
+// The binary marker (i.e. a nul character) is used for prefixing serialized
+// SLING objects to indicate that they are binary encoded. The textual encoding
+// will never contain a nul character. In binary encoding, a nul character is
+// decoded as REF(0). This will never be the first tag in a binary encoding
+// since initially there are no references to refer to.
+enum EncodingMarker {
+  WIRE_BINARY_MARKER = 0,
+};
+
 }  // namespace sling
 
 #endif  // SLING_FRAME_WIRE_H_
