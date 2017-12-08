@@ -203,7 +203,7 @@ PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
 
   // Load frames from memory buffer.
   ArrayInputStream stream(data, length);
-  InputParser parser(store, &stream);
+  InputParser parser(store, &stream, force_binary);
   Object result = parser.ReadAll();
   if (parser.error()) {
     PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
