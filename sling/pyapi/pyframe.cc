@@ -29,6 +29,8 @@ PyMethodDef PyFrame::methods[] = {
   {"append", (PyCFunction) &PyFrame::Append, METH_VARARGS, ""},
   {"extend", (PyCFunction) &PyFrame::Extend, METH_O, ""},
   {"store", (PyCFunction) &PyFrame::GetStore, METH_NOARGS, ""},
+  {"islocal", (PyCFunction) &PyFrame::IsLocal, METH_NOARGS, ""},
+  {"isglobal", (PyCFunction) &PyFrame::IsGlobal, METH_NOARGS, ""},
   {nullptr}
 };
 
@@ -52,16 +54,20 @@ void PyFrame::Define(PyObject *module) {
   type.tp_as_sequence = &sequence;
   sequence.sq_contains = &PyFrame::Contains;
 
-  RegisterType(&type);
+  RegisterType(&type, module, "Frame");
 }
 
 void PyFrame::Init(PyStore *pystore, Handle handle) {
-  // Add frame as root object for store to keep it alive in the store.
-  InitRoot(pystore->store, handle);
-
   // Add reference to store to keep it alive.
-  this->pystore = pystore;
-  Py_INCREF(pystore);
+  if (handle.IsGlobalRef() && pystore->pyglobals != nullptr) {
+    this->pystore = pystore->pyglobals;
+  } else {
+    this->pystore = pystore;
+  }
+  Py_INCREF(this->pystore);
+
+  // Add frame as root object for store to keep it alive in the store.
+  InitRoot(this->pystore->store, handle);
 }
 
 void PyFrame::Dealloc() {
@@ -92,16 +98,11 @@ PyObject *PyFrame::Compare(PyObject *other, int op) {
   if (PyObject_TypeCheck(other, &PyFrame::type)) {
     // Check if the stores and handles are the same.
     PyFrame *pyother = reinterpret_cast<PyFrame *>(other);
-    match = pyother->pystore->store == pystore->store &&
-            pyother->handle() == handle();
+    match = CompatibleStore(pyother) && pyother->handle() == handle();
   }
 
   if (op == Py_NE) match = !match;
-  if (match) {
-    Py_RETURN_TRUE;
-  } else {
-    Py_RETURN_FALSE;
-  }
+  return PyBool_FromLong(match);
 }
 
 PyObject *PyFrame::GetStore() {
@@ -308,12 +309,36 @@ PyObject *PyFrame::Data(PyObject *args, PyObject *kw) {
   }
 }
 
+PyObject *PyFrame::IsLocal() {
+  return PyBool_FromLong(handle().IsLocalRef());
+}
+
+PyObject *PyFrame::IsGlobal() {
+  return PyBool_FromLong(handle().IsGlobalRef());
+}
+
 bool PyFrame::Writable() {
   if (pystore->store->frozen() || !pystore->store->Owned(handle())) {
     PyErr_SetString(PyExc_ValueError, "Frame is not writable");
     return false;
   }
   return true;
+}
+
+bool PyFrame::CompatibleStore(PyFrame *other) {
+  // Frames are compatible if they are in the same store.
+  if (pystore->store == other->pystore->store) return true;
+
+  if (handle().IsLocalRef()) {
+    // A local store is also compatible with its global store.
+    return pystore->pyglobals->store == other->pystore->store;
+  } else if (other->handle().IsLocalRef()) {
+    // A global store is also compatible with a local store based on it.
+    return pystore->store == other->pystore->pyglobals->store;
+  } else {
+    // Frames belong to different global stores.
+    return false;
+  }
 }
 
 void PySlots::Define(PyObject *module) {

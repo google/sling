@@ -43,7 +43,7 @@ void PyArray::Define(PyObject *module) {
   sequence.sq_ass_item = &PyArray::SetItem;
   sequence.sq_contains = &PyArray::Contains;
 
-  RegisterType(&type);
+  RegisterType(&type, module, "Array");
 }
 
 void PyArray::Init(PyStore *pystore, Handle handle) {

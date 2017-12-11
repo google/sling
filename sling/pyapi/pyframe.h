@@ -74,8 +74,17 @@ struct PyFrame : public PyBase, public Root {
   // Return frame in ascii or binary encoding.
   PyObject *Data(PyObject *args, PyObject *kw);
 
+  // Check if frame is local.
+  PyObject *IsLocal();
+
+  // Check if frame is global.
+  PyObject *IsGlobal();
+
   // Check if frame can be modified.
   bool Writable();
+
+  // Check if another frame belongs to a compatible store.
+  bool CompatibleStore(PyFrame *other);
 
   // Return handle for frame.
   Handle handle() const { return handle_; }

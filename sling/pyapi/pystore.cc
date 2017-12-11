@@ -34,6 +34,7 @@ PyMethodDef PyStore::methods[] = {
   {"parse", (PyCFunction) &PyStore::Parse, METH_VARARGS| METH_KEYWORDS, ""},
   {"frame", (PyCFunction) &PyStore::NewFrame, METH_O, ""},
   {"array", (PyCFunction) &PyStore::NewArray, METH_O, ""},
+  {"globals", (PyCFunction) &PyStore::Globals, METH_NOARGS, ""},
   {nullptr}
 };
 
@@ -73,9 +74,14 @@ int PyStore::Init(PyObject *args, PyObject *kwds) {
 
     // Create local store.
     store = new Store(globals->store);
+
+    // Save reference to global store.
+    pyglobals = globals;
+    Py_INCREF(pyglobals);
   } else {
     // Create global store.
     store = new Store();
+    pyglobals = nullptr;
   }
 
   return 0;
@@ -83,6 +89,7 @@ int PyStore::Init(PyObject *args, PyObject *kwds) {
 
 void PyStore::Dealloc() {
   delete store;
+  if (pyglobals != nullptr) Py_DECREF(pyglobals);
 }
 
 PyObject *PyStore::Freeze() {
@@ -299,6 +306,14 @@ bool PyStore::Writable() {
   return true;
 }
 
+PyObject *PyStore::Globals() {
+  // Return None if store is not a local store.
+  if (pyglobals == nullptr) Py_RETURN_NONE;
+
+  Py_INCREF(pyglobals);
+  return pyglobals->AsObject();
+}
+
 PyObject *PyStore::PyValue(Handle handle) {
   switch (handle.tag()) {
     case Handle::kGlobal:
@@ -361,6 +376,7 @@ Handle PyStore::Value(PyObject *object) {
     return frame->handle();
   } else if (PyString_Check(object)) {
     // Create string and return handle.
+    if (!Writable()) return Handle::error();
     char *data;
     Py_ssize_t length;
     PyString_AsStringAndSize(object, &data, &length);
@@ -372,7 +388,7 @@ Handle PyStore::Value(PyObject *object) {
     // Return floating point number handle.
     return Handle::Float(PyFloat_AsDouble(object));
   } else if (PyObject_TypeCheck(object, &PyArray::type)) {
-    // Return handle for frame.
+    // Return handle for array.
     PyArray *array = reinterpret_cast<PyArray *>(object);
     if (array->pystore->store != store &&
         array->pystore->store != store->globals()) {
@@ -380,6 +396,51 @@ Handle PyStore::Value(PyObject *object) {
       return Handle::error();
     }
     return array->handle();
+  } else if (PyDict_Check(object)) {
+    // Build frame from dictionary.
+    if (!Writable()) return Handle::error();
+    GCLock lock(store);
+    PyObject *k;
+    PyObject *v;
+    Py_ssize_t pos = 0;
+    std::vector<Slot> slots;
+    slots.reserve(PyDict_Size(object));
+    while (PyDict_Next(object, &pos, &k, &v)) {
+      // Get slot name.
+      Handle name = RoleValue(k);
+      if (name.IsError()) return Handle::error();
+
+      // Get slot value.
+      Handle value;
+      if (name.IsId() && PyString_Check(v)) {
+        value = SymbolValue(v);
+      } else {
+        value = Value(v);
+      }
+      if (value.IsError()) return Handle::error();
+
+      // Add slot.
+      slots.emplace_back(name, value);
+    }
+
+    // Allocate new frame.
+    Slot *begin = slots.data();
+    Slot *end = slots.data() + slots.size();
+    return store->AllocateFrame(begin, end);
+  } else if (PyList_Check(object)) {
+    // Build array from list.
+    if (!Writable()) return Handle::error();
+    GCLock lock(store);
+    int size = PyList_Size(object);
+    Handle handle = store->AllocateArray(size);
+    ArrayDatum *array = store->Deref(handle)->AsArray();
+    for (int i = 0; i < size; ++i) {
+      PyObject *item = PyList_GetItem(object, i);
+      Handle value = Value(item);
+      if (value.IsError()) return Handle::error();
+      *array->at(i) = value;
+    }
+    return handle;
   } else {
     PyErr_SetString(PyExc_ValueError, "Unsupported frame value type");
     return Handle::error();

@@ -59,6 +59,9 @@ struct PyStore : public PyBase {
   // Create new array.
   PyObject *NewArray(PyObject *arg);
 
+  // Return global store for local store.
+  PyObject *Globals();
+
   // Create new Python object for handle value.
   PyObject *PyValue(Handle handle);
 
@@ -83,6 +86,9 @@ struct PyStore : public PyBase {
 
   // Underlying frame store.
   Store *store;
+
+  // Global store or null if this is not a local store.
+  PyStore *pyglobals;
 
   // Registration.
   static PyTypeObject type;
