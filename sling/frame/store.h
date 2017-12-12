@@ -475,6 +475,9 @@ struct Datum {
   // Invalidate heap object by setting the type to INVALID.
   void invalidate() { info = size() | INVALID; }
 
+  // Resize object.
+  void resize(int size) { info = size | typebits(); }
+
   // Returns the next object in the heap.
   Datum *next() const {
     return reinterpret_cast<Datum *>(payload() + Align(size()));
@@ -961,6 +964,9 @@ class Store {
   // Clones an existing frame and adds an additional slot to the clone. This can
   // only be used on anonymous frames. Returns handle to the new frame.
   Handle Extend(Handle frame, Handle name, Handle value);
+
+  // Deletes all slots in a frame with a particular name.
+  void Delete(Handle frame, Handle name);
 
   // Returns a display name for the handle. This should only be used for display
   // purposes and should not be used as an alternative identifier for the

@@ -132,10 +132,6 @@ int PyFrame::Assign(PyObject *key, PyObject *v) {
   Handle role = pystore->RoleValue(key);
   if (role.IsError()) return -1;
 
-  // Get new frame role value.
-  Handle value = pystore->Value(v);
-  if (value.IsError()) return -1;
-
   // Check role.
   if (role.IsNil()) {
     PyErr_SetString(PyExc_IndexError, "Role not defined");
@@ -146,8 +142,17 @@ int PyFrame::Assign(PyObject *key, PyObject *v) {
     return -1;
   };
 
-  // Set frame slot value.
-  pystore->store->Set(handle(), role, value);
+  if (v == nullptr) {
+    // Delete all slots with name.
+    pystore->store->Delete(handle(), role);
+  } else {
+    // Get new frame role value.
+    Handle value = pystore->Value(v);
+    if (value.IsError()) return -1;
+
+    // Set frame slot value.
+    pystore->store->Set(handle(), role, value);
+  }
 
   return 0;
 }
@@ -201,12 +206,17 @@ int PyFrame::SetAttr(PyObject *key, PyObject *v) {
     return -1;
   };
 
-  // Get role value.
-  Handle value = pystore->Value(v);
-  if (value.IsError())  return -1;
+  if (v == nullptr) {
+    // Delete all slots with name.
+    pystore->store->Delete(handle(), role);
+  } else {
+    // Get role value.
+    Handle value = pystore->Value(v);
+    if (value.IsError())  return -1;
 
-  // Set role value for frame.
-  pystore->store->Set(handle(), role, value);
+    // Set role value for frame.
+    pystore->store->Set(handle(), role, value);
+  }
 
   return 0;
 }

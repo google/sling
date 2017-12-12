@@ -59,6 +59,8 @@ wheel_filename = wheel_dir + "/" + wheel_basename
 files = {
   'bazel-bin/sling/pyapi/pysling.so': '$DATA$/sling/pysling.so',
   'python/__init__.py': '$DATA$/sling/__init__.py',
+  'python/nlp/__init__.py': '$DATA$/sling/nlp/__init__.py',
+  'python/nlp/document.py': '$DATA$/sling/nlp/document.py',
 }
 
 # Create new wheel zip archive.

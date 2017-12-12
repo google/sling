@@ -495,6 +495,39 @@ Handle Store::Extend(Handle frame, Handle name, Handle value) {
   return AllocateHandle(clone);
 }
 
+void Store::Delete(Handle frame, Handle name) {
+  // Get frame.
+  FrameDatum *datum = GetFrame(frame);
+  CHECK(datum->IsFrame());
+
+  // Id slots cannot be deleted.
+  CHECK(name != Handle::id());
+
+  // Delete all slots with name.
+  Slot *slot = datum->begin();
+  Slot *end = datum->end();
+  while (slot < end && slot->name != name) slot++;
+  if (slot == end) return;
+  Slot *current = slot;
+  while (slot < end) {
+    if (slot->name == name) {
+      slot++;
+    } else {
+      *current++ = *slot++;
+    }
+  }
+
+  // Update frame size.
+  Address limit = datum->limit();
+  datum->resize((current - datum->begin()) * sizeof(Slot));
+
+  // Create invalid object for the remainder.
+  Datum *remainder = reinterpret_cast<Datum *>(current);
+  remainder->invalidate();
+  remainder->resize(limit - remainder->payload());
+  remainder->self = Handle::nil();
+}
+
 Handle Store::Hash(Text str) {
   return Handle::Integer(HashBytes(str.data(), str.size()));
 }
