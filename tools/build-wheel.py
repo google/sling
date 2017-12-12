@@ -61,6 +61,7 @@ files = {
   'python/__init__.py': '$DATA$/sling/__init__.py',
   'python/nlp/__init__.py': '$DATA$/sling/nlp/__init__.py',
   'python/nlp/document.py': '$DATA$/sling/nlp/document.py',
+  'python/nlp/parser.py': '$DATA$/sling/nlp/parser.py',
 }
 
 # Create new wheel zip archive.

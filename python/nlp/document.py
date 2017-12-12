@@ -25,7 +25,7 @@ PARAGRAPH_BREAK = 4
 SECTION_BREAK = 5
 CHAPTER_BREAK = 6
 
-class DocumentNames:
+class DocumentSchema:
   def __init__(self, store):
     self.isa = store['isa']
     self.document = store['/s/document']
@@ -48,43 +48,43 @@ class DocumentNames:
 
 
 class Token(object):
-  def __init__(self, names, frame):
-    self.names = names
+  def __init__(self, schema, frame):
+    self.schema = schema
     self.frame = frame
 
   @property
   def index(self):
-    return self.frame[self.names.token_index]
+    return self.frame[self.schema.token_index]
 
   @index.setter
   def index(self, value):
-    self.frame[self.names.token_index] = value
+    self.frame[self.schema.token_index] = value
 
   @property
   def text(self):
-    return self.frame[self.names.token_text]
+    return self.frame[self.schema.token_text]
 
   @text.setter
   def text(self, value):
-    self.frame[self.names.token_text] = value
+    self.frame[self.schema.token_text] = value
 
   @property
   def start(self):
-    return self.frame[self.names.token_start]
+    return self.frame[self.schema.token_start]
 
   @start.setter
   def start(self, value):
-    self.frame[self.names.token_start] = value
+    self.frame[self.schema.token_start] = value
 
   @property
   def length(self):
-    l = self.frame[self.names.token_length]
+    l = self.frame[self.schema.token_length]
     if l == None: l = 1
     return l
 
   @length.setter
   def length(self, value):
-    self.frame[self.names.token_length] = value
+    self.frame[self.schema.token_length] = value
 
   @property
   def end(self):
@@ -92,64 +92,64 @@ class Token(object):
 
   @property
   def brk(self):
-    b = self.frame[self.names.token_break]
+    b = self.frame[self.schema.token_break]
     if b == None: b = SPACE_BREAK
     return b
 
   @brk.setter
   def brk(self, value):
-    self.frame[self.names.token_break] = value
+    self.frame[self.schema.token_break] = value
 
 
 class Mention(object):
-  def __init__(self, names, frame):
-    self.names = names
+  def __init__(self, schema, frame):
+    self.schema = schema
     self.frame = frame
 
   @property
   def begin(self):
-    return self.frame[self.names.phrase_begin]
+    return self.frame[self.schema.phrase_begin]
 
   @begin.setter
   def begin(self, value):
-    self.frame[self.names.phrase_begin] = value
+    self.frame[self.schema.phrase_begin] = value
 
   @property
   def length(self):
-    l = self.frame[self.names.phrase_length]
+    l = self.frame[self.schema.phrase_length]
     if l == None: l = 1
     return l
 
   @length.setter
   def length(self, value):
-    self.frame[self.names.phrase_length] = value
+    self.frame[self.schema.phrase_length] = value
 
   @property
   def end(self):
     return self.begin + self.length
 
   def evokes(self):
-    return self.frame(self.names.phrase_evokes)
+    return self.frame(self.schema.phrase_evokes)
 
   def evoke(self, evoked):
-    return self.frame.append(self.names.phrase_evokes, evoked)
+    return self.frame.append(self.schema.phrase_evokes, evoked)
 
 
 class Document(object):
-  def __init__(self, frame=None, store=None, names=None):
-    # Create store, frame, and names if missing.
+  def __init__(self, frame=None, store=None, schema=None):
+    # Create store, frame, and schema if missing.
     if frame != None:
       store = frame.store()
     if store == None:
       store = sling.Store()
-    if names == None:
-      names = DocumentNames(store)
+    if schema == None:
+      schema = DocumentSchema(store)
     if frame == None:
-      frame = store.frame([(names.isa, names.document)])
+      frame = store.frame([(schema.isa, schema.document)])
 
     # Initialize document from frame.
     self.frame = frame
-    self.names = names
+    self.schema = schema
     self.tokens = []
     self.mentions = []
     self.themes = []
@@ -158,31 +158,31 @@ class Document(object):
     self.themes_dirty = False
 
     # Get tokens.
-    tokens = frame[names.document_tokens]
+    tokens = frame[schema.document_tokens]
     if tokens != None:
       for t in tokens:
-        token = Token(names, t)
+        token = Token(schema, t)
         self.tokens.append(token)
 
     # Get mentions.
-    for m in frame(names.document_mention):
-      mention = Mention(names, m)
+    for m in frame(schema.document_mention):
+      mention = Mention(schema, m)
       self.mentions.append(mention)
 
     # Get themes.
-    for theme in frame(names.document_theme):
+    for theme in frame(schema.document_theme):
       self.themes.append(theme)
 
   def add_token(self, text=None, start=None, length=None, brk=SPACE_BREAK):
     slots = [
-      (self.names.isa, self.names.token),
-      (self.names.token_index, len(self.tokens)),
+      (self.schema.isa, self.schema.token),
+      (self.schema.token_index, len(self.tokens)),
     ]
-    if text != None: slots.append((self.names.token_text, text))
-    if start != None: slots.append((self.names.token_start, start))
-    if length != None: slots.append((self.names.token_length, length))
-    if brk != SPACE_BREAK: slots.append((self.names.token_break, brk))
-    token = Token(self.names, self.frame.store().frame(slots))
+    if text != None: slots.append((self.schema.token_text, text))
+    if start != None: slots.append((self.schema.token_start, start))
+    if length != None: slots.append((self.schema.token_length, length))
+    if brk != SPACE_BREAK: slots.append((self.schema.token_break, brk))
+    token = Token(self.schema, self.frame.store().frame(slots))
     self.tokens.append(token)
     self.tokens_dirty = True
     return token;
@@ -190,11 +190,11 @@ class Document(object):
   def add_mention(self, begin, end):
     length = end - begin
     slots = [
-      (self.names.isa, self.names.phrase),
-      (self.names.phrase_begin, begin),
+      (self.schema.isa, self.schema.phrase),
+      (self.schema.phrase_begin, begin),
     ]
-    if length != 1: slots.append((self.names.phrase_length, length))
-    mention = Mention(self.names, self.frame.store().frame(slots))
+    if length != 1: slots.append((self.schema.phrase_length, length))
+    mention = Mention(self.schema, self.frame.store().frame(slots))
     self.mentions.append(mention)
     self.mentions_dirty = True
     return mention;
@@ -208,15 +208,15 @@ class Document(object):
     if self.tokens_dirty:
       array = []
       for token in self.tokens: array.append(token.frame)
-      self.frame[self.names.document_tokens] = array
+      self.frame[self.schema.document_tokens] = array
       self.tokens_dirty = False
 
     # Update mentions in document frame.
     if self.mentions_dirty:
       slots = []
       for mention in self.mentions:
-        slots.append((self.names.document_mention, mention.frame))
-      del self.frame[self.names.document_mention]
+        slots.append((self.schema.document_mention, mention.frame))
+      del self.frame[self.schema.document_mention]
       self.frame.extend(slots)
       self.mentions_dirty = False
 
@@ -224,16 +224,44 @@ class Document(object):
     if self.themes_dirty:
       slots = []
       for theme in self.themes:
-        slots.append((self.names.document_theme, theme))
-      del self.frame[self.names.document_theme]
+        slots.append((self.schema.document_theme, theme))
+      del self.frame[self.schema.document_theme]
       self.frame.extend(slots)
       self.themes_dirty = False
 
   @property
   def text(self):
-    return self.frame[self.names.document_text]
+    return self.frame[self.schema.document_text]
 
   @text.setter
   def text(self, value):
-    self.frame[self.names.document_text] = value
+    self.frame[self.schema.document_text] = value
+
+  def phrase(self, begin, end):
+    parts = []
+    for token in self.tokens[begin:end]:
+      if len(parts) > 0 and token.brk != NO_BREAK: parts.append(' ')
+      parts.append(token.text)
+    return ''.join(parts)
+
+  def remove_annotations(self):
+    if len(self.mentions) > 0:
+      self.mentions = []
+      self.mentions_dirty = True
+    if len(self.themes) > 0:
+      self.themes = []
+      self.themes_dirty = True
+    self.update()
+
+  def refresh_annotations(self):
+    self.mentions = []
+    for m in self.frame(self.schema.document_mention):
+      mention = Mention(self.schema, m)
+      self.mentions.append(mention)
+    self.mentions_dirty = False
+
+    self.themes = []
+    for theme in self.frame(self.schema.document_theme):
+      self.themes.append(theme)
+    self.themes_dirty = False
 

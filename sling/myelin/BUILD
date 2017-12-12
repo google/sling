@@ -95,16 +95,6 @@ cc_library(
   ],
 )
 
-cc_library(
-  name = "dictionary",
-  srcs = ["dictionary.cc"],
-  hdrs = ["dictionary.h"],
-  deps = [
-    ":flow",
-    "//sling/base",
-  ],
-)
-
 cc_binary(
   name = "analyze",
   srcs = ["analyze.cc"],
