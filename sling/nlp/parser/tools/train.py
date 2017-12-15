@@ -97,7 +97,7 @@ def evaluator(gold_docs, test_docs):
 
   try:
     output = subprocess.check_output(
-        ['bazel-bin/nlp/parser/tools/evaluate-frames',
+        ['bazel-bin/sling/nlp/parser/tools/evaluate-frames',
          '--gold_documents=' + gold_zip_name,
          '--test_documents=' + test_zip_name,
          '--commons=' + FLAGS.commons],
