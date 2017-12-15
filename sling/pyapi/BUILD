@@ -8,6 +8,7 @@ cc_library(
     "pybase.cc",
     "pyframe.cc",
     "pyparser.cc",
+    "pyrecordio.cc",
     "pystore.cc",
   ],
   hdrs = [
@@ -15,11 +16,13 @@ cc_library(
     "pybase.h",
     "pyframe.h",
     "pyparser.h",
+    "pyrecordio.h",
     "pystore.h",
   ],
   deps = [
     "//sling/base",
     "//sling/file",
+    "//sling/file:recordio",
     "//sling/frame",
     "//sling/nlp/document",
     "//sling/nlp/document:document-tokenizer",

@@ -6,3 +6,6 @@ Store=api.Store
 Frame=api.Frame
 Array=api.Array
 
+RecordReader=api.RecordReader
+RecordWriter=api.RecordWriter
+

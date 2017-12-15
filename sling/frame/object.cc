@@ -332,432 +332,530 @@ bool Frame::Is(const Name &type) const {
   return Is(type.Lookup(store_));
 }
 
-void Frame::Add(Handle name, Handle value) {
+Frame &Frame::Add(Handle name, Handle value) {
   store_->Add(handle_, name, value);
+  return *this;
 }
 
-void Frame::Add(const Object &name, Handle value) {
+Frame &Frame::Add(const Object &name, Handle value) {
   store_->Add(handle_, name.handle(), value);
+  return *this;
 }
 
-void Frame::Add(const Name &name, Handle value) {
+Frame &Frame::Add(const Name &name, Handle value) {
   store_->Add(handle_, name.Lookup(store_), value);
+  return *this;
 }
 
-void Frame::Add(Text name, Handle value) {
+Frame &Frame::Add(Text name, Handle value) {
   store_->Add(handle_, store_->Lookup(name), value);
+  return *this;
 }
 
-void Frame::Add(Handle value) {
+Frame &Frame::Add(Handle value) {
   store_->Add(handle_, Handle::nil(), value);
+  return *this;
 }
 
-void Frame::Add(Handle name, const Object &value) {
+Frame &Frame::Add(Handle name, const Object &value) {
   store_->Add(handle_, name, value.handle());
+  return *this;
 }
 
-void Frame::Add(Handle name, const Name &value) {
+Frame &Frame::Add(Handle name, const Name &value) {
   store_->Add(handle_, name, value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Add(const Object &name, const Object &value) {
+Frame &Frame::Add(const Object &name, const Object &value) {
   store_->Add(handle_, name.handle(), value.handle());
+  return *this;
 }
 
-void Frame::Add(const Object &name, const Name &value) {
+Frame &Frame::Add(const Object &name, const Name &value) {
   store_->Add(handle_, name.handle(), value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Add(const Name &name, const Object &value) {
+Frame &Frame::Add(const Name &name, const Object &value) {
   store_->Add(handle_, name.Lookup(store_), value.handle());
+  return *this;
 }
 
-void Frame::Add(const Name &name, const Name &value) {
+Frame &Frame::Add(const Name &name, const Name &value) {
   store_->Add(handle_, name.Lookup(store_), value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Add(Text name, const Object &value) {
+Frame &Frame::Add(Text name, const Object &value) {
   store_->Add(handle_, store_->Lookup(name), value.handle());
+  return *this;
 }
 
-void Frame::Add(Text name, const Name &value) {
+Frame &Frame::Add(Text name, const Name &value) {
   store_->Add(handle_, store_->Lookup(name), value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Add(Handle name, int value) {
+Frame &Frame::Add(Handle name, int value) {
   store_->Add(handle_, name, Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Add(const Object &name, int value) {
+Frame &Frame::Add(const Object &name, int value) {
   store_->Add(handle_, name.handle(), Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Add(const Name &name, int value) {
+Frame &Frame::Add(const Name &name, int value) {
   store_->Add(handle_, name.Lookup(store_), Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Add(Text name, int value) {
+Frame &Frame::Add(Text name, int value) {
   store_->Add(handle_, store_->Lookup(name), Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Add(int value) {
+Frame &Frame::Add(int value) {
   store_->Add(handle_, Handle::nil(), Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Add(Handle name, bool value) {
+Frame &Frame::Add(Handle name, bool value) {
   store_->Add(handle_, name, Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Add(const Object &name, bool value) {
+Frame &Frame::Add(const Object &name, bool value) {
   store_->Add(handle_, name.handle(), Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Add(const Name &name, bool value) {
+Frame &Frame::Add(const Name &name, bool value) {
   store_->Add(handle_, name.Lookup(store_), Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Add(Text name, bool value) {
+Frame &Frame::Add(Text name, bool value) {
   store_->Add(handle_, store_->Lookup(name), Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Add(bool value) {
+Frame &Frame::Add(bool value) {
   store_->Add(handle_, Handle::nil(), Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Add(Handle name, float value) {
+Frame &Frame::Add(Handle name, float value) {
   store_->Add(handle_, name, Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(const Object &name, float value) {
+Frame &Frame::Add(const Object &name, float value) {
   store_->Add(handle_, name.handle(), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(const Name &name, float value) {
+Frame &Frame::Add(const Name &name, float value) {
   store_->Add(handle_, name.Lookup(store_), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(Text name, float value) {
+Frame &Frame::Add(Text name, float value) {
   store_->Add(handle_, store_->Lookup(name), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(float value) {
+Frame &Frame::Add(float value) {
   store_->Add(handle_, Handle::nil(), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(Handle name, double value) {
+Frame &Frame::Add(Handle name, double value) {
   store_->Add(handle_, name, Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(const Object &name, double value) {
+Frame &Frame::Add(const Object &name, double value) {
   store_->Add(handle_, name.handle(), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(const Name &name, double value) {
+Frame &Frame::Add(const Name &name, double value) {
   store_->Add(handle_, name.Lookup(store_), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(Text name, double value) {
+Frame &Frame::Add(Text name, double value) {
   store_->Add(handle_, store_->Lookup(name), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(double value) {
+Frame &Frame::Add(double value) {
   store_->Add(handle_, Handle::nil(), Handle::Float(value));
+  return *this;
 }
 
-void Frame::Add(Handle name, Text value) {
+Frame &Frame::Add(Handle name, Text value) {
   store_->LockGC();
   store_->Add(handle_, name, store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(const Object &name, Text value) {
+Frame &Frame::Add(const Object &name, Text value) {
   store_->LockGC();
   store_->Add(handle_, name.handle(), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(const Name &name, Text value) {
+Frame &Frame::Add(const Name &name, Text value) {
   store_->LockGC();
   store_->Add(handle_, name.Lookup(store_), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(Text name, Text value) {
+Frame &Frame::Add(Text name, Text value) {
   store_->LockGC();
   store_->Add(handle_, store_->Lookup(name), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(Text value) {
+Frame &Frame::Add(Text value) {
   store_->LockGC();
   store_->Add(handle_, Handle::nil(), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(Handle name, const char *value) {
+Frame &Frame::Add(Handle name, const char *value) {
   store_->LockGC();
   store_->Add(handle_, name, store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(const Object &name, const char *value) {
+Frame &Frame::Add(const Object &name, const char *value) {
   store_->LockGC();
   store_->Add(handle_, name.handle(), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(const Name &name, const char *value) {
+Frame &Frame::Add(const Name &name, const char *value) {
   store_->LockGC();
   store_->Add(handle_, name.Lookup(store_), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(Text name, const char *value) {
+Frame &Frame::Add(Text name, const char *value) {
   store_->LockGC();
   store_->Add(handle_, store_->Lookup(name), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Add(const char *value) {
+Frame &Frame::Add(const char *value) {
   store_->LockGC();
   store_->Add(handle_, Handle::nil(), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::AddLink(Handle name, Text symbol) {
+Frame &Frame::AddLink(Handle name, Text symbol) {
   store_->Add(handle_, name, store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::AddLink(const Object &name, Text symbol) {
+Frame &Frame::AddLink(const Object &name, Text symbol) {
   store_->Add(handle_, name.handle(), store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::AddLink(const Name &name, Text symbol) {
+Frame &Frame::AddLink(const Name &name, Text symbol) {
   store_->Add(handle_, name.Lookup(store_), store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::AddLink(Text name, Text symbol) {
+Frame &Frame::AddLink(Text name, Text symbol) {
   store_->Add(handle_, store_->Lookup(name), store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::AddLink(Text symbol) {
+Frame &Frame::AddLink(Text symbol) {
   store_->Add(handle_, Handle::nil(), store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::AddIsA(Handle type) {
+Frame &Frame::AddIsA(Handle type) {
   store_->Add(handle_, Handle::isa(), type);
+  return *this;
 }
 
-void Frame::AddIsA(const Object &type) {
+Frame &Frame::AddIsA(const Object &type) {
   store_->Add(handle_, Handle::isa(), type.handle());
+  return *this;
 }
 
-void Frame::AddIsA(const Name &type) {
+Frame &Frame::AddIsA(const Name &type) {
   store_->Add(handle_, Handle::isa(), type.Lookup(store_));
+  return *this;
 }
 
-void Frame::AddIsA(Text type) {
+Frame &Frame::AddIsA(Text type) {
   store_->Add(handle_, Handle::isa(), store_->Lookup(type));
+  return *this;
 }
 
-void Frame::AddIsA(const String &type) {
+Frame &Frame::AddIsA(const String &type) {
   store_->Add(handle_, Handle::isa(), store_->Lookup(type.handle()));
+  return *this;
 }
 
-void Frame::AddIs(Handle type) {
+Frame &Frame::AddIs(Handle type) {
   store_->Add(handle_, Handle::is(), type);
+  return *this;
 }
 
-void Frame::AddIs(const Object &type) {
+Frame &Frame::AddIs(const Object &type) {
   store_->Add(handle_, Handle::is(), type.handle());
+  return *this;
 }
 
-void Frame::AddIs(const Name &type) {
+Frame &Frame::AddIs(const Name &type) {
   store_->Add(handle_, Handle::is(), type.Lookup(store_));
+  return *this;
 }
 
-void Frame::AddIs(Text type) {
+Frame &Frame::AddIs(Text type) {
   store_->Add(handle_, Handle::is(), store_->Lookup(type));
+  return *this;
 }
 
-void Frame::AddIs(const String &type) {
+Frame &Frame::AddIs(const String &type) {
   store_->Add(handle_, Handle::is(), store_->Lookup(type.handle()));
+  return *this;
 }
 
-void Frame::Set(Handle name, Handle value) {
+Frame &Frame::Set(Handle name, Handle value) {
   store_->Set(handle_, name, value);
+  return *this;
 }
 
-void Frame::Set(const Object &name, Handle value) {
+Frame &Frame::Set(const Object &name, Handle value) {
   store_->Set(handle_, name.handle(), value);
+  return *this;
 }
 
-void Frame::Set(const Name &name, Handle value) {
+Frame &Frame::Set(const Name &name, Handle value) {
   store_->Set(handle_, name.Lookup(store_), value);
+  return *this;
 }
 
-void Frame::Set(Text name, Handle value) {
+Frame &Frame::Set(Text name, Handle value) {
   store_->Set(handle_, store_->Lookup(name), value);
+  return *this;
 }
 
-void Frame::Set(Handle name, const Object &value) {
+Frame &Frame::Set(Handle name, const Object &value) {
   store_->Set(handle_, name, value.handle());
+  return *this;
 }
 
-void Frame::Set(Handle name, const Name &value) {
+Frame &Frame::Set(Handle name, const Name &value) {
   store_->Set(handle_, name, value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Set(const Object &name, const Object &value) {
+Frame &Frame::Set(const Object &name, const Object &value) {
   store_->Set(handle_, name.handle(), value.handle());
+  return *this;
 }
 
-void Frame::Set(const Object &name, const Name &value) {
+Frame &Frame::Set(const Object &name, const Name &value) {
   store_->Set(handle_, name.handle(), value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Set(const Name &name, const Object &value) {
+Frame &Frame::Set(const Name &name, const Object &value) {
   store_->Set(handle_, name.Lookup(store_), value.handle());
+  return *this;
 }
 
-void Frame::Set(const Name &name, const Name &value) {
+Frame &Frame::Set(const Name &name, const Name &value) {
   store_->Set(handle_, name.Lookup(store_), value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Set(Text name, const Object &value) {
+Frame &Frame::Set(Text name, const Object &value) {
   store_->Set(handle_, store_->Lookup(name), value.handle());
+  return *this;
 }
 
-void Frame::Set(Text name, const Name &value) {
+Frame &Frame::Set(Text name, const Name &value) {
   store_->Set(handle_, store_->Lookup(name), value.Lookup(store_));
+  return *this;
 }
 
-void Frame::Set(Handle name, int value) {
+Frame &Frame::Set(Handle name, int value) {
   store_->Set(handle_, name,  Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Set(const Object &name, int value) {
+Frame &Frame::Set(const Object &name, int value) {
   store_->Set(handle_, name.handle(),  Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Set(const Name &name, int value) {
+Frame &Frame::Set(const Name &name, int value) {
   store_->Set(handle_, name.Lookup(store_),  Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Set(Text name, int value) {
+Frame &Frame::Set(Text name, int value) {
   store_->Set(handle_, store_->Lookup(name),  Handle::Integer(value));
+  return *this;
 }
 
-void Frame::Set(Handle name, bool value) {
+Frame &Frame::Set(Handle name, bool value) {
   store_->Set(handle_, name,  Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Set(const Object &name, bool value) {
+Frame &Frame::Set(const Object &name, bool value) {
   store_->Set(handle_, name.handle(),  Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Set(const Name &name, bool value) {
+Frame &Frame::Set(const Name &name, bool value) {
   store_->Set(handle_, name.Lookup(store_),  Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Set(Text name, bool value) {
+Frame &Frame::Set(Text name, bool value) {
   store_->Set(handle_, store_->Lookup(name),  Handle::Bool(value));
+  return *this;
 }
 
-void Frame::Set(Handle name, float value) {
+Frame &Frame::Set(Handle name, float value) {
   store_->Set(handle_, name,  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(const Object &name, float value) {
+Frame &Frame::Set(const Object &name, float value) {
   store_->Set(handle_, name.handle(),  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(const Name &name, float value) {
+Frame &Frame::Set(const Name &name, float value) {
   store_->Set(handle_, name.Lookup(store_),  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(Text name, float value) {
+Frame &Frame::Set(Text name, float value) {
   store_->Set(handle_, store_->Lookup(name),  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(Handle name, double value) {
+Frame &Frame::Set(Handle name, double value) {
   store_->Set(handle_, name,  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(const Object &name, double value) {
+Frame &Frame::Set(const Object &name, double value) {
   store_->Set(handle_, name.handle(),  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(const Name &name, double value) {
+Frame &Frame::Set(const Name &name, double value) {
   store_->Set(handle_, name.Lookup(store_),  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(Text name, double value) {
+Frame &Frame::Set(Text name, double value) {
   store_->Set(handle_, store_->Lookup(name),  Handle::Float(value));
+  return *this;
 }
 
-void Frame::Set(Handle name, Text value) {
+Frame &Frame::Set(Handle name, Text value) {
   store_->LockGC();
   store_->Set(handle_, name, store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(const Object &name, Text value) {
+Frame &Frame::Set(const Object &name, Text value) {
   store_->LockGC();
   store_->Set(handle_, name.handle(), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(const Name &name, Text value) {
+Frame &Frame::Set(const Name &name, Text value) {
   store_->LockGC();
   store_->Set(handle_, name.Lookup(store_), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(Text name, Text value) {
+Frame &Frame::Set(Text name, Text value) {
   store_->LockGC();
   store_->Set(handle_, store_->Lookup(name), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(Handle name, const char *value) {
+Frame &Frame::Set(Handle name, const char *value) {
   store_->LockGC();
   store_->Set(handle_, name, store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(const Object &name, const char *value) {
+Frame &Frame::Set(const Object &name, const char *value) {
   store_->LockGC();
   store_->Set(handle_, name.handle(), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(const Name &name, const char *value) {
+Frame &Frame::Set(const Name &name, const char *value) {
   store_->LockGC();
   store_->Set(handle_, name.Lookup(store_), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::Set(Text name, const char *value) {
+Frame &Frame::Set(Text name, const char *value) {
   store_->LockGC();
   store_->Set(handle_, store_->Lookup(name), store_->AllocateString(value));
   store_->UnlockGC();
+  return *this;
 }
 
-void Frame::SetLink(Handle name, Text symbol) {
+Frame &Frame::SetLink(Handle name, Text symbol) {
   store_->Set(handle_, name, store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::SetLink(const Object &name, Text symbol) {
+Frame &Frame::SetLink(const Object &name, Text symbol) {
   store_->Set(handle_, name.handle(), store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::SetLink(const Name &name, Text symbol) {
+Frame &Frame::SetLink(const Name &name, Text symbol) {
   store_->Set(handle_, name.Lookup(store_), store_->Lookup(symbol));
+  return *this;
 }
 
-void Frame::SetLink(Text name, Text symbol) {
+Frame &Frame::SetLink(Text name, Text symbol) {
   store_->Set(handle_, store_->Lookup(name), store_->Lookup(symbol));
+  return *this;
 }
 
 Symbol::Symbol(Store *store, Handle handle) : Object(store, handle) {
@@ -833,569 +931,677 @@ Builder::Builder(Store *store, Text id) : External(store), store_(store) {
 Builder::~Builder() {
 }
 
-void Builder::Add(Handle name, Handle value) {
+Builder &Builder::Add(Handle name, Handle value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = value;
+  return *this;
 }
 
-void Builder::Add(const Object &name, Handle value) {
+Builder &Builder::Add(const Object &name, Handle value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = value;
+  return *this;
 }
 
-void Builder::Add(const Name &name, Handle value) {
+Builder &Builder::Add(const Name &name, Handle value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = value;
+  return *this;
 }
 
-void Builder::Add(Text name, Handle value) {
+Builder &Builder::Add(Text name, Handle value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = value;
+  return *this;
 }
 
-void Builder::Add(Handle value) {
+Builder &Builder::Add(Handle value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = value;
+  return *this;
 }
 
-void Builder::Add(Handle name, const Object &value) {
+Builder &Builder::Add(Handle name, const Object &value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = value.handle();
+  return *this;
 }
 
-void Builder::Add(Handle name, const Name &value) {
+Builder &Builder::Add(Handle name, const Name &value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Add(const Object &name, const Object &value) {
+Builder &Builder::Add(const Object &name, const Object &value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = value.handle();
+  return *this;
 }
 
-void Builder::Add(const Object &name, const Name &value) {
+Builder &Builder::Add(const Object &name, const Name &value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Add(const Name &name, const Object &value) {
+Builder &Builder::Add(const Name &name, const Object &value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = value.handle();
+  return *this;
 }
 
-void Builder::Add(const Name &name, const Name &value) {
+Builder &Builder::Add(const Name &name, const Name &value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Add(Text name, const Object &value) {
+Builder &Builder::Add(Text name, const Object &value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = value.handle();
+  return *this;
 }
 
-void Builder::Add(Text name, const Name &value) {
+Builder &Builder::Add(Text name, const Name &value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Add(Handle name, int value) {
+Builder &Builder::Add(Handle name, int value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Add(const Object &name, int value) {
+Builder &Builder::Add(const Object &name, int value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Add(const Name &name, int value) {
+Builder &Builder::Add(const Name &name, int value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Add(Text name, int value) {
+Builder &Builder::Add(Text name, int value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Add(int value) {
+Builder &Builder::Add(int value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Add(Handle name, bool value) {
+Builder &Builder::Add(Handle name, bool value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Add(const Object &name, bool value) {
+Builder &Builder::Add(const Object &name, bool value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Add(const Name &name, bool value) {
+Builder &Builder::Add(const Name &name, bool value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Add(Text name, bool value) {
+Builder &Builder::Add(Text name, bool value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Add(bool value) {
+Builder &Builder::Add(bool value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Add(Handle name, float value) {
+Builder &Builder::Add(Handle name, float value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(const Object &name, float value) {
+Builder &Builder::Add(const Object &name, float value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(const Name &name, float value) {
+Builder &Builder::Add(const Name &name, float value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(Text name, float value) {
+Builder &Builder::Add(Text name, float value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(float value) {
+Builder &Builder::Add(float value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(Handle name, double value) {
+Builder &Builder::Add(Handle name, double value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(const Object &name, double value) {
+Builder &Builder::Add(const Object &name, double value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(const Name &name, double value) {
+Builder &Builder::Add(const Name &name, double value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(Text name, double value) {
+Builder &Builder::Add(Text name, double value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(double value) {
+Builder &Builder::Add(double value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Add(Handle name, Text value) {
+Builder &Builder::Add(Handle name, Text value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(const Object &name, Text value) {
+Builder &Builder::Add(const Object &name, Text value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(const Name &name, Text value) {
+Builder &Builder::Add(const Name &name, Text value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(Text name, Text value) {
+Builder &Builder::Add(Text name, Text value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(Text value) {
+Builder &Builder::Add(Text value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(Handle name, const char *value) {
+Builder &Builder::Add(Handle name, const char *value) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(const Object &name, const char *value) {
+Builder &Builder::Add(const Object &name, const char *value) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(const Name &name, const char *value) {
+Builder &Builder::Add(const Name &name, const char *value) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(Text name, const char *value) {
+Builder &Builder::Add(Text name, const char *value) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Add(const char *value) {
+Builder &Builder::Add(const char *value) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::AddLink(Handle name, Text symbol) {
+Builder &Builder::AddLink(Handle name, Text symbol) {
   Slot *slot = NewSlot();
   slot->name = name;
   slot->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::AddLink(const Object &name, Text symbol) {
+Builder &Builder::AddLink(const Object &name, Text symbol) {
   Slot *slot = NewSlot();
   slot->name = name.handle();
   slot->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::AddLink(const Name &name, Text symbol) {
+Builder &Builder::AddLink(const Name &name, Text symbol) {
   Slot *slot = NewSlot();
   slot->name = name.Lookup(store_);
   slot->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::AddLink(Text name, Text symbol) {
+Builder &Builder::AddLink(Text name, Text symbol) {
   Slot *slot = NewSlot();
   slot->name = store_->Lookup(name);
   slot->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::AddLink(Text symbol) {
+Builder &Builder::AddLink(Text symbol) {
   Slot *slot = NewSlot();
   slot->name = Handle::nil();
   slot->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::Builder::AddId(Handle id) {
+Builder &Builder::Builder::AddId(Handle id) {
   Slot *slot = NewSlot();
   slot->name = Handle::id();
   slot->value = id;
+  return *this;
 }
 
-void Builder::Builder::AddId(const Object &id) {
+Builder &Builder::Builder::AddId(const Object &id) {
   Slot *slot = NewSlot();
   slot->name = Handle::id();
   slot->value = id.handle();
+  return *this;
 }
 
-void Builder::AddId(Text id) {
+Builder &Builder::AddId(Text id) {
   Slot *slot = NewSlot();
   slot->name = Handle::id();
   slot->value = store_->Symbol(id);
+  return *this;
 }
 
-void Builder::AddId(const String &id) {
+Builder &Builder::AddId(const String &id) {
   Slot *slot = NewSlot();
   slot->name = Handle::id();
   slot->value = store_->Symbol(id.handle());
+  return *this;
 }
 
-void Builder::AddIsA(Handle type) {
+Builder &Builder::AddIsA(Handle type) {
   Slot *slot = NewSlot();
   slot->name = Handle::isa();
   slot->value = type;
+  return *this;
 }
 
-void Builder::AddIsA(const Object &type) {
+Builder &Builder::AddIsA(const Object &type) {
   Slot *slot = NewSlot();
   slot->name = Handle::isa();
   slot->value = type.handle();
+  return *this;
 }
 
-void Builder::AddIsA(const Name &type) {
+Builder &Builder::AddIsA(const Name &type) {
   Slot *slot = NewSlot();
   slot->name = Handle::isa();
   slot->value = type.Lookup(store_);
+  return *this;
 }
 
-void Builder::AddIsA(Text type) {
+Builder &Builder::AddIsA(Text type) {
   Slot *slot = NewSlot();
   slot->name = Handle::isa();
   slot->value = store_->Lookup(type);
+  return *this;
 }
 
-void Builder::AddIsA(const String &type) {
+Builder &Builder::AddIsA(const String &type) {
   Slot *slot = NewSlot();
   slot->name = Handle::isa();
   slot->value = store_->Lookup(type.handle());
+  return *this;
 }
 
-void Builder::AddIs(Handle type) {
+Builder &Builder::AddIs(Handle type) {
   Slot *slot = NewSlot();
   slot->name = Handle::is();
   slot->value = type;
+  return *this;
 }
 
-void Builder::AddIs(const Object &type) {
+Builder &Builder::AddIs(const Object &type) {
   Slot *slot = NewSlot();
   slot->name = Handle::is();
   slot->value = type.handle();
+  return *this;
 }
 
-void Builder::AddIs(const Name &type) {
+Builder &Builder::AddIs(const Name &type) {
   Slot *slot = NewSlot();
   slot->name = Handle::is();
   slot->value = type.Lookup(store_);
+  return *this;
 }
 
-void Builder::AddIs(Text type) {
+Builder &Builder::AddIs(Text type) {
   Slot *slot = NewSlot();
   slot->name = Handle::is();
   slot->value = store_->Lookup(type);
+  return *this;
 }
 
-void Builder::AddIs(const String &type) {
+Builder &Builder::AddIs(const String &type) {
   Slot *slot = NewSlot();
   slot->name = Handle::is();
   slot->value = store_->Lookup(type.handle());
+  return *this;
 }
 
-void Builder::AddFrom(Handle other) {
+Builder &Builder::AddFrom(Handle other) {
   FrameDatum *frame = store_->GetFrame(other);
   memcpy(slots_.alloc(frame->size()), frame->begin(), frame->size());
+  return *this;
 }
 
-void Builder::Delete(Handle name) {
+Builder &Builder::Delete(Handle name) {
   Slot *slot = slots_.base();
   Slot *end = slots_.end();
   while (slot < end && slot->name != name) slot++;
-  if (slot == end) return;
-  Slot *current = slot;
-  while (slot < end) {
-    if (slot->name == name) {
-      slot++;
-    } else {
-      *current++ = *slot++;
+  if (slot != end) {
+    Slot *current = slot;
+    while (slot < end) {
+      if (slot->name == name) {
+        slot++;
+      } else {
+        *current++ = *slot++;
+      }
     }
+    slots_.set_end(current);
   }
-  slots_.set_end(current);
+  return *this;
 }
 
-void Builder::Delete(const Object &name) {
+Builder &Builder::Delete(const Object &name) {
   Delete(name.handle());
+  return *this;
 }
 
-void Builder::Delete(const Name &name) {
+Builder &Builder::Delete(const Name &name) {
   Delete(name.Lookup(store_));
+  return *this;
 }
 
-void Builder::Delete(Text name) {
+Builder &Builder::Delete(Text name) {
   Delete(store_->Lookup(name));
+  return *this;
 }
 
-void Builder::Set(Handle name, Handle value) {
+Builder &Builder::Set(Handle name, Handle value) {
   NamedSlot(name)->value = value;
+  return *this;
 }
 
-void Builder::Set(const Object &name, Handle value) {
+Builder &Builder::Set(const Object &name, Handle value) {
   NamedSlot(name.handle())->value = value;
+  return *this;
 }
 
-void Builder::Set(const Name &name, Handle value) {
+Builder &Builder::Set(const Name &name, Handle value) {
   NamedSlot(name.Lookup(store_))->value = value;
+  return *this;
 }
 
-void Builder::Set(Text name, Handle value) {
+Builder &Builder::Set(Text name, Handle value) {
   NamedSlot(store_->Lookup(name))->value = value;
+  return *this;
 }
 
-void Builder::Set(Handle name, const Object &value) {
+Builder &Builder::Set(Handle name, const Object &value) {
   NamedSlot(name)->value = value.handle();
+  return *this;
 }
 
-void Builder::Set(Handle name, const Name &value) {
+Builder &Builder::Set(Handle name, const Name &value) {
   NamedSlot(name)->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Set(const Object &name, const Object &value) {
+Builder &Builder::Set(const Object &name, const Object &value) {
   NamedSlot(name.handle())->value = value.handle();
+  return *this;
 }
 
-void Builder::Set(const Object &name, const Name &value) {
+Builder &Builder::Set(const Object &name, const Name &value) {
   NamedSlot(name.handle())->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Set(const Name &name, const Object &value) {
+Builder &Builder::Set(const Name &name, const Object &value) {
   NamedSlot(name.Lookup(store_))->value = value.handle();
+  return *this;
 }
 
-void Builder::Set(const Name &name, const Name &value) {
+Builder &Builder::Set(const Name &name, const Name &value) {
   NamedSlot(name.Lookup(store_))->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Set(Text name, const Object &value) {
+Builder &Builder::Set(Text name, const Object &value) {
   NamedSlot(store_->Lookup(name))->value = value.handle();
+  return *this;
 }
 
-void Builder::Set(Text name, const Name &value) {
+Builder &Builder::Set(Text name, const Name &value) {
   NamedSlot(store_->Lookup(name))->value = value.Lookup(store_);
+  return *this;
 }
 
-void Builder::Set(Handle name, int value) {
+Builder &Builder::Set(Handle name, int value) {
   NamedSlot(name)->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Set(const Object &name, int value) {
+Builder &Builder::Set(const Object &name, int value) {
   NamedSlot(name.handle())->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Set(const Name &name, int value) {
+Builder &Builder::Set(const Name &name, int value) {
   NamedSlot(name.Lookup(store_))->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Set(Text name, int value) {
+Builder &Builder::Set(Text name, int value) {
   NamedSlot(store_->Lookup(name))->value = Handle::Integer(value);
+  return *this;
 }
 
-void Builder::Set(Handle name, bool value) {
+Builder &Builder::Set(Handle name, bool value) {
   NamedSlot(name)->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Set(const Object &name, bool value) {
+Builder &Builder::Set(const Object &name, bool value) {
   NamedSlot(name.handle())->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Set(const Name &name, bool value) {
+Builder &Builder::Set(const Name &name, bool value) {
   NamedSlot(name.Lookup(store_))->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Set(Text name, bool value) {
+Builder &Builder::Set(Text name, bool value) {
   NamedSlot(store_->Lookup(name))->value = Handle::Bool(value);
+  return *this;
 }
 
-void Builder::Set(Handle name, float value) {
+Builder &Builder::Set(Handle name, float value) {
   NamedSlot(name)->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(const Object &name, float value) {
+Builder &Builder::Set(const Object &name, float value) {
   NamedSlot(name.handle())->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(const Name &name, float value) {
+Builder &Builder::Set(const Name &name, float value) {
   NamedSlot(name.Lookup(store_))->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(Text name, float value) {
+Builder &Builder::Set(Text name, float value) {
   NamedSlot(store_->Lookup(name))->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(Handle name, double value) {
+Builder &Builder::Set(Handle name, double value) {
   NamedSlot(name)->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(const Object &name, double value) {
+Builder &Builder::Set(const Object &name, double value) {
   NamedSlot(name.handle())->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(const Name &name, double value) {
+Builder &Builder::Set(const Name &name, double value) {
   NamedSlot(name.Lookup(store_))->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(Text name, double value) {
+Builder &Builder::Set(Text name, double value) {
   NamedSlot(store_->Lookup(name))->value = Handle::Float(value);
+  return *this;
 }
 
-void Builder::Set(Handle name, Text value) {
+Builder &Builder::Set(Handle name, Text value) {
   NamedSlot(name)->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(const Object &name, Text value) {
+Builder &Builder::Set(const Object &name, Text value) {
   NamedSlot(name.handle())->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(const Name &name, Text value) {
+Builder &Builder::Set(const Name &name, Text value) {
   NamedSlot(name.Lookup(store_))->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(Text name, Text value) {
+Builder &Builder::Set(Text name, Text value) {
   NamedSlot(store_->Lookup(name))->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(Handle name, const char *value) {
+Builder &Builder::Set(Handle name, const char *value) {
   NamedSlot(name)->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(const Object &name, const char *value) {
+Builder &Builder::Set(const Object &name, const char *value) {
   NamedSlot(name.handle())->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(const Name &name, const char *value) {
+Builder &Builder::Set(const Name &name, const char *value) {
   NamedSlot(name.Lookup(store_))->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::Set(Text name, const char *value) {
+Builder &Builder::Set(Text name, const char *value) {
   NamedSlot(store_->Lookup(name))->value = store_->AllocateString(value);
+  return *this;
 }
 
-void Builder::SetLink(Handle name, Text symbol) {
+Builder &Builder::SetLink(Handle name, Text symbol) {
   NamedSlot(name)->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::SetLink(const Object &name, Text symbol) {
+Builder &Builder::SetLink(const Object &name, Text symbol) {
   NamedSlot(name.handle())->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::SetLink(const Name &name, Text symbol) {
+Builder &Builder::SetLink(const Name &name, Text symbol) {
   NamedSlot(name.Lookup(store_))->value = store_->Lookup(symbol);
+  return *this;
 }
 
-void Builder::SetLink(Text name, Text symbol) {
+Builder &Builder::SetLink(Text name, Text symbol) {
   NamedSlot(store_->Lookup(name))->value = store_->Lookup(symbol);
+  return *this;
 }
 
 Frame Builder::Create() const {

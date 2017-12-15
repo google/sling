@@ -380,7 +380,10 @@ PyObject *PySlots::Next() {
       // Create two-tuple for name and value.
       PyObject *name = pyframe->pystore->PyValue(slot->name);
       PyObject *value = pyframe->pystore->PyValue(slot->value);
-      return PyTuple_Pack(2, name, value);
+      PyObject *pair = PyTuple_Pack(2, name, value);
+      Py_DECREF(name);
+      Py_DECREF(value);
+      return pair;
     } else if (role == slot->name) {
       return pyframe->pystore->PyValue(slot->value);
     }

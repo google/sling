@@ -84,11 +84,14 @@ int PyStore::Init(PyObject *args, PyObject *kwds) {
     pyglobals = nullptr;
   }
 
+  // Make new store shared.
+  store->Share();
+
   return 0;
 }
 
 void PyStore::Dealloc() {
-  delete store;
+  store->Release();
   if (pyglobals != nullptr) Py_DECREF(pyglobals);
 }
 

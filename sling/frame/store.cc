@@ -154,6 +154,9 @@ Store::Store(const Store *globals) : globals_(globals) {
   // Global store must be frozen.
   CHECK(globals->frozen_);
 
+  // Add reference to shared global store.
+  if (globals->shared()) globals->AddRef();
+
   // Get configuration options for local store.
   options_ = globals->options_->local;
 
@@ -178,6 +181,9 @@ Store::Store(const Store *globals) : globals_(globals) {
 }
 
 Store::~Store() {
+  // Make sure there are no references to store.
+  CHECK(refs_ <= 0) << "Delete with live references to store";
+
   // Unlink roots and externals to prevent access to the store after it has been
   // destructed.
   roots_.Unlink();
@@ -189,6 +195,28 @@ Store::~Store() {
     Heap *next = heap->next();
     delete heap;
     heap = next;
+  }
+
+  // Release reference to shared global store.
+  if (globals_ != nullptr && globals_->shared()) globals_->Release();
+}
+
+void Store::Share() {
+  CHECK(!shared()) << "Store is already shared";
+  refs_ = 1;
+}
+
+void Store::AddRef() const {
+  int r = refs_.fetch_add(1);
+  CHECK(r != -1) << "Store is not shared";
+}
+
+void Store::Release() const {
+  int r = refs_.fetch_sub(1);
+  if (r == 1) {
+    delete this;
+  } else {
+    CHECK(r != -1) << "Store is not shared";
   }
 }
 

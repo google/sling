@@ -26,3 +26,17 @@ cc_library(
   alwayslink = 1,
 )
 
+# File utility libraries.
+
+cc_library(
+  name = "recordio",
+  srcs = ["recordio.cc"],
+  hdrs = ["recordio.h"],
+  deps = [
+    ":file",
+    "//sling/base",
+    "//sling/util:varint",
+    "//third_party/snappy",
+  ],
+)
+

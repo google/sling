@@ -17,6 +17,7 @@
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/pyapi/pyparser.h"
+#include "sling/pyapi/pyrecordio.h"
 #include "sling/pyapi/pystore.h"
 
 namespace sling {
@@ -40,6 +41,8 @@ static void RegisterPythonModule() {
   PyItems::Define(module);
   PyTokenizer::Define(module);
   PyParser::Define(module);
+  PyRecordReader::Define(module);
+  PyRecordWriter::Define(module);
 }
 
 }  // namespace sling

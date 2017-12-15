@@ -474,140 +474,140 @@ class Frame : public Object {
   bool Is(const Name &type) const;
 
   // Adds handle slot to frame.
-  void Add(Handle name, Handle value);
-  void Add(const Object &name, Handle value);
-  void Add(const Name &name, Handle value);
-  void Add(Text name, Handle value);
-  void Add(Handle value);
+  Frame &Add(Handle name, Handle value);
+  Frame &Add(const Object &name, Handle value);
+  Frame &Add(const Name &name, Handle value);
+  Frame &Add(Text name, Handle value);
+  Frame &Add(Handle value);
 
   // Adds slot to frame.
-  void Add(Handle name, const Object &value);
-  void Add(Handle name, const Name &value);
-  void Add(const Object &name, const Object &value);
-  void Add(const Object &name, const Name &value);
-  void Add(const Name &name, const Object &value);
-  void Add(const Name &name, const Name &value);
-  void Add(Text name, const Object &value);
-  void Add(Text name, const Name &value);
+  Frame &Add(Handle name, const Object &value);
+  Frame &Add(Handle name, const Name &value);
+  Frame &Add(const Object &name, const Object &value);
+  Frame &Add(const Object &name, const Name &value);
+  Frame &Add(const Name &name, const Object &value);
+  Frame &Add(const Name &name, const Name &value);
+  Frame &Add(Text name, const Object &value);
+  Frame &Add(Text name, const Name &value);
 
   // Adds integer slot to frame.
-  void Add(Handle name, int value);
-  void Add(const Object &name, int value);
-  void Add(const Name &name, int value);
-  void Add(Text name, int value);
-  void Add(int value);
+  Frame &Add(Handle name, int value);
+  Frame &Add(const Object &name, int value);
+  Frame &Add(const Name &name, int value);
+  Frame &Add(Text name, int value);
+  Frame &Add(int value);
 
   // Adds boolean slot to frame.
-  void Add(Handle name, bool value);
-  void Add(const Object &name, bool value);
-  void Add(const Name &name, bool value);
-  void Add(Text name, bool value);
-  void Add(bool value);
+  Frame &Add(Handle name, bool value);
+  Frame &Add(const Object &name, bool value);
+  Frame &Add(const Name &name, bool value);
+  Frame &Add(Text name, bool value);
+  Frame &Add(bool value);
 
   // Adds floating point slot to frame.
-  void Add(Handle name, float value);
-  void Add(const Object &name, float value);
-  void Add(const Name &name, float value);
-  void Add(Text name, float value);
-  void Add(float value);
+  Frame &Add(Handle name, float value);
+  Frame &Add(const Object &name, float value);
+  Frame &Add(const Name &name, float value);
+  Frame &Add(Text name, float value);
+  Frame &Add(float value);
 
-  void Add(Handle name, double value);
-  void Add(const Object &name, double value);
-  void Add(const Name &name, double value);
-  void Add(Text name, double value);
-  void Add(double value);
+  Frame &Add(Handle name, double value);
+  Frame &Add(const Object &name, double value);
+  Frame &Add(const Name &name, double value);
+  Frame &Add(Text name, double value);
+  Frame &Add(double value);
 
   // Adds string slot to frame.
-  void Add(Handle name, Text value);
-  void Add(const Object &name, Text value);
-  void Add(const Name &name, Text value);
-  void Add(Text name, Text value);
-  void Add(Text value);
+  Frame &Add(Handle name, Text value);
+  Frame &Add(const Object &name, Text value);
+  Frame &Add(const Name &name, Text value);
+  Frame &Add(Text name, Text value);
+  Frame &Add(Text value);
 
-  void Add(Handle name, const char *value);
-  void Add(const Object &name, const char *value);
-  void Add(const Name &name, const char *value);
-  void Add(Text name, const char *value);
-  void Add(const char *value);
+  Frame &Add(Handle name, const char *value);
+  Frame &Add(const Object &name, const char *value);
+  Frame &Add(const Name &name, const char *value);
+  Frame &Add(Text name, const char *value);
+  Frame &Add(const char *value);
 
   // Adds slot with symbol link to frame. This will link to a proxy if the
   // symbol is not already defined.
-  void AddLink(Handle name, Text symbol);
-  void AddLink(const Object &name, Text symbol);
-  void AddLink(const Name &name, Text symbol);
-  void AddLink(Text name, Text symbol);
-  void AddLink(Text symbol);
+  Frame &AddLink(Handle name, Text symbol);
+  Frame &AddLink(const Object &name, Text symbol);
+  Frame &AddLink(const Name &name, Text symbol);
+  Frame &AddLink(Text name, Text symbol);
+  Frame &AddLink(Text symbol);
 
   // Adds isa: slot to frame.
-  void AddIsA(Handle type);
-  void AddIsA(const Object &type);
-  void AddIsA(const Name &type);
-  void AddIsA(Text type);
-  void AddIsA(const String &type);
+  Frame &AddIsA(Handle type);
+  Frame &AddIsA(const Object &type);
+  Frame &AddIsA(const Name &type);
+  Frame &AddIsA(Text type);
+  Frame &AddIsA(const String &type);
 
   // Adds is: slot to frame.
-  void AddIs(Handle type);
-  void AddIs(const Object &type);
-  void AddIs(const Name &type);
-  void AddIs(Text type);
-  void AddIs(const String &type);
+  Frame &AddIs(Handle type);
+  Frame &AddIs(const Object &type);
+  Frame &AddIs(const Name &type);
+  Frame &AddIs(Text type);
+  Frame &AddIs(const String &type);
 
   // Sets slot to handle value.
-  void Set(Handle name, Handle value);
-  void Set(const Object &name, Handle value);
-  void Set(const Name &name, Handle value);
-  void Set(Text name, Handle value);
+  Frame &Set(Handle name, Handle value);
+  Frame &Set(const Object &name, Handle value);
+  Frame &Set(const Name &name, Handle value);
+  Frame &Set(Text name, Handle value);
 
   // Sets slot to frame value.
-  void Set(Handle name, const Object &value);
-  void Set(Handle name, const Name &value);
-  void Set(const Object &name, const Object &value);
-  void Set(const Object &name, const Name &value);
-  void Set(const Name &name, const Object &value);
-  void Set(const Name &name, const Name &value);
-  void Set(Text name, const Object &value);
-  void Set(Text name, const Name &value);
+  Frame &Set(Handle name, const Object &value);
+  Frame &Set(Handle name, const Name &value);
+  Frame &Set(const Object &name, const Object &value);
+  Frame &Set(const Object &name, const Name &value);
+  Frame &Set(const Name &name, const Object &value);
+  Frame &Set(const Name &name, const Name &value);
+  Frame &Set(Text name, const Object &value);
+  Frame &Set(Text name, const Name &value);
 
   // Sets slot to integer value.
-  void Set(Handle name, int value);
-  void Set(const Object &name, int value);
-  void Set(const Name &name, int value);
-  void Set(Text name, int value);
+  Frame &Set(Handle name, int value);
+  Frame &Set(const Object &name, int value);
+  Frame &Set(const Name &name, int value);
+  Frame &Set(Text name, int value);
 
   // Sets slot to boolean value.
-  void Set(Handle name, bool value);
-  void Set(const Object &name, bool value);
-  void Set(const Name &name, bool value);
-  void Set(Text name, bool value);
+  Frame &Set(Handle name, bool value);
+  Frame &Set(const Object &name, bool value);
+  Frame &Set(const Name &name, bool value);
+  Frame &Set(Text name, bool value);
 
   // Sets slot to floating point value.
-  void Set(Handle name, float value);
-  void Set(const Object &name, float value);
-  void Set(const Name &name, float value);
-  void Set(Text name, float value);
+  Frame &Set(Handle name, float value);
+  Frame &Set(const Object &name, float value);
+  Frame &Set(const Name &name, float value);
+  Frame &Set(Text name, float value);
 
-  void Set(Handle name, double value);
-  void Set(const Object &name, double value);
-  void Set(const Name &name, double value);
-  void Set(Text name, double value);
+  Frame &Set(Handle name, double value);
+  Frame &Set(const Object &name, double value);
+  Frame &Set(const Name &name, double value);
+  Frame &Set(Text name, double value);
 
   // Sets slot to string value.
-  void Set(Handle name, Text value);
-  void Set(const Object &name, Text value);
-  void Set(const Name &name, Text value);
-  void Set(Text name, Text value);
+  Frame &Set(Handle name, Text value);
+  Frame &Set(const Object &name, Text value);
+  Frame &Set(const Name &name, Text value);
+  Frame &Set(Text name, Text value);
 
-  void Set(Handle name, const char *value);
-  void Set(const Object &name, const char *value);
-  void Set(const Name &name, const char *value);
-  void Set(Text name, const char *value);
+  Frame &Set(Handle name, const char *value);
+  Frame &Set(const Object &name, const char *value);
+  Frame &Set(const Name &name, const char *value);
+  Frame &Set(Text name, const char *value);
 
   // Sets slot to link to a frame. This will link to a proxy if the symbol is
   // not already defined.
-  void SetLink(Handle name, Text symbol);
-  void SetLink(const Object &name, Text symbol);
-  void SetLink(const Name &name, Text symbol);
-  void SetLink(Text name, Text symbol);
+  Frame &SetLink(Handle name, Text symbol);
+  Frame &SetLink(const Object &name, Text symbol);
+  Frame &SetLink(const Name &name, Text symbol);
+  Frame &SetLink(Text name, Text symbol);
 
   // Iterator for iterating over all slots in a frame.
   class iterator {
@@ -737,156 +737,156 @@ class Builder : public External {
   ~Builder() override;
 
   // Adds handle slot to frame.
-  void Add(Handle name, Handle value);
-  void Add(const Object &name, Handle value);
-  void Add(const Name &name, Handle value);
-  void Add(Text name, Handle value);
-  void Add(Handle value);
+  Builder &Add(Handle name, Handle value);
+  Builder &Add(const Object &name, Handle value);
+  Builder &Add(const Name &name, Handle value);
+  Builder &Add(Text name, Handle value);
+  Builder &Add(Handle value);
 
   // Adds slot to frame.
-  void Add(Handle name, const Object &value);
-  void Add(Handle name, const Name &value);
-  void Add(const Object &name, const Object &value);
-  void Add(const Object &name, const Name &value);
-  void Add(const Name &name, const Object &value);
-  void Add(const Name &name, const Name &value);
-  void Add(Text name, const Object &value);
-  void Add(Text name, const Name &value);
+  Builder &Add(Handle name, const Object &value);
+  Builder &Add(Handle name, const Name &value);
+  Builder &Add(const Object &name, const Object &value);
+  Builder &Add(const Object &name, const Name &value);
+  Builder &Add(const Name &name, const Object &value);
+  Builder &Add(const Name &name, const Name &value);
+  Builder &Add(Text name, const Object &value);
+  Builder &Add(Text name, const Name &value);
 
   // Adds integer slot to frame.
-  void Add(Handle name, int value);
-  void Add(const Object &name, int value);
-  void Add(const Name &name, int value);
-  void Add(Text name, int value);
-  void Add(int value);
+  Builder &Add(Handle name, int value);
+  Builder &Add(const Object &name, int value);
+  Builder &Add(const Name &name, int value);
+  Builder &Add(Text name, int value);
+  Builder &Add(int value);
 
   // Adds boolean slot to frame.
-  void Add(Handle name, bool value);
-  void Add(const Object &name, bool value);
-  void Add(const Name &name, bool value);
-  void Add(Text name, bool value);
-  void Add(bool value);
+  Builder &Add(Handle name, bool value);
+  Builder &Add(const Object &name, bool value);
+  Builder &Add(const Name &name, bool value);
+  Builder &Add(Text name, bool value);
+  Builder &Add(bool value);
 
   // Adds floating point slot to frame.
-  void Add(Handle name, float value);
-  void Add(const Object &name, float value);
-  void Add(const Name &name, float value);
-  void Add(Text name, float value);
-  void Add(float value);
+  Builder &Add(Handle name, float value);
+  Builder &Add(const Object &name, float value);
+  Builder &Add(const Name &name, float value);
+  Builder &Add(Text name, float value);
+  Builder &Add(float value);
 
-  void Add(Handle name, double value);
-  void Add(const Object &name, double value);
-  void Add(const Name &name, double value);
-  void Add(Text name, double value);
-  void Add(double value);
+  Builder &Add(Handle name, double value);
+  Builder &Add(const Object &name, double value);
+  Builder &Add(const Name &name, double value);
+  Builder &Add(Text name, double value);
+  Builder &Add(double value);
 
   // Adds string slot to frame.
-  void Add(Handle name, Text value);
-  void Add(const Object &name, Text value);
-  void Add(const Name &name, Text value);
-  void Add(Text name, Text value);
-  void Add(Text value);
+  Builder &Add(Handle name, Text value);
+  Builder &Add(const Object &name, Text value);
+  Builder &Add(const Name &name, Text value);
+  Builder &Add(Text name, Text value);
+  Builder &Add(Text value);
 
-  void Add(Handle name, const char *value);
-  void Add(const Object &name, const char *value);
-  void Add(const Name &name, const char *value);
-  void Add(Text name, const char *value);
-  void Add(const char *value);
+  Builder &Add(Handle name, const char *value);
+  Builder &Add(const Object &name, const char *value);
+  Builder &Add(const Name &name, const char *value);
+  Builder &Add(Text name, const char *value);
+  Builder &Add(const char *value);
 
   // Adds slot with symbol link to frame. This will link to a proxy if the
   // symbol is not already defined.
-  void AddLink(Handle name, Text symbol);
-  void AddLink(const Object &name, Text symbol);
-  void AddLink(const Name &name, Text symbol);
-  void AddLink(Text name, Text symbol);
-  void AddLink(Text symbol);
+  Builder &AddLink(Handle name, Text symbol);
+  Builder &AddLink(const Object &name, Text symbol);
+  Builder &AddLink(const Name &name, Text symbol);
+  Builder &AddLink(Text name, Text symbol);
+  Builder &AddLink(Text symbol);
 
   // Adds id: slot to frame.
-  void AddId(Handle id);
-  void AddId(const Object &id);
-  void AddId(Text id);
-  void AddId(const String &id);
+  Builder &AddId(Handle id);
+  Builder &AddId(const Object &id);
+  Builder &AddId(Text id);
+  Builder &AddId(const String &id);
 
   // Adds isa: slot to frame.
-  void AddIsA(Handle type);
-  void AddIsA(const Object &type);
-  void AddIsA(const Name &type);
-  void AddIsA(Text type);
-  void AddIsA(const String &type);
+  Builder &AddIsA(Handle type);
+  Builder &AddIsA(const Object &type);
+  Builder &AddIsA(const Name &type);
+  Builder &AddIsA(Text type);
+  Builder &AddIsA(const String &type);
 
   // Adds is: slot to frame.
-  void AddIs(Handle type);
-  void AddIs(const Object &type);
-  void AddIs(const Name &type);
-  void AddIs(Text type);
-  void AddIs(const String &type);
+  Builder &AddIs(Handle type);
+  Builder &AddIs(const Object &type);
+  Builder &AddIs(const Name &type);
+  Builder &AddIs(Text type);
+  Builder &AddIs(const String &type);
 
   // Adds all the slots from another frame.
-  void AddFrom(Handle other);
-  void AddFrom(const Frame &other) { AddFrom(other.handle()); }
+  Builder &AddFrom(Handle other);
+  Builder &AddFrom(const Frame &other) { return AddFrom(other.handle()); }
 
   // Deletes slot(s) from frame.
-  void Delete(Handle name);
-  void Delete(const Object &name);
-  void Delete(const Name &name);
-  void Delete(Text name);
+  Builder &Delete(Handle name);
+  Builder &Delete(const Object &name);
+  Builder &Delete(const Name &name);
+  Builder &Delete(Text name);
 
   // Sets slot to handle value.
-  void Set(Handle name, Handle value);
-  void Set(const Object &name, Handle value);
-  void Set(const Name &name, Handle value);
-  void Set(Text name, Handle value);
+  Builder &Set(Handle name, Handle value);
+  Builder &Set(const Object &name, Handle value);
+  Builder &Set(const Name &name, Handle value);
+  Builder &Set(Text name, Handle value);
 
   // Sets slot to frame value.
-  void Set(Handle name, const Object &value);
-  void Set(Handle name, const Name &value);
-  void Set(const Object &name, const Object &value);
-  void Set(const Object &name, const Name &value);
-  void Set(const Name &name, const Object &value);
-  void Set(const Name &name, const Name &value);
-  void Set(Text name, const Object &value);
-  void Set(Text name, const Name &value);
+  Builder &Set(Handle name, const Object &value);
+  Builder &Set(Handle name, const Name &value);
+  Builder &Set(const Object &name, const Object &value);
+  Builder &Set(const Object &name, const Name &value);
+  Builder &Set(const Name &name, const Object &value);
+  Builder &Set(const Name &name, const Name &value);
+  Builder &Set(Text name, const Object &value);
+  Builder &Set(Text name, const Name &value);
 
   // Sets slot to integer value.
-  void Set(Handle name, int value);
-  void Set(const Object &name, int value);
-  void Set(const Name &name, int value);
-  void Set(Text name, int value);
+  Builder &Set(Handle name, int value);
+  Builder &Set(const Object &name, int value);
+  Builder &Set(const Name &name, int value);
+  Builder &Set(Text name, int value);
 
   // Sets slot to boolean value.
-  void Set(Handle name, bool value);
-  void Set(const Object &name, bool value);
-  void Set(const Name &name, bool value);
-  void Set(Text name, bool value);
+  Builder &Set(Handle name, bool value);
+  Builder &Set(const Object &name, bool value);
+  Builder &Set(const Name &name, bool value);
+  Builder &Set(Text name, bool value);
 
   // Sets slot to floating point value.
-  void Set(Handle name, float value);
-  void Set(const Object &name, float value);
-  void Set(const Name &name, float value);
-  void Set(Text name, float value);
+  Builder &Set(Handle name, float value);
+  Builder &Set(const Object &name, float value);
+  Builder &Set(const Name &name, float value);
+  Builder &Set(Text name, float value);
 
-  void Set(Handle name, double value);
-  void Set(const Object &name, double value);
-  void Set(const Name &name, double value);
-  void Set(Text name, double value);
+  Builder &Set(Handle name, double value);
+  Builder &Set(const Object &name, double value);
+  Builder &Set(const Name &name, double value);
+  Builder &Set(Text name, double value);
 
   // Sets slot to string value.
-  void Set(Handle name, Text value);
-  void Set(const Object &name, Text value);
-  void Set(const Name &name, Text value);
-  void Set(Text name, Text value);
+  Builder &Set(Handle name, Text value);
+  Builder &Set(const Object &name, Text value);
+  Builder &Set(const Name &name, Text value);
+  Builder &Set(Text name, Text value);
 
-  void Set(Handle name, const char *value);
-  void Set(const Object &name, const char *value);
-  void Set(const Name &name, const char *value);
-  void Set(Text name, const char *value);
+  Builder &Set(Handle name, const char *value);
+  Builder &Set(const Object &name, const char *value);
+  Builder &Set(const Name &name, const char *value);
+  Builder &Set(Text name, const char *value);
 
   // Sets slot to link to a frame. This will link to a proxy if the symbol is
   // not already defined.
-  void SetLink(Handle name, Text symbol);
-  void SetLink(const Object &name, Text symbol);
-  void SetLink(const Name &name, Text symbol);
-  void SetLink(Text name, Text symbol);
+  Builder &SetLink(Handle name, Text symbol);
+  Builder &SetLink(const Object &name, Text symbol);
+  Builder &SetLink(const Name &name, Text symbol);
+  Builder &SetLink(Text name, Text symbol);
 
   // Creates frame from the slots in the frame builder.
   Frame Create() const;
@@ -895,7 +895,7 @@ class Builder : public External {
   void Update() const;
 
   // Clears all the slots.
-  void Clear() { slots_.reset(); }
+  Builder &Clear() { slots_.reset(); return *this; }
 
   // Checks if this is a new frame, i.e. the existing handle is nil or points
   // to a proxy.
