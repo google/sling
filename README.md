@@ -25,6 +25,32 @@ A more detailed description of the SLING parser can be found in this paper:
 
 </span>
 
+## Trying out the parser
+
+If you just want to try out the parser on a pre-trained model, you can install
+the wheel with pip and download a pre-trained parser model. On a Linux machine
+with Python 2.7 you can install a pre-built wheel:
+
+```
+sudo pip install http://www.jbox.dk/sling/sling-1.0.0-cp27-none-linux_x86_64.whl
+```
+and download the pre-trained model:
+```
+wget http://www.jbox.dk/sling/sempar.flow
+```
+You can then use the parser in Python:
+```
+import sling
+
+parser = sling.Parser("sempar.flow")
+
+text = raw_input("text: ")
+doc = parser.parse(text)
+print doc.frame.data(pretty=True)
+for m in doc.mentions:
+  print "mention", doc.phrase(m.begin, m.end)
+```
+
 ## Installation
 
 First, make sure that the repository is cloned with `--recursive`, so that you
