@@ -54,6 +54,9 @@ void InitializeFileSystems() {
 // Find file system for file name. If no matching file system is found, the
 // default file system is returned.
 FileSystem *FindFileSystem(const string &filename, string *rest) {
+  // Initialize file systems if not already done.
+  if (default_file_system == nullptr) File::Init();
+
   // Match the first component in the path.
   if (!filename.empty() && filename[0] == '/') {
     int slash = filename.find('/', 1);
