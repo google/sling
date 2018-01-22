@@ -170,6 +170,7 @@ can be seen below. It is best to create one SLING document per input sentence.
   }
 }
 ```
+For writing your converter or getting a better hold of the concepts of frames and store in SLING, you can have a look at detailed deep dive on frames and stores [here](sling/frame/README.md).
 
 The SLING [Document class](sling/nlp/document/document.h)
 also has methods to incrementally make such document frames, e.g.
