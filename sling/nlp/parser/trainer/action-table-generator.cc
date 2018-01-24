@@ -14,6 +14,7 @@
 
 #include "sling/nlp/parser/trainer/action-table-generator.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "sling/base/macros.h"

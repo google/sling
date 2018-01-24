@@ -267,7 +267,13 @@ static uint64 ShiftMix(uint64 val) {
 }
 
 static uint64 HashLen16(uint64 u, uint64 v) {
-  return Hash128to64(uint128(u, v));
+  const uint64 kMul = 0x9ddfea08eb382d69ULL;
+  uint64 a = (u ^ v) * kMul;
+  a ^= (a >> 47);
+  uint64 b = (v ^ a) * kMul;
+  b ^= (b >> 47);
+  b *= kMul;
+  return b;
 }
 
 static uint64 HashLen16(uint64 u, uint64 v, uint64 mul) {

@@ -25,7 +25,6 @@
 #include "sling/nlp/document/document.h"
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"
-#include "sling/util/hash.h"
 
 namespace sling {
 namespace nlp {

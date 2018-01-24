@@ -14,6 +14,7 @@
 
 #include "sling/nlp/document/document.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 

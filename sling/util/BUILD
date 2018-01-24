@@ -10,18 +10,12 @@ cc_library(
 )
 
 cc_library(
-  name = "hash",
-  srcs = ["hash.cc"],
-  hdrs = ["hash.h"],
-  deps = [
-    "//sling/base",
-  ],
-)
-
-cc_library(
   name = "city",
   srcs = ["city.cc"],
   hdrs = ["city.h"],
+  deps = [
+    "//sling/base",
+  ],
 )
 
 cc_library(

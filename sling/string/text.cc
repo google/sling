@@ -25,15 +25,6 @@
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
 #include "sling/string/memutil.h"
-#include "sling/util/hash.h"
-
-namespace __gnu_cxx {
-
-size_t hash<sling::Text>::operator ()(sling::Text t) const {
-  return sling::HashTo32(t.data(), t.size());
-}
-
-}  // namespace __gnu_cxx
 
 namespace sling {
 

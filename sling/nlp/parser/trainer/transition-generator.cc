@@ -14,6 +14,7 @@
 
 #include "sling/nlp/parser/trainer/transition-generator.h"
 
+#include <algorithm>
 #include <unordered_set>
 
 #include "sling/base/macros.h"
