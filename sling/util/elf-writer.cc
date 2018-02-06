@@ -222,6 +222,11 @@ void Elf::Buffer::AddPtr32(Buffer *buffer, int offset) {
   Add32(0);
 }
 
+void Elf::Buffer::AddExternPtr(Elf::Symbol *symbol) {
+  AddReloc(symbol, R_X86_64_64);
+  Add64(0);
+}
+
 void Elf::Buffer::Clear64(int offset) {
   for (int n = 0; n < 8; ++n) content[offset + n] = 0;
 }

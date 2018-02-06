@@ -17,10 +17,12 @@
 namespace sling {
 
 void PyBase::InitType(PyTypeObject *type,
-                      const char *name, size_t size) {
+                      const char *name,
+                      size_t size,
+                      bool instantiable) {
   type->tp_name = name;
   type->tp_basicsize = size;
-  type->tp_new = PyType_GenericNew;
+  if (instantiable) type->tp_new = PyType_GenericNew;
   type->tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
 }
 

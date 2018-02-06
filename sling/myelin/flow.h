@@ -197,7 +197,7 @@ class Shape {
     return true;
   }
 
-  // Check if shape is missing, .e.g. some dimensions are zero.
+  // Check if shape is missing, i.e. some dimensions are zero.
   bool missing() const {
     for (int d : dims_) if (d == 0) return true;
     return false;

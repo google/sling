@@ -501,9 +501,9 @@ class Calculate : public Kernel {
   }
 
  private:
-  const string name_;       // kernel name
-  const string operation_;  // kernel operation
-  int arity_;               // number of inputs
+  string name_;       // kernel name
+  string operation_;  // kernel operation
+  int arity_;         // number of inputs
 };
 
 // Register arithmetic library.

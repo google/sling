@@ -17,7 +17,7 @@
 
 namespace sling {
 
-// Class for intializing program modules.
+// Class for initializing program modules.
 class LibraryInitializer {
  public:
   LibraryInitializer() {

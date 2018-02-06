@@ -39,7 +39,7 @@ PyMethodDef PyStore::methods[] = {
 };
 
 void PyStore::Define(PyObject *module) {
-  InitType(&type, "sling.Store", sizeof(PyStore));
+  InitType(&type, "sling.Store", sizeof(PyStore), true);
 
   type.tp_init = reinterpret_cast<initproc>(&PyStore::Init);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyStore::Dealloc);
@@ -93,6 +93,7 @@ int PyStore::Init(PyObject *args, PyObject *kwds) {
 void PyStore::Dealloc() {
   store->Release();
   if (pyglobals != nullptr) Py_DECREF(pyglobals);
+  Free();
 }
 
 PyObject *PyStore::Freeze() {
@@ -122,7 +123,9 @@ PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
     // Load store from file object.
     StdFileInputStream stream(PyFile_AsFile(file), false);
     InputParser parser(store, &stream, force_binary);
+    store->LockGC();
     Object result = parser.ReadAll();
+    store->UnlockGC();
     if (parser.error()) {
       PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
       return nullptr;
@@ -140,7 +143,9 @@ PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
     // Load frames from file.
     FileInputStream stream(f);
     InputParser parser(store, &stream, force_binary);
+    store->LockGC();
     Object result = parser.ReadAll();
+    store->UnlockGC();
     if (parser.error()) {
       PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
       return nullptr;
@@ -535,11 +540,11 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
 }
 
 void PySymbols::Define(PyObject *module) {
-  InitType(&type, "sling.Symbols", sizeof(PySymbols));
+  InitType(&type, "sling.Symbols", sizeof(PySymbols), false);
   type.tp_dealloc = reinterpret_cast<destructor>(&PySymbols::Dealloc);
   type.tp_iter = &PySymbols::Self;
   type.tp_iternext = &PySymbols::Next;
-  RegisterType(&type);
+  RegisterType(&type, module, "Symbols");
 }
 
 void PySymbols::Init(PyStore *pystore) {
@@ -553,8 +558,8 @@ void PySymbols::Init(PyStore *pystore) {
 }
 
 void PySymbols::Dealloc() {
-  // Release reference to store.
   Py_DECREF(pystore);
+  Free();
 }
 
 PyObject *PySymbols::Next() {

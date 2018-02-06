@@ -35,7 +35,7 @@ PyMethodDef PyFrame::methods[] = {
 };
 
 void PyFrame::Define(PyObject *module) {
-  InitType(&type, "sling.Frame", sizeof(PyFrame));
+  InitType(&type, "sling.Frame", sizeof(PyFrame), false);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyFrame::Dealloc);
   type.tp_getattro = &PyFrame::GetAttr;
   type.tp_setattro = &PyFrame::SetAttr;
@@ -76,6 +76,9 @@ void PyFrame::Dealloc() {
 
   // Release reference to store.
   Py_DECREF(pystore);
+
+  // Free object.
+  Free();
 }
 
 Py_ssize_t PyFrame::Size() {
@@ -352,11 +355,11 @@ bool PyFrame::CompatibleStore(PyFrame *other) {
 }
 
 void PySlots::Define(PyObject *module) {
-  InitType(&type, "sling.Slots", sizeof(PySlots));
+  InitType(&type, "sling.Slots", sizeof(PySlots), false);
   type.tp_dealloc = reinterpret_cast<destructor>(&PySlots::Dealloc);
   type.tp_iter = &PySlots::Self;
   type.tp_iternext = &PySlots::Next;
-  RegisterType(&type);
+  RegisterType(&type, module, "Slots");
 }
 
 void PySlots::Init(PyFrame *pyframe, Handle role) {
@@ -368,6 +371,7 @@ void PySlots::Init(PyFrame *pyframe, Handle role) {
 
 void PySlots::Dealloc() {
   Py_DECREF(pyframe);
+  Free();
 }
 
 PyObject *PySlots::Next() {

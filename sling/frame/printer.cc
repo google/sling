@@ -24,7 +24,9 @@
 namespace sling {
 
 void Printer::Print(const Object &object) {
-  CHECK(object.store() == nullptr || object.store() == store_);
+  CHECK(object.store() == nullptr ||
+        object.store() == store_ ||
+        object.store() == store_->globals());
   Print(object.handle());
 }
 

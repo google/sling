@@ -407,6 +407,8 @@ struct Range {
 const Word kSizeBits = 28;
 const Word kSizeMask = (1 << kSizeBits) - 1;
 const Word kTypeMask = 0xF0000000;
+const Word kObjectSizeLimit = (1 << kSizeBits);
+const Word kMapSizeLimit = kObjectSizeLimit / sizeof(Handle);
 
 // Types.
 enum Type : Word {
@@ -996,6 +998,9 @@ class Store {
 
   ProxyDatum *GetProxy(Handle h) { return Deref(h)->AsProxy(); }
   const ProxyDatum *GetProxy(Handle h) const { return Deref(h)->AsProxy(); }
+
+  // Resolve handle by following is: chain.
+  Handle Resolve(Handle handle);
 
   // Freezes the store. This will convert all handles to global handles and make
   // the store read-only.

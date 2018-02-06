@@ -62,6 +62,7 @@ class Elf {
     void Add64(uint64_t data);
     void AddPtr(Buffer *buffer, int offset);
     void AddPtr32(Buffer *buffer, int offset);
+    void AddExternPtr(Elf::Symbol *symbol);
 
     // Clear qword at offset in section buffer.
     void Clear64(int offset);

@@ -22,30 +22,30 @@ namespace sling {
 namespace nlp {
 
 uint64 Fingerprinter::Fingerprint(Text word) {
- // Normalize string.
- string normalized;
- UTF8::Normalize(word.data(), word.size(), &normalized);
+  // Normalize string.
+  string normalized;
+  UTF8::Normalize(word.data(), word.size(), &normalized);
 
- // Ignore degenerate words.
- if (normalized.empty()) return 1;
+  // Ignore degenerate words.
+  if (normalized.empty()) return 1;
 
- // Return fingerprint for normalized word.
- return Hash(normalized);
+  // Return fingerprint for normalized word.
+  return Hash(normalized);
 }
 
 uint64 Fingerprinter::Fingerprint(Text word, uint64 seed) {
- uint64 fp = Fingerprint(word);
- return fp == 1 ? seed : Mix(fp, seed);
+  uint64 fp = Fingerprint(word);
+  return fp == 1 ? seed : Mix(fp, seed);
 }
 
 uint64 Fingerprinter::Fingerprint(const std::vector<Text> &words) {
- uint64 fp = 1;
- for (const Text &word : words) {
-   uint64 word_fp = Fingerprint(word);
-   if (word_fp == 1) continue;
-   fp = Mix(word_fp, fp);
- }
- return fp;
+  uint64 fp = 1;
+  for (const Text &word : words) {
+    uint64 word_fp = Fingerprint(word);
+    if (word_fp == 1) continue;
+    fp = Mix(word_fp, fp);
+  }
+  return fp;
 }
 
 }  // namespace nlp

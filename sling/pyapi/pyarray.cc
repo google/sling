@@ -30,7 +30,7 @@ PyMethodDef PyArray::methods[] = {
 };
 
 void PyArray::Define(PyObject *module) {
-  InitType(&type, "sling.Array", sizeof(PyArray));
+  InitType(&type, "sling.Array", sizeof(PyArray), false);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyArray::Dealloc);
   type.tp_str = &PyArray::Str;
   type.tp_iter = &PyArray::Items;
@@ -61,6 +61,9 @@ void PyArray::Dealloc() {
 
   // Release reference to store.
   Py_DECREF(pystore);
+
+  // Free object.
+  Free();
 }
 
 Py_ssize_t PyArray::Size() {
@@ -163,7 +166,7 @@ bool PyArray::Writable() {
 }
 
 void PyItems::Define(PyObject *module) {
-  InitType(&type, "sling.Items", sizeof(PyItems));
+  InitType(&type, "sling.Items", sizeof(PyItems), false);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyItems::Dealloc);
   type.tp_iter = &PyItems::Self;
   type.tp_iternext = &PyItems::Next;
@@ -179,6 +182,9 @@ void PyItems::Init(PyArray *pyarray) {
 void PyItems::Dealloc() {
   // Release reference to array.
   Py_DECREF(pyarray);
+
+  // Free object.
+  Free();
 }
 
 PyObject *PyItems::Next() {

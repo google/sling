@@ -81,14 +81,17 @@ Handle Reader::ParseObject() {
 
     case NULL_TOKEN:
       handle = Handle::nil();
+      NextToken();
       break;
 
     case TRUE_TOKEN:
       handle = Handle::Bool(true);
+      NextToken();
       break;
 
     case FALSE_TOKEN:
       handle = Handle::Bool(false);
+      NextToken();
       break;
 
     case SYMBOL_TOKEN:
@@ -122,11 +125,11 @@ Handle Reader::ParseObject() {
       break;
 
     case ERROR:
-      return Handle::nil();
+      return Handle::error();
 
     default:
       SetError("syntax error");
-      return Handle::nil();
+      return Handle::error();
   }
 
   return handle;
@@ -141,63 +144,95 @@ Handle Reader::ParseFrame() {
 
   // Parse frame slots.
   int index = -1;
-  while (token() != '}') {
-    // Parse slot name.
-    switch (token()) {
-      case END:
-        SetError("unexpected end of object");
-        return Handle::nil();
+  if (!json_) {
+    // Parse frame in SLING format.
+    while (token() != '}') {
+      switch (token()) {
+        case END:
+          SetError("unexpected end of object");
+          return Handle::error();
 
-      case '=': {
-        NextToken();
-        Handle id = ParseId();
-        if (error()) return Handle::nil();
-        if (id.IsIndex()) {
-          index = id.AsIndex();
-        } else {
-          Push(Handle::id());
-          Push(id);
+        case '=': {
+          NextToken();
+          Handle id = ParseId();
+          if (error()) return Handle::error();
+          if (id.IsIndex()) {
+            index = id.AsIndex();
+          } else {
+            Push(Handle::id());
+            Push(id);
+          }
+          break;
         }
-        break;
+
+        case ':':
+          Push(Handle::isa());
+          NextToken();
+          Push(ParseObject());
+          if (error()) return Handle::error();
+          break;
+
+        case '+':
+          Push(Handle::is());
+          NextToken();
+          Push(ParseObject());
+          if (error()) return Handle::error();
+          break;
+
+        default:
+          Push(ParseObject());
+          if (error()) return Handle::error();
+          if (token() == ':') {
+            // Slot with name and value.
+            NextToken();
+            Push(ParseObject());
+            if (error()) return Handle::error();
+          } else {
+            // Slot without name.
+            Handle value = Pop();
+            Push(Handle::nil());
+            Push(value);
+          }
       }
 
-      case ':':
-        Push(Handle::isa());
-        NextToken();
-        Push(ParseObject());
-        if (error()) return Handle::nil();
-        break;
-
-      case '+':
-        Push(Handle::is());
-        NextToken();
-        Push(ParseObject());
-        if (error()) return Handle::nil();
-        break;
-
-      default:
-        if (json_ && token() == STRING_TOKEN) {
-          Push(store_->Lookup(token_text()));
-          NextToken();
-        } else {
-          Push(ParseObject());
-        }
-        if (error()) return Handle::nil();
-        if (token() == ':') {
-          // Slot with name and value.
-          NextToken();
-          Push(ParseObject());
-          if (error()) return Handle::nil();
-        } else {
-          // Slot without name.
-          Handle value = Pop();
-          Push(Handle::nil());
-          Push(value);
-        }
+      // Skip commas between slots.
+      if (token() == ',') NextToken();
     }
+  } else {
+    // Parse frame in JSON format.
+    while (token() != '}') {
+      if (token() == END) {
+        SetError("unexpected end of object");
+        return Handle::error();
+      }
 
-    // Skip commas between slots.
-    if (token() == ',') NextToken();
+      // Parse slot name.
+      Handle name;
+      if (token() == STRING_TOKEN) {
+        name = store_->Lookup(token_text());
+        NextToken();
+      } else {
+        name = ParseObject();
+        if (error()) return Handle::error();
+      }
+      if (name.IsId()) name = store_->Lookup("_id");
+      Push(name);
+
+      // Skip colon between slot name and value.
+      if (token() != ':') {
+        SetError("missing colon in object slot");
+        return Handle::error();
+      }
+      NextToken();
+
+      // Parse slot value.
+      Handle value = ParseObject();
+      if (error()) return Handle::error();
+      Push(value);
+
+      // Skip commas between slots.
+      if (token() == ',') NextToken();
+    }
   }
 
   // Skip closing bracket.
@@ -234,7 +269,7 @@ Handle Reader::ParseArray() {
   while (token() != ']') {
     // Parse next element and push it on the stack.
     Push(ParseObject());
-    if (error()) return Handle::nil();
+    if (error()) return Handle::error();
 
     // Skip commas between slots.
     if (token() == ',') NextToken();

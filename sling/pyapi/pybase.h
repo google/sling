@@ -25,9 +25,17 @@ struct PyBase : public PyVarObject {
   // Return wrapper as a python object.
   PyObject *AsObject() { return reinterpret_cast<PyObject *>(this); }
 
+  // Free object.
+  void Free() {
+    PyObject *self = AsObject();
+    Py_TYPE(self)->tp_free(self);
+  }
+
   // Initialize type information.
   static void InitType(PyTypeObject *type,
-                       const char *name, size_t size);
+                       const char *name,
+                       size_t size,
+                       bool instantiable);
 
   // Register type.
   static void RegisterType(PyTypeObject *type);

@@ -32,7 +32,7 @@ PyMethodDef PyTokenizer::methods[] = {
 };
 
 void PyTokenizer::Define(PyObject *module) {
-  InitType(&type, "sling.api.Tokenizer", sizeof(PyTokenizer));
+  InitType(&type, "sling.api.Tokenizer", sizeof(PyTokenizer), true);
 
   type.tp_init = reinterpret_cast<initproc>(&PyTokenizer::Init);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyTokenizer::Dealloc);
@@ -49,6 +49,7 @@ int PyTokenizer::Init(PyObject *args, PyObject *kwds) {
 
 void PyTokenizer::Dealloc() {
   delete tokenizer;
+  Free();
 }
 
 PyObject *PyTokenizer::Tokenize(PyObject *args) {
@@ -83,7 +84,7 @@ PyMethodDef PyParser::methods[] = {
 };
 
 void PyParser::Define(PyObject *module) {
-  InitType(&type, "sling.api.Parser", sizeof(PyParser));
+  InitType(&type, "sling.api.Parser", sizeof(PyParser), true);
 
   type.tp_init = reinterpret_cast<initproc>(&PyParser::Init);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyParser::Dealloc);
@@ -103,7 +104,7 @@ int PyParser::Init(PyObject *args, PyObject *kwds) {
   // Save reference to store to keep it alive.
   this->pystore = pystore;
   Py_INCREF(pystore);
-  
+
   // Load parser.
   parser = new nlp::Parser();
   parser->Load(pystore->store, filename);
@@ -117,6 +118,9 @@ void PyParser::Dealloc() {
 
   // Release reference to store.
   Py_DECREF(pystore);
+
+  // Free object.
+  Free();
 }
 
 PyObject *PyParser::Parse(PyObject *args) {
@@ -133,7 +137,7 @@ PyObject *PyParser::Parse(PyObject *args) {
   // Parse document.
   parser->Parse(&document);
   document.Update();
-  
+
   Py_RETURN_NONE;
 }
 

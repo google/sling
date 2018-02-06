@@ -612,8 +612,9 @@ void Store::InsertSymbol(SymbolDatum *symbol) {
   GetMap(symbols_)->insert(symbol);
   num_symbols_++;
 
-  // Resize symbol table if fill factor is more than 1:1.
-  if (num_symbols_ > num_buckets_) {
+  // Resize symbol table if fill factor is more than 1:1, unless this would
+  // make the symbol table exceed the maximum object size.
+  if (num_symbols_ > num_buckets_ && num_buckets_ < kMapSizeLimit / 2) {
     // Double the number of buckets.
     num_buckets_ *= 2;
 
@@ -856,8 +857,11 @@ Datum *Store::AllocateDatumSlow(Type type, Word size) {
   // Object allocation not allowed in frozen store.
   CHECK(!frozen_);
 
-  // This is called when the current heap is full.
+  // Check for size overflow.
   Word bytes = Align(sizeof(Datum) + size);
+  CHECK_LT(bytes, kObjectSizeLimit) << "Object too big";
+
+  // This is called when the current heap is full.
   Datum *object;
   while (current_heap_->next() != nullptr) {
     // Switch to next heap.
@@ -937,6 +941,21 @@ Handle Store::AllocateHandleSlow(Datum *object) {
   object->self = handle;
 
   return handle;
+}
+
+Handle Store::Resolve(Handle handle) {
+  for (;;) {
+    if (!handle.IsRef() || handle.IsNil()) return handle;
+    Datum *datum = Deref(handle);
+    if (!datum->IsFrame()) return handle;
+
+    FrameDatum *frame = datum->AsFrame();
+    if (frame->IsNamed()) return handle;
+
+    Handle qua = frame->get(Handle::is());
+    if (qua == Handle::nil()) return handle;
+    handle = qua;
+  }
 }
 
 void Store::Mark() {

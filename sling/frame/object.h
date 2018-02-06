@@ -467,6 +467,12 @@ class Frame : public Object {
   Handle GetHandle(const Name &name) const;
   Handle GetHandle(Text name) const;
 
+  // Resolve slot value by following is: chain.
+  Handle Resolve(Handle name) const;
+  Handle Resolve(const Object &name) const;
+  Handle Resolve(const Name &name) const;
+  Handle Resolve(Text name) const;
+
   // Checks frame type, i.e. checks if frame has an isa/is slot with the type.
   bool IsA(Handle type) const;
   bool IsA(const Name &type) const;

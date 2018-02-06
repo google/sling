@@ -40,7 +40,6 @@ cc_binary(
   deps = [
     ":pyapi",
     "//sling/base",
-    "//sling/base:libinit",
     "//sling/file:posix",
   ],
   linkshared = 1,

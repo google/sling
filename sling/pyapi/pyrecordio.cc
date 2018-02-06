@@ -40,7 +40,7 @@ PyMethodDef PyRecordReader::methods[] = {
 };
 
 void PyRecordReader::Define(PyObject *module) {
-  InitType(&type, "sling.RecordReader", sizeof(PyRecordReader));
+  InitType(&type, "sling.RecordReader", sizeof(PyRecordReader), true);
 
   type.tp_init = reinterpret_cast<initproc>(&PyRecordReader::Init);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyRecordReader::Dealloc);
@@ -70,6 +70,7 @@ int PyRecordReader::Init(PyObject *args, PyObject *kwds) {
 
 void PyRecordReader::Dealloc() {
   delete reader;
+  Free();
 }
 
 PyObject *PyRecordReader::Close() {
@@ -140,7 +141,7 @@ PyMethodDef PyRecordWriter::methods[] = {
 };
 
 void PyRecordWriter::Define(PyObject *module) {
-  InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter));
+  InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter), false);
 
   type.tp_init = reinterpret_cast<initproc>(&PyRecordWriter::Init);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyRecordWriter::Dealloc);
@@ -172,6 +173,7 @@ int PyRecordWriter::Init(PyObject *args, PyObject *kwds) {
 
 void PyRecordWriter::Dealloc() {
   delete writer;
+  Free();
 }
 
 PyObject *PyRecordWriter::Close() {

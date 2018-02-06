@@ -310,6 +310,22 @@ Handle Frame::GetHandle(Text name) const {
   return GetHandle(store()->Lookup(name));
 }
 
+Handle Frame::Resolve(Handle name) const {
+  return store()->Resolve(frame()->get(name));
+}
+
+Handle Frame::Resolve(const Object &name) const {
+  return Resolve(name.handle());
+}
+
+Handle Frame::Resolve(const Name &name) const {
+  return Resolve(name.Lookup(store_));
+}
+
+Handle Frame::Resolve(Text name) const {
+  return Resolve(store()->Lookup(name));
+}
+
 bool Frame::IsA(Handle type) const {
   for (const Slot *slot = frame()->begin(); slot < frame()->end(); ++slot) {
     if (slot->name.IsIsA() && slot->value == type) return true;

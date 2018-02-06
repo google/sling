@@ -14,6 +14,7 @@
 
 #include <python2.7/Python.h>
 
+#include "sling/base/init.h"
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/pyapi/pyparser.h"
@@ -48,6 +49,7 @@ static void RegisterPythonModule() {
 }  // namespace sling
 
 extern "C" void initpysling() {
+  sling::InitSharedLibrary();
   sling::RegisterPythonModule();
 }
 
