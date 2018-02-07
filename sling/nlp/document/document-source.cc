@@ -19,6 +19,7 @@
 #include "sling/base/logging.h"
 #include "sling/base/macros.h"
 #include "sling/file/file.h"
+#include "sling/file/recordio.h"
 #include "sling/frame/object.h"
 #include "sling/frame/serialization.h"
 #include "sling/stream/input.h"
@@ -54,7 +55,7 @@ class EncodedDocumentSource : public DocumentSource {
   int index_;
 };
 
-// Iterator implementation for zip archives..
+// Iterator implementation for zip archives.
 // Assumes that each encoded document is a separate file in the zip archive.
 class ZipDocumentSource : public DocumentSource {
  public:
@@ -96,6 +97,55 @@ class ZipDocumentSource : public DocumentSource {
   int current_;
 };
 
+// Iterator implementation for SLING recordio files.
+// Assumes that each encoded document is a separate record in the recordio file.
+class RecordIODocumentSource : public DocumentSource {
+ public:
+  RecordIODocumentSource(const string &file) {
+    reader_ = new RecordReader(file);
+    file_ = file;
+  }
+
+  ~RecordIODocumentSource() override {
+    if (reader_ != nullptr) reader_->Close();
+    delete reader_;
+  }
+
+  bool NextSerialized(string *name, string *contents) override {
+    if (reader_->Done()) return false;
+
+    Record record;
+    CHECK(reader_->Read(&record));
+
+    *name = record.key.str();
+    *contents = record.value.str();
+
+    return true;
+  }
+
+  Document *Next(Store *store, string *name) override {
+    if (reader_->Done()) return false;
+
+    Record record;
+    CHECK(reader_->Read(&record));
+    *name = record.key.str();
+
+    StringDecoder decoder(store, record.value.data(), record.value.size());
+    return new Document(decoder.Decode().AsFrame());
+  }
+
+  void Rewind() override {
+    if (reader_ != nullptr) {
+      delete reader_;
+      reader_ = new RecordReader(file_);
+    }
+  }
+
+ private:
+  RecordReader *reader_ = nullptr;
+  string file_;
+};
+
 Document *DocumentSource::Next(Store *store) {
   string name, contents;
   if (!NextSerialized(&name, &contents)) return nullptr;
@@ -125,6 +175,8 @@ DocumentSource *DocumentSource::Create(const string &file_pattern) {
   // TODO: Add more formats as needed.
   if (HasSuffix(file_pattern, ".zip")) {
     return new ZipDocumentSource(file_pattern);
+  } else if (HasSuffix(file_pattern, ".rec")) {
+    return new RecordIODocumentSource(file_pattern);
   } else {
     std::vector<string> files;
     CHECK(File::Match(file_pattern, &files));

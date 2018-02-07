@@ -66,6 +66,7 @@ cc_library(
   deps = [
     ":document",
     "//sling/base",
+    "//sling/file:recordio",
     "//sling/frame:object",
     "//sling/frame:serialization",
     "//sling/frame:store",

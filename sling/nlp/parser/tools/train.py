@@ -18,6 +18,7 @@ Although it can be called by itself, it is best invoked from train.sh.
 
 import io
 import os
+import sling
 import subprocess
 import sys
 import tensorflow as tf
@@ -62,6 +63,11 @@ def read_corpus(file_pattern):
         docs = [None] * len(zipreader.namelist())
         for index, fname in enumerate(zipreader.namelist()):
           docs[index] = zipreader.read(fname)
+  elif file_pattern.endswith(".rec"):
+    reader = sling.RecordReader(file_pattern)
+    for _, value in reader:
+      docs.append(value)
+    reader.close()
   else:
     filenames = gfile.Glob(file_pattern)
     docs = [None] * len(filenames)
@@ -73,15 +79,22 @@ def read_corpus(file_pattern):
 
 
 def write_corpus(filename, prefix, data):
-  buf = io.BytesIO()
-  with zipfile.ZipFile(buf, 'w') as z:
-    for i in xrange(len(data)):
-      entry = prefix + str(i)
-      z.writestr(entry, data[i])
-  z.close()
-
-  with gfile.GFile(filename, 'w') as f:
-    f.write(buf.getvalue())
+  if filename.endswith(".rec"):
+    writer = sling.RecordWriter(filename)
+    for index, d in enumerate(data):
+      name = prefix + str(index)
+      writer.write(name, d)
+    writer.close()
+  else:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+      for i in xrange(len(data)):
+        entry = prefix + str(i)
+        z.writestr(entry, data[i])
+    z.close()
+  
+    with gfile.GFile(filename, 'w') as f:
+      f.write(buf.getvalue())
 
 
 def evaluator(gold_docs, test_docs):
@@ -90,16 +103,16 @@ def evaluator(gold_docs, test_docs):
   folder = os.path.join(FLAGS.output_folder, "tmp_docs")
   empty_dir(folder)
 
-  gold_zip_name = os.path.join(folder, "dev.gold.zip")
-  test_zip_name = os.path.join(folder, "dev.test.zip")
-  write_corpus(gold_zip_name, "gold.", gold_docs)
-  write_corpus(test_zip_name, "test.", test_docs)
+  gold_file_name = os.path.join(folder, "dev.gold.rec")
+  test_file_name = os.path.join(folder, "dev.test.rec")
+  write_corpus(gold_file_name, "gold.", gold_docs)
+  write_corpus(test_file_name, "test.", test_docs)
 
   try:
     output = subprocess.check_output(
         ['bazel-bin/sling/nlp/parser/tools/evaluate-frames',
-         '--gold_documents=' + gold_zip_name,
-         '--test_documents=' + test_zip_name,
+         '--gold_documents=' + gold_file_name,
+         '--test_documents=' + test_file_name,
          '--commons=' + FLAGS.commons],
         stderr=subprocess.STDOUT)
   except subprocess.CalledProcessError as e:
