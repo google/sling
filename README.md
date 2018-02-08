@@ -6,6 +6,8 @@ SLING is a parser for annotating text with frame semantic annotations. It is
 trained on an annotated corpus using [Tensorflow](https://www.tensorflow.org/)
 and [Dragnn](https://github.com/tensorflow/models/blob/master/research/syntaxnet/g3doc/DRAGNN.md).
 
+This is the first generation of the SLING parser. We have started to work on the second generation of the parser, CASPAR, which can be found [here](https://github.com/google/sling/tree/caspar).
+
 The parser is a general transition-based frame semantic parser using
 bi-directional LSTMs for input encoding and a Transition Based Recurrent Unit
 (TBRU) for output decoding. It is a jointly trained model using only the text
