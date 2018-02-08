@@ -1,9 +1,4 @@
-bazel-bin
-bazel-genfiles
-bazel-sling
-bazel-google3
-bazel-out
-bazel-testlogs
+bazel-*
 examples
 local
 *.pyc
@@ -14,4 +9,3 @@ local
 *.out
 *.pdf_tex
 doc/report/sling.pdf
-
