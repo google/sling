@@ -101,21 +101,17 @@ class ZipDocumentSource : public DocumentSource {
 // Assumes that each encoded document is a separate record in the recordio file.
 class RecordIODocumentSource : public DocumentSource {
  public:
-  RecordIODocumentSource(const string &file) {
-    reader_ = new RecordReader(file);
-    file_ = file;
-  }
+  RecordIODocumentSource(const string &file) : reader_(file) {}
 
   ~RecordIODocumentSource() override {
-    if (reader_ != nullptr) reader_->Close();
-    delete reader_;
+    CHECK(reader_.Close());
   }
 
   bool NextSerialized(string *name, string *contents) override {
-    if (reader_->Done()) return false;
+    if (reader_.Done()) return false;
 
     Record record;
-    CHECK(reader_->Read(&record));
+    CHECK(reader_.Read(&record));
 
     *name = record.key.str();
     *contents = record.value.str();
@@ -124,10 +120,10 @@ class RecordIODocumentSource : public DocumentSource {
   }
 
   Document *Next(Store *store, string *name) override {
-    if (reader_->Done()) return false;
+    if (reader_.Done()) return false;
 
     Record record;
-    CHECK(reader_->Read(&record));
+    CHECK(reader_.Read(&record));
     *name = record.key.str();
 
     StringDecoder decoder(store, record.value.data(), record.value.size());
@@ -135,15 +131,11 @@ class RecordIODocumentSource : public DocumentSource {
   }
 
   void Rewind() override {
-    if (reader_ != nullptr) {
-      delete reader_;
-      reader_ = new RecordReader(file_);
-    }
+    CHECK(reader_.Rewind());
   }
 
  private:
-  RecordReader *reader_ = nullptr;
-  string file_;
+  RecordReader reader_;
 };
 
 Document *DocumentSource::Next(Store *store) {

@@ -43,6 +43,9 @@ struct PyRecordReader : public PyBase {
   // Set file position.
   PyObject *Seek(PyObject *arg);
 
+  // Seek to first record.
+  PyObject *Rewind();
+
   // Return next record as 2-tuple with key and value.
   PyObject *Next();
 

@@ -35,6 +35,7 @@ PyMethodDef PyRecordReader::methods[] = {
   {"read", (PyCFunction) &PyRecordReader::Read, METH_VARARGS, ""},
   {"tell", (PyCFunction) &PyRecordReader::Tell, METH_NOARGS, ""},
   {"seek", (PyCFunction) &PyRecordReader::Seek, METH_O, ""},
+  {"rewind", (PyCFunction) &PyRecordReader::Rewind, METH_NOARGS, ""},
 
   {nullptr}
 };
@@ -114,6 +115,12 @@ PyObject *PyRecordReader::Seek(PyObject *arg) {
 
   // Seek to position.
   if (!CheckIO(reader->Seek(pos))) return nullptr;
+  Py_RETURN_NONE;
+}
+
+PyObject *PyRecordReader::Rewind() {
+  // Seek to first record.
+  if (!CheckIO(reader->Rewind())) return nullptr;
   Py_RETURN_NONE;
 }
 

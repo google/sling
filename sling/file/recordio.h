@@ -176,6 +176,9 @@ class RecordReader : public RecordFile {
   // Seek to new position in record file.
   Status Seek(uint64 pos);
 
+  // Seek to first record in record file.
+  Status Rewind() { return Seek(info_.hdrlen); }
+
   // Skip bytes in input. The offset can be negative.
   Status Skip(int64 n);
 
