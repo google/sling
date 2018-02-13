@@ -15,6 +15,7 @@ bazel build -c opt \
   sling/pyapi:* \
   sling/stream:* \
   sling/string:* \
+  sling/task:* \
   sling/util:* \
   sling/web:* \
 

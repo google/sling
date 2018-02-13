@@ -42,6 +42,41 @@ cc_library(
 )
 
 cc_library(
+  name = "thread",
+  srcs = ["thread.cc"],
+  hdrs = [
+    "thread.h",
+  ],
+  deps = [
+    "//sling/base",
+  ],
+  copts = [
+    "-pthread",
+  ],
+)
+
+cc_library(
+  name = "threadpool",
+  srcs = ["threadpool.cc"],
+  hdrs = ["threadpool.h"],
+  deps = [
+    ":thread",
+    "//sling/base",
+  ],
+  copts = [
+    "-pthread",
+  ],
+)
+
+cc_library(
+  name = "mutex",
+  hdrs = ["mutex.h"],
+  copts = [
+    "-pthread",
+  ],
+)
+
+cc_library(
   name = "table-writer",
   srcs = ["table-writer.cc"],
   hdrs = ["table-writer.h"],
