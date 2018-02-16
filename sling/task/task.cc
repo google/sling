@@ -207,11 +207,27 @@ Binding *Task::GetInput(const string &name) {
   return nullptr;
 }
 
+const string &Task::GetInputFile(const string &name) {
+  Binding *input = GetInput(name);
+  if (input == nullptr) {
+    LOG(FATAL) << "Input " << name << " is missing for task " << ToString();
+  }
+  return input->resource()->name();
+}
+
 Binding *Task::GetOutput(const string &name) {
   for (auto *output : outputs_) {
     if (output->name() == name) return output;
   }
   return nullptr;
+}
+
+const string &Task::GetOutputFile(const string &name) {
+  Binding *output = GetOutput(name);
+  if (output == nullptr) {
+    LOG(FATAL) << "Output " << name << " is missing for task " << ToString();
+  }
+  return output->resource()->name();
 }
 
 std::vector<Binding *> Task::GetInputs(const string &name) {

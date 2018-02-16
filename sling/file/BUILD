@@ -40,3 +40,13 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "textmap",
+  srcs = ["textmap.cc"],
+  hdrs = ["textmap.h"],
+  deps = [
+    ":file",
+    "//sling/base",
+  ],
+)
+

@@ -111,7 +111,7 @@ class Resource {
     : id_(id), name_(name), shard_(), format_(format) {}
 
   int id() const { return id_; }
-  const string name() const { return name_; }
+  const string &name() const { return name_; }
   const Shard &shard() const { return shard_; }
   const Format &format() const { return format_; }
 
@@ -306,9 +306,11 @@ class Task {
 
   // Get the resource binding for singleton input. Return null if not bound.
   Binding *GetInput(const string &name);
+  const string &GetInputFile(const string &name);
 
   // Get the resource binding for singleton output. Return null if not bound.
   Binding *GetOutput(const string &name);
+  const string &GetOutputFile(const string &name);
 
   // Get resource bindings for input.
   std::vector<Binding *> GetInputs(const string &name);

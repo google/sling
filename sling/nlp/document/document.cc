@@ -29,17 +29,17 @@ namespace sling {
 namespace nlp {
 
 void Span::Evoke(const Frame &frame) {
-  mention_.Add(document_->n_evokes_, frame);
+  mention_.Add(document_->names_->n_evokes, frame);
   document_->AddMention(frame.handle(), this);
 }
 
 void Span::Evoke(Handle frame) {
-  mention_.Add(document_->n_evokes_, frame);
+  mention_.Add(document_->names_->n_evokes, frame);
   document_->AddMention(frame, this);
 }
 
 Frame Span::Evoked(Handle type) const {
-  Handle n_evokes = document_->n_evokes_.handle();
+  Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
     Frame frame(document_->store(), slot.value);
@@ -50,7 +50,7 @@ Frame Span::Evoked(Handle type) const {
 }
 
 Frame Span::Evoked(const Name &type) const {
-  Handle n_evokes = document_->n_evokes_.handle();
+  Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
     Frame frame(document_->store(), slot.value);
@@ -61,7 +61,7 @@ Frame Span::Evoked(const Name &type) const {
 }
 
 Frame Span::Evoked() const {
-  Handle n_evokes = document_->n_evokes_.handle();
+  Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name == n_evokes) {
       return Frame(document_->store(), slot.value);
@@ -72,7 +72,7 @@ Frame Span::Evoked() const {
 }
 
 bool Span::Evokes(Handle type) const {
-  Handle n_evokes = document_->n_evokes_.handle();
+  Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
     Frame frame(document_->store(), slot.value);
@@ -83,7 +83,7 @@ bool Span::Evokes(Handle type) const {
 }
 
 bool Span::Evokes(const Name &type) const {
-  Handle n_evokes = document_->n_evokes_.handle();
+  Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
     Frame frame(document_->store(), slot.value);
@@ -107,29 +107,33 @@ uint64 Span::Fingerprint() {
   return fp;
 }
 
-Document::Document(Store *store) : themes_(store) {
+Document::Document(Store *store, const DocumentNames *names)
+    : themes_(store), names_(names) {
   // Bind names.
-  CHECK(names_.Bind(store));
+  if (names_ == nullptr) names_ = new DocumentNames(store);
+  names_->AddRef();
 
   // Build empty document.
   Builder builder(store);
-  builder.AddIsA(n_document_);
+  builder.AddIsA(names_->n_document);
   top_ = builder.Create();
 }
 
-Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
+Document::Document(const Frame &top, const DocumentNames *names)
+    : top_(top), themes_(top.store()), names_(names) {
   // Bind names.
-  CHECK(names_.Bind(store()));
+  if (names_ == nullptr) names_ = new DocumentNames(top.store());
+  names_->AddRef();
 
   // Add document frame if it is missing.
   if (!top_.valid()) {
     Builder builder(store());
-    builder.AddIsA(n_document_);
+    builder.AddIsA(names_->n_document);
     top_ = builder.Create();
   }
 
   // Get tokens.
-  Array tokens = top_.Get(n_document_tokens_).AsArray();
+  Array tokens = top_.Get(names_->n_document_tokens).AsArray();
   if (tokens.valid()) {
     // Initialize tokens.
     int num_tokens = tokens.length();
@@ -138,10 +142,10 @@ Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
       // Get token information from token frame.
       Handle h = tokens.get(i);
       FrameDatum *token = store()->GetFrame(h);
-      Handle text = token->get(n_token_text_.handle());
-      Handle start = token->get(n_token_start_.handle());
-      Handle length = token->get(n_token_length_.handle());
-      Handle brk = token->get(n_token_break_.handle());
+      Handle text = token->get(names_->n_token_text.handle());
+      Handle start = token->get(names_->n_token_start.handle());
+      Handle length = token->get(names_->n_token_length.handle());
+      Handle brk = token->get(names_->n_token_break.handle());
 
       // Fill token from frame.
       Token &t = tokens_[i];
@@ -172,11 +176,11 @@ Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
   // Add themes and spans from document.
   FrameDatum *frame = store()->GetFrame(top_.handle());
   for (const Slot *slot = frame->begin(); slot < frame->end(); ++slot) {
-    if (slot->name ==  n_mention_.handle()) {
+    if (slot->name ==  names_->n_mention.handle()) {
       // Get token span.
       FrameDatum *mention = store()->GetFrame(slot->value);
-      Handle start = mention->get(n_begin_.handle());
-      Handle length = mention->get(n_length_.handle());
+      Handle start = mention->get(names_->n_begin.handle());
+      Handle length = mention->get(names_->n_length.handle());
       int begin = start.AsInt();
       int end = length.IsNil() ? begin + 1 : begin + length.AsInt();
 
@@ -185,9 +189,9 @@ Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
       CHECK(span != nullptr) << "Crossing span: " << begin << "," << end;
       span->mention_ = Frame(store(), mention->self);
       for (const Slot &s : span->mention_) {
-        if (s.name == n_evokes_) AddMention(s.value, span);
+        if (s.name == names_->n_evokes) AddMention(s.value, span);
       }
-    } else if (slot->name == n_theme_.handle()) {
+    } else if (slot->name == names_->n_theme.handle()) {
       // Add thematic frame.
       themes_.push_back(slot->value);
     }
@@ -197,13 +201,16 @@ Document::Document(const Frame &top) : top_(top), themes_(top.store()) {
 Document::~Document() {
   // Delete all spans. This also clears all references to the mention frames.
   for (auto *s : spans_) delete s;
+
+  // Release names.
+  names_->Release();
 }
 
 void Document::Update() {
   // Build document frame.
   Builder builder(top_);
-  builder.Delete(n_mention_);
-  builder.Delete(n_theme_);
+  builder.Delete(names_->n_mention);
+  builder.Delete(names_->n_theme);
 
   // Update tokens.
   if (tokens_changed_) {
@@ -212,41 +219,41 @@ void Document::Update() {
     for (int i = 0; i < tokens_.size(); ++i) {
       Token &t = tokens_[i];
       Builder token(store());
-      token.AddIsA(n_token_);
-      token.Add(n_token_index_, i);
-      token.Add(n_token_text_, t.text_);
+      token.AddIsA(names_->n_token);
+      token.Add(names_->n_token_index, i);
+      token.Add(names_->n_token_text, t.text_);
       if (t.begin_ != -1) {
-        token.Add(n_token_start_, t.begin_);
+        token.Add(names_->n_token_start, t.begin_);
         if (t.end_ != -1) {
-          token.Add(n_token_length_, t.end_ - t.begin_);
+          token.Add(names_->n_token_length, t.end_ - t.begin_);
         }
       }
       if (t.brk_ != SPACE_BREAK) {
-        token.Add(n_token_break_, t.brk_);
+        token.Add(names_->n_token_break, t.brk_);
       }
       tokens.push_back(token.Create().handle());
     }
     Array token_array(store(), tokens);
-    builder.Set(n_document_tokens_, token_array);
+    builder.Set(names_->n_document_tokens, token_array);
     tokens_changed_ = false;
   }
 
   // Update mentions.
   for (Span *span : spans_) {
     if (span->deleted()) continue;
-    builder.Add(n_mention_, span->mention_);
+    builder.Add(names_->n_mention, span->mention_);
   }
 
   // Update thematic frames.
   for (Handle theme : themes_) {
-    builder.Add(n_theme_, theme);
+    builder.Add(names_->n_theme, theme);
   }
 
   builder.Update();
 }
 
 void Document::SetText(Text text) {
-  top_.Set(n_document_text_, text);
+  top_.Set(names_->n_document_text, text);
   tokens_.clear();
   tokens_changed_ = true;
 }
@@ -280,8 +287,8 @@ Span *Document::AddSpan(int begin, int end, Handle type) {
     int length = end - begin;
     Builder phrase(store());
     phrase.AddIsA(type);
-    phrase.Add(n_begin_, begin);
-    if (length != 1) phrase.Add(n_length_, length);
+    phrase.Add(names_->n_begin, begin);
+    if (length != 1) phrase.Add(names_->n_length, length);
     span->mention_ = phrase.Create();
   } else {
     // Span already exists. Add the type to the phrase frame.
@@ -302,7 +309,7 @@ void Document::DeleteSpan(Span *span) {
 
   // Remove all evoked frames from mention table.
   for (const Slot &slot : span->mention_) {
-    if (slot.name == n_evokes_) {
+    if (slot.name == names_->n_evokes) {
       RemoveMention(slot.value, span);
     }
   }

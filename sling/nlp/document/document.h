@@ -31,6 +31,29 @@ namespace nlp {
 class Span;
 class Document;
 
+// Symbol names for documents.
+struct DocumentNames : public SharedNames {
+  DocumentNames(Store *store) { CHECK(Bind(store)); }
+
+  Name n_document{*this, "/s/document"};
+  Name n_document_text{*this, "/s/document/text"};
+  Name n_document_tokens{*this, "/s/document/tokens"};
+  Name n_mention{*this, "/s/document/mention"};
+  Name n_theme{*this, "/s/document/theme"};
+
+  Name n_token{*this, "/s/token"};
+  Name n_token_index{*this, "/s/token/index"};
+  Name n_token_start{*this, "/s/token/start"};
+  Name n_token_length{*this, "/s/token/length"};
+  Name n_token_text{*this, "/s/token/text"};
+  Name n_token_break{*this, "/s/token/break"};
+
+  Name n_phrase{*this, "/s/phrase"};
+  Name n_begin{*this, "/s/phrase/begin"};
+  Name n_length{*this, "/s/phrase/length"};
+  Name n_evokes{*this, "/s/phrase/evokes"};
+};
+
 // A token represents a range of characters in the document text. A token is a
 // word or any other kind of lexical unit like punctuation, number, etc.
 class Token {
@@ -185,10 +208,10 @@ class Span {
 class Document {
  public:
   // Create empty document.
-  explicit Document(Store *store);
+  explicit Document(Store *store, const DocumentNames *names = nullptr);
 
   // Initialize document from frame.
-  explicit Document(const Frame &top);
+  explicit Document(const Frame &top, const DocumentNames *names = nullptr);
 
   ~Document();
 
@@ -203,7 +226,7 @@ class Document {
 
   // Return the document text.
   string GetText() const {
-    return top_.GetString(n_document_text_);
+    return top_.GetString(names_->n_document_text);
   }
 
   // Set document text. This will delete all existing tokens.
@@ -223,7 +246,7 @@ class Document {
     return AddSpan(begin, end, type.Lookup(store()));
   }
   Span *AddSpan(int begin, int end) {
-    return AddSpan(begin, end, n_phrase_);
+    return AddSpan(begin, end, names_->n_phrase);
   }
 
   // Deletes span from the document.
@@ -362,25 +385,8 @@ class Document {
   // span.
   MentionMap mentions_;
 
-  // Names.
-  Names names_;
-  Name n_document_{names_, "/s/document"};
-  Name n_document_text_{names_, "/s/document/text"};
-  Name n_document_tokens_{names_, "/s/document/tokens"};
-  Name n_mention_{names_, "/s/document/mention"};
-  Name n_theme_{names_, "/s/document/theme"};
-
-  Name n_token_{names_, "/s/token"};
-  Name n_token_index_{names_, "/s/token/index"};
-  Name n_token_start_{names_, "/s/token/start"};
-  Name n_token_length_{names_, "/s/token/length"};
-  Name n_token_text_{names_, "/s/token/text"};
-  Name n_token_break_{names_, "/s/token/break"};
-
-  Name n_phrase_{names_, "/s/phrase"};
-  Name n_begin_{names_, "/s/phrase/begin"};
-  Name n_length_{names_, "/s/phrase/length"};
-  Name n_evokes_{names_, "/s/phrase/evokes"};
+  // Document symbol names.
+  const DocumentNames *names_;
 
   friend class Span;
 };
