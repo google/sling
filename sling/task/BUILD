@@ -137,6 +137,79 @@ cc_library(
 )
 
 cc_library(
+  name = "message-printer",
+  srcs = ["message-printer.cc"],
+  deps = [
+    ":task",
+    "//sling/base",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "sharder",
+  srcs = ["sharder.cc"],
+  deps = [
+    ":task",
+    "//sling/base",
+    "//sling/util:fingerprint",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "mapper",
+  srcs = ["mapper.cc"],
+  hdrs = ["mapper.h"],
+  deps = [
+    ":task",
+    "//sling/base",
+  ],
+)
+
+cc_library(
+  name = "reducer",
+  srcs = ["reducer.cc"],
+  hdrs = ["reducer.h"],
+  deps = [
+    ":task",
+    "//sling/base",
+    "//sling/util:mutex",
+  ],
+)
+
+cc_library(
+  name = "identity",
+  srcs = ["identity.cc"],
+  deps = [
+    ":task",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "sorter",
+  srcs = ["sorter.cc"],
+  deps = [
+    ":task",
+    "//sling/base",
+    "//sling/file:recordio",
+    "//sling/string:printf",
+    "//sling/util:mutex",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "null-sink",
+  srcs = ["null-sink.cc"],
+  deps = [
+    ":task",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
   name = "frames",
   srcs = ["frames.cc"],
   hdrs = ["frames.h"],
@@ -195,6 +268,22 @@ cc_library(
     ":frames",
     "//sling/base",
     "//sling/frame",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "accumulator",
+  srcs = ["accumulator.cc"],
+  hdrs = ["accumulator.h"],
+  deps = [
+    ":reducer",
+    ":task",
+    "//sling/base",
+    "//sling/string:numbers",
+    "//sling/string:text",
+    "//sling/util:fingerprint",
+    "//sling/util:mutex",
   ],
   alwayslink = 1,
 )
