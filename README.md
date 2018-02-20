@@ -74,7 +74,7 @@ sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-
 ## Building
 
 Operating system: Linux<br>
-Languages: C++, Python 2.7, assembler<br>
+Languages: C++ 11 (GCC 4), Python 2.7, assembler<br>
 CPU: Intel x64 or compatible<br>
 Build system: Bazel<br>
 
@@ -90,7 +90,6 @@ includes, try the following:
    link](sling/blob/master/third_party/tensorflow/include) to point to your Tensorflow include folder.
 *  Change [this
    dependency](https://github.com/google/sling/blob/04d6f28269bdc7d29c71d8dc24d74fe39641f589/third_party/tensorflow/BUILD#L21) to point to your Tensorflow's pywrap library.
-
 
 ## Training
 
