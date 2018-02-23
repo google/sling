@@ -233,6 +233,7 @@ class ConstantFolding : public Transformer {
               // Change variable to a constant.
               output->data = buffer;
               output->size = size;
+              output->shape = result->shape();
               output->in = true;
             }
 
