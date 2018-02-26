@@ -148,7 +148,7 @@ PyMethodDef PyRecordWriter::methods[] = {
 };
 
 void PyRecordWriter::Define(PyObject *module) {
-  InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter), false);
+  InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter), true);
 
   type.tp_init = reinterpret_cast<initproc>(&PyRecordWriter::Init);
   type.tp_dealloc = reinterpret_cast<destructor>(&PyRecordWriter::Dealloc);
