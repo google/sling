@@ -65,7 +65,7 @@ void WorkerPool::Start(int num_workers, const Worker &worker) {
   // Create worker threads.
   int first = workers_.size();
   for (int i = 0; i < num_workers; ++i) {
-    workers_.emplace_back(worker);
+    workers_.emplace_back([worker, i]() { worker(i); });
   }
 
   // Start worker threads.

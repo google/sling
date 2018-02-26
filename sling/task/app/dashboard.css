@@ -1,0 +1,51 @@
+@font-face {
+  font-family: lcd;
+  src: url(digital-7.mono.ttf);
+}
+
+.job-table {
+  width: 100%;
+  margin-top: 8px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.channel-table {
+  width: calc(100% - 8px);
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.counter-table {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.res-table {
+  padding: 4px;
+  width: 160px;
+  margin-left: 8px;
+  margin-bottom: 8px;
+  margin-top: 8px;
+  border-radius: 4px;
+  box-shadow: inset 0px 0px 24px 2px rgba(0,0,0,0.2);
+  color: #303060;
+  background: #BAC2B6;
+  font-family: arial;
+  font-weight: normal;
+  font-size: 12pt;
+  text-shadow: 1px 1px 4px rgba(150, 150, 150, 1);
+}
+
+.res-table td {
+  vertical-align: baseline;
+}
+
+.lcd {
+  font-family: lcd;
+  font-size: 20pt;
+  font-weight: normal;
+  text-align: right;
+  width: 100%;
+}
+

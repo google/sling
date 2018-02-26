@@ -4,6 +4,7 @@ bazel build -c opt \
   sling/base:* \
   sling/file:* \
   sling/frame:* \
+  sling/http:* \
   sling/myelin:* \
   sling/myelin/kernel:* \
   sling/myelin/generator:* \
@@ -18,4 +19,5 @@ bazel build -c opt \
   sling/task:* \
   sling/util:* \
   sling/web:* \
+  tools:* \
 

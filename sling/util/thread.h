@@ -80,8 +80,8 @@ class ClosureThread : public Thread {
 // A worker pool runs a closure in a set of worker threads.
 class WorkerPool {
  public:
-  // A worker is a void functional.
-  typedef std::function<void()> Worker;
+  // A worker is a functional that takes the worker index as an argument.
+  typedef std::function<void(int index)> Worker;
 
   // Start a number of threads and run the functional in each thread.
   void Start(int num_workers, const Worker &worker);

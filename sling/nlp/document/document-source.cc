@@ -120,7 +120,7 @@ class RecordIODocumentSource : public DocumentSource {
   }
 
   Document *Next(Store *store, string *name) override {
-    if (reader_.Done()) return false;
+    if (reader_.Done()) return nullptr;
 
     Record record;
     CHECK(reader_.Read(&record));

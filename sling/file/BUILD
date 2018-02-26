@@ -26,6 +26,17 @@ cc_library(
   alwayslink = 1,
 )
 
+cc_library(
+  name = "embed",
+  srcs = ["embed.cc"],
+  hdrs = ["embed.h"],
+  deps = [
+    ":file",
+    "//sling/base",
+  ],
+  alwayslink = 1,
+)
+
 # File utility libraries.
 
 cc_library(
