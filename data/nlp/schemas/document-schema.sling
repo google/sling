@@ -67,6 +67,13 @@
     source: /s/token
     target: int
   }
+  
+  role: {=/s/token/text :slot
+    name: "text"
+    description: "Token text"
+    source: /s/token
+    target: string
+  }
 }
 
 ; Phrase schema.
