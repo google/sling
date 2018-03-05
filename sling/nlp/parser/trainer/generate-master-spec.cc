@@ -369,12 +369,14 @@ void OutputMasterSpec(Artifacts *artifacts) {
   int roles = artifacts->resources.roles.size();
   int fr = roles * kRoleFrameLimit;
   int f2 = kRoleFrameLimit * kRoleFrameLimit;
-  AddFixedFeature(ff, "in-roles", "in-roles", arg, 16, fr, kMaxRoleIds);
-  AddFixedFeature(ff, "out-roles", "out-roles", arg, 16, fr, kMaxRoleIds);
-  AddFixedFeature(
-      ff, "labeled-roles", "labeled-roles", arg, 16, f2 * roles, kMaxRoleIds);
-  AddFixedFeature(
-      ff, "unlabeled-roles", "unlabeled-roles", arg, 16, f2, kMaxRoleIds);
+  if (fr > 0) {
+    AddFixedFeature(ff, "in-roles", "in-roles", arg, 16, fr, kMaxRoleIds);
+    AddFixedFeature(ff, "out-roles", "out-roles", arg, 16, fr, kMaxRoleIds);
+    AddFixedFeature(
+        ff, "labeled-roles", "labeled-roles", arg, 16, f2 * roles, kMaxRoleIds);
+    AddFixedFeature(
+        ff, "unlabeled-roles", "unlabeled-roles", arg, 16, f2, kMaxRoleIds);
+  }
 
   AddLinkedFeature(ff, "frame-creation-steps", "frame-creation", 5, 64, "ff");
   AddLinkedFeature(ff, "frame-focus-steps", "frame-focus", 5, 64, "ff");
