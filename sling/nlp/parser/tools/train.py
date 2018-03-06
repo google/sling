@@ -54,6 +54,7 @@ flags.DEFINE_integer('report_every', 500, 'Checkpoint interval')
 flags.DEFINE_integer('batch_size', 8, 'Training batch size')
 flags.DEFINE_string('flow', '', 'Myelin flow file for model output')
 
+
 def read_corpus(file_pattern):
   docs = []
   if file_pattern.endswith(".zip"):
@@ -235,5 +236,4 @@ def main(unused_argv):
 
 
 if __name__ == '__main__':
-  FLAGS.alsologtostderr = True
   tf.app.run()
