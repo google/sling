@@ -28,7 +28,7 @@ namespace task {
 // Input to reducer with a key and all messages with that key.
 class ReduceInput {
  public:
-  ReduceInput(int shard, Slice key, const std::vector<Message *> &messages)
+  ReduceInput(int shard, Slice key, std::vector<Message *> &messages)
       : shard_(shard), key_(key), messages_(messages) {}
 
   // Shard number for messages.
@@ -40,10 +40,17 @@ class ReduceInput {
   // Messages for key.
   const std::vector<Message *> &messages() const { return messages_; }
 
+  // Release message from shard.
+  Message *release(int index) const {
+    Message *message = messages_[index];
+    messages_[index] = nullptr;
+    return message;
+  }
+
  private:
   int shard_;
   Slice key_;
-  const std::vector<Message *> &messages_;
+  std::vector<Message *> &messages_;
 };
 
 // A reducer groups all consecutive messages with the same key together and
