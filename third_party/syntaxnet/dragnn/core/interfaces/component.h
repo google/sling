@@ -16,6 +16,7 @@
 #ifndef SYNTAXNET_DRAGNN_CORE_INTERFACES_COMPONENT_H_
 #define SYNTAXNET_DRAGNN_CORE_INTERFACES_COMPONENT_H_
 
+#include <functional>
 #include <vector>
 
 #include "dragnn/core/input_batch_cache.h"

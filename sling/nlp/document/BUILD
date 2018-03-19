@@ -34,6 +34,18 @@ cc_library(
 )
 
 cc_library(
+  name = "tokens",
+  srcs = ["tokens.cc"],
+  hdrs = ["tokens.h"],
+  deps = [
+    ":text-tokenizer",
+    "//sling/base",
+    "//sling/frame:object",
+    "//sling/frame:store",
+  ],
+)
+
+cc_library(
   name = "fingerprinter",
   srcs = ["fingerprinter.cc"],
   hdrs = ["fingerprinter.h"],
