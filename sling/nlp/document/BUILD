@@ -58,6 +58,18 @@ cc_library(
 )
 
 cc_library(
+  name = "phrase-tokenizer",
+  srcs = ["phrase-tokenizer.cc"],
+  hdrs = ["phrase-tokenizer.h"],
+  deps = [
+    ":fingerprinter",
+    ":text-tokenizer",
+    "//sling/base",
+    "//sling/string:text",
+  ],
+)
+
+cc_library(
   name = "document-tokenizer",
   srcs = ["document-tokenizer.cc"],
   hdrs = ["document-tokenizer.h"],

@@ -61,3 +61,13 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "repository",
+  srcs = ["repository.cc"],
+  hdrs = ["repository.h"],
+  deps = [
+    ":file",
+    "//sling/base",
+  ],
+)
+
