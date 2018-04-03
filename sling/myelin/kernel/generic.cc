@@ -234,6 +234,47 @@ class FlattenConcatTransformer : public Transformer {
   }
 };
 
+// Normalizes "Gather" operations:
+// 1. Replaces "GatherV2" with "Gather".
+// 2. Removes the "axis" input when it is zero.
+class GatherTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    bool transformed = false;
+
+    // First, normalize the operation type.
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type != "GatherV2") continue;
+      op->type = "Gather";
+      transformed = true;
+    }
+
+    // Next, remove the "axis" input when it is zero.
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type != "Gather") continue;  // types were normalized above
+
+      // When present, the axis is the third argument.
+      if (op->indegree() != 3) continue;
+      Flow::Variable *axis = op->inputs.back();
+
+      // The axis must be constant and zero.
+      int32 axis32 = -1;
+      if (!axis->GetData(&axis32)) continue;
+      if (axis32 != 0) continue;
+
+      // The axis will be pruned, so it should have no other dependencies.
+      if (axis->consumers.size() != 1) continue;
+      if (axis->producer != nullptr) continue;
+
+      op->RemoveInput(axis);
+      flow->DeleteVariable(axis);
+      transformed = true;
+    }
+
+    return transformed;
+  }
+};
+
 // Type inference for standard ops.
 class StandardTyper : public Typer {
  public:
@@ -403,6 +444,7 @@ void RegisterGenericLibrary(Library *library) {
   library->RegisterTransformer(new IdentityTransformer());
   library->RegisterTransformer(new CombineTransformer());
   library->RegisterTransformer(new FlattenConcatTransformer());
+  library->RegisterTransformer(new GatherTransformer());
 
   // Register type inference.
   library->RegisterTyper(new StandardTyper());
