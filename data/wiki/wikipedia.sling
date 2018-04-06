@@ -1,0 +1,88 @@
+; Wikipedia schemas.
+
+{=/wp/page +/s/document :schema
+  name: "Wikipedia page"
+  family: /schema/wikipedia
+
+  role: {=/wp/page/pageid :slot
+    name: "page id"
+    description: "Wikipedia page id"
+    source: /wp/page
+    target: int
+  }
+
+  role: {=/wp/page/title :slot
+    name: "page title"
+    description: "Wikipedia page title"
+    source: /wp/page
+    target: string
+  }
+
+  role: {=/wp/page/text :slot
+    name: "wiki text"
+    description: "Wikipedia page text in wiki markup format"
+    source: /wp/page
+    target: string
+  }
+
+  role: {=/wp/page/item :slot
+    name: "Wikidata item"
+    description: "Wikidata item"
+    source: /wp/page
+    target: /w/item
+  }
+
+  role: {=/wp/page/category :slot
+    name: "category"
+    description: "Wikipedia category"
+    source: /wp/page
+    target: /wp/category
+    multi: 1
+  }
+}
+
+{=/wp/redirect :schema
+  name: "Wikipedia redirect"
+  family: /schema/wikipedia
+
+  role: {=/wp/redirect/pageid :slot
+    name: "page id"
+    description: "Wikipedia page id"
+    source: /wp/redirect
+    target: int
+  }
+
+  role: {=/wp/redirect/title :slot
+    name: "redirect title"
+    description: "Wikipedia redirect page title"
+    source: /wp/redirect
+    target: string
+  }
+
+  role: {=/wp/redirect/link :slot
+    name: "redirect link"
+    description: "Wikipedia redirect link"
+    source: /wp/redirect
+    target: /wp/page
+  }
+}
+
+{=/wp/link :schema
+  name: "Wikipedia link"
+  family: /schema/wikipedia
+}
+
+{=/wp/category :schema
+  name: "Wikipedia category"
+  family: /schema/wikipedia
+}
+
+{=/schema/wikipedia :schema_family
+  name: "Wikipedia schemas"
+
+  member_schema: /wp/page
+  member_schema: /wp/redirect
+  member_schema: /wp/link
+  member_schema: /wp/category
+}
+

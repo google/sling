@@ -1,0 +1,240 @@
+; Schema for WordNet
+
+{=/wn/synset :schema +knowledge
+  name: "Synset"
+  family: /schema/wordnet
+
+  role: {=/wn/synset/pos :slot
+    name: "POS"
+    source: /wn/synset
+    target: part_of_speech
+  }
+
+  role: {=/wn/synset/gloss :slot
+    name: "gloss"
+    source: /wn/synset
+    target: string
+  }
+
+  role: {=/wn/synset/sense :slot
+    name: "sense"
+    source: /wn/synset
+    target: /wn/sense
+    multi: 1
+  }
+
+  role: {=/wn/synset/hypernym :slot
+    name: "hypernym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/hyponym :slot
+    name: "hyponym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/instance_hypernym :slot
+    name: "instance hypernym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/instance_hyponym :slot
+    name: "instance hyponym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/member_holonym :slot
+    name: "member holonym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/substance_holonym :slot
+    name: "substance holonym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/part_holonym :slot
+    name: "part holonym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/member_meronym :slot
+    name: "member meronym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/substance_meronym :slot
+    name: "substance meronym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/part_meronym :slot
+    name: "part meronym"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/topic_domain :slot
+    name: "topic domain"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/region_domain :slot
+    name: "region domain"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/usage_domain :slot
+    name: "usage domain"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/attribute :slot
+    name: "attribute"
+    source: /wn/synset
+    target: /wn/synset
+  }
+
+  role: {=/wn/synset/entailment :slot
+    name: "entailment"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/cause :slot
+    name: "cause"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/see_also :slot
+    name: "see also"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/verb_group :slot
+    name: "verb group"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+
+  role: {=/wn/synset/similar_to :slot
+    name: "similar to"
+    source: /wn/synset
+    target: /wn/synset
+    multi: 1
+  }
+}
+
+{=/wn/sense :schema +knowledge
+  name: "Sense"
+  family: /schema/wordnet
+
+  role: {=/wn/sense/pos :slot
+    name: "POS"
+    source: /wn/sense
+    target: part_of_speech
+  }
+
+  role: {=/wn/sense/lemma :slot
+    name: "lemma"
+    source: /wn/sense
+    target: string
+  }
+
+  role: {=/wn/sense/number :slot
+    name: "sense number"
+    source: /wn/sense
+    target: int
+  }
+
+  role: {=/wn/sense/key :slot
+    name: "sense key"
+    source: /wn/sense
+    target: string
+  }
+
+  role: {=/wn/sense/synset :slot
+    name: "synset"
+    source: /wn/sense
+    target: /wn/synset
+  }
+
+  role: {=/wn/sense/antonym :slot
+    name: "antonym"
+    source: /wn/sense
+    target: /wn/sense
+    multi: 1
+  }
+
+  role: {=/wn/sense/pertainym :slot
+    name: "pertainym"
+    source: /wn/sense
+    target: /wn/sense
+    multi: 1
+  }
+
+  role: {=/wn/sense/derivationally_related_form :slot
+    name: "derivationally related form"
+    source: /wn/sense
+    target: /wn/sense
+    multi: 1
+  }
+}
+
+{=/wn/lemma :schema
+  name: "Lemma"
+  family: /schema/wordnet
+
+  role: {=/wn/lemma/word :slot
+    name: "word"
+    source: /wn/lemma
+    target: string
+  }
+
+  role: {=/wn/lemma/sense :slot
+    name: "sense"
+    source: /wn/lemma
+    target: /wn/sense
+    multi: 1
+  }
+}
+
+{=/schema/wordnet :schema_family
+  name: "WordNet schemas"
+  precompute_rolemaps: 1
+
+  member_schema: /wn/synset
+  member_schema: /wn/sense
+  member_schema: /wn/lemma
+}

@@ -10,5 +10,8 @@
   catalog_schema_family: /schema/vn_meta
   catalog_schema_family: /schema/verbnet
   catalog_schema_family: /schema/saft
+  catalog_schema_family: /schema/lang
+  catalog_schema_family: /schema/wikidata
+  catalog_schema_family: /schema/wikipedia
 }
 

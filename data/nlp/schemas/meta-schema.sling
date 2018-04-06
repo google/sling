@@ -20,6 +20,24 @@
     source: named
     target: knowledge
   }
+  role: {=lang :slot
+    name: "language"
+    source: named
+    target: language
+  }
+}
+
+; Schema for language.
+{=language +named :schema
+  name: "Language"
+  family: /schema/meta
+
+  role: {=code :slot
+    name: "code"
+    description: "Language code"
+    source: language
+    target: string
+  }
 }
 
 ; Schema definition for schema.
@@ -257,6 +275,7 @@
   precompute_ancestors: 1
 
   member_schema: named
+  member_schema: language
   member_schema: schema
   member_schema: string
   member_schema: number

@@ -15,6 +15,16 @@ cc_library(
 )
 
 cc_library(
+  name = "http-stream",
+  srcs = ["http-stream.cc"],
+  hdrs = ["http-stream.h"],
+  deps = [
+    ":http-server",
+    "//sling/stream",
+  ],
+)
+
+cc_library(
   name = "static-content",
   srcs = ["static-content.cc"],
   hdrs = ["static-content.h"],
@@ -22,6 +32,25 @@ cc_library(
     ":http-server",
     "//sling/base",
     "//sling/file",
+  ],
+)
+
+cc_library(
+  name = "web-service",
+  srcs = ["web-service.cc"],
+  hdrs = ["web-service.h"],
+  deps = [
+    ":http-server",
+    ":http-stream",
+    "//sling/base",
+    "//sling/frame:decoder",
+    "//sling/frame:encoder",
+    "//sling/frame:json",
+    "//sling/frame:printer",
+    "//sling/frame:object",
+    "//sling/frame:reader",
+    "//sling/frame:store",
+    "//sling/string:text",
   ],
 )
 

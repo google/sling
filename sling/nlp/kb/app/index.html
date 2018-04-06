@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SLING Knowledge base</title>
+  <base href="/kb/">
+  <link rel="shortcut icon" href="appicon.ico" type="image/x-icon" />
+
+  <!-- AngularJS libraries -->
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular-animate.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular-route.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular-aria.min.js"></script>
+
+  <!-- Angular Material library -->
+  <script src="http://ajax.googleapis.com/ajax/libs/angular_material/1.1.1/angular-material.min.js"></script>
+
+  <!-- Angular Material style sheet -->
+  <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/angular_material/1.1.1/angular-material.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic">
+
+  <!-- Knowledge base browser style sheet -->
+  <link rel="stylesheet" href="kb.css">
+</head>
+
+<body ng-app="KnowledgeBaseApp" ng-controller="KnowledgeBaseCtrl" ng-cloak>
+  <div layout="column" layout-fill>
+    <!-- Side nav -->
+    <md-sidenav class="md-sidenav-left md-whiteframe-z2" md-component-id="left">
+      <md-toolbar layout="row">
+        <div class="md-toolbar-tools">
+          <h2><span>Apps</span></h2>
+          <span flex></span>
+          <md-button class="md-icon-button" ng-click="closeSideNavPanel()">
+            <md-tooltip>Close</md-tooltip>
+            <i class="material-icons">close</i>
+          </md-button>
+         </div>
+      </md-toolbar>
+
+      <md-content layout-padding="">
+        <md-menu-item ng-repeat="appl in applications">
+          <md-button ng-click="switchTo(appl)">
+            <md-icon class="md-default-theme" class="material-icons">{{appl.icon}}</md-icon>
+            {{appl.title}}
+          </md-button>
+        </md-menu-item>
+      </md-content>
+    </md-sidenav>
+
+    <!-- Toolbar -->
+    <md-toolbar md-whiteframe="3">
+      <div class="md-toolbar-tools" layout="row" layout-align="start center">
+        <!-- Side nav button -->
+        <md-button id="menubtn" class="md-icon-button" ng-click="openSideNavPanel()">
+          <i class="material-icons">menu</i>
+        </md-button>
+
+        <!-- Title -->
+        <h2><span>{{active.title}}</span></h2>
+
+        <!-- Spacer -->
+        <span flex></span>
+
+        <!-- Search form -->
+        <md-button class="md-icon-button">
+          <i class="material-icons">search</i>
+        </md-button>
+        <form class="search" ng-controller="SearchCtrl as ctrl">
+          <md-autocomplete
+              md-selected-item="ctrl.selected"
+              md-search-text="ctrl.query"
+              md-selected-item-change="ctrl.selectedItemChange(item)"
+              md-items="item in ctrl.querySearch(ctrl.query)"
+              md-item-text="item.text"
+              md-menu-class="match"
+              md-min-length="2"
+              md-clear-button="true"
+              placeholder="Search knowledge base">
+            <md-item-template>
+              <span class="item-title">{{item.text}}</span>
+              <span class="item-description">{{item.description}}</span>
+            </md-item-template>
+            <md-not-found>
+              <em>No matches found</em>
+            </md-not-found>
+          </md-autocomplete>
+        </form>
+
+        <!-- Menu -->
+        <md-button class="md-icon-button">
+          <i class="material-icons">more_vert</i>
+        </md-button>
+      </div>
+    </md-toolbar>
+
+    <!-- Content -->
+    <md-content id="main" class="md-padding" ng-controller="ItemCtrl as ctrl" flex>
+      <div layout="row">
+        <div layout="column" flex="70">
+
+          <!-- Item card -->
+          <div class="card" ng-show="hasItem()">
+            <div class="card-toolbar" layout="row" layout-align="start center">
+              <span class="md-headline" layout-align="start center">
+                {{item.text}}
+              </span>
+              <span class="extref">
+                  (<a ng-href="https://www.wikidata.org/wiki/{{item.ref}}">{{item.ref}}</a>)
+              </span>
+              <span flex></span>
+              <md-button class="md-icon-button">
+                <a ng-href="https://www.wikidata.org/wiki/Special:EntityData/{{item.ref}}.json">
+                  <i class="material-icons">library_books</i>
+                </a>
+              </md-button>
+              <md-button class="md-icon-button">
+                <a ng-href="/kb/item?fmt=json&id={{item.ref}}">
+                  <i class="material-icons">code</i>
+                </a>
+              </md-button>
+              <md-button class="md-icon-button">
+                <a ng-href="/kb/frame?fmt=txt&id={{item.ref}}">
+                  <i class="material-icons">input</i>
+                </a>
+              </md-button>
+            </div>
+
+            <div class="description">{{item.description}}</div>
+          </div>
+
+          <!-- Item properties card -->
+          <div class="card" ng-show="hasProperties()">
+            <div class="card-toolbar" layout="row" layout-align="start center">
+              <span class="md-headline">Properties</span>
+              <span flex></span>
+              <md-button class="md-icon-button">
+                <i class="material-icons">expand_less</i>
+              </md-button>
+            </div>
+
+            <table class="prop-tab">
+              <tr class="prop-row" ng-repeat="p in item.properties">
+                <!-- Property name -->
+                <td class="prop-name">
+                  <a ng-href="{{itemUrl(p.ref)}}">{{p.property}}</a>
+                </td>
+
+                <!-- Property values -->
+                <td class="prop-values">
+                  <div class="prop-value" ng-repeat="v in p.values">
+                    <a ng-href="{{itemUrl(v.ref, v.url)}}">{{v.text}}</a>
+
+                    <!-- Property qualifiers -->
+                    <table class="qual-tab" ngshow="v.qualifiers">
+                      <tr class="qual-row" ng-repeat="qp in v.qualifiers">
+                        <td class="qprop-name">
+                          <a ng-href="{{itemUrl(qp.ref)}}">{{qp.property}}</a>
+                        </td>
+                        <td class="qprop-values">
+                          <div class="qprop-value" ng-repeat="qv in qp.values">
+                            <a ng-href="{{itemUrl(qv.ref, qv.url)}}">
+                              {{qv.text}}
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+        </div>
+        <div layout="column" layout-align="start stretch" flex="30">
+
+          <!-- Item image card -->
+          <div class="card" ng-show="hasImage()">
+            <div class="card-toolbar" layout="row" layout-align="start center">
+              <span class="md-headline">Image</span>
+              <span flex></span>
+              <md-button class="md-icon-button">
+                <i class="material-icons">expand_less</i>
+              </md-button>
+            </div>
+
+            <a ng-href="{{image_url}}" flex>
+              <img class="image" ng-src="{{image}}" alt="No image" width="300">
+            </a>
+          </div>
+
+          <!-- Item references card -->
+          <div class="card" ng-show="hasReferences()">
+            <div class="card-toolbar" layout="row" layout-align="start center">
+              <span class="md-headline">References</span>
+              <span flex></span>
+              <md-button class="md-icon-button">
+                <i class="material-icons">expand_less</i>
+              </md-button>
+            </div>
+
+            <table class="xref-tab">
+              <tr class="xref-row" ng-repeat="x in item.xrefs">
+                <td class="xref-name">
+                  <a ng-href="{{itemUrl(x.ref)}}">{{x.property}}</a>
+                </td>
+                <td class="xref-values">
+                  <div class="xref-value" ng-repeat="v in x.values">
+                    <a ng-href="{{v.url}}">{{v.text}}</a>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </div>
+        </div>
+    </md-content>
+  </div>
+
+  <!-- Knowledge base browser components -->
+  <script src="kb.js"></script>
+
+</body>
+</html>
+

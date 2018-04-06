@@ -1,0 +1,167 @@
+.background {
+  background-color: #eeeeee;
+}
+
+.card {
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.16), 0 2px 4px rgba(0,0,0,0.23);
+  padding: 10px 10px 10px 10px;
+  margin: 5px 5px 5px 5px;
+}
+
+.card-toolbar {
+  margin-top: 3px;
+  margin-bottom: 8px;
+}
+
+.image {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.description {
+  font-size: 11pt;
+  margin-bottom: 8px;
+}
+
+.search {
+  width: 400px;
+  margin: 0 !important;
+}
+
+.match li {
+  border-bottom: 1px dotted #ccc;
+  height: auto;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  white-space: normal;
+}
+
+.item-title {
+  font-weight: bold;
+  display: block;
+  line-height: 1.4;
+}
+
+.item-description {
+  display: block;
+  line-height: 1.4;
+}
+
+.extref {
+  font-size: 12pt;
+  color: #888888;
+  margin-left: 5px;
+}
+
+.extref a {
+  color: #888888;
+  text-decoration: none;
+}
+
+.prop-tab {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.prop-row {
+  border-top: 1px solid lightgrey;
+}
+
+.prop-name {
+  font-weight: bold;
+  width: 20%;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.prop-name a {
+  color: #0b0080;
+  text-decoration: none;
+  cursor: hand;
+}
+
+.prop-values {
+  vertical-align: top;
+}
+
+.prop-value {
+  padding: 8px;
+  cursor: hand;
+}
+
+.prop-value a {
+  color: #0b0080;
+  text-decoration: none;
+}
+
+.qual-tab {
+  border-collapse: collapse;
+}
+
+.qual-row {
+}
+
+.qprop-name {
+  font-size: 10pt;
+  vertical-align: top;
+  padding-left: 30px;
+  width: 150px;
+}
+
+.qprop-name a {
+  color: #0b0080;
+  text-decoration: none;
+  cursor: hand;
+}
+
+.qprop-values {
+  vertical-align: top;
+}
+
+.qprop-value {
+  font-size: 10pt;
+  vertical-align: top;
+}
+
+.xref-tab {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.xref-row {
+  border-top: 1px solid lightgrey;
+}
+
+.xref-name {
+  font-size: 10pt;
+  width: 40%;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.xref-name a {
+  color: #0b0080;
+  text-decoration: none;
+  cursor: hand;
+}
+
+.xref-values {
+  max-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xref-value {
+  font-size: 10pt;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.xref-value a {
+  color: #0b0080;
+  text-decoration: none;
+}
+

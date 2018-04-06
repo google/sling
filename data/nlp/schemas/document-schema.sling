@@ -1,7 +1,7 @@
 ; SLING document schema definitions.
 
 ; Document schema.
-{=/s/document :schema
+{=/s/document +named :schema
   name: "Document"
   family: /schema/document
 
@@ -183,8 +183,8 @@
   family: /schema/document
   simple: 1
 
-  value: {=/s/male :/s/gender name: "Male"  qua: /m/05zppz}
-  value: {=/s/female :/s/gender name: "Female" qua: /m/02zsn}
+  value: {=/s/male :/s/gender name: "Male"  qua: Q6581097}
+  value: {=/s/female :/s/gender name: "Female" qua: Q6581072}
 }
 
 {=/s/title +/s/concept :schema
@@ -344,6 +344,33 @@
     description: "Name disambiguation"
     source: /s/profile
     target: string
+  }
+
+  role: {=/s/profile/alias :slot
+    name: "alias"
+    description: "Entity name"
+    source: /s/profile
+    target: /s/alias
+    multi: 1
+  }
+}
+
+{=/s/alias +named :schema
+  name: "Alias"
+  family: /schema/document
+
+  role: {=/s/alias/sources :slot
+    name: "Alias sources"
+    description: "Bitmask for sources of alias"
+    source: /s/profile
+    target: int
+  }
+
+  role: {=/s/alias/count :slot
+    name: "Alias count"
+    description: "Number of alias occurences"
+    source: /s/profile
+    target: int
   }
 }
 
@@ -620,6 +647,7 @@
   member_schema: /s/patronym
 
   member_schema: /s/profile
+  member_schema: /s/alias
 
   member_schema: /s/measure/type
   member_schema: /s/measure

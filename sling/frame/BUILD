@@ -111,6 +111,19 @@ cc_library(
 )
 
 cc_library(
+  name = "json",
+  srcs = ["json.cc"],
+  hdrs = ["json.h"],
+  deps = [
+    ":object",
+    ":store",
+    "//sling/base",
+    "//sling/stream:output",
+    "//sling/string:numbers",
+  ],
+)
+
+cc_library(
   name = "serialization",
   srcs = ["serialization.cc"],
   hdrs = ["serialization.h"],
@@ -121,6 +134,7 @@ cc_library(
     ":printer",
     ":reader",
     ":store",
+    ":wire",
     "//sling/base",
     "//sling/file",
     "//sling/stream",

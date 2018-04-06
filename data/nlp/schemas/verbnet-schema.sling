@@ -1,0 +1,143 @@
+; VerbNet schema definitions.
+
+; Base VerbNet schema.
+{=/vn/class :schema
+  name: "VerbNet class"
+  family: /schema/vn_meta
+
+  role: {=/vn/class/agent :slot name: "Agent" source: /vn/class abstract: 1}
+  role: {=/vn/class/asset :slot name: "Asset" source: /vn/class abstract: 1}
+  role: {=/vn/class/attribute :slot name: "Attribute" source: /vn/class abstract: 1}
+  role: {=/vn/class/beneficiary :slot name: "Beneficiary" source: /vn/class abstract: 1}
+  role: {=/vn/class/cause :slot name: "Cause" source: /vn/class abstract: 1}
+  role: {=/vn/class/co-agent :slot name: "Co-Agent" source: /vn/class abstract: 1}
+  role: {=/vn/class/co-patient :slot name: "Co-Patient" source: /vn/class abstract: 1}
+  role: {=/vn/class/co-theme :slot name: "Co-Theme" source: /vn/class abstract: 1}
+  role: {=/vn/class/destination :slot name: "Destination" source: /vn/class abstract: 1}
+  role: {=/vn/class/experiencer :slot name: "Experiencer" source: /vn/class abstract: 1}
+  role: {=/vn/class/extent :slot name: "Extent" source: /vn/class abstract: 1}
+  role: {=/vn/class/initial_location :slot name: "Initial Location" source: /vn/class abstract: 1}
+  role: {=/vn/class/instrument :slot name: "Instrument" source: /vn/class abstract: 1}
+  role: {=/vn/class/location :slot name: "Location" source: /vn/class abstract: 1}
+  role: {=/vn/class/material :slot name: "Material" source: /vn/class abstract: 1}
+  role: {=/vn/class/patient :slot name: "Patient" source: /vn/class abstract: 1}
+  role: {=/vn/class/pivot :slot name: "Pivot" source: /vn/class abstract: 1}
+  role: {=/vn/class/predicate :slot name: "Predicate" source: /vn/class abstract: 1}
+  role: {=/vn/class/product :slot name: "Product" source: /vn/class abstract: 1}
+  role: {=/vn/class/recipient :slot name: "Recipient" source: /vn/class abstract: 1}
+  role: {=/vn/class/reflexive :slot name: "Reflexive" source: /vn/class abstract: 1}
+  role: {=/vn/class/result :slot name: "Result" source: /vn/class abstract: 1}
+  role: {=/vn/class/source :slot name: "Source" source: /vn/class abstract: 1}
+  role: {=/vn/class/stimulus :slot name: "Stimulus" source: /vn/class abstract: 1}
+  role: {=/vn/class/theme :slot name: "Theme" source: /vn/class abstract: 1}
+  role: {=/vn/class/time :slot name: "Time" source: /vn/class abstract: 1}
+  role: {=/vn/class/topic :slot name: "Topic" source: /vn/class abstract: 1}
+  role: {=/vn/class/trajectory :slot name: "Trajectory" source: /vn/class abstract: 1}
+  role: {=/vn/class/value :slot name: "Value" source: /vn/class abstract: 1}
+}
+
+; VerbNet selectional restrictions. Indentation reflects the type hierarchy.
+{=/vn/entity :schema name: "Entity" family: /schema/vn_meta}
+  {=/vn/concrete +/vn/entity name: "Concrete entity" family: /schema/vn_meta}
+    {=/vn/int_control +/vn/concrete name: "Internal control" family: /schema/vn_meta}
+      {=/vn/force +/vn/int_control name: "Force" family: /schema/vn_meta}
+      {=/vn/machine +/vn/int_control name: "Machine" family: /schema/vn_meta}
+        {=/vn/vehicle +/vn/machine name: "Vehicle" family: /schema/vn_meta}
+    {=/vn/natural +/vn/concrete name: "Natural entity" family: /schema/vn_meta}
+      {=/vn/animate +/vn/natural name: "Animate entity" family: /schema/vn_meta}
+        {=/vn/human +/vn/animate name: "Human" family: /schema/vn_meta}
+        {=/vn/animal +/vn/animate name: "Animal" family: /schema/vn_meta}
+        {=/vn/body_part +/vn/animate name: "Body part" family: /schema/vn_meta}
+      {=/vn/plant +/vn/natural name: "Plant" family: /schema/vn_meta}
+    {=/vn/phys_obj +/vn/concrete name: "Physical object" family: /schema/vn_meta}
+      {=/vn/comestible +/vn/phys_obj name: "Comestible object" family: /schema/vn_meta}
+      {=/vn/artifact +/vn/phys_obj name: "Artifact" family: /schema/vn_meta}
+        {=/vn/machine +/vn/artifact name: "Machine" family: /schema/vn_meta}
+        {=/vn/garment +/vn/artifact name: "Garment" family: /schema/vn_meta}
+        {=/vn/tool +/vn/artifact name: "Tool" family: /schema/vn_meta}
+    {=/vn/solid +/vn/concrete name: "Solid object" family: /schema/vn_meta}
+      {=/vn/rigid +/vn/solid name: "Rigid object" family: /schema/vn_meta}
+      {=/vn/nonrigid +/vn/solid name: "Non-rigid object" family: /schema/vn_meta}
+    {=/vn/shape +/vn/concrete name: "Shape" family: /schema/vn_meta}
+      {=/vn/pointy +/vn/shape name: "Pointy shape" family: /schema/vn_meta}
+      {=/vn/elongated +/vn/shape name: "Elongated shape" family: /schema/vn_meta}
+    {=/vn/substance +/vn/concrete name: "Substance" family: /schema/vn_meta}
+  {=/vn/time +/vn/entity name: "Time" family: /schema/vn_meta}
+  {=/vn/state +/vn/entity name: "State" family: /schema/vn_meta}
+  {=/vn/abstract +/vn/entity name: "Abstract entity" family: /schema/vn_meta}
+    {=/vn/idea +/vn/abstract name: "Idea" family: /schema/vn_meta}
+    {=/vn/sound +/vn/abstract name: "Sound" family: /schema/vn_meta}
+    {=/vn/communication +/vn/abstract name: "Communication" family: /schema/vn_meta}
+  {=/vn/scalar +/vn/entity name: "Scalar" family: /schema/vn_meta}
+  {=/vn/currency +/vn/entity name: "Currency" family: /schema/vn_meta}
+  {=/vn/location +/vn/entity name: "Location" family: /schema/vn_meta}
+    {=/vn/region +/vn/location name: "Region" family: /schema/vn_meta}
+    {=/vn/place +/vn/location name: "Place" family: /schema/vn_meta}
+    {=/vn/object +/vn/location name: "Object" family: /schema/vn_meta}
+  {=/vn/organization +/vn/entity name: "Organization" family: /schema/vn_meta}
+
+  {=/vn/dest +/vn/entity name: "Destination" family: /schema/vn_meta}
+  {=/vn/dest_conf +/vn/entity name: "Destination configuration" family: /schema/vn_meta}
+  {=/vn/dest_dir +/vn/entity name: "Destination direction" family: /schema/vn_meta}
+  {=/vn/dir +/vn/entity name: "Direction" family: /schema/vn_meta}
+  {=/vn/loc +/vn/entity name: "Location" family: /schema/vn_meta}
+  {=/vn/path +/vn/entity name: "Path" family: /schema/vn_meta}
+  {=/vn/plural +/vn/entity name: "Plural" family: /schema/vn_meta}
+  {=/vn/refl +/vn/entity name: "Reflexive" family: /schema/vn_meta}
+  {=/vn/spatial +/vn/entity name: "Spatial" family: /schema/vn_meta}
+  {=/vn/src +/vn/entity name: "Source" family: /schema/vn_meta}
+
+{=/schema/vn_meta :schema_family
+  name: "VerbNet meta schemas"
+  precompute_templates: 1
+
+  member_schema: /vn/class
+  member_schema: /vn/entity
+  member_schema: /vn/concrete
+  member_schema: /vn/int_control
+  member_schema: /vn/force
+  member_schema: /vn/machine
+  member_schema: /vn/vehicle
+  member_schema: /vn/natural
+  member_schema: /vn/animate
+  member_schema: /vn/human
+  member_schema: /vn/animal
+  member_schema: /vn/body_part
+  member_schema: /vn/plant
+  member_schema: /vn/phys_obj
+  member_schema: /vn/comestible
+  member_schema: /vn/artifact
+  member_schema: /vn/machine
+  member_schema: /vn/garment
+  member_schema: /vn/tool
+  member_schema: /vn/solid
+  member_schema: /vn/rigid
+  member_schema: /vn/nonrigid
+  member_schema: /vn/shape
+  member_schema: /vn/pointy
+  member_schema: /vn/elongated
+  member_schema: /vn/substance
+  member_schema: /vn/time
+  member_schema: /vn/state
+  member_schema: /vn/abstract
+  member_schema: /vn/idea
+  member_schema: /vn/sound
+  member_schema: /vn/communication
+  member_schema: /vn/scalar
+  member_schema: /vn/currency
+  member_schema: /vn/location
+  member_schema: /vn/region
+  member_schema: /vn/place
+  member_schema: /vn/object
+  member_schema: /vn/organization
+  member_schema: /vn/dest
+  member_schema: /vn/dest_conf
+  member_schema: /vn/dest_dir
+  member_schema: /vn/dir
+  member_schema: /vn/loc
+  member_schema: /vn/path
+  member_schema: /vn/plural
+  member_schema: /vn/refl
+  member_schema: /vn/spatial
+  member_schema: /vn/src
+}

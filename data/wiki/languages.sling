@@ -1,0 +1,167 @@
+; Language definitions.
+
+{=/lang/wikilang :schema
+  name: "Wiki language metadata"
+  family: /schema/lang
+
+  role: {=/lang/wikilang/wiki_category :slot
+    name: "wiki category prefix"
+    description: "Wikipedia category link prefix"
+    source: /lang/wikilang
+    target: string
+  }
+
+  role: {=/lang/wikilang/wiki_image :slot
+    name: "wiki image prefix"
+    description: "Wikipedia image link prefix"
+    source: /lang/wikilang
+    target: string
+  }
+
+  role: {=/lang/wikilang/wiki_template :slot
+    name: "wiki template prefix"
+    description: "Wikipedia template link prefix"
+    source: /lang/wikilang
+    target: string
+  }
+
+  value: /lang/da
+  value: /lang/de
+  value: /lang/en
+  value: /lang/es
+  value: /lang/fi
+  value: /lang/fr
+  value: /lang/it
+  value: /lang/nl
+  value: /lang/no
+  value: /lang/pl
+  value: /lang/pt
+  value: /lang/sv
+}
+
+{=/lang/da
+  :language :/lang/wikilang
+  name: "Danish"
+  code: "da"
+
+  /lang/wikilang/wiki_category: "Kategori"
+  /lang/wikilang/wiki_image: "Fil"
+  /lang/wikilang/wiki_template: "Skabelon"
+}
+
+{=/lang/de
+  :language :/lang/wikilang
+  name: "German"
+  code: "de"
+
+  /lang/wikilang/wiki_category: "Kategorie"
+  /lang/wikilang/wiki_image: "Datei"
+  /lang/wikilang/wiki_template: "Vorlage"
+}
+
+{=/lang/en
+  :language :/lang/wikilang
+  name: "English"
+  code: "en"
+
+  /lang/wikilang/wiki_category: "Category"
+  /lang/wikilang/wiki_image: "File"
+  /lang/wikilang/wiki_template: "Template"
+}
+
+{=/lang/es
+  :language :/lang/wikilang
+  name: "Spanish"
+  code: "es"
+
+  /lang/wikilang/wiki_category: "Categoría"
+  /lang/wikilang/wiki_image: "Archivo"
+  /lang/wikilang/wiki_template: "Plantilla"
+}
+
+{=/lang/fi
+  :language :/lang/wikilang
+  name: "Finnish"
+  code: "fi"
+
+  /lang/wikilang/wiki_category: "Luokka"
+  /lang/wikilang/wiki_image: "Tiedosto"
+  /lang/wikilang/wiki_template: "Malline"
+}
+
+{=/lang/fr
+  :language :/lang/wikilang
+  name: "French"
+  code: "fr"
+
+  /lang/wikilang/wiki_category: "Catégorie"
+  /lang/wikilang/wiki_image: "Fichier"
+  /lang/wikilang/wiki_template: "Modèle"
+}
+
+{=/lang/it
+  :language :/lang/wikilang
+  name: "Italian"
+  code: "it"
+
+  /lang/wikilang/wiki_category: "Categoria"
+  /lang/wikilang/wiki_image: "Immagine"
+  /lang/wikilang/wiki_template: "Template"
+}
+
+{=/lang/nl
+  :language :/lang/wikilang
+  name: "Dutch"
+  code: "nl"
+
+  /lang/wikilang/wiki_category: "Categorie"
+  /lang/wikilang/wiki_image: "Bestand"
+  /lang/wikilang/wiki_template: "Sjabloon"
+}
+
+{=/lang/no
+  :language :/lang/wikilang
+  name: "Norwegian"
+  code: "no"
+
+  /lang/wikilang/wiki_category: "Kategori"
+  /lang/wikilang/wiki_image: "Fil"
+  /lang/wikilang/wiki_template: "Mal"
+}
+
+{=/lang/pl
+  :language :/lang/wikilang
+  name: "Polish"
+  code: "pl"
+
+  /lang/wikilang/wiki_category: "Kategoria"
+  /lang/wikilang/wiki_image: "Plik"
+  /lang/wikilang/wiki_template: "Szablon"
+}
+
+{=/lang/pt
+  :language :/lang/wikilang
+  name: "Portuguese"
+  code: "pt"
+
+  /lang/wikilang/wiki_category: "Categoria"
+  /lang/wikilang/wiki_image: "Ficheiro"
+  /lang/wikilang/wiki_template: "Predefinição"
+}
+
+{=/lang/sv
+  :language :/lang/wikilang
+  name: "Swedish"
+  code: "sv"
+
+  /lang/wikilang/wiki_category: "Kategori"
+  /lang/wikilang/wiki_image: "Fil"
+  /lang/wikilang/wiki_template: "Mall"
+}
+
+{=/schema/lang :schema_family
+  name: "Language schemas"
+
+  member_schema: /lang/wikilang
+}
+

@@ -1,0 +1,194 @@
+; Wikidata schemas.
+
+; The schema for /w/entity contains all the Wikidata properties and is defined
+; by the property collector, and has the following form:
+;
+; {=/w/entity  :schema
+;   name: "Wikidata entity"
+;   family: /schema/wikidata
+;   role: Pxxx (one for each property)
+; }
+
+{=/w/item +/s/profile +/w/entity :schema
+  name: "Wikidata item"
+  family: /schema/wikidata
+
+  role: {=/w/item/wikipedia :slot
+    name: "Wikipedia articles"
+    description: "Map of Wikipedia articles for each language"
+    source: /w/item
+  }
+
+  role: {=/w/item/category :slot
+    name: "Wikipedia category"
+    description: "Category for corresponding Wikipedia articles"
+    source: /w/item
+    target: /w/item
+  }
+}
+
+{=/w/property +slot +/w/entity :schema
+  name: "Wikidata property"
+  family: /schema/wikidata
+}
+
+{=/w/type :schema
+  name: "Data type"
+  family: /schema/wikidata
+  simple: 1
+
+  value: /w/string
+  value: /w/time
+  value: /w/quantity
+  value: /w/text
+  value: /w/item
+  value: /w/media
+  value: /w/xref
+  value: /w/property
+  value: /w/url
+  value: /w/geo
+  value: /w/math
+  value: /w/table
+  value: /w/shape
+}
+
+{=/w/string +string :schema
+  name: "String"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/time :schema
+  name: "Time"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/quantity :schema
+  name: "Quantity"
+  family: /schema/wikidata
+
+  role: {=/w/amount :slot
+    name: "amount"
+    description: "Quantity value"
+    source: /w/quantity
+    target: /w/item
+  }
+
+  role: {=/w/unit :slot
+    name: "unit"
+    description: "Unit of measurement"
+    source: /w/quantity
+    target: /w/item
+  }
+
+  role: {=/w/precision :slot
+    name: "precision"
+    description: "Precision of quantity"
+    source: /w/quantity
+    target: number
+  }
+
+  role: {=/w/low :slot
+    name: "low"
+    description: "Low value of quantity range"
+    source: /w/quantity
+    target: number
+  }
+
+  role: {=/w/high :slot
+    name: "high"
+    description: "High value of quantity range"
+    source: /w/quantity
+    target: number
+  }
+}
+
+{=/w/text :schema
+  name: "Text"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/media :schema
+  name: "Media"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/xref :schema
+  name: "Cross reference"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/url :schema
+  name: "URL"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/geo :schema
+  name: "Geopoint"
+  family: /schema/wikidata
+
+  role: {=/w/lat :slot
+    name: "latitude"
+    description: "Latitude"
+    source: /w/geo
+    target: float
+  }
+
+  role: {=/w/lng :slot
+    name: "longitude"
+    description: "Longitude"
+    source: /w/geo
+    target: float
+  }
+
+  role: {=/w/globe :slot
+    name: "globe"
+    description: "Globe for geographic point"
+    source: /w/geo
+    target: /w/item
+  }
+}
+
+{=/w/math :schema
+  name: "Math"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/table :schema
+  name: "Table"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/w/shape :schema
+  name: "Shape"
+  family: /schema/wikidata
+  simple: 1
+}
+
+{=/schema/wikidata :schema_family
+  name: "Wikidata schemas"
+
+  member_schema: /w/entity
+  member_schema: /w/item
+  member_schema: /w/property
+  member_schema: /w/type
+
+  member_schema: /w/string
+  member_schema: /w/time
+  member_schema: /w/quantity
+  member_schema: /w/text
+  member_schema: /w/media
+  member_schema: /w/xref
+  member_schema: /w/url
+  member_schema: /w/geo
+  member_schema: /w/math
+  member_schema: /w/table
+  member_schema: /w/shape
+}
