@@ -301,7 +301,7 @@ void OutputResources(Artifacts *artifacts) {
   artifacts->num_words = id_to_word.size();
   string contents;
   for (const string &w : id_to_word) {
-    StrAppend(&contents, !contents.empty() ?  "\n" : "", w);
+    StrAppend(&contents, w, "\n");
   }
   CHECK(File::WriteContents(artifacts->word_vocab, contents));
 

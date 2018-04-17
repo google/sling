@@ -54,7 +54,7 @@ OUTPUT_FOLDER=${SEM}/out
 TRAIN_FILEPATTERN=${SEM}/train.rec
 DEV_FILEPATTERN=${SEM}/dev.rec
 WORD_EMBEDDINGS_DIM=32
-PRETRAINED_WORD_EMBEDDINGS=$SEM/word2vec-32-embeddings.bin
+PRETRAINED_WORD_EMBEDDINGS=${SEM}/word2vec-32-embeddings.bin
 OOV_FEATURES=true
 
 # Training hyperparameters.
@@ -71,6 +71,7 @@ DROPOUT=1.0
 TRAIN_STEPS=200000
 DECAY_STEPS=500000
 MOVING_AVERAGE=true
+L2_COEFFICIENT=0.0001
 
 # Whether we should make the MasterSpec again or not.
 MAKE_SPEC=1
@@ -169,6 +170,10 @@ case $i in
     MOVING_AVERAGE="${i#*=}"
     shift
     ;;
+    --l2=*|--l2_coeff=*)
+    L2_COEFFICIENT="${i#*=}"
+    shift
+    ;;
     *)
     echo "Unknown option " $i
     exit 1
@@ -202,7 +207,9 @@ HYPERPARAMS="learning_rate:${LEARNING_RATE} decay_steps:${DECAY_STEPS} "
 HYPERPARAMS+="seed:${SEED} learning_method:'${METHOD}' "
 HYPERPARAMS+="use_moving_average:${MOVING_AVERAGE} dropout_rate:${DROPOUT} "
 HYPERPARAMS+="gradient_clip_norm:${GRAD_CLIP_NORM} adam_beta1:${ADAM_BETA1} "
-HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS}"
+HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS} "
+HYPERPARAMS+="l2_regularization_coefficient:${L2_COEFFICIENT} "
+
 
 mkdir -p "${OUTPUT_FOLDER}"
 

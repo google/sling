@@ -80,6 +80,8 @@ def _create_optimizer(hyperparams, learning_rate_var, step_var=None):
         beta2=hyperparams.adam_beta2,
         epsilon=hyperparams.adam_eps,
         use_locking=True)
+  elif hyperparams.learning_method == 'sgd':
+    return tf.train.GradientDescentOptimizer(learning_rate=learning_rate_var)
   elif hyperparams.learning_method == 'momentum':
     return tf.train.MomentumOptimizer(
         learning_rate_var, hyperparams.momentum, use_locking=True)
@@ -342,6 +344,12 @@ class MasterBuilder(object):
     # 1. compute the gradients,
     # 2. add an optimizer to update the parameters using the gradients,
     # 3. make the ComputeSession handle depend on the optimizer.
+    num_elements = 0
+    for p in params_to_train:
+      print "Parameter", p.name, p.shape
+      num_elements += p.shape.num_elements()
+
+    print "Num parameters", num_elements
     grads_and_vars = self.optimizer.compute_gradients(
         cost, var_list=params_to_train)
     clipped_gradients = [(self._clip_gradients(g), v)

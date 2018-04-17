@@ -73,7 +73,7 @@ Py_ssize_t PyArray::Size() {
 PyObject *PyArray::GetItem(Py_ssize_t index) {
   // Check array bounds.
   ArrayDatum *arr = array();
-  if (index < 0) index = arr->length() - index;
+  if (index < 0) index = arr->length() + index;
   if (index < 0 || index >= arr->length()) {
     PyErr_SetString(PyExc_IndexError, "Array index out of bounds");
     return nullptr;
@@ -88,7 +88,7 @@ int PyArray::SetItem(Py_ssize_t index, PyObject *value) {
   if (!Writable()) return -1;
 
   // Check array bounds.
-  if (index < 0) index = array()->length() - index;
+  if (index < 0) index = array()->length() + index;
   if (index < 0 || index >= array()->length()) {
     PyErr_SetString(PyExc_IndexError, "Array index out of bounds");
     return -1;

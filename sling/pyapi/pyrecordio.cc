@@ -36,6 +36,7 @@ PyMethodDef PyRecordReader::methods[] = {
   {"tell", (PyCFunction) &PyRecordReader::Tell, METH_NOARGS, ""},
   {"seek", (PyCFunction) &PyRecordReader::Seek, METH_O, ""},
   {"rewind", (PyCFunction) &PyRecordReader::Rewind, METH_NOARGS, ""},
+  {"done", (PyCFunction) &PyRecordReader::Done, METH_NOARGS, ""},
 
   {nullptr}
 };

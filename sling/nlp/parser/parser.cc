@@ -525,7 +525,7 @@ void ParserInstance::ExtractFeaturesFF(int step) {
   }
 
   // Extract role features.
-  if (parser_->frame_limit_ > 0) {
+  if (parser_->frame_limit_ > 0 && parser_->roles_.size() > 0) {
     // Construct role graph for center of attention.
     RoleGraph graph;
     graph.Compute(state_, parser_->frame_limit_, parser_->roles_);

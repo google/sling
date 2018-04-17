@@ -54,7 +54,7 @@ def annotate_dataset(sess, annotator, eval_corpus):
 
 
 def run_training_step(sess, trainer, train_corpus, batch_size):
-  """Runs a single iteration of train_op on a  sampled batch."""
+  """Runs a single iteration of train_op on a sampled batch."""
   batch = random.sample(train_corpus, batch_size)
   cost, _ = sess.run([trainer['cost'], trainer['run']],
                      feed_dict={trainer['input_batch']: batch})
@@ -99,6 +99,7 @@ def run_training(sess, trainers, annotator, evaluator, pretrain_steps,
   target_for_step = []
   for target_idx in xrange(len(pretrain_steps)):
     target_for_step += [target_idx] * pretrain_steps[target_idx]
+
   while sum(train_steps) > 0:
     step = random.randint(0, sum(train_steps) - 1)
     cumulative_steps = 0
