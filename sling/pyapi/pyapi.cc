@@ -17,18 +17,22 @@
 #include "sling/base/init.h"
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
+#include "sling/pyapi/pymisc.h"
 #include "sling/pyapi/pyparser.h"
+#include "sling/pyapi/pyphrase.h"
 #include "sling/pyapi/pyrecordio.h"
 #include "sling/pyapi/pystore.h"
+#include "sling/pyapi/pytask.h"
 
 namespace sling {
 
-static PyObject *version(PyObject *self, PyObject *args) {
-  return Py_BuildValue("s", "1.0.0");
-}
-
 static PyMethodDef py_funcs[] = {
-  {"version", version, METH_NOARGS, ""},
+  {"get_flags", (PyCFunction) PyGetFlags, METH_NOARGS, ""},
+  {"set_flag", (PyCFunction) PySetFlag, METH_VARARGS, ""},
+  {"log_message", (PyCFunction) PyLogMessage, METH_VARARGS, ""},
+  {"start_task_monitor", (PyCFunction) StartTaskMonitor, METH_VARARGS, ""},
+  {"get_job_statistics", (PyCFunction) GetJobStatistics, METH_NOARGS, ""},
+  {"finalize_dashboard", (PyCFunction) FinalizeDashboard, METH_NOARGS, ""},
   {nullptr, nullptr, 0, nullptr}
 };
 
@@ -41,9 +45,11 @@ static void RegisterPythonModule() {
   PyArray::Define(module);
   PyItems::Define(module);
   PyTokenizer::Define(module);
+  PyPhraseTable::Define(module);
   PyParser::Define(module);
   PyRecordReader::Define(module);
   PyRecordWriter::Define(module);
+  PyJob::Define(module);
 }
 
 }  // namespace sling
