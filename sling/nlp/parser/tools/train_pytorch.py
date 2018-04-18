@@ -151,6 +151,10 @@ class Trainer:
   def _reset(self):
     self.current_batch_size = 0
     self.current_batch_num_transitions = 0
+    
+    # Note: self.batch_loss is the apex of the computation graph.
+    # Just resetting it often doesn't guarantee (immediate) garbage collection.
+    # Explicitly deleting it here seems to work better empirically.
     del self.batch_loss
     self.batch_loss = Var(torch.FloatTensor([0.0]))
     self.optimizer.zero_grad()
