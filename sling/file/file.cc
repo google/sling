@@ -107,13 +107,6 @@ File *File::OpenOrDie(const string &name, const char *mode) {
   return f;
 }
 
-File *File::TempFile() {
-  CHECK(default_file_system != nullptr) << "No filesystems";
-  File *f;
-  CHECK(default_file_system->CreateTempFile(&f));
-  return f;
-}
-
 Status File::Delete(const string &name) {
   // Find file system.
   string rest;
@@ -188,24 +181,16 @@ Status File::Rmdir(const string &dir) {
   return fs->DeleteDir(rest);
 }
 
-Status File::CreateLocalTempDir(string *dir) {
-  char tmpldir[] = "/tmp/local.XXXXXX";
-  char *tmpname = mkdtemp(tmpldir);
-  if (tmpname == nullptr) {
-    return Status(errno, "mkdtemp", strerror(errno));
-  }
-  *dir = tmpname;
-  return Status::OK;
+File *File::TempFile() {
+  CHECK(default_file_system != nullptr);
+  File *f;
+  CHECK(default_file_system->CreateTempFile(&f));
+  return f;
 }
 
-Status File::CreateGlobalTempDir(string *dir) {
-  char tmpldir[] = "/var/data/tmp/global.XXXXXX";
-  char *tmpname = mkdtemp(tmpldir);
-  if (tmpname == nullptr) {
-    return Status(errno, "mkdtemp", strerror(errno));
-  }
-  *dir = tmpname;
-  return Status::OK;
+Status File::CreateTempDir(string *dir) {
+  if (default_file_system == nullptr) return NoFileSystem("tmpdir");
+  return default_file_system->CreateTempDir(dir);
 }
 
 Status File::Match(const string &pattern, std::vector<string> *filenames) {

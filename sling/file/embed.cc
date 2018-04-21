@@ -242,8 +242,12 @@ class InternalFileSystem : public FileSystem {
     return Status::OK;
   }
 
-  Status CreateTempFile(File **f) {
+  Status CreateTempFile(File **f) override {
     return Status(ENOSYS, "CreateTempFile not supported");
+  }
+
+  Status CreateTempDir(string *dir) override {
+    return Status(ENOSYS, "CreateTempDir not supported");
   }
 
   bool FileExists(const string &filename) override {

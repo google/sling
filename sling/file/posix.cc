@@ -17,10 +17,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
-#include <unistd.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <string>
 
@@ -48,6 +50,15 @@ int OpenFlags(const char *mode) {
   }
 
   return flags;
+}
+
+const char *GetTempDir() {
+  static const char *tmpdir = nullptr;
+  if (tmpdir != nullptr) return tmpdir;
+  tmpdir = getenv("TMPDIR");
+  if (tmpdir == nullptr) tmpdir = getenv("TMP");
+  if (tmpdir == nullptr) tmpdir = "/tmp";
+  return tmpdir;
 }
 
 }  // namespace
@@ -176,11 +187,24 @@ class PosixFileSystem : public FileSystem {
     return Status::OK;
   }
 
-  Status CreateTempFile(File **f) {
-    char tmpname[] = "/tmp/scratch.XXXXXX";
+  Status CreateTempFile(File **f) override {
+    char tmpname[PATH_MAX];
+    strcpy(tmpname, GetTempDir());
+    strcat(tmpname, "/scratch.XXXXXX");
     int fd = mkstemp(tmpname);
     if (fd == -1) return IOError(tmpname, errno);
     *f = new PosixFile(fd, tmpname);
+    return Status::OK;
+  }
+
+  Status CreateTempDir(string *dir) override {
+    char tmpname[PATH_MAX];
+    strcpy(tmpname, GetTempDir());
+    strcat(tmpname, "/local.XXXXXX");
+    if (mkdtemp(tmpname) == nullptr) {
+      return Status(errno, "mkdtemp", strerror(errno));
+    }
+    *dir = tmpname;
     return Status::OK;
   }
 

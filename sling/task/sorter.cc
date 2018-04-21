@@ -125,7 +125,7 @@ class Sorter : public Processor {
 
     // Create temp dir if not already done.
     if (tmpdir_.empty()) {
-      CHECK(File::CreateLocalTempDir(&tmpdir_));
+      CHECK(File::CreateTempDir(&tmpdir_));
     }
 
     // Write messages to next merge file.

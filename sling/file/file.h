@@ -111,9 +111,6 @@ class File {
   // Open file and fail if file cannot be opened.
   static File *OpenOrDie(const string &name, const char *mode);
 
-  // Create temporary file.
-  static File *TempFile();
-
   // Delete a file.
   static Status Delete(const string &name);
 
@@ -135,11 +132,11 @@ class File {
   // Remove directory.
   static Status Rmdir(const string &dir);
 
-  // Create local temporary directory.
-  static Status CreateLocalTempDir(string *dir);
+  // Create temporary file.
+  static File *TempFile();
 
-  // Create global temporary directory.
-  static Status CreateGlobalTempDir(string *dir);
+  // Create temporary directory.
+  static Status CreateTempDir(string *dir);
 
   // Find file names matching pattern.
   static Status Match(const string &pattern,
@@ -184,6 +181,9 @@ class FileSystem : public Singleton<FileSystem> {
 
   // Create temporary file.
   virtual Status CreateTempFile(File **f) = 0;
+
+  // Create temporary directory.
+  virtual Status CreateTempDir(string *dir) = 0;
 
   // Get file information.
   virtual Status Stat(const string &name, FileStat *stat) = 0;
