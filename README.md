@@ -1,14 +1,11 @@
 # SLING - A natural language frame semantics parser
 
-[![Build Status](https://travis-ci.org/google/sling.svg?branch=master)](https://travis-ci.org/google/sling)
+[![Build Status](https://travis-ci.org/google/sling.svg?branch=caspar)](https://travis-ci.org/google/sling)
 
-SLING CASPAR is a parser for annotating text with frame semantic annotations. It is
-trained on an annotated corpus using [Tensorflow](https://www.tensorflow.org/)
-and [Dragnn](https://github.com/tensorflow/models/blob/master/research/syntaxnet/g3doc/DRAGNN.md).
+SLING CASPAR is a parser for annotating text with frame semantic annotations.
+This is the second generation of the SLING parser. The first generation, SEMPAR, can be found [here](https://github.com/google/sling). CASPAR is intended to generate parses in a cascaded way (i.e. a staggered fashion).
 
-This is the second generation of the SLING parser. The first generation, SEMPAR, can be found [here](https://github.com/google/sling).
-
-The parser is a general transition-based frame semantic parser using
+The basic CASPAR parser is a general transition-based frame semantic parser using
 bi-directional LSTMs for input encoding and a Transition Based Recurrent Unit
 (TBRU) for output decoding. It is a jointly trained model using only the text
 tokens as input and the transition system has been designed to output frame
@@ -62,15 +59,14 @@ get all the submodules.
 git clone --recursive https://github.com/google/sling.git
 ```
 
-The parser trainer uses Tensorflow for training. SLING uses the Python 2.7
-distribution of Tensorflow, so this needs to be installed. The installed version
-of protocol buffers needs to match the version used by Tensorflow. Finally,
+The parser trainer uses Python v2.7 and PyTorch for training,
+so they need to be installed. Additionally,
 SLING uses [Bazel](https://bazel.build/) as the build system, so you need to
 install Bazel in order to build the SLING parser.
 
 ```shell
-sudo pip install -U protobuf==3.4.0
-sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.4.0-cp27-none-linux_x86_64.whl
+# Change to your favorite version as needed.
+sudo pip install http://download.pytorch.org/whl/cpu/torch-0.3.1-cp27-cp27mu-linux_x86_64.whl 
 ```
 
 ## Building
@@ -86,11 +82,17 @@ You can test your installation by building a few important targets.
 bazel build -c opt sling/nlp/parser sling/nlp/parser/tools:all
 ```
 
-**NOTES:** 
-*  In case you get compile errors complaining about missing Tensorflow
-includes, try the following:
-  *  Recreate [this soft link](sling/blob/master/third_party/tensorflow/include) to point to your Tensorflow include folder.
-  *  Change [this dependency](https://github.com/google/sling/blob/04d6f28269bdc7d29c71d8dc24d74fe39641f589/third_party/tensorflow/BUILD#L21) to point to your Tensorflow's pywrap library.
+Next, build and link to the SLING Python module since it will be used
+by the trainer. But first, remember to switch to the caspar branch since
+it implements all functionality inside CASPAR.
+
+```shell
+git checkout caspar
+bazel build -c opt sling/pyapi:pysling.so
+sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
+```
+
+**NOTE:** 
 *  In case you are using an older version of GCC (< v5), you may want to comment out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
 
 ## Training
@@ -218,18 +220,22 @@ doc.AddSpan(2, 3)->Evoke(mary_frame);
 doc.Update();
 string encoded = Encode(doc.top());
 
-// Write 'encoded' to a zip stream or a file.
+// Append 'encoded' to a recordio file.
+RecordWriter writer(<filename>);
+
+writer.Write(encoded);
+...<write more documents>
+
+writer.Close();
 ```
 
 Use the converter to create the following corpora:
 + Training corpus of annotated SLING documents.
 + Dev corpus of annotated SLING documents.
 
-  The default corpus format is zip, where the zip file contains one file
-  per document, and the file for a document is just its encoded document
-  frame. An alternate format is to have a folder with one file per
-  document. More formats can be added by modifying the reader code
-[here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/document/document-source.cc#L107) and [here](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.py#L57).
+CASPAR uses the [recordio file format](https://github.com/google/sling/blob/caspar/sling/file/recordio.h)
+for training where each record corresponds to one encoded document. This format is up to 25x faster
+to read than zip files, with almost identical compression ratios.
 
 ### Specify training options and hyperparameters:
 
@@ -244,36 +250,31 @@ the input data are:
   temporary files, and the final model will be saved.
 
 Then we have the various training options and hyperparameters:
-+ `--oov_features`: Whether fallback lexical features should be used in the LSTMs.
 + `--word_embeddings`: Empty, or path to pretrained word embeddings in
   [Mikolov's word2vec format](https://github.com/tmikolov/word2vec/blob/master/word2vec.c).
   If supplied, these are used to initialize the embeddings for word features.
-+ `--word_embeddings_dim`: Dimensionality of embeddings for word features.
-  Should be the same as the pretrained embeddings, if they are supplied.
 + `--batch`: Batch size used during training.
-+ `--report_every`: Checkpoint interval.
-+ `--train_steps`: Number of training steps.
++ `--report_every`: Checkpoint interval (in number of batches).
++ `--steps`: Number of training batches to process.
 + `--method`: Optimization method to use (e.g. adam or momentum), along
   with auxiliary arguments like `--adam_beta1`, `--adam_beta2`, `--adam_eps`.
-+ `--dropout_keep_rate`: Probability of keeping after dropout during
-  training , so `--dropout_keep_rate=1.0` means nothing is dropped.
 + `--learning_rate`: Learning rate.
-+ `--decay`: Decay steps.
 + `--grad_clip_norm`: Max norm beyond which gradients will be clipped.
 + `--moving_average`: Whether or not to use exponential moving average.
-+ `--seed`, `--seed2`: Randomization seeds used for initializing embedding matrices.
 
 The script comes with reasonable defaults for the hyperparameters for
 training a semantic parser model, but it would be a good idea to hardcode
 your favorite arguments [directly in the
-script](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.sh#L51)
+flag definitions](sling/nlp/parser/trainer/train_util.py#L94)
 to avoid supplying them again and again on the commandline.
 
 ### Run the training script
 
 To test your training setup, you can kick off a small training run:
 ```shell
-./sling/nlp/parser/tools/train.sh --report_every=500 --train_steps=1000
+./sling/nlp/parser/tools/train.sh --commons=<path to commons> \
+   --train=<oath to train recordio> --dev=<path to dev recordio> \
+   --report_every=500 --train_steps=1000 --output=<output folder>
 ```
 
 This training run should be over in 10-20 minutes, and should checkpoint and
@@ -282,79 +283,60 @@ the number of steps to something like 100,000 and decreasing the checkpoint
 frequency to something like every 2000-5000 steps.
 
 As training proceeds, the training script produces a lot of useful
-diagnostic information, which we describe below.
+diagnostic information, which is logged by default to a file called "log"
+inside the specified output folder.
 
-* The script begins by constructing an action table, which is a list of all
-  transitions required to generate the gold frames in the training corpus.
-  The table and its summary are dumped in `$OUTPUT_FOLDER/{table,
-  table.summary}`, and this path is logged by the script in its output.
-  For example, here is the action table summary for the
-  semantic parsing model included in this release:
+* The script will first generate the PyTorch model and print its specification, i.e. various
+sub-modules inside the model and their dimensionalities.
 
+```shell
+Modules: Sempar(
+  (lr_lstm_embedding_words): EmbeddingBag(53257, 32, mode=sum)
+  (rl_lstm_embedding_words): EmbeddingBag(53257, 32, mode=sum)
+  (lr_lstm_embedding_suffix): EmbeddingBag(8334, 16, mode=sum)
+  (rl_lstm_embedding_suffix): EmbeddingBag(8334, 16, mode=sum)
+  (lr_lstm_embedding_capitalization): EmbeddingBag(5, 8, mode=sum)
+  (rl_lstm_embedding_capitalization): EmbeddingBag(5, 8, mode=sum)
+  (lr_lstm_embedding_hyphen): EmbeddingBag(2, 8, mode=sum)
+  (rl_lstm_embedding_hyphen): EmbeddingBag(2, 8, mode=sum)
+  (lr_lstm_embedding_punctuation): EmbeddingBag(3, 8, mode=sum)
+  (rl_lstm_embedding_punctuation): EmbeddingBag(3, 8, mode=sum)
+  (lr_lstm_embedding_quote): EmbeddingBag(4, 8, mode=sum)
+  (rl_lstm_embedding_quote): EmbeddingBag(4, 8, mode=sum)
+  (lr_lstm_embedding_digit): EmbeddingBag(3, 8, mode=sum)
+  (rl_lstm_embedding_digit): EmbeddingBag(3, 8, mode=sum)
+  (lr_lstm): DragnnLSTM(in=88, hidden=256)
+  (rl_lstm): DragnnLSTM(in=88, hidden=256)
+  (ff_fixed_embedding_in-roles): EmbeddingBag(125, 16, mode=sum)
+  (ff_fixed_embedding_out-roles): EmbeddingBag(125, 16, mode=sum)
+  (ff_fixed_embedding_labeled-roles): EmbeddingBag(625, 16, mode=sum)
+  (ff_fixed_embedding_unlabeled-roles): EmbeddingBag(25, 16, mode=sum)
+  (ff_link_transform_frame-creation-steps): LinkTransform(input_activation=128, dim=64, oov_vector=64)
+  (ff_link_transform_frame-focus-steps): LinkTransform(input_activation=128, dim=64, oov_vector=64)
+  (ff_link_transform_frame-end-lr): LinkTransform(input_activation=256, dim=32, oov_vector=32)
+  (ff_link_transform_frame-end-rl): LinkTransform(input_activation=256, dim=32, oov_vector=32)
+  (ff_link_transform_history): LinkTransform(input_activation=128, dim=64, oov_vector=64)
+  (ff_link_transform_lr): LinkTransform(input_activation=256, dim=32, oov_vector=32)
+  (ff_link_transform_rl): LinkTransform(input_activation=256, dim=32, oov_vector=32)
+  (ff_layer): Projection(in=1344, out=128, bias=True)
+  (ff_relu): ReLU()
+  (ff_softmax): Projection(in=128, out=6968, bias=True)
+  (loss_fn): CrossEntropyLoss(
+  )
+)
+
+```
+
+* Training will now commence, and you will see the training cost being logged at regular intervals.
   ```shell
-  $ cat $OUTPUT_FOLDER/table.summary
-
-  Actions Summary
-  ===================================================
-  Action Type || Unique Arg Combinations || Raw Count
-  ===================================================
-      OVERALL ||                   6,968 || 4,038,809
-         STOP ||                       1 ||   111,006
-        SHIFT ||                       1 || 2,206,274
-       ASSIGN ||                      13 ||     5,430
-      CONNECT ||                   1,421 ||   635,734
-        EVOKE ||                   5,532 || 1,080,365
-  ===================================================
+  BatchLoss after (1 batches = 8 examples): 2.94969940186  incl. L2= [0.000000029] (1.6 secs) <snip>
+  BatchLoss after (2 batches = 16 examples): 2.94627690315  incl. L2= [0.000000029] (1.9 secs) <snip>
+  BatchLoss after (3 batches = 24 examples): 2.94153237343  incl. L2= [0.000000037] (1.1 secs) <snip>
+  ...
   <snip>
+
   ```
-
-* The script then prepares all the lexical resources (e.g. word
-  vocabulary, affixes etc), and the DRAGNN MasterSpec protocol buffer, which
-  completely specifies the configuration of the two LSTMs and the feed forward
-  unit, including the features used by each component, and the dimensions of
-  the various embeddings.
-
-  If you wish to modify the default set of features,
-  then you would have to modify the [MasterSpec generation code](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/parser/trainer/generate-master-spec.cc#L319)
-  and add any new feature definitions [here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/parser/trainer/feature-extractor.cc#L73)
-  and/or [here](https://github.com/google/sling/blob/88771ebb771d2e32a2f481d3523c4747303047e0/nlp/parser/trainer/feature-extractor.cc#L193). Recall however that
-  `--word_embeddings_dim`, `--pretrained_embeddings`, and `--oov_features`
-  allow you to do some of this directly from the commandline.
-
-  Once the MasterSpec is ready, the script would log that the spec is
-  being dumped at `$OUTPUT_FOLDER/master_spec` as a textualized protocol
-  buffer, so you can visually check whether the configuration looks good or not.
-
-  **NOTE:** If you specify `--spec_only` on the commandline, then the script
-  will finish here. This is useful for first ascertaining that the spec and
-  action table look right, particularly while debugging or running a new
-  training setup for the first time.
-
-* The script will now generate the Tensorflow graph, and log some messages
-  about the internal structure of the graph. Once that is done, it will inform
-  that it's creating a log directory for running [Tensorboard](https://www.tensorflow.org/get_started/summaries_and_tensorboard).
-
-  ```shell
-  Wrote events (incl. graph) for Tensorboard to folder: /my/output/folder/tensorboard
-  The graph can be viewed via
-  tensorboard --logdir=/my/output/folder/tensorboard
-  then navigating to http://localhost:6006 and clicking on 'GRAPHS'
-  ```
-
-  Tensorboard is a useful tool that provides a browser-based UI to track
-  training, particularly the evaluation metrics at various checkpoints.
-  It also allows you to view the Tensorflow graph used for training.
-
-* Once the graph is ready, training will commence, and you will see
-  the training cost being logged at regular intervals.
-  ```shell
-  INFO:tensorflow:Initial cost at step 0: 2.949682
-  INFO:tensorflow:cost at step 100: 1.218417
-  INFO:tensorflow:cost at step 200: 0.991216
-  INFO:tensorflow:cost at step 300: 0.838045
-  <snip>
-  ```
-  After every checkpoint interval (specified via `--report_every`),
+* After every checkpoint interval (specified via `--report_every`),
   it will save the model and evaluate it on the dev corpus.
   The evaluation runs a [graph matching algorithm](sling/nlp/parser/trainer/frame-evaluation.h)
   that outputs various metrics from aligning the gold frame graph
@@ -364,32 +346,19 @@ diagnostic information, which we describe below.
 
   Note that graph matching is an intrinsic evaluation, so if you wish to swap
   it with an extrinsic evaluation, then just replace the binary
-  [here](https://github.com/google/sling/blob/0c8ec1dcc4057c64eac8f8d5939b128a10750c63/nlp/parser/tools/train.py#L97) with your evaluation binary.
+  [here](sling/nlp/parser/trainer/train_util.py#L30) with your evaluation binary.
 
-* Finally, the best performing checkpoint will be converted into a Myelin flow file
-  in `$OUTPUT_FOLDER/sempar.flow`.
+* At any point, the best performing checkpoint will be available as a Myelin flow file
+  in `<output folder>/pytorch.best.flow`.
 
-  **NOTE:** A common use-case is that one often wants to play around with
-  different training options without really wanting to change the spec,
-  or the action table, or any lexical resources. For this, use the
-  `--train_only` commandline argument. This will initiate training from
-  the Tensorflow graph generation step, and will use the pre-generated spec
-  etc. from the same output folder.
-
-We have made a synthetic training and evaluation corpus available for trying out the parser
-trainer:
-
-```
-curl -o /tmp/conll-2003-sempar.tar.gz http://www.jbox.dk/sling/conll-2003-sempar.tar.gz
-tar -xvf /tmp/conll-2003-sempar.tar.gz
-```
-
-See [local/conll2003/README.md](local/conll2003/README.md) for instructions on how to train a parser.
+**NOTE:** 
+* If you wish to modify the default set of features,
+then you would have to modify the [feature specification code](sling/nlp/parser/trainer/spec.py#L212).
 
 ## Parsing
 
 The trained parser model is stored in a [Myelin](sling/myelin/README.md) flow file,
-e.g. `sempar.flow`. It contains all the information needed for parsing text:
+It contains all the information needed for parsing text:
 * The neural network units (LR, RL, FF) with the parameters learned from
 training.
 * Feature maps for the lexicon and affixes.
@@ -397,7 +366,7 @@ training.
 frames.
 * The action table with all the transition actions.
 
-A pre-trained model can be download from [here](http://www.jbox.dk/sling/sempar.flow).
+A pre-trained model can be downloaded from [here](http://www.jbox.dk/sling/sempar.flow).
 The model can be loaded and initialized in the following way:
 
 ```c++
@@ -435,21 +404,13 @@ document.Update();
 std::cout << sling::ToText(document.top(), 2);
 ```
 
-## Annotation Tools
+## Myelin-based parser tool
 
-SLING comes with utility tools for annotating a corpus of documents with frames
+SLING comes with a [parsing tool](sling/nlp/parser/tools/parse.cc)
+for annotating a corpus of documents with frames
 using a parser model, benchmarking this annotation process, and optionally
 evaluating the annotated frames against supplied gold frames.
 
-We provide two such tools -- a
-[tf-parse](sling/nlp/parser/tools/tf-parse.py) Python script, and a [Myelin-based
-parser tool](sling/nlp/parser/tools/parse.cc).
-Given the same trained parser model, both these tools should produce
-the same annotated frames and evaluation numbers. However the Myelin-based
-parser is significantly faster than Tensorflow-based tf-parse ([3x-10x in our
-experiments](http://www.jbox.dk/sling/sempar-profile.htm)).
-
-### Myelin-based parser tool
 
 This tool takes the following commandline arguments:
 
@@ -538,11 +499,11 @@ This tool takes the following commandline arguments:
    documents.
    ```shell
    bazel-bin/sling/nlp/parser/tools/parse --logtostderr \
-     --evaluate --parser=sempar.flow --corpus=dev.zip --maxdocs=200
+     --evaluate --parser=sempar.flow --corpus=dev.rec --maxdocs=200
 
    I0927 14:51:39.542151 31336 parse.cc:127] Load parser from sempar.flow
    I0927 14:51:40.211920 31336 parse.cc:135] 562.249 ms loading parser
-   I0927 14:51:40.211973 31336 parse.cc:194] Evaluating parser on dev.zip
+   I0927 14:51:40.211973 31336 parse.cc:194] Evaluating parser on dev.rec
    SPAN_P+ 1442
    SPAN_P- 93
    SPAN_R+ 1442
@@ -562,36 +523,6 @@ This tool takes the following commandline arguments:
    COMBINED_Recall 84.529532967032978
    COMBINED_F1     86.517276488704127
    ```
-
-### Tensorflow-based parser tool
-
-An alternative to running the Myelin-based parsing tool is to run the tf-parse
-Python script that executes the annotation part of the Tensorflow graph over the
-input documents. It takes the following arguments:
-
-*  `--parser_dir`: This should be the directory where the trained model is saved.
-*  `--commons`: Path to the commons store. Should be the same as the one used in training.
-*  `--corpus`: Corpus of documents that will be annotated with the model.
-*  `--batch`: Batch size. Higher batch sizes are efficient but only if all the batch
-    documents are roughly of similar length.
-*  `--threads` : Number of threads to use in Tensorflow. This drives Tensorflow's
-    inter-op and intra-op parallelism. Making this very high will lead to inefficiencies
-    due to inter-thread CPU contention.
-*  `--output`: (Optional) File name where the annotated corpus will be saved.
-*  `--evaluate`: (Optional) If true, then it will evaluate the annotated corpus vs
-    the gold corpus (specified via --corpus).
-
-Sample Usage:
-```shell
-python sling/nlp/parser/tools/tf-parse.py \
-  --parser_dir=/path/to/training/script/output/folder \
-  --commons=/path/to/commons \
-  --corpus=/path/to/gold/eval/corpus \
-  --batch=512 \
-  --threads=4 \
-  --output=annotated.zip \
-  --evaluate
-```
 
 ## Credits
 

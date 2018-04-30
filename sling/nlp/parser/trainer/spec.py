@@ -457,7 +457,7 @@ class Spec:
     output = []
     if name == "history":
       for i in xrange(num):
-        output.append(None if i >= state.steps else -1 - i)
+        output.append(None if i >= state.steps else state.steps - i - 1)
     elif name == "lr":
       index = None
       if state.current < state.end:
@@ -466,7 +466,7 @@ class Spec:
     elif name == "rl":
       index = None
       if state.current < state.end:
-        index = -1 - (state.current - state.begin)
+        index = state.current - state.begin
       output.append(index)
     elif name == "frame-end-lr":
       for i in xrange(num):
@@ -480,7 +480,7 @@ class Spec:
         index = None
         end = state.frame_end_inclusive(i)
         if end != -1:
-          index = -1 - (end - state.begin)
+          index = end - state.begin
         output.append(index)
     elif name == "frame-creation-steps":
       for i in xrange(num):

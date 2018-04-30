@@ -196,27 +196,27 @@ class Sempar(nn.Module):
       lr_embedding = nn.EmbeddingBag(f.vocab_size, f.dim, mode='sum')
       self.add_module('lr_lstm_embedding_' + f.name, lr_embedding)
       self.lr_embeddings.append(lr_embedding)
+      f.lr_embedding = lr_embedding
 
       rl_embedding = nn.EmbeddingBag(f.vocab_size, f.dim, mode='sum')
       self.add_module('rl_lstm_embedding_' + f.name, rl_embedding)
       self.rl_embeddings.append(rl_embedding)
+      f.rl_embedding = rl_embedding
 
     # LR and RL LSTM cells.
     self.lr_lstm = DragnnLSTM(spec.lstm_input_dim, spec.lstm_hidden_dim)
     self.rl_lstm = DragnnLSTM(spec.lstm_input_dim, spec.lstm_hidden_dim)
 
     # FF Embeddings and network.
-    self.ff_fixed_embeddings = []
-    self.ff_link_transforms = []
     for f in spec.ff_fixed_features:
       embedding = nn.EmbeddingBag(f.vocab_size, f.dim, mode='sum')
-      self.ff_fixed_embeddings.append(embedding)
       self.add_module('ff_fixed_embedding_' + f.name, embedding)
+      f.bag = embedding
 
     for f in spec.ff_link_features:
       transform = LinkTransform(f.activation_size, f.dim)
-      self.ff_link_transforms.append(transform)
       self.add_module('ff_link_transform_' + f.name, transform)
+      f.transform = transform
 
     # Feedforward unit.
     h = spec.ff_hidden_dim
@@ -234,11 +234,10 @@ class Sempar(nn.Module):
   def initialize(self):
     # Initialize the embeddings to gaussian(mean=0, stddev=1/sqrt(dim)),
     # where 'dim' is the dimensionality of the embedding.
-    for lr, rl, f in zip(
-      self.lr_embeddings, self.rl_embeddings, self.spec.lstm_features):
+    for f in self.spec.lstm_features:
       coeff = 1.0 / math.sqrt(f.dim)
-      lr = lr.weight.data
-      rl = rl.weight.data
+      lr = f.lr_embedding.weight.data
+      rl = f.rl_embedding.weight.data
       lr.normal_()
       lr.mul_(coeff)
       rl.normal_()
@@ -259,12 +258,12 @@ class Sempar(nn.Module):
             "embedding vectors with normalized pre-trained vectors."
 
     # Initialize the FF's fixed and link embeddings like those in the LSTMs.
-    for matrix, f in zip(self.ff_fixed_embeddings, self.spec.ff_fixed_features):
-      matrix.weight.data.normal_()
-      matrix.weight.data.mul_(1.0 / math.sqrt(f.dim))
+    for f in self.spec.ff_fixed_features:
+      f.bag.weight.data.normal_()
+      f.bag.weight.data.mul_(1.0 / math.sqrt(f.dim))
 
-    for t, f in zip(self.ff_link_transforms, self.spec.ff_link_features):
-      t.init(1.0 / math.sqrt(f.dim))
+    for f in self.spec.ff_link_features:
+      f.transform.init(1.0 / math.sqrt(f.dim))
 
     # Initialize the LSTM and FF parameters with gaussan(mean=0, stddev=1e-4).
     params = [self.ff_layer.weight, self.ff_softmax.weight]
@@ -325,7 +324,9 @@ class Sempar(nn.Module):
     inverse_indices = torch.arange(length - 1, -1, -1).long()
     rl_inputs = rl_inputs[inverse_indices]
     rl_out, _ = self.rl_lstm.forward(rl_inputs)
+    rl_out.reverse()
 
+    # lr_out[i], rl_out[i] are the LSTM outputs for the ith token.
     return (lr_out, rl_out, raw_features)
 
 
@@ -337,21 +338,20 @@ class Sempar(nn.Module):
     ff_input_parts_debug = []
 
     # Fixed features.
-    for f, bag in zip(self.spec.ff_fixed_features, self.ff_fixed_embeddings):
+    for f in self.spec.ff_fixed_features:
       raw_features = self.spec.raw_ff_fixed_features(f, state)
 
       embedded_features = None
       if len(raw_features) == 0:
         embedded_features = Var(torch.zeros(1, f.dim))
       else:
-        embedded_features = bag(
+        embedded_features = f.bag(
           Var(torch.LongTensor(raw_features)), Var(torch.LongTensor([0])))
       ff_input_parts.append(embedded_features)
       if debug: ff_input_parts_debug.append((f, raw_features))
 
     # Link features.
-    link_features = zip(self.spec.ff_link_features, self.ff_link_transforms)
-    for f, transform in link_features:
+    for f in self.spec.ff_link_features:
       link_debug = (f, [])
 
       # Figure out where we need to pick the activations from.
@@ -369,10 +369,10 @@ class Sempar(nn.Module):
       for index in indices:
         activation = None
         if index is not None:
-          assert index < len(activations), "%r" % index
-          if index < 0: assert -index <= len(activations), "%r" % index
+          l = len(activations)
+          assert index >= 0 and index < l, (f.name, index, l)
           activation = activations[index]
-        vec = transform.forward(activation)
+        vec = f.transform.forward(activation)
         ff_input_parts.append(vec)
 
       if debug:
@@ -548,9 +548,9 @@ class Sempar(nn.Module):
     rl_concat_op.add_output(rl_input)
 
     # Add LSTM inputs.
-    for i, feature in enumerate(spec.lstm_features):
-      write_fixed_feature(feature, self.lr_embeddings[i], lr, lr_concat_op)
-      write_fixed_feature(feature, self.rl_embeddings[i], rl, rl_concat_op)
+    for feature in spec.lstm_features:
+      write_fixed_feature(feature, feature.lr_embedding, lr, lr_concat_op)
+      write_fixed_feature(feature, feature.rl_embedding, rl, rl_concat_op)
 
     finish_concat_op(lr, lr_concat_op)
     finish_concat_op(rl, rl_concat_op)
@@ -588,10 +588,10 @@ class Sempar(nn.Module):
     ff_steps = link(ff, "steps", spec.ff_hidden_dim, ff_cnx, False)
 
     # Add FF's input variables.
-    for feature, bag in zip(spec.ff_fixed_features, self.ff_fixed_embeddings):
-      write_fixed_feature(feature, bag, ff, ff_concat_op)
+    for feature in spec.ff_fixed_features:
+      write_fixed_feature(feature, feature.bag, ff, ff_concat_op)
 
-    for feature, lt in zip(spec.ff_link_features, self.ff_link_transforms):
+    for feature in spec.ff_link_features:
       indices = index_vars(ff, feature)
 
       activations = None
@@ -613,9 +613,9 @@ class Sempar(nn.Module):
           name=name + ":0", shape=[feature.num, activations.shape[1] + 1])
       collect.add_output(collected)
 
-      sz = lt.weight.size()
+      sz = feature.transform.weight.size()
       transform = ff.var(name=feature.name + "/transform", shape=[sz[0], sz[1]])
-      transform.data = lt.weight.data.numpy()
+      transform.data = feature.transform.weight.data.numpy()
 
       name = feature.name + "/MatMul"
       matmul = ff.rawop(optype="MatMul", name=name)

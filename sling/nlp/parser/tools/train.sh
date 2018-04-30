@@ -17,9 +17,15 @@
 # Script for training a Sempar model from scratch.
 #
 # It should be run from the top-level folder (i.e. the one which contains the
-# 'nlp' and 'frame' subfolders).
+# 'sling' subfolder).
+#
 # Usage:
-#   /path/to/this/script <train filepattern> <path to commons> <output folder>
+#   /path/to/this/script <flags described in train_pytorch.py and train_util.py>
+#
+# Sample command:
+#   /path/to/this/script --commons=commons_file --train=train.rec --dev=dev.rec \
+#        --output=out_folder [--word_embeddings=word_embeddings.bin] \
+#        [--batch=8] [--report_every=3000] [--steps=100000] [--alpha=0.005]
 #
 # It takes as input:
 # - A file pattern of training documents with gold annotations. Each file should
@@ -30,186 +36,35 @@
 # - Word embedding dimension, and optionally a pretrained word embedding.
 # - Training parameters, e.g. batch size, training steps, learning rate,
 #   checkpoint interval etc.
+#
+# It outputs a Myelin flow file in the output folder corresponding to the best
+# checkpoint.
 
-# It performs the following steps:
-# - Builds the action table.
-# - Builds resources needed by the features.
-# - Builds a complete MasterSpec proto.
-# - Builds a TF graph using the master spec and default hyperparameters.
-# - Trains a model using the graph above.
-# - Converts the trained model to a Myelin flow file for use in the runtime.
-
-# Tweaks:
-# - The features and component attributes (e.g. hidden layer size) are
-#   hard-coded in generate-master-spec.cc and can be changed there.
 
 set -eu
 
 readonly COMMAND=`echo $0 $@`
+readonly ARGS=`echo $@`
 
-# Input resources and arguments.
-SEM=local/sempar
-COMMONS=${SEM}/commons
-OUTPUT_FOLDER=${SEM}/out
-TRAIN_FILEPATTERN=${SEM}/train.rec
-DEV_FILEPATTERN=${SEM}/dev.rec
-WORD_EMBEDDINGS_DIM=32
-PRETRAINED_WORD_EMBEDDINGS=${SEM}/word2vec-32-embeddings.bin
-OOV_FEATURES=true
-
-# Training hyperparameters.
-BATCH_SIZE=8
-REPORT_EVERY=2000
-LEARNING_RATE=0.0005
-SEED=2
-METHOD=adam
-ADAM_BETA1=0.01
-ADAM_BETA2=0.999
-ADAM_EPS=0.00001
-GRAD_CLIP_NORM=1.0
-DROPOUT=1.0
-TRAIN_STEPS=200000
-DECAY_STEPS=500000
-MOVING_AVERAGE=true
-L2_COEFFICIENT=0.0001
-
-# Whether we should make the MasterSpec again or not.
-MAKE_SPEC=1
-
-# Whether we should train or stop after making the MasterSpec.
-DO_TRAINING=1
-
+OUTPUT_FOLDER=
 for i in "$@"
 do
 case $i in
-    --commons=*)
-    COMMONS="${i#*=}"
-    shift
-    ;;
     --output_dir=*|--output=*|--output_folder=*)
     OUTPUT_FOLDER="${i#*=}"
     shift
     ;;
-    --train=*|--train_corpus=*)
-    TRAIN_FILEPATTERN="${i#*=}"
-    shift
-    ;;
-    --dev=*|--dev_with_gold=*)
-    DEV_FILEPATTERN="${i#*=}"
-    shift
-    ;;
-    --spec_only|--only_spec)
-    DO_TRAINING=0
-    shift
-    ;;
-    --train_only|--only_train)
-    MAKE_SPEC=0
-    shift
-    ;;
-    --batch=*|--batch_size=*)
-    BATCH_SIZE="${i#*=}"
-    shift
-    ;;
-    --report_every=*|--checkpoint_every=*)
-    REPORT_EVERY="${i#*=}"
-    shift
-    ;;
-    --learning_rate=*|--eta=*)
-    LEARNING_RATE="${i#*=}"
-    shift
-    ;;
-    --train_steps=*|--steps=*|--num_train_steps=*)
-    TRAIN_STEPS="${i#*=}"
-    shift
-    ;;
-    --word_embeddings_dim=*|--word_dim=*|--word_embedding_dim=*)
-    WORD_EMBEDDINGS_DIM="${i#*=}"
-    shift
-    ;;
-    --word_embeddings=*|--pretrained_embeddings=*|--pretrained_word_embeddings=*)
-    PRETRAINED_WORD_EMBEDDINGS="${i#*=}"
-    shift
-    ;;
-    --oov_features=*|--oov_lstm_features=*)
-    OOV_FEATURES="${i#*=}"
-    shift
-    ;;
-    --seed=*)
-    SEED="${i#*=}"
-    shift
-    ;;
-    --method=*|--optimizer=*)
-    METHOD="${i#*=}"
-    shift
-    ;;
-    --adam_beta1=*)
-    ADAM_BETA1="${i#*=}"
-    shift
-    ;;
-    --adam_beta2=*)
-    ADAM_BETA2="${i#*=}"
-    shift
-    ;;
-    --adam_eps=*|--adam_epsilon=*)
-    ADAM_EPS="${i#*=}"
-    shift
-    ;;
-    --grad_clip_norm=*|--gradient_clip_norm=*|--grad_clip=*|--gradient_clip=*)
-    GRAD_CLIP_NORM="${i#*=}"
-    shift
-    ;;
-    --dropout=*|--dropout_rate=*|--dropout_keep_rate=*)
-    DROPOUT="${i#*=}"
-    shift
-    ;;
-    --decay=*|--decay_steps=*)
-    DECAY="${i#*=}"
-    shift
-    ;;
-    --moving_average=*|--use_moving_average=*)
-    MOVING_AVERAGE="${i#*=}"
-    shift
-    ;;
-    --l2=*|--l2_coeff=*)
-    L2_COEFFICIENT="${i#*=}"
-    shift
-    ;;
     *)
-    echo "Unknown option " $i
-    exit 1
+    shift
     ;;
 esac
 done
 
-if [ -z "$COMMONS" ];
+if [ -z "$OUTPUT_FOLDER" ];
 then
-  echo "Commons not specified. Use --commons to specify it."
+  echo "Output folder not specified. Use --output_folder to specify it."
   exit 1
 fi
-if [ -z "$TRAIN_FILEPATTERN" ];
-then
-  echo "Train corpus not specified. Use --train or --train_corpus."
-  exit 1
-fi
-if [ -z "$DEV_FILEPATTERN" ];
-then
-  echo "Dev gold corpus not specified. Use --dev or --dev_with_gold."
-  exit 1
-fi
-
-if [[ "$MAKE_SPEC" -eq 0 ]] && [[ "$DO_TRAINING" -eq 0 ]];
-then
-  echo "Specify at most one of --only_spec and --only_train"
-  exit 1
-fi
-
-HYPERPARAMS="learning_rate:${LEARNING_RATE} decay_steps:${DECAY_STEPS} "
-HYPERPARAMS+="seed:${SEED} learning_method:'${METHOD}' "
-HYPERPARAMS+="use_moving_average:${MOVING_AVERAGE} dropout_rate:${DROPOUT} "
-HYPERPARAMS+="gradient_clip_norm:${GRAD_CLIP_NORM} adam_beta1:${ADAM_BETA1} "
-HYPERPARAMS+="adam_beta2:${ADAM_BETA2} adam_eps:${ADAM_EPS} "
-HYPERPARAMS+="l2_regularization_coefficient:${L2_COEFFICIENT} "
-
 
 mkdir -p "${OUTPUT_FOLDER}"
 
@@ -217,35 +72,16 @@ COMMAND_FILE="${OUTPUT_FOLDER}/command"
 echo "Writing command to ${COMMAND_FILE}"
 echo $COMMAND > ${COMMAND_FILE}
 
-if [[ "$MAKE_SPEC" -eq 1 ]];
-then
-  bazel build -c opt sling/nlp/parser/trainer:generate-master-spec
-  bazel-bin/sling/nlp/parser/trainer/generate-master-spec \
-    --documents=${TRAIN_FILEPATTERN} \
-    --commons=${COMMONS} \
-    --output_dir=${OUTPUT_FOLDER} \
-    --word_embeddings=${PRETRAINED_WORD_EMBEDDINGS} \
-    --word_embeddings_dim=${WORD_EMBEDDINGS_DIM} \
-    --oov_lstm_features=${OOV_FEATURES} \
-    --logtostderr
-fi
+LOG_FILE="${OUTPUT_FOLDER}/log"
+echo "Logging will be teed to ${LOG_FILE}"
 
-if [[ "$DO_TRAINING" -eq 1 ]];
+bazel build -c opt sling/nlp/parser/tools:evaluate-frames
+bazel build -c opt sling/pyapi:pysling.so
+SLING_SYMLINK=/usr/local/lib/python2.7/dist-packages/sling
+if [ ! -e  $SLING_SYMLINK ];
 then
-  bazel build -c opt sling/nlp/parser/tools:evaluate-frames
-  bazel build -c opt sling/nlp/parser/trainer:sempar.so
-  python sling/nlp/parser/tools/train.py \
-    --master_spec="${OUTPUT_FOLDER}/master_spec" \
-    --hyperparams="${HYPERPARAMS}" \
-    --output_folder=${OUTPUT_FOLDER} \
-    --flow=${OUTPUT_FOLDER}/sempar.flow \
-    --commons=${COMMONS} \
-    --train_corpus=${TRAIN_FILEPATTERN} \
-    --dev_corpus=${DEV_FILEPATTERN} \
-    --batch_size=${BATCH_SIZE} \
-    --report_every=${REPORT_EVERY} \
-    --train_steps=${TRAIN_STEPS} \
-    --logtostderr
+  echo "Need sudo to link the sling python module.."
+  sudo ln -s $(realpath python) $SLING_SYMLINK
 fi
-
-echo "Done."
+stdbuf -o 0 python sling/nlp/parser/tools/train_pytorch.py $ARGS 2>&1 | tee ${LOG_FILE}
+echo "Done. Log is available at ${LOG_FILE}."
