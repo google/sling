@@ -118,6 +118,9 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
             &Assembler::vmaxss, &Assembler::vmaxsd,
             masm);
         break;
+      case Express::SQRT:
+        GenerateSqrt(instr, masm);
+        break;
       case Express::MULADD132:
         GenerateXMMFltOp(instr,
             &Assembler::vfmadd132ss, &Assembler::vfmadd132sd,
@@ -253,6 +256,33 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
         case DT_DOUBLE:
           __ vroundsd(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]),
                       code);
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      UNSUPPORTED;
+    }
+  }
+
+  // Generate square root.
+  void GenerateSqrt(Express::Op *instr, MacroAssembler *masm) {
+    if (instr->dst != -1 && instr->src != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vsqrtss(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
+          break;
+        case DT_DOUBLE:
+          __ vsqrtsd(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->dst != -1 && instr->src == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vsqrtss(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ vsqrtsd(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]));
           break;
         default: UNSUPPORTED;
       }

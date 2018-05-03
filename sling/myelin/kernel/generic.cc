@@ -18,9 +18,14 @@
 #include <vector>
 
 #include "sling/myelin/compute.h"
+#include "sling/myelin/macro-assembler.h"
+
+#define __ masm->
 
 namespace sling {
 namespace myelin {
+
+using namespace jit;
 
 // array.cc
 void RegisterArrayKernels(Library *library);
@@ -33,6 +38,76 @@ void RegisterGenericMatMul(Library *library);
 
 // generic-operators.cc
 void RegisterGenericOperators(Library *library);
+
+// Reference op for accessing parameters in other cells of the network. Looks up
+// tensor 'var' in instance and outputs a reference to the tensor.
+class Reference : public Kernel {
+ public:
+  string Name() override { return "Reference"; }
+  string Operation() override { return "Reference"; }
+
+  bool Supports(Step *step) override {
+    // Check inputs and outputs.
+    if (step->indegree() != 1 || step->outdegree() != 1) return false;
+
+    // Lookup variable.
+    Tensor *var = GetReference(step);
+    if (var == nullptr) {
+      LOG(WARNING) << "Missing/unknown reference variable for " << step->name();
+      return false;
+    }
+
+    // Check types.
+    Tensor *instance = step->input(0);
+    Tensor *ref = step->output(0);
+    if (instance->type() != DT_RESOURCE || !instance->ref()) return false;
+    if (ref->type() != var->type() || !ref->ref()) return false;
+
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+    // Propagate alignment constraints from reference to variable.
+    Tensor *var = GetReference(step);
+    CHECK(var != nullptr);
+    step->output(0)->Link(var);
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    // Get inputs and outputs.
+    Tensor *instance = step->input(0);
+    Tensor *ref = step->output(0);
+    Tensor *var = GetReference(step);
+    CHECK(instance->IsLocal());
+    CHECK(ref->IsLocal());
+    CHECK(var != nullptr);
+
+    // Output reference to variable in other instance.
+    Register addr = masm->rr().alloc();
+    if (var->IsGlobal()) {
+      __ load_extern(addr, var->data(), var->name());
+    } else {
+      __ movq(addr, Operand(masm->instance(), instance->offset()));
+      if (var->ref()) {
+        __ movq(addr, Operand(addr, var->offset()));
+      } else if (var->offset() != 0) {
+        __ addq(addr, Immediate(var->offset()));
+      }
+    }
+    __ movq(Operand(masm->instance(), ref->offset()), addr);
+  }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+  }
+
+  // Get referenced tensor.
+  static Tensor *GetReference(Step *step) {
+    const string &varname = step->GetAttr("var");
+    if (varname.empty()) return nullptr;
+    return step->cell()->network()->GetParameter(varname);
+  }
+};
 
 // Rename operations with aliases.
 class RenameTransformer : public Transformer {
@@ -99,8 +174,8 @@ class IdentityTransformer : public Transformer {
   }
 };
 
-// Combine ops.
-class CombineTransformer : public Transformer {
+// Combine matrix multiplication with add and relu.
+class MatMulTransformer : public Transformer {
  public:
   bool Transform(Flow *flow) override {
     int combines = 0;
@@ -120,16 +195,18 @@ class CombineTransformer : public Transformer {
       if (op->type != first) continue;
       if (op->outputs.size() != 1) continue;
       Flow::Variable *var = op->outputs[0];
-      if (var->consumers.size() != 1) continue;
+      if (var->usages() != 1) continue;
       if (var->consumers[0]->type != second) continue;
       if (var->consumers[0]->task != op->task) continue;
-      if (var->out) continue;
+      if (var->out()) continue;
       if (!var->shape.defined()) continue;
       if (op->indegree() >= 1) {
         // Only combine for vector inputs.
         Flow::Variable *input = op->inputs[0];
         if (input->rank() == 2 && input->dim(0) > 1) continue;
       }
+      if (op->GetAttr("transpose_a", false)) continue;
+      if (op->GetAttr("transpose_b", false)) continue;
 
       flow->Fuse(op, var->consumers[0], combined);
       return true;
@@ -169,7 +246,7 @@ class FlattenConcatTransformer : public Transformer {
 
       // The child should have only one consumer, the parent.
       Flow::Variable *child_result = child->outputs[0];
-      if (child_result->consumers.size() != 1) continue;
+      if (child_result->usages() != 1) continue;
       Flow::Operation *parent = child_result->consumers[0];
       if (!IsConcat(*parent)) continue;
 
@@ -180,7 +257,7 @@ class FlattenConcatTransformer : public Transformer {
       if (parent_axis != child_axis) continue;
 
       // The child axis will be pruned, so it should have no other dependencies.
-      if (child->inputs.back()->consumers.size() != 1) continue;
+      if (child->inputs.back()->usages() != 1) continue;
       if (child->inputs.back()->producer != nullptr) continue;
 
       Flatten(flow, parent, child);
@@ -263,7 +340,7 @@ class GatherTransformer : public Transformer {
       if (axis32 != 0) continue;
 
       // The axis will be pruned, so it should have no other dependencies.
-      if (axis->consumers.size() != 1) continue;
+      if (axis->usages() != 1) continue;
       if (axis->producer != nullptr) continue;
 
       op->RemoveInput(axis);
@@ -278,7 +355,7 @@ class GatherTransformer : public Transformer {
 // Type inference for standard ops.
 class StandardTyper : public Typer {
  public:
-  bool InferTypes(Flow::Operation *op) override {
+  bool InferTypes(Flow *flow, Flow::Operation *op) override {
     // Infer shape for matrix multiplication.
     if (op->type == "MatMul" ||
         op->type == "MatMulAdd" ||
@@ -292,9 +369,17 @@ class StandardTyper : public Typer {
         if (c->type == DT_INVALID) c->type = a->type;
 
         // Matrix multiplied by matrix.
-        if (a->rank() == 2 && b->rank() == 2 && a->dim(1) == b->dim(0)) {
-          c->shape.assign(a->dim(0), b->dim(1));
-          return true;
+        if (a->rank() == 2 && b->rank() == 2) {
+          bool ta = op->GetAttr("transpose_a", false);
+          bool tb = op->GetAttr("transpose_b", false);
+          int a_rows =  ta ? a->dim(1) : a->dim(0);
+          int a_cols =  ta ? a->dim(0) : a->dim(1);
+          int b_rows =  tb ? b->dim(1) : b->dim(0);
+          int b_cols =  tb ? b->dim(0) : b->dim(1);
+          if (a_cols == b_rows) {
+            c->shape.assign(a_rows, b_cols);
+            return true;
+          }
         }
       }
     }
@@ -413,12 +498,38 @@ class StandardTyper : public Typer {
       }
     }
 
+    // Infer shape for pooling gather operation.
+    if (op->type == "GatherAvg" ||
+        op->type == "GatherSum" ||
+        op->type == "GatherMax") {
+      if (op->indegree() == 2 && op->outdegree() == 1) {
+        Flow::Variable *params = op->inputs[0];
+        Flow::Variable *result = op->outputs[0];
+        result->type = params->type;
+        result->shape = params->shape;
+        result->shape.set(0, 1);
+        return true;
+      }
+    }
+
     // Infer shape for argmax operation.
     if (op->type == "ArgMax") {
       if (op->indegree() == 1 && op->outdegree() == 1) {
         Flow::Variable *y = op->outputs[0];
         if (y->type == DT_INVALID) y->type = DT_INT32;
         y->shape.redim(0);
+        return true;
+      }
+    }
+
+    // Infer shape for reference operation.
+    if (op->type == "Reference") {
+      if (op->indegree() == 1 && op->outdegree() == 1) {
+        Flow::Variable *ref = op->outputs[0];
+        Flow::Variable *external = flow->Var(op->GetAttr("var"));
+        ref->type = external->type;
+        ref->shape = external->shape;
+        ref->set_ref();
         return true;
       }
     }
@@ -442,7 +553,7 @@ void RegisterGenericLibrary(Library *library) {
   // Register transformations.
   library->RegisterTransformer(new RenameTransformer());
   library->RegisterTransformer(new IdentityTransformer());
-  library->RegisterTransformer(new CombineTransformer());
+  library->RegisterTransformer(new MatMulTransformer());
   library->RegisterTransformer(new FlattenConcatTransformer());
   library->RegisterTransformer(new GatherTransformer());
 
@@ -450,6 +561,7 @@ void RegisterGenericLibrary(Library *library) {
   library->RegisterTyper(new StandardTyper());
 
   // Register kernels.
+  library->Register(new Reference());
   RegisterArrayKernels(library);
   RegisterGenericMath(library);
   RegisterGenericMatMul(library);

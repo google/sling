@@ -94,6 +94,11 @@ GraphOptions::GraphOptions() {
   consts.color = "#A6A6A6";
   consts.fillcolor = "#EEEEEE";
 
+  globals.shape = "box";
+  globals.style = "filled";
+  globals.color = "#A6A6A6";
+  globals.fillcolor = "#EEEEEE";
+
   funcs.shape = "box";
   funcs.style = "rounded,filled";
   funcs.fillcolor = "#FCFCFC";
@@ -109,7 +114,11 @@ static void AppendOp(string *str,
   str->append("label=\"");
   if (options.op_type_as_label) {
     if (op->HasAttr("expr")) {
+      if (op->type == "Assign") str->append("&#8612; ");
       str->append(op->GetAttr("expr"));
+    } else if (op->HasAttr("var")) {
+      str->append("&#10132; ");
+      str->append(op->GetAttr("var"));
     } else {
       str->append(op->type);
     }
@@ -127,13 +136,47 @@ static void AppendOp(string *str,
   } else {
     options.ops.Append(str);
   }
+
+  bool calculate = (op->type == "Calculate" || op->type == "Assign");
+  str->append(" tooltip=\"");
+  StringAppendF(str, "name: %s&#10;", op->name.c_str());
+  StringAppendF(str, "type: %s&#10;", op->type.c_str());
+  if (!op->inputs.empty()) {
+    str->append("input:&#10;");
+    for (int i = 0; i < op->inputs.size(); ++i) {
+      Flow::Variable *var = op->inputs[i];
+      if (calculate) StringAppendF(str, "  %%%d ", i);
+      StringAppendF(str, "  %s: %s",
+        var->name.c_str(), var->TypeString().c_str());
+      str->append("&#10;");
+    }
+  }
+  if (!op->outputs.empty()) {
+    str->append("output:&#10;");
+    for (int i = 0; i < op->outputs.size(); ++i) {
+      Flow::Variable *var = op->outputs[i];
+      if (calculate) StringAppendF(str, "  @%d ", i);
+      StringAppendF(str, "  %s: %s",
+        var->name.c_str(), var->TypeString().c_str());
+      str->append("&#10;");
+    }
+  }
+  if (!op->attrs().empty()) {
+    str->append("attr:&#10;");
+    for (const auto &attr : op->attrs()) {
+      StringAppendF(str, "  %s = %s&#10;",
+        attr.name.c_str(), attr.value.c_str());
+    }
+  }
+  str->append("\"");
+
   str->append("];\n");
 }
 
 static void AppendVar(string *str,
                       Flow::Variable *var,
                       const GraphOptions &options) {
-  if (var->in || var->out || var->data) {
+  if (var->in() || var->out() || var->global()) {
     AppendVarId(str, var);
     str->append(" [");
     str->append("label=\"");
@@ -156,14 +199,33 @@ static void AppendVar(string *str,
     }
     str->append("\" ");
 
+    str->append(" tooltip=\"");
+    if (var->constant()) str->append("const ");
+    if (var->learnable()) str->append("learnable ");
+    if (var->in()) str->append("in ");
+    if (var->out()) str->append("out ");
+    if (var->unique()) str->append("unique ");
+    str->append("var ");
+    str->append(var->name);
+    if (!var->aliases.empty()) {
+      str->append("&#10;alias:");
+      for (const string &alias : var->aliases) {
+        str->append("&#10;  ");
+        str->append(alias);
+      }
+    }
+    str->append("\" ");
+
     auto f = options.custom_vars.find(var->name);
     if (f != options.custom_vars.end()) {
       f->second.Append(str);
-    } else if (var->data != nullptr) {
+    } else if (var->constant()) {
       options.consts.Append(str);
-    } else if (var->out && !var->in) {
+    } else if (var->global()) {
+      options.globals.Append(str);
+    } else if (var->out() && !var->in()) {
       options.outputs.Append(str);
-    } else if (var->in && !var->out) {
+    } else if (var->in() && !var->out()) {
       options.inputs.Append(str);
     } else {
       options.vars.Append(str);
@@ -177,6 +239,9 @@ static void AppendVar(string *str,
       str->append(" [");
       str->append("tooltip=\"");
       str->append(var->name);
+      if (var->producer->outputs.size() > 1) {
+        StringAppendF(str, " (@%d)", var->producer->OutputIndex(var));
+      }
       str->append("\" ");
       AppendPenWidth(str, var, options);
       str->append("];\n");
@@ -188,6 +253,9 @@ static void AppendVar(string *str,
       AppendOpId(str, consumer);
       str->append(" [");
       str->append("tooltip=\"");
+      if (consumer->inputs.size() > 1) {
+        StringAppendF(str, "%%%d = ", consumer->InputIndex(var));
+      }
       str->append(var->name);
       str->append("\" ");
       AppendPenWidth(str, var, options);
@@ -213,7 +281,9 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
 
   // Output DOT graph header.
   str.append("digraph flow {\n");
-  StringAppendF(&str, "graph [rankdir=%s]\n", options.direction);
+  StringAppendF(&str, "graph [rankdir=%s;splines=%s]\n",
+               options.direction,
+               options.splines);
   StringAppendF(&str, "node [fontname=\"%s\"]\n", options.fontname);
 
   // Output DOT graph nodes for ops.
@@ -227,6 +297,9 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
       StringAppendF(&str, "subgraph cluster_%d {\n", cluster_id++);
       options.funcs.Append(&str, ";\n");
       StringAppendF(&str, "label=\"%s\";\n", func->name.c_str());
+      StringAppendF(&str, "tooltip=\"%s%s\";\n",
+                    func->name.c_str(),
+                    func->training() ? " (train)" : "");
     }
 
     // Output all ops in function.
@@ -251,14 +324,28 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
 
   // Output DOT graph edges between ops.
   for (Flow::Operation *op : flow.ops()) {
-    for (Flow::Variable *input : op->inputs) {
-      if (input->producer != nullptr && !input->in && !input->out) {
+    for (int i = 0; i < op->inputs.size(); ++i) {
+      Flow::Variable *input = op->inputs[i];
+      if (input->producer != nullptr && !input->in() && !input->out()) {
         AppendOpId(&str, input->producer);
         str.append(" -> ");
         AppendOpId(&str, op);
         str.append(" [");
         str.append("tooltip=\"");
+        if (op->inputs.size() > 1) {
+          StringAppendF(&str, "%%%d = ", i);
+        }
         str.append(input->name);
+        if (input->producer->outputs.size() > 1) {
+          StringAppendF(&str, " (@%d)", input->producer->OutputIndex(input));
+        }
+        if (!input->aliases.empty()) {
+          str.append("&#10;alias:");
+          for (const string &alias : input->aliases) {
+            str.append("&#10;  ");
+            str.append(alias);
+          }
+        }
         str.append("\" ");
         AppendPenWidth(&str, input, options);
         str.append("];\n");
@@ -269,7 +356,7 @@ string FlowToDotGraph(const Flow &flow, const GraphOptions &options) {
   // Output shared variables.
   for (Flow::Variable *var : flow.vars()) {
     if (exclusive.count(var) == 0) {
-      if (options.include_constants || var->data == nullptr) {
+      if (options.include_constants || !var->constant()) {
         AppendVar(&str, var, options);
       }
     }

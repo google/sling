@@ -47,8 +47,10 @@ DEFINE_string(datagraph, "", "DOT file name prefix for data profile");
 DEFINE_int32(batch, 1, "Batch size");
 DEFINE_string(o, "", "ELF object output file for generated code");
 DEFINE_bool(gendata, false, "Output tensor data to ELF object file");
+DEFINE_bool(genrwdata, false, "Allocate space for tensor data in object file");
 DEFINE_bool(gpu, false, "Run kernels on GPU");
 DEFINE_bool(argmax, false, "Use argmax for predictions");
+DEFINE_bool(compile, true, "Compile flow");
 
 using namespace sling;
 using namespace sling::myelin;
@@ -70,7 +72,7 @@ class FixedDragnnInitializer : public Kernel {
 // Type inference for Dragnn ops.
 class FixedDragnnTyper : public Typer {
  public:
-  bool InferTypes(Flow::Operation *op) override {
+  bool InferTypes(Flow *flow, Flow::Operation *op) override {
     if (op->type == "WordEmbeddingInitializer") {
       if (op->outdegree() == 1) {
         Flow::Variable *result = op->outputs[0];
@@ -143,7 +145,7 @@ int main(int argc, char *argv[]) {
     FlowToDotGraphFile(flow, opts, FLAGS_graph);
   }
 
-  if (!FLAGS_raw) {
+  if (FLAGS_compile && !FLAGS_raw) {
     // Compile model.
     LOG(INFO) << "Compiling flow";
     ElfLinker *linker = nullptr;
@@ -153,8 +155,13 @@ int main(int argc, char *argv[]) {
       network.set_runtime(&cudart);
     }
     if (!FLAGS_o.empty()) {
-      linker = new ElfLinker();
-      if (FLAGS_gendata) linker->set_generate_data(true);
+      ElfLinker::Options linker_opts;
+      if (FLAGS_gendata) linker_opts.generate_data = true;
+      if (FLAGS_genrwdata) {
+        linker_opts.generate_data = true;
+        linker_opts.writeable_data = true;
+      }
+      linker = new ElfLinker(linker_opts);
       network.set_linker(linker);
     }
     if (FLAGS_profile) network.options().profiling = true;

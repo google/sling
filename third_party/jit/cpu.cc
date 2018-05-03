@@ -29,6 +29,7 @@
 // modified significantly by Google Inc.
 // Copyright 2017 Google Inc. All rights reserved.
 
+#include <sys/sysinfo.h>
 #include <utility>
 
 #include "third_party/jit/cpu.h"
@@ -44,15 +45,15 @@ unsigned CPU::cache_line_size = 0;
 bool CPU::vzero_needed = false;
 
 static void __cpuid(int cpu_info[4], int info_type) {
-  __asm__ volatile("cpuid \n\t"
-                   : "=a"(cpu_info[0]), "=b"(cpu_info[1]), "=c"(cpu_info[2]),
-                     "=d"(cpu_info[3])
-                   : "a"(info_type), "c"(0));
+  __asm__ volatile ("cpuid \n\t"
+                    : "=a"(cpu_info[0]), "=b"(cpu_info[1]), "=c"(cpu_info[2]),
+                      "=d"(cpu_info[3])
+                    : "a"(info_type), "c"(0));
 }
 
 static uint64_t _xgetbv(unsigned int xcr) {
   unsigned eax, edx;
-  __asm__ volatile(".byte 0x0f, 0x01, 0xd0" : "=a"(eax), "=d"(edx) : "c"(xcr));
+  __asm__ volatile (".byte 0x0f, 0x01, 0xd0" : "=a"(eax), "=d"(edx) : "c"(xcr));
   return static_cast<uint64_t>(eax) | (static_cast<uint64_t>(edx) << 32);
 }
 
@@ -64,10 +65,20 @@ static bool os_has_avx_support() {
   return (feature_mask & 0x6) == 0x6;
 }
 
+static void enable_fast_math() {
+  // Prevent slowdown on denormals by treating them as zero.
+  int mxcsr;
+  __asm__ volatile ("stmxcsr %0" : "=m"(mxcsr) : :);
+  mxcsr |= (1 << 11) | (1 << 15); // set bit 11 and 15: flush-to-zero mode
+  mxcsr |= (1 << 6) | (1 << 8);   // set bit 11 and 15: denormals-are-zero mode
+  __asm__ volatile ("ldmxcsr %0" : : "m"(mxcsr) :);
+}
+
 ProcessorInformation::ProcessorInformation() {
   memcpy(vendor_, "Unknown", 8);
   memcpy(brand_, "Unknown", 8);
   int cpu_info[4];
+  for (int i = 0; i < NUMBER_OF_AVX512_FEATURES; ++i) avx512[i] = false;
 
   // Query basic CPU information.
   __cpuid(cpu_info, 0);
@@ -107,6 +118,26 @@ ProcessorInformation::ProcessorInformation() {
     has_bmi1_ = (cpu_info[1] & 0x00000008) != 0;
     has_bmi2_ = (cpu_info[1] & 0x00000100) != 0;
     has_avx2_ = (cpu_info[1] & 0x00000020) != 0;
+
+    auto has = [&cpu_info](int r, int b)  {
+      return (cpu_info[r] & (1 << b)) != 0;
+    };
+
+    avx512[AVX512F] = has(1, 16);
+    avx512[AVX512DQ] = has(1, 17);
+    avx512[AVX512IFMA] = has(1, 21);
+    avx512[AVX512PF] = has(1, 26);
+    avx512[AVX512ER] = has(1, 27);
+    avx512[AVX512CD] = has(1, 28);
+    avx512[AVX512BW] = has(1, 30);
+    avx512[AVX512VL] = has(1, 31);
+    avx512[AVX512VBMI] = has(2, 1);
+    avx512[AVX512VBMI2] = has(2, 6);
+    avx512[AVX512VNNI] = has(2, 11);
+    avx512[AVX512BITALG] = has(2, 12);
+    avx512[AVX512VPOPCNTDQ] = has(2, 14);
+    avx512[AVX512_4VNNIW] = has(3, 2);
+    avx512[AVX512_4FMAPS] = has(3, 3);
   }
 
   // Query extended IDs.
@@ -165,6 +196,12 @@ ProcessorInformation::ProcessorInformation() {
 
 const char *ProcessorInformation::architecture() {
   switch (family_model()) {
+    case 0x068E:
+    case 0x069E:
+      return "Kaby Lake";
+
+    case 0x064E:
+    case 0x0655:
     case 0x065E:
       return "Skylake";
 
@@ -234,9 +271,12 @@ void CPU::Initialize() {
   if (cpu.has_sahf()) features |= 1u << SAHF;
 
   if (cpu.has_osxsave() && os_has_avx_support()) {
-    features |= 1u << AVX;
+    if (cpu.has_avx()) features |= 1u << AVX;
     if (cpu.has_fma3()) features |= 1u << FMA3;
     if (cpu.has_avx2()) features |= 1u << AVX2;
+    if (cpu.has_avx512(ProcessorInformation::AVX512F)) {
+      features |= 1u << AVX512F;
+    }
   }
 
   if (cpu.has_bmi1()) features |= 1u << BMI1;
@@ -249,12 +289,35 @@ void CPU::Initialize() {
 
   cache_line_size = cpu.cache_line_size();
 
-  vzero_needed = false;
-  if (cpu.has_avx()) {
+  // Check if vzeroupper is needed to avoid expensive state transitions. Based
+  // on recommandations in:
+  // https://software.intel.com/en-us/forums/intel-isa-extensions/topic/704023
 #ifndef __AVX__
-    vzero_needed = true;
-#endif
+  switch (cpu.family_model()) {
+    case 0x062A: // Sandy Bridge
+    case 0x062D: // Sandy Bridge
+    case 0x063A: // Ivy Bridge
+    case 0x063E: // Ivy Bridge
+    case 0x063C: // Haswell
+    case 0x063F: // Haswell
+    case 0x0645: // Haswell
+    case 0x0646: // Haswell
+    case 0x063D: // Broadwell
+      vzero_needed = true;
+      break;
+    default:
+      vzero_needed = false;
   }
+#endif
+
+  if (cpu.has_sse3()) {
+    enable_fast_math();
+  }
+}
+
+int CPU::Processors() {
+  Probe();
+  return get_nprocs();
 }
 
 }  // namespace jit

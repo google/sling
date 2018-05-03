@@ -719,6 +719,10 @@ class Assembler : public CodeGenerator {
   void movss(const Operand &dst, XMMRegister src);
 
   void shufps(XMMRegister dst, XMMRegister src, byte imm8);
+  void shufps(XMMRegister dst, const Operand &src, byte imm8);
+
+  void shufpd(XMMRegister dst, XMMRegister src, byte imm8);
+  void shufpd(XMMRegister dst, const Operand &src, byte imm8);
 
   void cvttss2si(Register dst, const Operand &src);
   void cvttss2si(Register dst, XMMRegister src);
@@ -887,12 +891,16 @@ class Assembler : public CodeGenerator {
 
 #undef SSE_CMP_P
 
+  void rcpss(XMMRegister dst, XMMRegister src);
+  void rcpss(XMMRegister dst, const Operand &src);
   void rcpps(XMMRegister dst, XMMRegister src);
   void rcpps(XMMRegister dst, const Operand &src);
   void rsqrtps(XMMRegister dst, XMMRegister src);
   void rsqrtps(XMMRegister dst, const Operand &src);
   void sqrtps(XMMRegister dst, XMMRegister src);
   void sqrtps(XMMRegister dst, const Operand &src);
+  void sqrtpd(XMMRegister dst, XMMRegister src);
+  void sqrtpd(XMMRegister dst, const Operand &src);
   void movups(XMMRegister dst, XMMRegister src);
   void movups(XMMRegister dst, const Operand &src);
   void movups(const Operand &dst, XMMRegister src);
@@ -1817,20 +1825,41 @@ class Assembler : public CodeGenerator {
 
   void vshufps(XMMRegister dst, XMMRegister src1, XMMRegister src2,
                int8_t imm8) {
-    vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG);
+    vinstr(0xc6, dst, src1, src2, kNone, k0F, kWIG);
     emit(imm8);
   }
   void vshufps(XMMRegister dst, XMMRegister src1, const Operand &src2,
                int8_t imm8) {
-    vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG, 1);
+    vinstr(0xc6, dst, src1, src2, kNone, k0F, kWIG, 1);
     emit(imm8);
   }
   void vshufps(YMMRegister dst, YMMRegister src1, YMMRegister src2,
                int8_t imm8) {
-    vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG);
+    vinstr(0xc6, dst, src1, src2, kNone, k0F, kWIG);
     emit(imm8);
   }
   void vshufps(YMMRegister dst, YMMRegister src1, const Operand &src2,
+               int8_t imm8) {
+    vinstr(0xc6, dst, src1, src2, kNone, k0F, kWIG, 1);
+    emit(imm8);
+  }
+
+  void vshufpd(XMMRegister dst, XMMRegister src1, XMMRegister src2,
+               int8_t imm8) {
+    vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG);
+    emit(imm8);
+  }
+  void vshufpd(XMMRegister dst, XMMRegister src1, const Operand &src2,
+               int8_t imm8) {
+    vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG, 1);
+    emit(imm8);
+  }
+  void vshufpd(YMMRegister dst, YMMRegister src1, YMMRegister src2,
+               int8_t imm8) {
+    vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG);
+    emit(imm8);
+  }
+  void vshufpd(YMMRegister dst, YMMRegister src1, const Operand &src2,
                int8_t imm8) {
     vinstr(0xc6, dst, src1, src2, k66, k0F, kWIG, 1);
     emit(imm8);
@@ -2078,6 +2107,13 @@ class Assembler : public CodeGenerator {
     vinstr(0x5b, dst, ymm0, src, kNone, k0F, kWIG);
   }
 
+  void vrcpss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vinstr(0x53, dst, src1, src2, kF3, k0F, kWIG);
+  }
+  void vrcpss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vinstr(0x53, dst, src1, src2, kF3, k0F, kWIG);
+  }
+
   void vrcpps(XMMRegister dst, XMMRegister src) {
     vinstr(0x53, dst, xmm0, src, kNone, k0F, kWIG);
   }
@@ -2089,6 +2125,46 @@ class Assembler : public CodeGenerator {
   }
   void vrcpps(YMMRegister dst, const Operand &src) {
     vinstr(0x53, dst, ymm0, src, kNone, k0F, kWIG);
+  }
+
+
+  void vsqrtss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vinstr(0x51, dst, src1, src2, kF3, k0F, kWIG);
+  }
+  void vsqrtss(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vinstr(0x51, dst, src1, src2, kF3, k0F, kWIG);
+  }
+  void vsqrtsd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vinstr(0x51, dst, src1, src2, kF2, k0F, kWIG);
+  }
+  void vsqrtsd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
+    vinstr(0x51, dst, src1, src2, kF2, k0F, kWIG);
+  }
+
+
+  void vsqrtps(XMMRegister dst, XMMRegister src) {
+    vinstr(0x51, dst, xmm0, src, kNone, k0F, kWIG);
+  }
+  void vsqrtps(XMMRegister dst, const Operand &src) {
+    vinstr(0x51, dst, xmm0, src, kNone, k0F, kWIG);
+  }
+  void vsqrtps(YMMRegister dst, YMMRegister src) {
+    vinstr(0x51, dst, ymm0, src, kNone, k0F, kWIG);
+  }
+  void vsqrtps(YMMRegister dst, const Operand &src) {
+    vinstr(0x51, dst, ymm0, src, kNone, k0F, kWIG);
+  }
+  void vsqrtpd(XMMRegister dst, XMMRegister src) {
+    vinstr(0x51, dst, xmm0, src, k66, k0F, kWIG);
+  }
+  void vsqrtpd(XMMRegister dst, const Operand &src) {
+    vinstr(0x51, dst, xmm0, src, k66, k0F, kWIG);
+  }
+  void vsqrtpd(YMMRegister dst, YMMRegister src) {
+    vinstr(0x51, dst, ymm0, src, k66, k0F, kWIG);
+  }
+  void vsqrtpd(YMMRegister dst, const Operand &src) {
+    vinstr(0x51, dst, ymm0, src, k66, k0F, kWIG);
   }
 
   void vzeroall();

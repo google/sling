@@ -684,8 +684,8 @@ class AVXFltMatMatMul : public Kernel {
     Shape a = A->shape();
     Shape b = B->shape();
     Shape c = C->shape();
-    if (transpose_a) a.transpose();
-    if (transpose_b) b.transpose();
+    if (transpose_a) a = a.transpose();
+    if (transpose_b) b = b.transpose();
 
     if (a.dim(0) != c.dim(0)) return false;
     if (a.dim(1) != b.dim(0)) return false;
@@ -855,7 +855,7 @@ class AVXFltMatMatMul : public Kernel {
     __ vmovss(Operand(c), sum[0]);
     __ addq(c, Immediate(C->stride(c_col_dim)));
 
-    // Move to next column in B
+    // Move to next column in B.
     __ addq(b_row, Immediate(B->stride(b_col_dim)));
     __ cmpq(b_row, b_end);
     __ j(less, &l2);
@@ -873,6 +873,395 @@ class AVXFltMatMatMul : public Kernel {
 
   int64 Complexity(const Step *step) override {
     return step->input(0)->dim(0) * step->input(1)->elements() * 2;
+  }
+};
+
+// Float dot product for CPUs with AVX.
+class AVXFltDotProduct : public Kernel {
+ public:
+  // Maximum number of loop unrolls.
+  static const int kMaxUnrolls = 4;
+
+  // Maximum number of adder registers.
+  static const int kMaxAdders = 4;
+
+  string Name() override { return "AVXFltDotProduct"; }
+  string Operation() override { return "MatMul"; }
+
+  bool Supports(Step *step) override {
+    // Requires CPU with AVX support.
+    if (!CPU::Enabled(AVX)) return false;
+
+    // Two tensor inputs and one tensor output.
+    if (step->indegree() != 2 || step->outdegree() != 1) return false;
+    Tensor *a = step->input(0);
+    Tensor *b = step->input(1);
+    Tensor *c = step->output(0);
+    if (a->type() != DT_FLOAT) return false;
+    if (b->type() != DT_FLOAT) return false;
+    if (c->type() != DT_FLOAT) return false;
+    if (a->elements() != b->elements()) return false;
+    if (c->elements() != 1) return false;
+
+    // Size of be multiple of YMM register size.
+    if (a->elements() % 8  != 0) return false;
+
+    // Horizontal summation is not strict math compatible.
+    if (step->GetAttr("strict", false)) return false;
+
+    return true;
+  }
+
+  int64 Complexity(const Step *step) override {
+    return step->output(0)->elements() * 2;
+  }
+
+  void Adjust(Step *step) override {
+    // Get input and output tensors.
+    Tensor *a = step->input(0);
+    Tensor *b = step->input(1);
+
+    // Align to one ymm register (256 bits, 32 bytes).
+    int byte_alignment = 256 / 8;
+    a->SetMiniumAlignment(byte_alignment);
+    b->SetMiniumAlignment(byte_alignment);
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    Registers &rr = masm->rr();
+    SIMDRegisters &mm = masm->mm();
+
+    // Get input and output tensors.
+    Tensor *a = step->input(0);
+    Tensor *b = step->input(1);
+    Tensor *c = step->output(0);
+
+    // Get number of elements.
+    int n = a->elements();
+
+    // Compute the number of unrolls and adders.
+    int unrolls = 0;
+    for (int i = 1; i <= kMaxUnrolls; ++i) {
+      int batch_size = i * 8;
+      if (n >= batch_size && n % batch_size == 0) unrolls = i;
+    }
+    int adders = unrolls;
+    if (adders < 1) adders = 1;
+    if (adders > kMaxAdders) adders = kMaxAdders;
+    string variant = "U" + std::to_string(unrolls);
+    variant += "A" + std::to_string(adders);
+    step->set_variant(variant);
+
+    // Allocate general registers.
+    Register idx = rr.alloc();
+    Register aptr = rr.alloc();
+    Register bptr = rr.alloc();
+    Register cptr = rr.alloc();
+
+    // Allocate SIMD registers.
+    std::vector<YMMRegister> elem;
+    for (int i = 0; i < std::max(unrolls, 1); ++i) {
+      elem.push_back(mm.allocy());
+    }
+    std::vector<YMMRegister> sum;
+    for (int i = 0; i < adders; ++i) {
+      sum.push_back(mm.allocy());
+    }
+    YMMRegister acc = mm.allocy();
+
+    // Load tensor locations.
+    __ LoadTensorAddress(aptr, a);
+    __ LoadTensorAddress(bptr, b);
+    __ xorq(idx, idx);
+    for (int i = 0; i < adders; ++i) {
+      __ vxorps(sum[i], sum[i], sum[i]);
+    }
+
+    // Outer loop over elements.
+    Label l;
+    __ LoopStart(&l);
+
+    // Multiply and sum next batch.
+    for (int i = 0; i < unrolls; ++i) {
+      // Load a[idx:idx+8].
+      int disp = 8 * i * sizeof(float);
+      __ vmovaps(elem[i], Operand(aptr, idx, times_4, disp));
+    }
+    for (int i = 0; i < unrolls; ++i) {
+      // Multiply a[idx:idx+8] with b[idx:idx+8] and add to sum.
+      int disp = 8 * i * sizeof(float);
+      if (masm->Enabled(FMA3)) {
+        __ vfmadd231ps(sum[i % adders], elem[i],
+                       Operand(bptr, idx, times_4, disp));
+      } else {
+        __ vmulps(elem[i], elem[i], Operand(bptr, idx, times_4, disp));
+        __ vaddps(sum[i % adders], sum[i % adders], elem[i]);
+      }
+    }
+
+    // Move to next batch.
+    if (n > 8 * unrolls) {
+      __ addq(idx, Immediate(8 * unrolls));
+      __ cmpq(idx, Immediate(n));
+      __ j(less, &l);
+    }
+
+    // Sum adders in sum[0].
+    if (adders == 4) {
+      __ vaddps(sum[0], sum[0], sum[2]);
+      __ vaddps(sum[1], sum[1], sum[3]);
+      __ vaddps(sum[0], sum[0], sum[1]);
+    } else {
+      for (int i = 1; i < adders; ++i) {
+        __ vaddps(sum[0], sum[0], sum[i]);
+      }
+    }
+
+    // Add elements in sum[0] horizontally.
+    __ vperm2f128(acc, sum[0], sum[0], 1);
+    __ vhaddps(sum[0], sum[0], acc);
+    __ vhaddps(sum[0], sum[0], sum[0]);
+    __ vhaddps(sum[0], sum[0], sum[0]);
+
+    // Save result to c.
+    __ LoadTensorAddress(cptr, c);
+    __ vmovss(Operand(cptr), sum[0]);
+  }
+};
+
+// Float accumulating outer product for CPUs with AVX (C += A * B).
+class AVXFltAssignAddOuter : public Kernel {
+ public:
+  // Block size.
+  static const int kRowRegs = 4;
+  static const int kColRegs = 4;
+
+  string Name() override { return "AVXFltAssignAddOuter"; }
+  string Operation() override { return "AssignAddMatMul"; }
+
+  bool Supports(Step *step) override {
+    // Requires CPU with AVX support.
+    if (!CPU::Enabled(AVX)) return false;
+
+    // Three matrix inputs.
+    if (step->indegree() != 3 || step->outdegree() != 0) return false;
+    Tensor *c = step->input(0);
+    Tensor *a = step->input(1);
+    Tensor *b = step->input(2);
+    if (a->type() != DT_FLOAT || a->rank() != 2) return false;
+    if (b->type() != DT_FLOAT || b->rank() != 2) return false;
+    if (c->type() != DT_FLOAT || c->rank() != 2) return false;
+    if (a->dim(0) != 1 || a->dim(1) != c->dim(0)) return false;
+    if (b->dim(0) != 1 || b->dim(1) != c->dim(1)) return false;
+    if (!step->GetAttr("transpose_a", false)) return false;
+    if (step->GetAttr("transpose_b", false)) return false;
+
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+    // Get tensors.
+    Tensor *c = step->input(0);
+    Tensor *a = step->input(1);
+    Tensor *b = step->input(2);
+
+    // Align to ymm register.
+    int byte_alignment = 256 / 8;
+    a->SetMiniumAlignment(byte_alignment);
+    b->SetMiniumAlignment(byte_alignment);
+    c->SetMiniumAlignment(byte_alignment);
+
+    // Ensure aligned loads on rows.
+    c->MinAlign({8, 1});
+    c->SetRequiredOrder(ROW_MAJOR);
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    // Get tensors.
+    Tensor *c = step->input(0);
+    Tensor *a = step->input(1);
+    Tensor *b = step->input(2);
+
+    // FMA is not strict math compatible.
+    bool fma = masm->Enabled(FMA3) && !step->GetAttr("strict", false);
+
+    // Get matrix dimensions.
+    int rows = c->dim(0);
+    int cols = c->dim(1);
+    int rowsize = c->stride(0);
+    int colblk = 8 * kColRegs;
+    int main_cols = (cols / colblk) * colblk;
+    int remaining_cols = cols - main_cols;
+    int main_rows = (rows / kRowRegs) * kRowRegs;
+
+    // Allocate general registers.
+    Register cptr = masm->rr().alloc();
+    Register aptr = masm->rr().alloc();
+    Register bptr = masm->rr().alloc();
+    Register col = masm->rr().alloc();
+    Register row = masm->rr().alloc();
+
+    // Allocate SIMD registers.
+    std::vector<YMMRegister> areg;
+    std::vector<YMMRegister> breg;
+    std::vector<YMMRegister> creg;
+    std::vector<YMMRegister> acc;
+    for (int i = 0; i < kRowRegs; ++i) {
+      areg.push_back(masm->mm().allocy());
+    }
+    for (int i = 0; i < kColRegs; ++i) {
+      breg.push_back(masm->mm().allocy());
+      creg.push_back(masm->mm().allocy());
+      acc.push_back(masm->mm().allocy());
+    }
+
+    // Load tensor locations.
+    __ LoadTensorAddress(cptr, c);
+    __ LoadTensorAddress(aptr, a);
+    __ LoadTensorAddress(bptr, b);
+
+    // First compute rows in blocks (stage 0) and then the remaining ones one
+    // row at a time (stage 1).
+    __ xorq(row, row);
+    for (int stage = 0; stage < 2; ++stage) {
+      // Determine the row block size.
+      int rowblk;
+      bool single;
+      if (stage == 0) {
+        if (rows < kRowRegs) continue;
+        rowblk = kRowRegs;
+        single = (rows == kRowRegs);
+      } else {
+        if (rows % kRowRegs == 0) continue;
+        rowblk = 1;
+        single = (rows % kRowRegs == 1);
+      }
+
+      // Outer loop over row blocks.
+      Label l1;
+      __ bind(&l1);
+
+      // Load a[row] block.
+      for (int r = 0; r < rowblk; ++r) {
+        int disp = r * sizeof(float);
+        __ vbroadcastss(areg[r], Operand(aptr, row, times_4, disp));
+      }
+
+      // Compute columns in blocks.
+      if (main_cols > 0) {
+        // Inner loop over column blocks.
+        __ xorq(col, col);
+        Label l2;
+        __ bind(&l2);
+
+        // Load b[col] block.
+        for (int c = 0; c < kColRegs; ++c) {
+          int disp = c * 8 * sizeof(float);
+          __ vmovaps(breg[c], Operand(bptr, col, times_4, disp));
+        }
+
+        // Multiply a[row] block with b[col] block and add to c[row,col] block.
+        for (int r = 0; r < rowblk; ++r) {
+          for (int c = 0; c < kColRegs; ++c) {
+            int disp = r * rowsize + c * 8 * sizeof(float);
+            __ vmovaps(creg[c], Operand(cptr, col, times_4, disp));
+            if (fma) {
+              __ vfmadd231ps(creg[c], areg[r], breg[c]);
+            } else {
+              __ vmulps(acc[c], areg[r], breg[c]);
+              __ vaddps(creg[c], creg[c], acc[c]);
+            }
+            __ vmovaps(Operand(cptr, col, times_4, disp), creg[c]);
+          }
+        }
+
+        if (main_cols > 8 * rowblk) {
+          __ addq(col, Immediate(8 * rowblk));
+          __ cmpq(col, Immediate(main_cols));
+          __ j(less, &l2);
+        }
+      }
+
+      // Compute remaining columns, first 8 floats at a time using AVX.
+      int coldisp = main_cols * sizeof(float);
+      int left = remaining_cols;
+      while (left >= 8) {
+        // Load b[col].
+        __ vmovaps(breg[0], Operand(bptr, coldisp));
+
+        // Multiply a[row] block with b[col] and add to c[row,col] block.
+        for (int r = 0; r < rowblk; ++r) {
+          int disp = r * rowsize + coldisp;
+          __ vmovaps(creg[0], Operand(cptr, disp));
+          if (fma) {
+            __ vfmadd231ps(creg[0], areg[r], breg[0]);
+          } else {
+            __ vmulps(acc[0], areg[r], breg[0]);
+            __ vaddps(creg[0], creg[0], acc[0]);
+          }
+          __ vmovaps(Operand(cptr, disp), creg[0]);
+        }
+
+        left -= 8;
+        coldisp += 8 * sizeof(float);
+      }
+
+      // Compute next four columns using SSE.
+      if (left >= 4) {
+        // Load b[col].
+        __ vmovaps(breg[0].xmm(), Operand(bptr, coldisp));
+
+        // Multiply a[row] block with b[col] and add to c[row,col] block.
+        for (int r = 0; r < rowblk; ++r) {
+          int disp = r * rowsize + coldisp;
+          __ vmovaps(creg[0].xmm(), Operand(cptr, disp));
+          if (fma) {
+            __ vfmadd231ps(creg[0].xmm(), areg[r].xmm(), breg[0].xmm());
+          } else {
+            __ vmulps(acc[0].xmm(), areg[r].xmm(), breg[0].xmm());
+            __ vaddps(creg[0].xmm(), creg[0].xmm(), acc[0].xmm());
+          }
+          __ vmovaps(Operand(cptr, disp), creg[0].xmm());
+        }
+
+        left -= 4;
+        coldisp += 4 * sizeof(float);
+      }
+
+      // Compute remaining remaining columns (0-3).
+      while (left > 0) {
+        // Load b[col].
+        __ vmovss(breg[0].xmm(), Operand(bptr, coldisp));
+
+        // Multiply a[row] block with b[col] and add to c[row,col] block.
+        for (int r = 0; r < rowblk; ++r) {
+          int disp = r * rowsize + coldisp;
+          __ vmovss(creg[0].xmm(), Operand(cptr, disp));
+          if (fma) {
+            __ vfmadd231ss(creg[0].xmm(), areg[r].xmm(), breg[0].xmm());
+          } else {
+            __ vmulss(acc[0].xmm(), areg[r].xmm(), breg[0].xmm());
+            __ vaddss(creg[0].xmm(), creg[0].xmm(), acc[0].xmm());
+          }
+          __ vmovss(Operand(cptr, disp), creg[0].xmm());
+        }
+
+        left -= 1;
+        coldisp += sizeof(float);
+      }
+
+      // Next row block.
+      __ addq(cptr, Immediate(rowblk * rowsize));
+      if (!single) {
+        __ addq(row, Immediate(rowblk));
+        __ cmpq(row, Immediate(stage == 0 ? main_rows : rows));
+        __ j(less, &l1);
+      }
+    }
+  }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements() * 2;
   }
 };
 
@@ -1182,6 +1571,22 @@ void RegisterAVXMatMul(Library *library) {
   // Output    : y: int16[1,m]
   // Requires  : AVX2
   library->Register(new AVXIntVecMatMulAddReluH());
+
+  // Computes  : c = a * c
+  // Input     : a: float32[1,n]
+  //             b: float32[n,1]
+  // Output    : c: float32[1]
+  // Requires  : AVX
+  // Supports  : FMA3
+  library->Register(new AVXFltDotProduct());
+
+  // Computes  : C += A * B
+  // Input     : A: float32[n,1]
+  //             B: float32[1,m]
+  // Output    : C: float32[n,m]
+  // Requires  : AVX
+  // Supports  : FMA3
+  library->Register(new AVXFltAssignAddOuter());
 }
 
 }  // namespace myelin

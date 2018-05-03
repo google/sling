@@ -145,7 +145,7 @@ class ConstantFolding : public Transformer {
           }
           char *data = flow->AllocateMemory(output->size);
           output->data = data;
-          output->in = true;
+          output->set_in();
           int32 *result = reinterpret_cast<int32 *>(data);
 
           // Create constant variable with the pre-computed value.
@@ -182,7 +182,7 @@ class ConstantFolding : public Transformer {
             // Make the output of the shape shifting op a constant.
             output->data = input->data;
             output->size = input->size;
-            output->in = true;
+            output->set_in();
 
             // Rename variable and add op name as alias.
             output->AddAlias(output->name);
@@ -233,8 +233,9 @@ class ConstantFolding : public Transformer {
               // Change variable to a constant.
               output->data = buffer;
               output->size = size;
+              output->type = result->type();
               output->shape = result->shape();
-              output->in = true;
+              output->set_in();
             }
 
             // Mark constant op for removal.
@@ -267,7 +268,7 @@ class RemoveUnusedVariables : public Transformer {
     // Find intermediate variables with no producers or consumers.
     std::vector<Flow::Variable *> remove;
     for (Flow::Variable *var : flow->vars()) {
-      if (!var->out && var->producer == nullptr && var->consumers.empty()) {
+      if (!var->out() && var->producer == nullptr && var->consumers.empty()) {
         remove.push_back(var);
       }
     }

@@ -33,40 +33,22 @@ ExpressionGenerator *CreateVectorIntSSEGenerator();
 ExpressionGenerator *CreateVectorIntAVX128Generator();
 ExpressionGenerator *CreateVectorIntAVX256Generator();
 
-void ExpressionGenerator::Initalize(const Express &expression,
-                                    Type type,
-                                    int spare_regs,
-                                    IndexGenerator *index) {
+void ExpressionGenerator::Initialize(const Express &expression,
+                                     Type type,
+                                     int spare_regs,
+                                     IndexGenerator *index) {
   // Copy expression.
   expression_.Copy(expression);
   type_ = type;
   index_ = index;
 
-  // Eliminate common subexpressions.
-  expression_.EliminateCommonSubexpressions();
-
-  // Fuse operations if supported by instruction model.
-  if (model_.fm_reg_reg_reg) {
-    expression_.FuseMulAdd();
-    expression_.FuseMulSub();
-  }
-
-  // Use spare registers to hoist constants outside the loop.
-  if (spare_regs > 0 && !ImmediateOperands()) {
-    expression_.HoistConstants(spare_regs);
-  }
-
-  // Cache inputs and results used in multiple ops in temporary variables.
-  expression_.CacheResults();
+  // Optimize expression.
+  bool fma = model_.fm_reg_reg_reg;
+  int spare = ImmediateOperands() ? 0 : spare_regs;
+  expression_.Optimize(fma, spare);
 
   // Convert expression to instructions using instruction model.
-  CHECK(expression_.Rewrite(model_, &instructions_));
-
-  // Compute live ranges for all variables.
-  instructions_.ComputeLiveRanges();
-
-  // Allocate registers for temporary variables.
-  instructions_.AllocateRegisters();
+  CHECK(expression_.Generate(model_, &instructions_));
 
   // Initialize index generator.
   index->Initialize(VectorSize());
@@ -89,6 +71,11 @@ void ExpressionGenerator::GenerateBody(MacroAssembler *masm) {
   for (int i = body; i < ops.size(); ++i) {
     if (!ops[i]->nop()) Generate(ops[i], masm);
   }
+}
+
+int ExpressionGenerator::RegisterNumber(Express::VarType type, int id) const {
+  Express::Var *v = instructions_.Lookup(type, id);
+  return v == nullptr ? -1 : v->reg;
 }
 
 ExpressionGenerator *ExpressionGenerator::Select(const Express &expr,
@@ -283,24 +270,48 @@ void ExpressionGenerator::GenerateXMMVectorMove(
     }
   } else if (instr->dst != -1 && instr->src == -1) {
     // MOV reg,[mem]
-    switch (type_) {
-      case DT_FLOAT:
-        if (CPU::Enabled(AVX)) {
-          __ vmovaps(xmm(instr->dst), addr(instr->args[0]));
-        } else {
-          __ movaps(xmm(instr->dst), addr(instr->args[0]));
-        }
-        break;
-      case DT_DOUBLE:
-        if (CPU::Enabled(AVX)) {
-          __ vmovapd(xmm(instr->dst), addr(instr->args[0]));
-        } else if (CPU::Enabled(SSE2)) {
-          __ movapd(xmm(instr->dst), addr(instr->args[0]));
-        } else {
-          UNSUPPORTED;
-        }
-        break;
-      default: UNSUPPORTED;
+    if (index_->NeedsBroadcast(instr->args[0])) {
+      switch (type_) {
+        case DT_FLOAT:
+          if (CPU::Enabled(AVX)) {
+            __ vbroadcastss(xmm(instr->dst), addr(instr->args[0]));
+          } else {
+            __ movss(xmm(instr->dst), addr(instr->args[0]));
+            __ shufps(xmm(instr->dst), xmm(instr->dst), 0);
+          }
+          break;
+        case DT_DOUBLE:
+          if (CPU::Enabled(AVX)) {
+            __ vbroadcastsd(ymm(instr->dst), addr(instr->args[0]));
+          } else if (CPU::Enabled(SSE2)) {
+            __ movss(xmm(instr->dst), addr(instr->args[0]));
+            __ shufpd(xmm(instr->dst), xmm(instr->dst), 0);
+          } else {
+            UNSUPPORTED;
+          }
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      switch (type_) {
+        case DT_FLOAT:
+          if (CPU::Enabled(AVX)) {
+            __ vmovaps(xmm(instr->dst), addr(instr->args[0]));
+          } else {
+            __ movaps(xmm(instr->dst), addr(instr->args[0]));
+          }
+          break;
+        case DT_DOUBLE:
+          if (CPU::Enabled(AVX)) {
+            __ vmovapd(xmm(instr->dst), addr(instr->args[0]));
+          } else if (CPU::Enabled(SSE2)) {
+            __ movapd(xmm(instr->dst), addr(instr->args[0]));
+          } else {
+            UNSUPPORTED;
+          }
+          break;
+        default: UNSUPPORTED;
+      }
     }
   } else if (instr->dst == -1 && instr->src != -1) {
     // MOV [mem],reg
@@ -359,7 +370,19 @@ void ExpressionGenerator::GenerateYMMVectorMove(
     }
   } else if (instr->dst != -1 && instr->src == -1) {
     // MOV reg,[mem]
-    GenerateYMMMoveMemToReg(ymm(instr->dst), addr(instr->args[0]), masm);
+    if (index_->NeedsBroadcast(instr->args[0])) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vbroadcastss(ymm(instr->dst), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ vbroadcastsd(ymm(instr->dst), addr(instr->args[0]));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      GenerateYMMMoveMemToReg(ymm(instr->dst), addr(instr->args[0]), masm);
+    }
   } else if (instr->dst == -1 && instr->src != -1) {
     // MOV [mem],reg
     switch (type_) {
@@ -447,12 +470,17 @@ void ExpressionGenerator::GenerateXMMVectorIntMove(
     }
   } else if (instr->dst != -1 && instr->src == -1) {
     // MOV reg,[mem]
-    if (CPU::Enabled(AVX)) {
-      __ vmovdqa(xmm(instr->dst), addr(instr->args[0]));
-    } else if (CPU::Enabled(SSE2)) {
-      __ movdqa(xmm(instr->dst), addr(instr->args[0]));
+    if (index_->NeedsBroadcast(instr->args[0])) {
+      // TODO: implement vector int broadcast load.
+      UNSUPPORTED;
     } else {
-      __ movaps(xmm(instr->dst), addr(instr->args[0]));
+      if (CPU::Enabled(AVX)) {
+        __ vmovdqa(xmm(instr->dst), addr(instr->args[0]));
+      } else if (CPU::Enabled(SSE2)) {
+        __ movdqa(xmm(instr->dst), addr(instr->args[0]));
+      } else {
+        __ movaps(xmm(instr->dst), addr(instr->args[0]));
+      }
     }
   } else if (instr->dst == -1 && instr->src != -1) {
     // MOV [mem],reg
@@ -476,7 +504,12 @@ void ExpressionGenerator::GenerateYMMVectorIntMove(
     __ vmovdqa(ymm(instr->dst), ymm(instr->src));
   } else if (instr->dst != -1 && instr->src == -1) {
     // MOV reg,[mem]
-    __ vmovdqa(ymm(instr->dst), addr(instr->args[0]));
+    if (index_->NeedsBroadcast(instr->args[0])) {
+      // TODO: implement vector int broadcast load.
+      UNSUPPORTED;
+    } else {
+      __ vmovdqa(ymm(instr->dst), addr(instr->args[0]));
+    }
   } else if (instr->dst == -1 && instr->src != -1) {
     // MOV [mem],reg
     __ vmovdqa(addr(instr->result), ymm(instr->src));
@@ -489,7 +522,7 @@ void ExpressionGenerator::GenerateXMMFltOp(
     Express::Op *instr,
     OpXMMRegReg fltopreg, OpXMMRegReg dblopreg,
     OpXMMRegMem fltopmem, OpXMMRegMem dblopmem,
-    MacroAssembler *masm) {
+    MacroAssembler *masm, int argnum) {
   if (instr->dst != -1 && instr->src != -1) {
     // OP reg,reg
     switch (type_) {
@@ -505,10 +538,10 @@ void ExpressionGenerator::GenerateXMMFltOp(
     // OP reg,[mem]
     switch (type_) {
       case DT_FLOAT:
-        (masm->*fltopmem)(xmm(instr->dst), addr(instr->args[1]));
+        (masm->*fltopmem)(xmm(instr->dst), addr(instr->args[argnum]));
         break;
       case DT_DOUBLE:
-        (masm->*dblopmem)(xmm(instr->dst), addr(instr->args[1]));
+        (masm->*dblopmem)(xmm(instr->dst), addr(instr->args[argnum]));
         break;
       default: UNSUPPORTED;
     }
@@ -542,6 +575,40 @@ void ExpressionGenerator::GenerateXMMFltOp(
         break;
       case DT_DOUBLE:
         (masm->*dblopmem)(xmm(instr->dst), addr(instr->args[1]), imm);
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateXMMUnaryFltOp(
+    Express::Op *instr,
+    OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
+    OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
+    MacroAssembler *masm) {
+  if (instr->dst != -1 && instr->src != -1) {
+    // OP reg,reg,reg
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopreg)(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopreg)(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else if (instr->dst != -1 && instr->src == -1) {
+    // OP reg,reg,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(xmm(instr->dst), xmm(instr->dst),
+                          addr(instr->args[0]));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(xmm(instr->dst), xmm(instr->dst),
+                          addr(instr->args[0]));
         break;
       default: UNSUPPORTED;
     }
@@ -613,6 +680,40 @@ void ExpressionGenerator::GenerateXMMFltOp(
       case DT_DOUBLE:
         (masm->*dblopmem)(xmm(instr->dst), xmm(instr->src),
                           addr(instr->args[argnum]), imm);
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateYMMUnaryFltOp(
+    Express::Op *instr,
+    OpYMMRegRegReg fltopreg, OpYMMRegRegReg dblopreg,
+    OpYMMRegRegMem fltopmem, OpYMMRegRegMem dblopmem,
+    MacroAssembler *masm) {
+  if (instr->dst != -1 && instr->src != -1) {
+    // OP reg,reg
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopreg)(ymm(instr->dst), ymm(instr->dst), ymm(instr->src));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopreg)(ymm(instr->dst), ymm(instr->dst), ymm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else if (instr->dst != -1 && instr->src == -1) {
+    // OP reg,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(ymm(instr->dst), ymm(instr->dst),
+                          addr(instr->args[0]));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(ymm(instr->dst), ymm(instr->dst),
+                          addr(instr->args[0]));
         break;
       default: UNSUPPORTED;
     }

@@ -283,8 +283,11 @@ class Linker {
                        jit::Code *code,
                        int data_size) {}
 
-  // Add entry point for step.
-  virtual void AddStep(Step *step, int offset) {}
+  // Start code generation for step.
+  virtual void BeginStep(Step *step, int offset) {}
+
+  // Code generation for step completed.
+  virtual void EndStep(Step *step, int offset) {}
 
   // Add tensor data block to linker.
   virtual void AddData(Tensor *data) {}
@@ -293,7 +296,7 @@ class Linker {
   virtual void AddDeviceCode(Step *step, const string &code) {}
 };
 
-// A tensor is a multi-dimensional array that can be used for constants and
+// A tensor is a multi-dimensional array that can be used for globals and
 // parameters.
 class Tensor {
  public:
@@ -335,6 +338,14 @@ class Tensor {
   // Check if tensor has the same shape as another tensor.
   bool HasSameShape(const Tensor *other) const;
 
+  // Check if tensor has dense layout.
+  bool HasDenseLayout() const;
+
+  // Check if tensor has standard layout, i.e. dense row-major.
+  bool HasStandardLayout() const {
+    return order_ == ROW_MAJOR && HasDenseLayout();
+  }
+
   // Check if tensor shape is broadcast compatible with another tensor.
   bool Compatible(const Tensor *other) const;
 
@@ -347,7 +358,7 @@ class Tensor {
   // Check if tensor is a matrix.
   bool IsMatrix() const { return rank() == 2; }
 
-  // Tensor name for parameter or constant.
+  // Tensor name for parameter or global.
   const string &name() const { return name_; }
 
   // Data type for tensor elements.
@@ -383,8 +394,29 @@ class Tensor {
   // Number of elements in tensor.
   int elements() const { return shape_.elements(); }
 
-  // Value for constant tensor. Return null for parameters.
+  // Value for global tensor. Return null for parameters.
   const char *data() const { return data_; }
+  char *data() { return data_; }
+
+  // Get data as scalar. Return false if types do not match.
+  template <typename T> bool GetData(T *value) const {
+    if (data_ == nullptr) return false;
+    auto &traits = Traits<T>();
+    if (type_ != traits.type() || size_ != traits.size()) return false;
+    *value = *reinterpret_cast<const T *>(data_);
+    return true;
+  }
+
+  // Get data as vector. Return false if types do not match.
+  template <typename T> bool GetData(std::vector<T> *value) const {
+    if (data_ == nullptr) return false;
+    auto &traits = Traits<T>();
+    if (type_ != traits.type()) return false;
+    if (elements() * traits.size() != size_) return false;
+    const T *array = reinterpret_cast<const T *>(data_);
+    value->assign(array, array + elements());
+    return true;
+  }
 
   // Pointer to constant tensor on device.
   DevicePtr device_data() const { return device_data_; }
@@ -396,8 +428,8 @@ class Tensor {
   // are not stored on the host.
   size_t offset() const { return offset_; }
 
-  // Offset in device data instance block. Return -1 for constants and tensors
-  // that are not stored on the device.
+  // Offset in device data instance block. Return -1 for tensors that are not
+  // stored in the instance block on the device.
   size_t device_offset() const { return device_offset_; }
 
   // Number bytes allocated for tensor in instance. This takes references into
@@ -417,6 +449,25 @@ class Tensor {
   size_t offset(int r, int c, int k, int l) const {
     return r * stride(0) + c * stride(1) + k * stride(2) + l * stride(3);
   }
+  size_t offset(const std::vector<int> &indices) const {
+    size_t n = 0;
+    for (int d = 0; d < rank(); ++d) {
+      n += indices[d] * stride(d);
+    }
+    return n;
+  }
+
+  // Byte offset of element in tensor by linear index between 0 and the number
+  // of elements in tensor.
+  size_t LinearOffset(int index) const {
+    int n = index;
+    size_t ofs = 0;
+    for (int d = rank() - 1; d >= 0; --d) {
+      ofs += (n % dim(d)) * stride(d);
+      n = n / dim(d);
+    }
+    return ofs;
+  }
 
   // Index of element in tensor.
   int index(int r) const {
@@ -431,17 +482,19 @@ class Tensor {
   int index(int r, int c, int k, int l) const {
     return offset(r, c, k, l) / element_size();
   }
+  int index(const std::vector<int> &indices) const {
+    return offset(indices) / element_size();
+  }
 
   // Check if tensor is a constant.
-  bool IsConstant() const {
-    return data_ != nullptr || device_data_ != DEVICE_NULL;
-  }
+  bool constant() const { return constant_; }
+
+  // Check if tensor is learnable.
+  bool learnable() const { return !local_ && !constant_; }
 
   // Local variables are allocated in the instance block.
-  bool IsGlobal() const {
-    return data_ != nullptr || device_data_ != DEVICE_NULL;
-  }
-  bool IsLocal() const { return !IsGlobal(); }
+  bool IsLocal() const { return local_; }
+  bool IsGlobal() const { return !local_; }
 
   // Return tensor placement.
   Placement placement() const { return placement_; }
@@ -480,15 +533,22 @@ class Tensor {
            (shared_ != nullptr && shared_ == other->shared_);
   }
 
-  // Other tensor that this tensor shares alignment requirements with.
-  Tensor *link() const { return link_; }
-  void set_link(Tensor *link) { link_ = link; }
+  // Circular list of tensors that tensor shares alignment requirements with.
+  Tensor *prev_link() const { return prev_link_; }
+  Tensor *next_link() const { return next_link_; }
+  bool linked() const { return prev_link_ != this; }
+
+  // Link other tensor for propagating alignment requirements.
+  void Link(Tensor *link);
 
   // Step that produces tensor.
   Step *producer() const { return producer_; }
 
   // List of steps that uses tensor.
-  const std::vector<Step *> consumers() const { return consumers_; }
+  const std::vector<Step *> &consumers() const { return consumers_; }
+
+  // Return the number of usages of tensor.
+  int usages() const { return consumers_.size(); }
 
   // Cell that tensor belongs to.
   Cell *cell() const { return cell_; }
@@ -507,6 +567,10 @@ class Tensor {
   // Return tensor type as string.
   string TypeString() const;
 
+  // Return contents of tensor as string.
+  string ToString(const char *data, bool deref = true) const;
+  string ToString() const { return ToString(data_); }
+
  private:
   // Offset in data instance block.
   size_t offset_ = -1;
@@ -514,7 +578,7 @@ class Tensor {
   // Offset in device data instance block.
   size_t device_offset_ = -1;
 
-  // Tensor name for parameter or constant.
+  // Tensor name.
   string name_;
 
   // Element data type.
@@ -554,17 +618,24 @@ class Tensor {
   // Optional other tensor that this tensor shares storage with.
   Tensor *shared_ = nullptr;
 
-  // Optional other tensor that this tensor shares alignment requirements with.
-  Tensor *link_ = nullptr;
+  // Tensors that share alignment requirements are linked in a circular list.
+  Tensor *prev_link_ = this;
+  Tensor *next_link_ = this;
 
-  // Value for constant tensor (not owned).
-  const char *data_ = nullptr;
+  // Value for global tensor (not owned).
+  char *data_ = nullptr;
 
-  // Pointer to constant tensor data on device. This is only set for constant
-  // tensors that need to be access from the device.
+  // Pointer to global tensor data on device. This is only set for constant
+  // or learnable tensors that need to be accessed from the device.
   DevicePtr device_data_ = DEVICE_NULL;
 
-  // Cell that tensor is part of. Constant tensors can be shared.
+  // Constant tensors are global and cannot be modifed.
+  bool constant_ = false;
+
+  // Local tensors are allocated in the instance data block.
+  bool local_ = true;
+
+  // Cell that tensor is part of.
   Cell *cell_ = nullptr;
 
   // Step that produces tensor.
@@ -595,7 +666,7 @@ class Tensor {
 };
 
 // A step represents an operation that is part of a cell.
-class Step {
+class Step : public Attributes {
  public:
   // Step name from flow operation.
   const string &name() const { return name_; }
@@ -612,36 +683,6 @@ class Step {
   const std::vector<Tensor *> &outputs() const { return outputs_; }
   Tensor *output(int index) const { return outputs_[index]; }
   int outdegree() const { return outputs_.size(); }
-
-  // Get attribute value.
-  const string &GetAttr(const string &name) const {
-    return attributes_.Get(name);
-  };
-  int GetAttr(const string &name, int defval) const {
-    return attributes_.Get(name, defval);
-  }
-  bool GetAttr(const string &name, bool defval) const {
-    return attributes_.Get(name, defval);
-  }
-
-  // Check if step has attribute.
-  bool HasAttr(const string &name) const {
-    return attributes_.Has(name);
-  }
-
-  // Set attribute.
-  void SetAttr(const string &name, const string &value) {
-    attributes_.Set(name, value);
-  }
-  void SetAttr(const string &name, const char *value) {
-    attributes_.Set(name, value);
-  }
-  void SetAttr(const string &name, int value) {
-    attributes_.Set(name, value);
-  }
-  void SetAttr(const string &name, bool value) {
-    attributes_.Set(name, value);
-  }
 
   // Kernel used for generating code for step.
   Kernel *kernel() const { return kernel_; }
@@ -724,63 +765,11 @@ class Step {
   friend class Network;
 };
 
-// A connector links different (parts of) cells in a network to create recurrent
-// connections.
-class Connector {
- public:
-  Connector(Network *network) : network_(network) {}
-  ~Connector() { delete type_; }
-
-  // Connector name.
-  const string &name() const { return type_->name(); }
-
-  // Connector type.
-  Tensor *type() const { return type_; }
-
-  // Size of one element.
-  size_t size() const { return type_->size(); }
-
-  // Connector array alignment (in bytes).
-  int alignment() const { return alignment_; }
-
-  // Return connector placement.
-  Placement placement() const { return placement_; }
-
-  // Add location for placement.
-  void AddPlace(Placement place) {
-    placement_ = static_cast<Placement>(placement_ | place);
-  }
-
-  // Tensors linked to the connector.
-  const std::vector<Tensor *> &links() const { return links_; }
-
-  // Network that connector belongs to.
-  Network *network() const { return network_; }
-
- private:
-  // Network that connector belongs to.
-  Network *network_;
-
-  // Tensor for connector type.
-  Tensor *type_ = nullptr;
-
-  // Tensors linked to the connector.
-  std::vector<Tensor *> links_;
-
-  // Connector array alignment (in bytes).
-  int alignment_ = kMinDataAlignment;
-
-  // Placement of connector.
-  Placement placement_ = NOWHERE;
-
-  friend class Network;
-};
-
 // A channel is an array of tensors used for connecting cells in a network.
 class Channel {
  public:
   // Initialize empty channel.
-  Channel(const Connector *connector) : connector_(connector) {}
+  Channel(const Tensor *format);
 
   // Delete channel.
   ~Channel();
@@ -791,12 +780,18 @@ class Channel {
   // Change size of channel.
   void resize(int n);
 
+  // Change size of channel and clear all elements.
+  void reset(int n);
+
   // Reserve space for channel elements.
   void reserve(int n);
 
+  // Zero-fill element in channel.
+  void zero(int n);
+
   // Return pointer to channel element.
   char *at(int index) const {
-    return data_ + (index * connector_->size());
+    return data_ + (index * format_->size());
   }
 
   // Add element to channel and return the last element.
@@ -808,8 +803,14 @@ class Channel {
   // Return the number of elements in the channel.
   int size() const { return size_; }
 
+  // Return placement of channel.
+  Placement placement() const { return format_->placement(); }
+
   // Return runtime for channel.
   inline Runtime *runtime() const;
+
+  // Return contents of channel as string.
+  string ToString() const;
 
  private:
   // Data for the channel.
@@ -821,8 +822,11 @@ class Channel {
   // Number of allocated elements.
   int capacity_ = 0;
 
-  // Connector describing the element type of the channel.
-  const Connector *connector_;
+  // A tensor describing the element type of the channel.
+  const Tensor *format_;
+
+  // Byte alignment.
+  int alignment_ = kMinDataAlignment;
 };
 
 // A tensor data object is a reference to a tensor value. It does not own the
@@ -891,6 +895,9 @@ class TensorData {
   // Return tensor format.
   const Tensor &format() const { return *format_; }
 
+  // Return tensor as string.
+  string ToString() const { return format_->ToString(data_); }
+
  private:
   char *data_;      // data for tensor
   Tensor *format_;  // tensor format
@@ -935,15 +942,17 @@ class Instance {
   // Get raw pointer to location of parameter in instance memory.
   char *GetAddress(Tensor *param) {
     DCHECK(param != nullptr);
-    DCHECK(!param->IsConstant()) << param->name();
+    DCHECK(param->IsLocal()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
     return data_ + param->offset();
   }
 
   // Get pointer to location of parameter in instance memory.
   template<typename T> T *Get(Tensor *param) {
     DCHECK(param != nullptr);
-    DCHECK(!param->IsConstant()) << param->name();
+    DCHECK(param->IsLocal()) << param->name();
     DCHECK(!param->ref()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
     return reinterpret_cast<T *>(data_ + param->offset());
   }
@@ -951,33 +960,48 @@ class Instance {
   // Get pointer to location of element of parameter in instance memory.
   template<typename T> T *Get(Tensor *param, int r) {
     DCHECK(param != nullptr);
-    DCHECK(!param->IsConstant()) << param->name();
+    DCHECK(param->IsLocal()) << param->name();
     DCHECK(!param->ref()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
     return reinterpret_cast<T *>(data_ + param->offset() + param->offset(r));
   }
   template<typename T> T *Get(Tensor *param, int r, int c) {
     DCHECK(param != nullptr);
-    DCHECK(!param->IsConstant()) << param->name();
+    DCHECK(param->IsLocal()) << param->name();
     DCHECK(!param->ref()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
     return reinterpret_cast<T *>(
         data_ + param->offset() + param->offset(r, c));
   }
 
-  // Set link to element in connector channel.
+  // Set link to element in channel.
   void Set(Tensor *param, Channel *channel, int index = 0) {
     DCHECK(param->ref()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
     *reinterpret_cast<char **>(data_ + param->offset()) = channel->at(index);
+  }
+
+  // Set link to other instance.
+  void Set(Tensor *param, Instance *instance) {
+    DCHECK(param->cell() == cell_) << param->name();
+    *reinterpret_cast<char **>(data_ + param->offset()) = instance->data();
   }
 
   // Sets a reference parameter to an address. Caller is responsible for
   // ensuring proper alignment and any other constraints.
   void SetReference(Tensor *param, void *address) {
     DCHECK(param != nullptr);
-    DCHECK(!param->IsConstant()) << param->name();
+    DCHECK(param->IsLocal()) << param->name();
     DCHECK(param->ref()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
     *reinterpret_cast<void **>(data_ + param->offset()) = address;
+  }
+
+  // Clear instance tensor.
+  void Clear(Tensor *param) {
+    memset(GetAddress(param), 0, param->space());
   }
 
   // Set profiling summary for collecting profiling data for instance.
@@ -1028,11 +1052,16 @@ class Instance {
 // A cell contains generated code for executing computation of a function.
 class Cell {
  public:
+  ~Cell() { delete profile_summary_; }
+
   // Cell name from flow function.
   const string &name() const { return name_; }
 
   // Cell computation steps.
   const std::vector<Step *> &steps() const { return steps_; }
+
+  // Look up parameter and return null if it is not found.
+  Tensor *LookupParameter(const string &name) const;
 
   // Get parameter.
   Tensor *GetParameter(const string &name) const;
@@ -1073,6 +1102,9 @@ class Cell {
 
   // Tensor with profiling information.
   Tensor *profile() const { return profile_; }
+
+  // Profile summary for global profiling.
+  ProfileSummary *profile_summary() const { return profile_summary_; }
 
   // Return cell in text format.
   string ToString() const;
@@ -1123,6 +1155,9 @@ class Cell {
   // Tensor with profiling information.
   Tensor *profile_ = nullptr;
 
+  // Profile summary for global profiling.
+  ProfileSummary *profile_summary_ = nullptr;
+
   friend class Network;
   friend class Step;
   friend class InstanceAllocator;
@@ -1134,8 +1169,12 @@ struct Options {
   bool debug = false;                        // insert breakpoint in cell
   bool profiling = false;                    // enable profiling
   bool external_profiler = false;            // external profiling buffer
+  bool global_profiler = false;              // global profiling buffer
   bool dynamic_allocation = false;           // dynamic instance allocation
   bool sync_steps = false;                   // synchronize all steps
+  int64 *flops_address = nullptr;            // address of FLOPs counter
+
+  bool ref_profiler() const { return external_profiler || global_profiler; }
 };
 
 // A network is a collection of cells and variables that are compiled as a unit.
@@ -1150,17 +1189,37 @@ class Network {
   // Load flow from file and compile all the cells.
   bool Compile(const string &flowfile, const Library &library);
 
-  // Get compiled cell.
+  // Look up cell returning null if it is not found.
+  Cell *LookupCell(const string &name) const;
+
+  // Get cell.
   Cell *GetCell(const string &name) const;
 
-  // Get connector.
-  Connector *GetConnector(const string &name) const;
+  // Look up up parameter tensor returning null if it is not found.
+  Tensor *LookupParameter(const string &name) const;
 
-  // Get parameter.
+  // Get parameter tensor.
   Tensor *GetParameter(const string &name) const;
+
+  // Return tensor data object for global tensor.
+  TensorData operator[](Tensor *global) {
+    CHECK(global->IsGlobal());
+    return TensorData(global->data(), global);
+  }
+  inline TensorData operator[](const string &name) {
+    Tensor *global = GetParameter(name);
+    DCHECK(global != nullptr) << "Unknown parameter: " << name;
+    CHECK(global->IsGlobal());
+    return TensorData(global->data(), global);
+  }
 
   // Allocate memory in memory pool.
   char *AllocateMemory(size_t size, int alignment);
+
+  // Save weights after training. This copies the value of each learnable tensor
+  // in the network to the corresponding variable in the flow. This clears the
+  // learning flag for the variable and turns it into a constant.
+  void SaveLearnedWeights(Flow *flow);
 
   // Runtime support functions.
   Runtime *runtime() const { return runtime_; }
@@ -1193,8 +1252,8 @@ class Network {
   // Network cells.
   const std::vector<Cell *> cells() const { return cells_; }
 
-  // Network constants.
-  const std::vector<Tensor *> constants() const { return constants_; }
+  // Global tensors.
+  const std::vector<Tensor *> globals() const { return globals_; }
 
   // Network parameters.
   const std::vector<Tensor *> parameters() const { return parameters_; }
@@ -1212,17 +1271,15 @@ class Network {
   // Network cells.
   std::vector<Cell *> cells_;
 
-  // Constants in network, e.g. weight matrices and vectors.
-  std::vector<Tensor *> constants_;
+  // Global tensors in network, e.g. learnable or constant weight matrices and
+  // scalars.
+  std::vector<Tensor *> globals_;
 
   // Parameters in instance blocks (input, output, and intermediate values).
   std::vector<Tensor *> parameters_;
 
   // Steps for network computation in order of execution.
   std::vector<Step *> steps_;
-
-  // Connections between tensors.
-  std::vector<Connector *> connectors_;
 
   // Parameter names.
   std::unordered_map<string, Tensor *> names_;
@@ -1287,12 +1344,12 @@ inline Runtime *Cell::runtime() const {
   return network_->runtime();
 }
 
-inline Runtime *Instance::runtime() const {
-  return cell_->runtime();
+inline Runtime *Channel::runtime() const {
+  return format_->cell()->runtime();
 }
 
-inline Runtime *Channel::runtime() const {
-  return connector_->network()->runtime();
+inline Runtime *Instance::runtime() const {
+  return cell_->runtime();
 }
 
 inline void Instance::Compute() {

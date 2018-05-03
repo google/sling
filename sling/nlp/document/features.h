@@ -66,7 +66,7 @@ class DocumentFeatures {
     NO_DIGIT = 0,
     SOME_DIGIT = 1,
     ALL_DIGIT = 2,
-    DIGIT__CARDINALITY = 3,
+    DIGIT_CARDINALITY = 3,
   };
 
   // Initialize lexical feature extractor.

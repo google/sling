@@ -33,7 +33,7 @@ namespace myelin {
 //
 //   %n: memory-based input variable
 //   #n: constant variable
-//   !n: register-based input variable
+//   !n: register-based variable
 //   @n: memory-based output variable
 //   $n: temporary register variable
 //   _n: number
@@ -78,11 +78,13 @@ class Express {
     NEG,         // negative, r=-x
     ABS,         // absolute value, r=|x|=max(x,neg(x))
     RELU,        // rectified linear unit, r=max(0,a)
+    RELUGRAD,    // rectified linear unit gradient, r=(x>0)*y
     SOFTSIGN,    // softsign, r=x/(|x|+1)
     SOFTPLUS,    // softplus, r=log(exp(x)+1)
     LOGSIGMOID,  // log sigmoid, r=log(1/(1+exp(-x)))=-softplus(-x))
     RECIPROCAL,  // reciprocal value, r=1/x
     SQUARE,      // square, r=x*x
+    SQRT,        // square root, r=x^(1/2)
 
     LOG,         // natural logarithm, r=log(a)
     EXP,         // natural exponential function, r=exp(a)
@@ -155,10 +157,17 @@ class Express {
     // Temporary variables and register-based inputs are in registers.
     bool IsRegister() const { return type == TEMP || type == REGISTER; }
 
+    // Check if live range for variable overlaps with another variable.
+    bool overlaps(Var *other) const {
+      return first->index < other->last->index &&
+             other->first->index < last->index;
+    }
+
     VarType type;                 // variable type
     int id;                       // variable id (-1 for unassigned temps)
     Op *producer;                 // operation producing value for variable
     std::vector<Op *> consumers;  // consumers of variable
+    bool single = false;          // single-element memory variable
 
     // Live range for variable.
     Op *first = nullptr;          // first usage of variable
@@ -207,6 +216,7 @@ class Express {
     int src = -1;                 // register for second operand
     int src2 = -1;                // register for third operand
     bool first_is_dest = false;   // first argument is also destination
+    int index = -1;               // operation index
   };
 
   // Target platform.
@@ -272,8 +282,11 @@ class Express {
   // set for the returned op.
   Op *Function(OpType type, std::vector<Var *> &args, bool expand = false);
 
-  // Lookup variable in expression or add a new variable if it does not exist.
+  // Find variable in expression or add a new variable if it does not exist.
   Var *Variable(VarType type, int id);
+
+  // Look up variable in expression. Return null if variable does not exist.
+  Var *Lookup(VarType type, int id) const;
 
   // Add new temp variable to expression.
   Var *Temp() { return Variable(TEMP, -1); }
@@ -281,7 +294,7 @@ class Express {
   // Add new number variable.
   Var *Number(ConstantNumber number);
 
-  // Count the number of variable of a certain type.
+  // Count the number of variables of a certain type.
   int NumVars(VarType type) const;
 
   // Count the number of ops of a certain type.
@@ -298,8 +311,10 @@ class Express {
 
   // Cache constants and move the loads outside the body of the code. Each
   // cached constant takes up an additional register, so the number of cached
-  // constants is limited to the number of spare registers.
-  void HoistConstants(int limit);
+  // constants is limited to the number of spare registers. Loop-invariant ops
+  // are also moved out of the body, notably loads of single element memory
+  // input variables.
+  void Hoist(int limit);
 
   // Cache inputs and results used in multiple ops in temporary variables.
   void CacheResults();
@@ -324,15 +339,26 @@ class Express {
   void FuseMulAdd() { Fuse(ADD, MUL, MULADD213, MULADD231); }
   void FuseMulSub() { Fuse(SUB, MUL, MULSUB213, INVALID); }
 
+  // Optimize expression by performing the following transformations:
+  //   - eliminate common subexpressions
+  //   - fuse multiply and add/subtract
+  //   - cache inputs and results used in multiple ops in temporary variables
+  //   - hoist loop-invariant instructions outside the loop
+  void Optimize(bool fma, int spare_regs);
+
   // Rewrite expression to match instruction formats supported by target
   // architecture. The expression is assumed to be in static single assignment
   // form. The expression is rewritten by adding additional temporary variables
-  // to the rewritten expression so only the supported instruction form are
-  // needed for evaluating the expression.
+  // to the rewritten expression so only the supported instruction forms are
+  // needed for computing the expression.
   bool Rewrite(const Model &model, Express *rewritten) const;
 
   // Allocate registers for operands. Return the number of registers used.
   int AllocateRegisters();
+
+  // Generate instructions according to the instruction model and allocate
+  // registers for operands.
+  bool Generate(const Model &model, Express *rewritten) const;
 
   // Returns the number of register used by expression.
   int NumRegs() const;
@@ -341,6 +367,10 @@ class Express {
   // operations needed to compute the expression. This does not include move
   // operations.
   int Complexity() const;
+
+  // Delete unused input variable from expression by renumbering all following
+  // input variables.
+  void EliminateInput(int id);
 
   // Variables.
   const std::vector<Var *> vars() const { return vars_; }
@@ -381,6 +411,8 @@ class Express {
   Var *Div(Var *x, Var *y) { return Do(DIV, x, y); }
   Var *Min(Var *x, Var *y) { return Do(MIN, x, y); }
   Var *Max(Var *x, Var *y) { return Do(MAX, x, y); }
+  Var *CmpGt(Var *x, Var *y) { return Do(CMPGTOQ, x, y); }
+  Var *And(Var *x, Var *y) { return Do(AND, x, y); }
   Var *Zero() { return Number(ZERO); }
   Var *One() { return Number(ONE); }
 
@@ -394,6 +426,7 @@ class Express {
   Var *Neg(Var *x) { return target_ == NVIDIA ? Do(NEG, x) : Sub(Zero(), x); }
   Var *Abs(Var *x) { return target_ == NVIDIA ? Do(ABS, x) : Max(x, Neg(x)); }
   Var *Relu(Var *x) { return Max(x, Zero()); }
+  Var *ReluGrad(Var *x, Var *y) { return Mul(And(CmpGt(x, Zero()), One()), y); }
   Var *Softsign(Var *x) { return Div(x, Add(Abs(x), One())); }
   Var *Softplus(Var *x) { return Log(Add(Exp(x), One())); }
   Var *LogSigmoid(Var *x) { return Neg(Softplus(Neg(x))); }
@@ -401,6 +434,7 @@ class Express {
     return target_ == NVIDIA ? Do(RECIPROCAL, x) : Div(One(), x);
   }
   Var *Square(Var *x) { return Mul(x, x); }
+  Var *Sqrt(Var *x) { return Do(SQRT, x); }
   Var *Sigmoid(Var *x) { return Reciprocal(Add(One(), Exp(Neg(x)))); }
 
   // Look up op type for op name. Return INVALID for unknown op name.

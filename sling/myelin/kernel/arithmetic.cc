@@ -14,10 +14,12 @@
 
 #include "sling/myelin/kernel/arithmetic.h"
 
+#include <math.h>
 #include <map>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "sling/base/logging.h"
@@ -55,14 +57,16 @@ static Express::OpType OpType(const string &op) {
     {"Sigmoid", Express::SIGMOID},
     {"Tanh", Express::TANH},
 
-    {"Negate", Express::NEG},
+    {"Neg", Express::NEG},
     {"Abs", Express::ABS},
     {"Relu", Express::RELU},
+    {"ReluGrad", Express::RELUGRAD},
     {"Softsign", Express::SOFTSIGN},
     {"Softplus", Express::SOFTPLUS},
     {"LogSigmoid", Express::LOGSIGMOID},
     {"Reciprocal", Express::RECIPROCAL},
     {"Square", Express::SQUARE},
+    {"Sqrt", Express::SQRT},
   };
 
   auto f = ops.find(op);
@@ -74,12 +78,20 @@ static bool IsCalculateOp(Flow::Operation *op) {
   return op->type == "Calculate" || OpType(op->type) != Express::INVALID;
 }
 
+// Check if operation is an assignment op.
+static bool IsAssignmentOp(Flow::Operation *op) {
+  return op->type == "Assign";
+}
+
 // Initialize expression for flow operation.
 static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
   if (op->type == "Calculate") {
     // Build expression from expression recipe attribute on op.
     const string &recipe = op->GetAttr("expr");
     if (!recipe.empty()) expr->Parse(recipe, expand);
+  } else if (op->type == "Assign") {
+    const string &recipe = op->GetAttr("expr");
+    expr->Parse(recipe.empty() ? "@0=Id(%1)" : recipe, expand);
   } else {
     // Add op with inputs and output.
     CHECK_EQ(op->outdegree(), 1);
@@ -92,31 +104,35 @@ static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
     expr->CompactTempVars();
   }
 
-  // Mark constant inputs.
+  // Mark constant and scalar inputs.
   for (int i = 0; i < op->indegree(); ++i) {
     auto *input = op->inputs[i];
-    if (input->constant() && input->elements() == 1) {
+    if (input->elements() == 1) {
       int const_id = -1;
-      if (input->type == DT_FLOAT) {
-        float value = *reinterpret_cast<const float *>(input->data);
-        if (value == 0.0) {
-          const_id = Express::ZERO;
-        } else if (value == 1.0) {
-          const_id = Express::ONE;
-        } else if (value == 0.5) {
-          const_id = Express::HALF;
-        } else if (value == 2.0) {
-          const_id = Express::TWO;
-        } else if (value == -1.0) {
-          const_id = Express::N1;
+      if (input->constant()) {
+        if (input->type == DT_FLOAT) {
+          float value = *reinterpret_cast<const float *>(input->data);
+          if (value == 0.0) {
+            const_id = Express::ZERO;
+          } else if (value == 1.0) {
+            const_id = Express::ONE;
+          } else if (value == 0.5) {
+            const_id = Express::HALF;
+          } else if (value == 2.0) {
+            const_id = Express::TWO;
+          } else if (value == -1.0) {
+            const_id = Express::N1;
+          }
         }
       }
       auto *var = expr->Variable(Express::INPUT, i);
       if (const_id != -1) {
         var->type = Express::NUMBER;
         var->id = const_id;
-      } else {
+      } else if (input->constant()) {
         var->type = Express::CONST;
+      } else {
+        var->single = true;
       }
     }
   }
@@ -128,6 +144,9 @@ void InitExpression(const Step *step, Express *expr, bool expand) {
     // Build expression from expression recipe attribute on op.
     const string &recipe = step->GetAttr("expr");
     if (!recipe.empty()) expr->Parse(recipe, expand);
+  } else if (step->type() == "Assign") {
+    const string &recipe = step->GetAttr("expr");
+    expr->Parse(recipe.empty() ? "@0=Id(%1)" : recipe, expand);
   } else {
     // Add op with inputs and output.
     CHECK_EQ(step->outdegree(), 1);
@@ -140,10 +159,15 @@ void InitExpression(const Step *step, Express *expr, bool expand) {
     expr->CompactTempVars();
   }
 
-  // Mark constant inputs.
+  // Mark scalar and constant inputs.
   for (int i = 0; i < step->indegree(); ++i) {
-    if (step->input(i)->IsConstant() && step->input(i)->elements() == 1) {
-      expr->Variable(Express::INPUT, i)->type = Express::CONST;
+    if (step->input(i)->elements() == 1) {
+      Express::Var *var = expr->Variable(Express::INPUT, i);
+      if (step->input(i)->constant()) {
+        var->type = Express::CONST;
+      } else {
+        var->single = true;
+      }
     }
   }
 }
@@ -153,28 +177,37 @@ struct Expression {
   // Initialize expression.
   Expression(const Step *step, MacroAssembler *masm, int spare_regs = 0)
       : index(step, masm) {
-    // Determine output type and shape from the first output.
-    output = step->output(0);
-    Type type = output->type();
+    // Determine output type and shape from the first output (or first input
+    // for assignment op).
+    assign = step->type() == "Assign";
+    prototype = assign ? step->input(0) : step->output(0);
+    Type type = prototype->type();
 
-    // Compute the maximum common size between inputs and outputs.
-    DCHECK_GE(step->outdegree(), 1);
-    int elements = output->elements();
+    // Compute the maximum common size between inputs and outputs. Scalars are
+    // not used for computing the maximum size since these can be broadcast to
+    // the vector size.
+    int elements = prototype->elements();
     for (auto *input : step->inputs()) {
-      if (input->IsConstant() && input->elements() == 1) continue;
-      int common = output->shape().CommonSize(input->shape());
+      if (input->elements() == 1) continue;
+      int common = prototype->shape().CommonSize(input->shape());
       if (common < elements) elements = common;
     }
 
     // Compile expression to be computed.
     InitExpression(step, &expr, true);
 
+    // Clear single flag for scalar ops since broadcasting and hoisting is not
+    // needed in this case.
+    if (elements == 1) {
+      for (auto *v : expr.vars()) v->single = false;
+    }
+
     // Select expression generator.
     generator = ExpressionGenerator::Select(expr, type, elements);
     CHECK(generator != nullptr);
 
     // Initialize expression and index generators.
-    generator->Initalize(expr, type, spare_regs, &index);
+    generator->Initialize(expr, type, spare_regs, &index);
   }
 
   ~Expression() { delete generator; }
@@ -186,19 +219,40 @@ struct Expression {
 
   // Generate code for expression loop.
   void Generate(MacroAssembler *masm) {
+    index.GenerateInit();
     generator->GenerateInit(masm);
-    index.BeginLoop();
+    index.GenerateLoopBegin();
     generator->GenerateBody(masm);
-    index.EndLoop();
+    index.GenerateLoopEnd();
   }
 
   // Compute complexity.
   int64 Complexity() {
-    return output->shape().elements() * expr.Complexity();
+    return prototype->shape().elements() * expr.Complexity();
+  }
+
+  // Compute how many spare register we have for hoisting constant out of the
+  // loop body. This is only done for floating-point operations to avoid
+  // register pressure on the regular x64 integer registers which are also
+  // used for the loop indexing.
+  static int SpareRegs(const Step *step, const Options &options) {
+    int spare_regs = 0;
+    bool assign = step->type() == "Assign";
+    Type type = assign ? step->input(0)->type() : step->output(0)->type();
+    if (type == DT_FLOAT || type == DT_DOUBLE) {
+      // Perform dry-run to estimate the number of SIMD registers needed.
+      MacroAssembler masm(nullptr, 0, options);
+      Expression expr(step, &masm, 0);
+      CHECK(expr.AllocateRegisters()) << "Register overflow";
+
+      // Count the number of spare SIMD registers.
+      while (masm.mm().try_alloc() != -1) spare_regs++;
+    }
+    return spare_regs;
   }
 
   // Representative output from expression.
-  Tensor *output;
+  Tensor *prototype;
 
   // Expression to be compiled.
   Express expr;
@@ -208,6 +262,9 @@ struct Expression {
 
   // Code generator for expression.
   ExpressionGenerator *generator;
+
+  // Assignment expression.
+  bool assign;
 };
 
 // Convert division with constant c to multiplication with constant 1/c to
@@ -222,7 +279,7 @@ class DivToMulTransformer : public Transformer {
       if (op->indegree() != 2) continue;
       Flow::Variable *second = op->inputs[1];
       if (second->type != DT_FLOAT || second->elements() != 1) continue;
-      if (!second->constant() || second->consumers.size() != 1) continue;
+      if (!second->constant() || second->usages() != 1) continue;
 
       // Change Div(x,c) to Mul(x,1/c).
       CHECK_EQ(second->size, sizeof(float));
@@ -237,36 +294,70 @@ class DivToMulTransformer : public Transformer {
   }
 };
 
+// Convert addition where last term is negated to subtraction.
+class AddNegToSubTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    int updates = 0;
+    for (Flow::Operation *op : flow->Find("Neg|1:Add")) {
+      Flow::Operation *add = op;
+      Flow::Operation *neg = add->inputs[1]->producer;
+      if (neg->outputs[0]->usages() == 1) {
+        flow->Eliminate(neg);
+        add->type = "Sub";
+        updates++;
+      }
+    }
+    return updates > 0;
+  }
+};
+
 // Combine arithmetic operators into expressions that can be computed by a
 // Calculate kernel.
 class ExpressionTransformer : public Transformer {
  public:
   bool Transform(Flow *flow) override {
-    // Make list of ops that can potentially be included in Calculate ops.
+    // Make list of ops that can potentially be included in Calculate or
+    // Assign op merging.
     std::vector<Flow::Operation *> candidates;
     for (Flow::Operation *op : flow->ops()) {
-      if (IsCalculateOp(op) && !op->GetAttr("strict", false)) {
-        candidates.push_back(op);
+      if (IsCalculateOp(op) || IsAssignmentOp(op)) {
+        if (!op->GetAttr("strict", false)) {
+          candidates.push_back(op);
+        }
       }
     }
 
-    // Find candidate pairs to merge into combined Calculate ops.
-    bool again = true;
+    // Merge calculate ops into assignment.
     int num_combines = 0;
+    bool again = true;
     while (again) {
       again = false;
       for (int i = 0; i < candidates.size(); ++i) {
         Flow::Operation *op = candidates[i];
         if (op == nullptr) continue;
+        if (!IsAssignmentOp(op)) continue;
 
-        // Check if producer of one of the inputs is also a candidate.
+        // Check if producer of one of the inputs is a calculate op.
         for (auto *input : op->inputs) {
-          if (input->producer == nullptr) continue;
-          if (!IsCalculateOp(input->producer)) continue;
-          if (input->producer->GetAttr("strict", false)) continue;
+          Flow::Operation *producer = input->producer;
+          if (producer == nullptr) continue;
+          if (!IsCalculateOp(producer)) continue;
+          if (producer->GetAttr("strict", false)) continue;
+
+          // Assignment must be the sole consumer of all the outputs from the
+          // producer.
+          bool contained = true;
+          for (auto *v : producer->outputs) {
+            if (v->usages() != 1 ||v->consumers[0] != op || v->out()) {
+              contained = false;
+              break;
+            }
+          }
+          if (!contained) continue;
 
           // Try to combine op with producer.
-          if (Combine(flow, input->producer, op)) {
+          if (Combine(flow, producer, op)) {
             // Remove op from candidate list and try again.
             candidates[i] = nullptr;
             num_combines++;
@@ -276,17 +367,49 @@ class ExpressionTransformer : public Transformer {
         }
       }
     }
-    VLOG(3) << num_combines << " of " << candidates.size() << " ops combined";
+
+    // Merge calculate ops.
+    again = true;
+    while (again) {
+      again = false;
+      // Merge calculate ops.
+      for (int i = 0; i < candidates.size(); ++i) {
+        Flow::Operation *op = candidates[i];
+        if (op == nullptr) continue;
+        if (!IsCalculateOp(op)) continue;
+
+        // Check if producer of one of the inputs is also a candidate.
+        for (auto *input : op->inputs) {
+          Flow::Operation *producer = input->producer;
+          if (producer == nullptr) continue;
+          if (!IsCalculateOp(producer)) continue;
+          if (producer->GetAttr("strict", false)) continue;
+
+          // Try to combine op with producer.
+          if (Combine(flow, producer, op)) {
+            // Remove op from candidate list and try again.
+            candidates[i] = nullptr;
+            num_combines++;
+            again = true;
+            break;
+          }
+        }
+      }
+    }
 
     return num_combines > 0;
   }
 
   bool Combine(Flow *flow, Flow::Operation *first, Flow::Operation *second) {
     // Check that ops have the same types and output shapes.
-    if (first->indegree() < 1 || first->outdegree() < 1) return false;
-    if (second->indegree() < 1 || second->outdegree() < 1) return false;
-    Type type = first->outputs[0]->type;
-    const Shape &shape = first->outputs[0]->shape;
+    bool assign = IsAssignmentOp(second);
+    if (first->indegree() < 1) return false;
+    if (first->outdegree() < 1) return false;
+    if (second->indegree() < 1) return false;
+    if (!assign && second->outdegree() < 1) return false;
+    Flow::Variable *prototype = assign ? first->inputs[0] : first->outputs[0];
+    Type type = prototype->type;
+    const Shape &shape = prototype->shape;
     for (auto *input : first->inputs) {
       if (input->type != type) return false;
       if (!input->shape.defined()) return false;
@@ -317,7 +440,30 @@ class ExpressionTransformer : public Transformer {
     string fused_recipe = FuseExpressions(first, second);
 
     // Fuse the two ops and set expression recipe for the fused Calculate op.
-    Flow::Operation *fused = flow->Fuse(first, second, "Calculate", true);
+    Flow::Variable *target = assign ? second->inputs[0] : nullptr;
+    Flow::Operation *fused = flow->Fuse(first, second,
+                                        assign ? "Assign" : "Calculate",
+                                        true);
+
+    // Make sure that the assignment target is still the first input to the
+    // combined op.
+    if (assign && fused->inputs[0] != target) {
+      // Get the input index of the target variable.
+      int target_index = fused->InputIndex(target);
+      CHECK(target_index != -1);
+
+      // Swap target variable with first input.
+      Express expr;
+      expr.Parse(fused_recipe, false);
+      auto *vt = expr.Variable(Express::INPUT, target_index);
+      auto *v0 = expr.Variable(Express::INPUT, 0);
+      vt->id = 0;
+      v0->id = target_index;
+      fused_recipe = expr.AsRecipe();
+      std::swap(fused->inputs[0], fused->inputs[target_index]);
+    }
+
+    // Set fused expression for combined op.
     fused->SetAttr("expr", fused_recipe);
 
     return true;
@@ -331,6 +477,7 @@ class ExpressionTransformer : public Transformer {
     MapVars(first, &expr1, &vars1);
 
     // Build second expression.
+    bool assign = IsAssignmentOp(second);
     Express expr2;
     InitExpression(second, &expr2, false);
     VarMap vars2;
@@ -341,12 +488,18 @@ class ExpressionTransformer : public Transformer {
     Express::Map mapping;
     int next_input = first->inputs.size();
     int next_output = first->outputs.size();
+    if (assign && second->outdegree() == 0) {
+      // Add implicit output for assignment target.
+      Express::Var *v2 = expr2.Variable(Express::OUTPUT, 0);
+      Express::Var *v1 = expr1.Variable(Express::OUTPUT, next_output++);
+      mapping[v2] = v1;
+    }
     for (Flow::Variable *v : second->inputs) {
       if (first->IsInput(v)) {
         // Map input from second op to input from first op.
         mapping[vars2[v]] = vars1[v];
       } else if (first->IsOutput(v)) {
-        if (v->consumers.size() == 1 && !v->out) {
+        if (v->usages() == 1 && !v->out()) {
           // Second op is the only consumer of the output from the first op,
           // so the input can be turned into a temporary variable.
           int id = vars1[v]->id;
@@ -406,6 +559,36 @@ class ExpressionTransformer : public Transformer {
   }
 };
 
+// Eliminate unused inputs to calculate ops. These are usually constants that
+// have been replaced with system constants.
+class RemoveUnusedInputs : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    int num_eliminates = 0;
+    for (Flow::Operation *op : flow->ops()) {
+      bool calculate = op->type == "Calculate";
+      bool assign = op->type == "Assign";
+      if (calculate || assign) {
+        Express expr;
+        InitExpression(op, &expr, false);
+        for (int i = 0; i < op->inputs.size(); ++i) {
+          if (expr.Lookup(Express::INPUT, i) == nullptr &&
+              expr.Lookup(Express::CONST, i) == nullptr) {
+            if (assign && i == 0) continue;
+            expr.EliminateInput(i);
+            op->RemoveInput(op->inputs[i]);
+            op->SetAttr("expr", expr.AsRecipe());
+            num_eliminates++;
+            break;
+          }
+        }
+      }
+    }
+
+    return num_eliminates > 0;
+  }
+};
+
 // Kernel for computing arithmetic expressions.
 class Calculate : public Kernel {
  public:
@@ -420,13 +603,16 @@ class Calculate : public Kernel {
     if (step->type() != operation_) return false;
     if (arity_ != -1 && step->indegree() != arity_) return false;
 
-    // Check that inputs and outputs have the compatible types and shapes.
-    if (step->indegree() < 1 || step->outdegree() < 1) return false;
-    Type type = step->output(0)->type();
-    const Shape &shape = step->output(0)->shape();
+    // Check that inputs and outputs have compatible types and shapes.
+    bool assign = step->type() == "Assign";
+    if (step->indegree() < 1) return false;
+    if (!assign && step->outdegree() < 1) return false;
+    Tensor *prototype = assign ? step->input(0) : step->output(0);
+    Type type = prototype->type();
+    const Shape &shape = prototype->shape();
     for (auto *input : step->inputs()) {
       if (input->type() != type) return false;
-      if (!input->Compatible(step->output(0))) return false;
+      if (!input->Compatible(prototype)) return false;
     }
     for (auto *output : step->outputs()) {
       if (output->type() != type) return false;
@@ -460,36 +646,39 @@ class Calculate : public Kernel {
       output->RequireStandardOrder();
     }
 
-    // Enable sharing of inputs and outputs.
-    for (int i = 0; i < step->indegree(); ++i) {
-      for (int j = 0; j < step->outdegree(); ++j) {
-        if (step->input(i)->shape() == step->output(j)->shape()) {
-          if (step->AllowInPlace(i, j)) break;
+    if (step->type() == "Assign") {
+      // Link output reference to assignment target.
+      if (step->outdegree() == 1) {
+        step->input(0)->Link(step->output(0));
+      }
+    } else {
+      // Enable sharing of inputs and outputs.
+      expression.expr.ComputeLiveRanges();
+      for (int i = 0; i < step->indegree(); ++i) {
+        Tensor *input = step->input(i);
+        Express::Var *ivar = expression.expr.Lookup(Express::INPUT, i);
+        if (ivar == nullptr) continue;
+
+        for (int j = 0; j < step->outdegree(); ++j) {
+          Tensor *output = step->output(j);
+          Express::Var *ovar = expression.expr.Lookup(Express::OUTPUT, j);
+          if (ovar == nullptr) continue;
+
+          // The input and output can be shared if they have the same format and
+          // their live ranges do not overlap.
+          if (input->shape() == output->shape() && !ivar->overlaps(ovar)) {
+            if (step->AllowInPlace(i, j)) {
+              break;
+            }
+          }
         }
       }
     }
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
-    // Check how many spare register we have for hoisting constant out of the
-    // loop body. This is only done for floating-point operations to avoid
-    // register pressure on the regular x64 integer registers which are also
-    // used for the loop indexing.
-    int spare_regs = 0;
-    Type type = step->output(0)->type();
-    if (type == DT_FLOAT || type == DT_DOUBLE) {
-      // Perform dry-run to estimate the number of SIMD registers needed.
-      MacroAssembler dryrun_masm(nullptr, 0, masm->options());
-      Expression dryrun_expr(step, &dryrun_masm, 0);
-      CHECK(dryrun_expr.AllocateRegisters()) << "Register overflow";
-
-      // Count the number of spare SIMD registers.
-      if (!dryrun_expr.index.single()) {
-        while (dryrun_masm.mm().try_alloc() != -1) spare_regs++;
-      }
-    }
-
     // Generate code for element-wise expression evaluation.
+    int spare_regs = Expression::SpareRegs(step, masm->options());
     Expression expression(step, masm, spare_regs);
     CHECK(expression.AllocateRegisters()) << "Register overflow";
     expression.Generate(masm);
@@ -506,6 +695,420 @@ class Calculate : public Kernel {
   int arity_;         // number of inputs
 };
 
+// Kernel for computing softmax or log-softmax.
+class Softmax : public Kernel {
+ public:
+  Softmax(bool log) : log_(log) {}
+
+  string Name() override { return log_ ? "LogSoftmax" : "Softmax"; }
+  string Operation() override { return log_ ? "LogSoftmax" : "Softmax"; }
+
+  bool Supports(Step *step) override {
+    // Requires SSE or AVX support.
+    if (!CPU::Enabled(AVX) && !CPU::Enabled(SSE)) return false;
+
+    // Check inputs and outputs.
+    if (step->indegree() != 1 || step->outdegree() != 1) return false;
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+
+    // Check type.
+    if (x->type() != DT_FLOAT) return false;
+    if (y->type() != DT_FLOAT) return false;
+
+    // Input and output must have same shape.
+    if (!x->HasSameShape(y)) return false;
+
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    x->SetMiniumAlignment(CPU::Enabled(AVX) ? 32 : 16);
+    x->RequireDense();
+    x->RequireStandardOrder();
+    y->SetMiniumAlignment(CPU::Enabled(AVX) ? 32 : 16);
+    y->RequireDense();
+    y->RequireStandardOrder();
+    step->AllowInPlace(0, 0);
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    // Get input and output.
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    int n = y->elements();
+
+    // Compile expression for preprocessing.
+    Express preexpr;
+    preexpr.Parse("!0=Id(%0)", true);
+
+    // Compile expression for computing y=exp(x-max(x)) storing the result in an
+    // intermediate register.
+    Express expr;
+    expr.Parse("!1=Exp(Sub(%0,!0));@0=Id(!1)", true);
+
+    // Compile expression for post-processing.
+    Express postexpr;
+    postexpr.Parse(log_ ? "@0=Log(Mul(%0,!0))" : "@0=Mul(%0,!0)", true);
+
+    // Determine vector size for main block computation.
+    int vecsize = 1;
+    if (masm->Enabled(AVX) && n >= 8) {
+      vecsize = 8;
+    } else if (masm->Enabled(SSE) && n >= 4) {
+      vecsize = 4;
+    }
+    int m = (n / vecsize) * vecsize;
+    int r = vecsize == 1 ? n : n % vecsize;
+
+    // Allocate registers.
+    Register input = masm->rr().alloc();
+    Register output = masm->rr().alloc();
+    Register offset = masm->rr().alloc();
+    YMMRegister sum = masm->mm().allocy();
+    YMMRegister elem = masm->mm().allocy();
+    YMMRegister max = masm->mm().allocy();
+    SIMDRegisters basemm = masm->mm();
+
+    // Load tensor locations.
+    __ LoadTensorAddress(input, x);
+    if (y->SharedWith(x)) {
+      output = input;
+    } else {
+      __ LoadTensorAddress(output, y);
+    }
+
+    // For numerical stability we compute softmax(x)=softmax(x-max(x)), so first
+    // we find the maximum input element. Initialize max to -inf.
+    float neginf = -INFINITY;
+    if (masm->Enabled(AVX)) {
+      __ vmovaps(max, masm->GetConstant(neginf, 8)->address());
+    } else {
+      __ movaps(max.xmm(), masm->GetConstant(neginf, 4)->address());
+    }
+
+    // Find max element for main block.
+    __ xorq(offset, offset);
+    if (vecsize > 1) {
+      UnaryExpression expression(preexpr, masm, input, jit::no_reg, offset, m);
+
+      // Loop over all main elements.
+      expression.generator->GenerateInit(masm);
+      Label l;
+      __ bind(&l);
+
+      // Find max element for next block.
+      expression.generator->GenerateBody(masm);
+      if (masm->Enabled(AVX)) {
+        __ vmaxps(max, max, expression.ymm(0));
+      } else {
+        __ maxps(max.xmm(), expression.xmm(0));
+      }
+
+      if (m > vecsize || r > 0) {
+        __ addq(offset, Immediate(vecsize * sizeof(float)));
+      }
+      if (m > vecsize) {
+        __ cmpq(offset, Immediate(m * sizeof(float)));
+        __ j(less, &l);
+      }
+
+      // Reduce max element vector.
+      if (masm->Enabled(AVX)) {
+        if (vecsize > 4) {
+          __ vperm2f128(elem, ymm0, ymm0, 1);
+          __ vmaxps(max, max, elem);
+        }
+        __ vpermilps(elem, max, 0x0E);
+        __ vmaxps(max, max, elem);
+        __ vpermilps(elem, max, 0x01);
+        __ vmaxps(max, max, elem);
+      } else {
+        __ shufps(elem.xmm(), max.xmm(), 0x0E);
+        __ maxps(max.xmm(), elem.xmm());
+        __ shufps(elem.xmm(), max.xmm(), 0x01);
+        __ maxps(max.xmm(), elem.xmm());
+      }
+
+      masm->mm() = basemm;
+    }
+
+    // Find max element for residual block.
+    if (r > 0) {
+      UnaryExpression expression(preexpr, masm, input, jit::no_reg, offset, 1);
+
+      // Loop over all residual elements.
+      expression.generator->GenerateInit(masm);
+      Label l;
+      __ bind(&l);
+      expression.generator->GenerateBody(masm);
+      if (masm->Enabled(AVX)) {
+        __ vmaxss(max, max, expression.ymm(0));
+      } else {
+        __ maxss(max.xmm(), expression.xmm(0));
+      }
+
+      if (r > 1) {
+        __ addq(offset, Immediate(sizeof(float)));
+        __ cmpq(offset, Immediate(n * sizeof(float)));
+        __ j(less, &l);
+      }
+
+      masm->mm() = basemm;
+    }
+
+    // Clear sum register.
+    if (masm->Enabled(AVX)) {
+      __ vxorps(sum, sum, sum);
+    } else {
+      __ xorps(sum.xmm(), sum.xmm());
+    }
+
+    // Compute exp(x) for main block.
+    __ xorq(offset, offset);
+    if (vecsize > 1) {
+      UnaryExpression expression(expr, masm, input, output, offset, m);
+
+      // Broadcast max value over vector.
+      YMMRegister i0 = expression.ymm(0);
+      if (masm->Enabled(AVX2)) {
+        __ vbroadcastss(i0, max);
+      } else if (masm->Enabled(AVX)) {
+        __ vshufps(i0, max, max, 0);
+        __ vperm2f128(i0, i0, i0, 0);
+      } else {
+        __ movaps(i0.xmm(), max.xmm());
+        __ shufps(i0.xmm(), i0.xmm(), 0);
+      }
+
+      // Loop over all main elements.
+      expression.generator->GenerateInit(masm);
+      Label l;
+      __ bind(&l);
+
+      // Compute exp(x) for the next block.
+      expression.generator->GenerateBody(masm);
+
+      // Sum up results.
+      if (masm->Enabled(AVX)) {
+        __ vaddps(sum, sum, expression.ymm(1));
+      } else {
+        __ addps(sum.xmm(), expression.xmm(1));
+      }
+
+      if (m > vecsize || r > 0) {
+        __ addq(offset, Immediate(vecsize * sizeof(float)));
+      }
+      if (m > vecsize) {
+        __ cmpq(offset, Immediate(m * sizeof(float)));
+        __ j(less, &l);
+      }
+
+      // Reduce sum.
+      if (masm->Enabled(AVX)) {
+        if (vecsize > 4) {
+          __ vperm2f128(elem, sum, sum, 1);
+          __ vhaddps(sum, sum, elem);
+        }
+        __ vhaddps(sum, sum, sum);
+        __ vhaddps(sum, sum, sum);
+      } else {
+        __ haddps(sum.xmm(), sum.xmm());
+        __ haddps(sum.xmm(), sum.xmm());
+      }
+
+      masm->mm() = basemm;
+    }
+
+    // Compute exp(x) for residual block.
+    if (r > 0) {
+      UnaryExpression expression(expr, masm, input, output, offset, 1);
+
+      // Loop over all residual elements.
+      if (masm->Enabled(AVX)) {
+        __ vmovaps(expression.ymm(0), max);
+      } else {
+        __ movaps(expression.xmm(0), max.xmm());
+      }
+      expression.generator->GenerateInit(masm);
+      Label l;
+      __ bind(&l);
+
+      // Compute exp(x) for the next element in residual block.
+      expression.generator->GenerateBody(masm);
+
+      // Sum up results.
+      if (masm->Enabled(AVX)) {
+        __ vaddss(sum, sum, expression.ymm(1));
+      } else {
+        __ addss(sum.xmm(), expression.xmm(1));
+      }
+
+      if (r > 1) {
+        __ addq(offset, Immediate(sizeof(float)));
+        __ cmpq(offset, Immediate(n * sizeof(float)));
+        __ j(less, &l);
+      }
+
+      masm->mm() = basemm;
+    }
+
+    // Compute 1/sum for normalization. Multiplication is faster than division.
+    if (masm->Enabled(AVX)) {
+      __ vrcpss(sum.xmm(), sum.xmm(), sum.xmm());
+      if (masm->Enabled(AVX2)) {
+        __ vbroadcastss(sum, sum);
+      } else {
+        __ vshufps(sum, sum, sum, 0);
+        __ vperm2f128(sum, sum, sum, 0);
+      }
+    } else {
+      __ rcpss(sum.xmm(), sum.xmm());
+      __ shufps(sum.xmm(), sum.xmm(), 0);
+    }
+
+    // Normalize output for main block.
+    __ xorq(offset, offset);
+    if (vecsize > 1) {
+      UnaryExpression expression(postexpr, masm, output, output, offset, m);
+
+      // Load scaling factor.
+      if (masm->Enabled(AVX)) {
+        __ vmovaps(expression.ymm(0), sum);
+      } else {
+        __ movaps(expression.xmm(0), sum.xmm());
+      }
+      expression.generator->GenerateInit(masm);
+
+      // Loop over main elements.
+      Label l;
+      __ bind(&l);
+
+      // Compute normalization for the next block.
+      expression.generator->GenerateBody(masm);
+
+      if (m > vecsize || r > 0) {
+        __ addq(offset, Immediate(vecsize * sizeof(float)));
+      }
+      if (m > vecsize) {
+        __ cmpq(offset, Immediate(m * sizeof(float)));
+        __ j(less, &l);
+      }
+
+      masm->mm() = basemm;
+    }
+
+    // Normalize output for residual block.
+    if (r > 0) {
+      UnaryExpression expression(postexpr, masm, output, output, offset, 1);
+
+      // Load scaling factor.
+      if (masm->Enabled(AVX)) {
+        __ vmovaps(expression.ymm(0), sum);
+      } else {
+        __ movaps(expression.xmm(0), sum.xmm());
+      }
+      expression.generator->GenerateInit(masm);
+
+      // Loop over all residual elements.
+      expression.generator->GenerateInit(masm);
+      Label l;
+      __ bind(&l);
+
+      // Compute normalization for the next residual element.
+      expression.generator->GenerateBody(masm);
+
+      if (r > 1) {
+        __ addq(offset, Immediate(sizeof(float)));
+        __ cmpq(offset, Immediate(n * sizeof(float)));
+        __ j(less, &l);
+      }
+      masm->mm() = basemm;
+    }
+  }
+
+  int64 Complexity(const Step *step) override {
+    int ops = 30;
+    if (log_) ops += 42;
+    return step->input(0)->elements() * ops + 10;
+  }
+
+ private:
+  // Index generator for unary function.
+  class UnaryIndexGenerator : public IndexGenerator {
+   public:
+    UnaryIndexGenerator(MacroAssembler *masm,
+                        Register input,
+                        Register output,
+                        Register offset)
+        : IndexGenerator(masm),
+          input_(input), output_(output), offset_(offset) {}
+
+    void Initialize(size_t vecsize) override {
+      vecsize_ = vecsize;
+    }
+
+    jit::Operand addr(Express::Var *var) override {
+      if (var->type == Express::NUMBER) {
+        float number = Express::NumericFlt32(var->id);
+        int repeat = vecsize_ / sizeof(float);
+        return masm_->GetConstant(number, repeat)->address();
+      } else if (var->type == Express::INPUT) {
+        return Operand(input_, offset_);
+      } else if (var->type == Express::OUTPUT) {
+        return Operand(output_, offset_);
+      } else {
+        LOG(INFO) << var->AsString();
+        UNSUPPORTED;
+        return Operand(no_reg);
+      }
+    }
+
+    const void *data(Express::Var *var) {
+      UNSUPPORTED;
+      return nullptr;
+    }
+
+    int vecsize() const { return vecsize_; }
+
+   private:
+    Register input_;    // input base register
+    Register output_;   // output base register
+    Register offset_;   // displacement register
+    int vecsize_;       // vector size
+  };
+
+  // Unary Expression.
+  struct UnaryExpression {
+    UnaryExpression(const Express &expr,
+                    MacroAssembler *masm,
+                    Register input,
+                    Register output,
+                    Register offset,
+                    int size)
+        : index(masm, input, output, offset) {
+      generator = ExpressionGenerator::Select(expr, DT_FLOAT, size);
+      CHECK(generator != nullptr);
+      generator->Initialize(expr, DT_FLOAT, 0, &index);
+      CHECK(index.AllocateRegisters()) << "Register overflow";
+    }
+
+    ~UnaryExpression() { delete generator; }
+
+    // Get register for register-based variable.
+    int reg(int id) { return generator->RegisterNumber(Express::REGISTER, id); }
+    YMMRegister ymm(int id) { return index.ymm(reg(id)); }
+    XMMRegister xmm(int id) { return index.xmm(reg(id)); }
+
+    UnaryIndexGenerator index;
+    ExpressionGenerator *generator;
+  };
+
+  bool log_; // log(softmax(x)) vs. softmax(x)
+};
+
 // Register arithmetic library.
 void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("AddExpr", "Add", 2));
@@ -520,21 +1123,29 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("SigmoidExpr", "Sigmoid", 1));
   library->Register(new Calculate("TanhExpr", "Tanh", 1));
   library->Register(new Calculate("Calculate", "Calculate"));
+  library->Register(new Calculate("Assign", "Assign"));
 
-  library->Register(new Calculate("NegateExpr", "Negate", 1));
+  library->Register(new Calculate("NegExpr", "Neg", 1));
   library->Register(new Calculate("AbsExpr", "Abs", 1));
   library->Register(new Calculate("ReluExpr", "Relu", 1));
+  library->Register(new Calculate("ReluGradExpr", "ReluGrad", 2));
   library->Register(new Calculate("SoftsignExpr", "Softsign", 1));
   library->Register(new Calculate("SoftplusExpr", "Softplus", 1));
   library->Register(new Calculate("LogSigmoidExpr", "LogSigmoid", 1));
   library->Register(new Calculate("ReciprocalExpr", "Reciprocal", 1));
   library->Register(new Calculate("SquareExpr", "Square", 1));
+  library->Register(new Calculate("SqrtExpr", "Sqrt", 1));
+
+  library->Register(new Softmax(false));
+  library->Register(new Softmax(true));
 }
 
 // Register arithmetic transforms.
 void RegisterArithmeticTransforms(Library *library) {
   library->RegisterTransformer(new ExpressionTransformer());
+  library->RegisterTransformer(new RemoveUnusedInputs());
   library->RegisterTransformer(new DivToMulTransformer());
+  library->RegisterTransformer(new AddNegToSubTransformer());
 }
 
 }  // namespace myelin

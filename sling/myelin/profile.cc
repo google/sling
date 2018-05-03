@@ -113,9 +113,10 @@ string Profile::ASCIIReport() const {
       complexity());
   StringAppendF(&report, "CPU model: %s\n", cpu.brand());
   StringAppendF(&report,
-      "CPU architecture: %s (family %02x model %02x stepping %02x)\n",
+      "CPU architecture: %s (family %02x model %02x stepping %02x), %d cores\n",
       cpu.architecture(),
-      cpu.family(), cpu.model(), cpu.stepping());
+      cpu.family(), cpu.model(), cpu.stepping(),
+      jit::CPU::Processors());
 
   report.append("CPU features:");
   if (jit::CPU::Enabled(jit::MMX)) report.append(" MMX");
@@ -127,6 +128,7 @@ string Profile::ASCIIReport() const {
   if (jit::CPU::Enabled(jit::F16C)) report.append(" F16C");
   if (jit::CPU::Enabled(jit::AVX)) report.append(" AVX");
   if (jit::CPU::Enabled(jit::AVX2)) report.append(" AVX2");
+  if (jit::CPU::Enabled(jit::AVX512F)) report.append(" AVX512F");
   if (jit::CPU::Enabled(jit::FMA3)) report.append(" FMA3");
   report.append("\n");
   string runtime_info = cell()->runtime()->Description();
@@ -165,8 +167,10 @@ string Profile::ASCIIReport() const {
                   name.c_str(),
                   tid.c_str(),
                   step(i)->name().c_str());
-    if (step(i)->type() == "Calculate") {
-      StringAppendF(&report, " [%s]", step(i)->GetAttr("expr").c_str());
+
+    const string &expr = step(i)->GetAttr("expr");
+    if (!expr.empty()) {
+      StringAppendF(&report, " [%s]", expr.c_str());
     }
     report.push_back('\n');
   }

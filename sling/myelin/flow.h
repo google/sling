@@ -25,8 +25,8 @@
 namespace sling {
 namespace myelin {
 
-class Typer;
-class Transformer;
+class Gradients;
+class Transformations;
 
 // Data types.
 enum Type {
@@ -56,13 +56,15 @@ enum Type {
 // Type properties.
 class TypeTraits {
  public:
-  TypeTraits(Type type, const char *name, int size, const char *ptx)
-      : type_(type), name_(name), size_(size), ptx_(ptx) {}
+  TypeTraits(Type type, const char *name, int size,
+             const char *ctype, const char *ptx)
+      : type_(type), name_(name), size_(size), ctype_(ctype), ptx_(ptx) {}
 
   Type type() const { return type_; }
   const string &name() const { return name_; }
   size_t size() const { return size_; }
   bool valid() const { return type_ != DT_INVALID; }
+  const char *ctype() const { return ctype_; }
   const char *ptx() const { return ptx_; }
   string str(const void *data) const;
 
@@ -73,10 +75,11 @@ class TypeTraits {
   static const TypeTraits &of(string &name);
 
  private:
-  Type type_;        // basic type
-  string name_;      // type name
-  size_t size_;      // size in bytes
-  const char *ptx_;  // ptx type
+  Type type_;          // basic type
+  string name_;        // type name
+  size_t size_;        // size in bytes
+  const char *ctype_;  // C type
+  const char *ptx_;    // ptx type
 };
 
 // Look up traits from type.
@@ -102,39 +105,6 @@ TYPE_TRAIT(int64, DT_INT64);
 TYPE_TRAIT(bool, DT_BOOL);
 
 #undef TYPE_TRAIT
-
-// Flow graph transformations.
-class Transformations {
- public:
-  ~Transformations();
-
-  // Register flow transformation component. Transfers ownership from caller.
-  void RegisterTransformer(Transformer *transformer) {
-    transformers_.emplace_back(transformer);
-  }
-
-  // Register type inference component. Transfers ownership from caller.
-  void RegisterTyper(Typer *typer) {
-    typers_.emplace_back(typer);
-  }
-
-  // Flow transformation components.
-  const std::vector<Transformer *> &transformers() const {
-    return transformers_;
-  }
-
-  // Type inference components.
-  const std::vector<Typer *> &typers() const {
-    return typers_;
-  }
-
- private:
-  // Flow transformation components.
-  std::vector<Transformer *> transformers_;
-
-  // Type inference components.
-  std::vector<Typer *> typers_;
-};
 
 // Tensor shape.
 class Shape {
@@ -167,9 +137,12 @@ class Shape {
   // Add dimension to shape.
   void add(int size) { dims_.push_back(size); }
 
-  // Transpose shape.
-  void transpose() {
-    if (rank() >= 2) std::swap(dims_[0], dims_[1]);
+  // Return transposed shape.
+  Shape transpose() {
+    if (rank() < 2) return *this;
+    Shape t = *this;
+    std::swap(t.dims_[0], t.dims_[1]);
+    return t;
   }
 
   // Return the rank of the shape, i.e. the number of dimensions.
@@ -239,6 +212,9 @@ class Shape {
   // Return shape as string.
   string ToString() const;
 
+  // Return dimensions.
+  const std::vector<int> dims() const { return dims_; }
+
  private:
   // Size of each dimension.
   std::vector<int> dims_;
@@ -256,18 +232,26 @@ struct Attribute {
 class Attributes : public std::vector<Attribute> {
  public:
   // Get attribute value.
-  const string &Get(const string &name) const;
-  int Get(const string &name, int defval) const;
-  bool Get(const string &name, bool defval) const;
+  const string &GetAttr(const string &name) const;
+  int GetAttr(const string &name, int defval) const;
+  bool GetAttr(const string &name, bool defval) const;
+  float GetAttr(const string &name, float defval) const;
 
   // Check if attribute exists.
-  bool Has(const string &name) const;
+  bool HasAttr(const string &name) const;
 
   // Set attribute.
-  void Set(const string &name, const string &value);
-  void Set(const string &name, const char *value);
-  void Set(const string &name, int value);
-  void Set(const string &name, bool value);
+  void SetAttr(const string &name, const string &value);
+  void SetAttr(const string &name, const char *value);
+  void SetAttr(const string &name, int value);
+  void SetAttr(const string &name, bool value);
+  void SetAttr(const string &name, float value);
+
+  // Copy attributes from another attribute list.
+  void CopyAttrsFrom(const Attributes &other);
+
+  // Return attribute list.
+  const std::vector<Attribute> attrs() const { return *this; }
 };
 
 // Flow graph for computation.
@@ -277,11 +261,43 @@ class Flow {
   struct Function;
 
   // Flow file version
-  static const int kVersion = 4;
+  static const int kVersion = 5;
   static const int kMagic = 0x776f6c66;
 
+  // Flow artifact.
+  template<typename T> struct Artifact {
+    // Check if flag is set.
+    bool is(uint32 flag) const { return (flag & flags) != 0; }
+
+    // Set or clear flag.
+    T *set(uint32 flag, bool enable = true) {
+      if (enable) {
+        flags |= flag;
+      } else {
+        flags &= ~flag;
+      }
+      return static_cast<T *>(this);
+    }
+    T *clear(uint32 flag, bool disable = true) {
+      return set(flag, !disable);
+    }
+
+    string name;         // artifact name
+    uint32 flags = 0;    // artifact flags (meaning depends on artifact type)
+  };
+
   // Flow variable.
-  struct Variable {
+  struct Variable : public Artifact<Variable> {
+    // Variable flags.
+    enum Flag {
+      NONE = 0,       // no flags
+      IN = 1,         // input variable
+      OUT = 2,        // output variable
+      REF = 4,        // reference variable
+      LEARNABLE = 8,  // learnable global variable
+      UNIQUE = 16,    // input with single gradient
+    };
+
     // Add alias for variable.
     void AddAlias(const string &alias);
 
@@ -294,8 +310,51 @@ class Flow {
     // Return the number of elements in the variable tensor.
     int elements() const { return shape.elements(); }
 
+    // Return the number of usages of variable.
+    int usages() const { return consumers.size(); }
+
+    // Input variable flag.
+    bool in() const { return is(IN); }
+    Variable *set_in(bool enable = true) { return set(IN, enable); }
+    Variable *clear_in(bool disable = true) { return clear(IN, disable); }
+
+    // Output variable flag.
+    bool out() const { return is(OUT); }
+    Variable *set_out(bool enable = true) { return set(OUT, enable); }
+    Variable *clear_out(bool disable = true) { return clear(OUT, disable); }
+
+    // Reference variable flag.
+    bool ref() const { return is(REF); }
+    Variable *set_ref(bool enable = true) { return set(REF, enable); }
+    Variable *clear_ref(bool disable = true) { return clear(REF, disable); }
+
+    // Learnable variable flag.
+    bool learnable() const { return is(LEARNABLE); }
+    Variable *set_learnable(bool enable = true) {
+      return set(LEARNABLE, enable);
+    }
+    Variable *clear_learnable(bool disable = true) {
+      return clear(LEARNABLE, disable);
+    }
+
+    // Unique gradient flag.
+    bool unique() const { return is(UNIQUE); }
+    Variable *set_unique(bool enable = true) {
+      return set(UNIQUE, enable);
+    }
+    Variable *clear_unique(bool disable = true) {
+      return clear(UNIQUE, disable);
+    }
+
     // Check if variable is a constant.
     bool constant() const { return data != nullptr; }
+
+    // Check if variable is a global variable. Global variables are either
+    // constants or read/write learnable variables.
+    bool global() const { return constant() || learnable(); }
+
+    // Check if variable is a local variable.
+    bool local() const { return !global(); }
 
     // Return type as string.
     string TypeString() const;
@@ -305,7 +364,7 @@ class Flow {
 
     // Set data for variable. The storage is not owned by the variable.
     void SetData(const void *buffer, int len) {
-      data = static_cast<const char *>(buffer);
+      data = const_cast<char *>(static_cast<const char *>(buffer));
       size = len;
     }
 
@@ -333,58 +392,29 @@ class Flow {
     // Check if variable has a dependency on some operation.
     bool DependsOn(const Operation *op) const;
 
-    string name;                         // variable name
     std::vector<string> aliases;         // additional aliases for variable
-
     Type type = DT_INVALID;              // element type for variable
-    bool ref = false;                    // is variable a reference?
     Shape shape;                         // variable shape
-    const char *data = nullptr;          // data for constants (owned by flow)
+    char *data = nullptr;                // data for constants (owned by flow)
     uint64_t size = 0;                   // size of data in bytes
-    bool in = false;                     // is variable a function input?
-    bool out = false;                    // is variable a function output?
 
     Operation *producer = nullptr;       // operation producing variable
     std::vector<Operation *> consumers;  // list of consumers of variable
   };
 
   // Flow operation.
-  struct Operation {
+  struct Operation : public Artifact<Operation>, public Attributes {
     // Add input to operation.
     void AddInput(Variable *var);
 
     // Add output to operation.
     void AddOutput(Variable *var);
 
-    // Get attribute value.
-    const string &GetAttr(const string &name) const {
-      return attrs.Get(name);
-    };
-    int GetAttr(const string &name, int defval) const {
-      return attrs.Get(name, defval);
-    }
-    bool GetAttr(const string &name, bool defval) const {
-      return attrs.Get(name, defval);
-    }
+    // Return input index for variable or -1 if variable is not an input.
+    int InputIndex(const Variable *var) const;
 
-    // Check if operation has attribute.
-    bool HasAttr(const string &name) const {
-      return attrs.Has(name);
-    }
-
-    // Set attribute.
-    void SetAttr(const string &name, const string &value) {
-      attrs.Set(name, value);
-    }
-    void SetAttr(const string &name, const char *value) {
-      attrs.Set(name, value);
-    }
-    void SetAttr(const string &name, int value) {
-      attrs.Set(name, value);
-    }
-    void SetAttr(const string &name, bool value) {
-      attrs.Set(name, value);
-    }
+    // Return output index for variable or -1 if variable is not an output.
+    int OutputIndex(const Variable *var) const;
 
     // Check if variable is an input to the operation.
     bool IsInput(const Variable *var) const;
@@ -414,11 +444,9 @@ class Flow {
     int indegree() const { return inputs.size(); }
     int outdegree() const { return outputs.size(); }
 
-    string name;                      // operation name
     string type;                      // operation type
     std::vector<Variable *> inputs;   // input variables
     std::vector<Variable *> outputs;  // output variables
-    Attributes attrs;                 // operation attributes
     Function *func = nullptr;         // function that operation belongs to
 
     int task = 0;                     // task id for operation for parallel op
@@ -428,18 +456,32 @@ class Flow {
   };
 
   // Flow function.
-  struct Function {
+  struct Function : public Artifact<Function> {
+    // Variable flags.
+    enum Flag {
+      NONE = 0,       // no flags
+      TRAINING = 1,   // function only needed for training
+    };
+
     // Add operation to function.
     void AddOperation(Operation *op);
 
-    string name;                      // function name
+    // Training function flag.
+    bool training() const { return is(TRAINING); }
+    Function *set_training(bool enable = true) {
+      return set(TRAINING, enable);
+    }
+    Function *clear_training(bool disable = true) {
+      return clear(TRAINING, disable);
+    }
+
     std::vector<Operation *> ops;     // ops for function in compute order
   };
 
   // Flow connector.
-  struct Connector {
+  struct Connector : public Artifact<Connector> {
     // Add linked variable to connector.
-    void AddLink(Variable *var);
+    Connector *AddLink(Variable *var);
 
     // Remove linked variable from connector. Return false if link was not
     // found.
@@ -449,15 +491,12 @@ class Flow {
     // not found.
     bool ReplaceLink(Variable *old, Variable *var);
 
-    string name;                      // connector name
     std::vector<Variable *> links;    // variables linked to connector
   };
 
   // Blob for storing auxiliary data blocks in flow files.
-  struct Blob {
-    string name;                      // name of data block
+  struct Blob : public Artifact<Blob>, public Attributes {
     string type;                      // data block type
-    Attributes attrs;                 // attributes for data block
     const char *data = nullptr;       // data for blob
     uint64_t size = 0;                // size of data for blob
   };
@@ -476,6 +515,12 @@ class Flow {
   // Allocate memory that is owned by the flow.
   char *AllocateMemory(size_t size);
 
+  // Allocate and initialize memory that is owned by the flow.
+  char *AllocateMemory(const void *data, size_t size);
+  char *AllocateMemory(const string &str) {
+    return AllocateMemory(str.data(), str.size());
+  }
+
   // Load flow from file.
   Status Load(const string &filename);
 
@@ -490,9 +535,13 @@ class Flow {
   void Analyze(const Transformations &transformations);
 
   // Add variable.
-  Variable *AddVariable(const string &name,
-                        Type type,
-                        const Shape &shape);
+  Variable *AddVariable(const string &name, Type type, const Shape &shape,
+                        Variable::Flag flags = Variable::NONE);
+
+  // Add learnable variable.
+  Variable *AddWeights(const string &name, Type type, const Shape &shape) {
+    return AddVariable(name, type, shape, Variable::LEARNABLE);
+  }
 
   // Add operation.
   Operation *AddOperation(const string &name, const string &type);
@@ -512,6 +561,9 @@ class Flow {
 
   // Add connector.
   Connector *AddConnector(const string &name);
+
+  // Link variables using new connector.
+  Connector *Connect(const std::vector<Variable *> &links);
 
   // Add data block.
   Blob *AddBlob(const string &name, const string &type);
@@ -595,6 +647,12 @@ class Flow {
   // Check flow graph consistency.
   bool IsConsistent() const;
 
+  // Return ops and variables in dependency order for a function. This does not
+  // change the internal order of the operations and variables.
+  void Order(Function *func,
+             std::vector<Operation *> *ops,
+             std::vector<Variable *> *vars) const;
+
  private:
   // Infer which variables are inputs and outputs to functions.
   void InferInputsAndOutputs();
@@ -638,7 +696,7 @@ class Typer {
 
   // Return true if the type of the outputs of the operations has been
   // inferred.
-  virtual bool InferTypes(Flow::Operation *op) = 0;
+  virtual bool InferTypes(Flow *flow, Flow::Operation *op) = 0;
 };
 
 // Component type for applying transformations to a flow.
@@ -649,6 +707,55 @@ class Transformer {
   // Apply transformations to flow and return true is any transformations were
   // applied.
   virtual bool Transform(Flow *flow) = 0;
+};
+
+// Flow graph transformations.
+class Transformations {
+ public:
+  // Gradient function for differentiation of ops.
+  typedef void (GradientFunc)(Flow::Operation *op, Gradients *g);
+
+  ~Transformations();
+
+  // Register flow transformation component. Transfers ownership from caller.
+  void RegisterTransformer(Transformer *transformer) {
+    transformers_.emplace_back(transformer);
+  }
+
+  // Register type inference component. Transfers ownership from caller.
+  void RegisterTyper(Typer *typer) {
+    typers_.emplace_back(typer);
+  }
+
+  // Register gradient function for op.
+  void RegisterGradient(const string &op, GradientFunc *func) {
+    gradients_[op] = func;
+  }
+
+  // Flow transformation components.
+  const std::vector<Transformer *> &transformers() const {
+    return transformers_;
+  }
+
+  // Type inference components.
+  const std::vector<Typer *> &typers() const {
+    return typers_;
+  }
+
+  // Gradient functions.
+  const std::unordered_map<string, GradientFunc *> &gradients() const {
+    return gradients_;
+  }
+
+ private:
+  // Flow transformation components.
+  std::vector<Transformer *> transformers_;
+
+  // Type inference components.
+  std::vector<Typer *> typers_;
+
+  // Gradient components.
+  std::unordered_map<string, GradientFunc *> gradients_;
 };
 
 }  // namespace myelin

@@ -28,11 +28,22 @@ namespace myelin {
 // Myelin linker for outputting code and data to ELF object file.
 class ElfLinker : public Linker {
  public:
+  struct Options {
+    // Generate data section with model parameters
+    bool generate_data = false;
+
+    // Generate writeable uninitalized data section with model parameters.
+    bool writeable_data = false;
+  };
+
+  ElfLinker(const Options &options) : options_(options) {}
+  ElfLinker() {}
+
   // Start generating code for cell.
   void BeginCell(Cell *cell) override;
 
   // Add local entry point for step.
-  void AddStep(Step *step, int offset) override;
+  void EndStep(Step *step, int offset) override;
 
   // Add code for cell.
   void EndCell(Cell *cell,
@@ -43,16 +54,19 @@ class ElfLinker : public Linker {
   // Add data for tensor.
   void AddData(Tensor *data) override;
 
+  // Add device code for step.
+  void AddDeviceCode(Step *step, const string &code) override;
+
   // Link sections.
   void Link();
 
   // Write object file.
   void Write(const char *filename);
 
-  // Set data generation flag.
-  void set_generate_data(bool b) { generate_data_ = b; }
-
  private:
+  // Linker options.
+  Options options_;
+
   // ELF object file writer.
   Elf elf_;
 
@@ -60,15 +74,14 @@ class ElfLinker : public Linker {
   Elf::Buffer code_{&elf_, ".text", ".rela.text",
                     SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR};
 
-  // Data section.
-  Elf::Buffer data_{&elf_, ".rodata", ".rela.rodata",
-                    SHT_PROGBITS, SHF_ALLOC};
+  // Read-only data section.
+  Elf::Buffer rodata_{&elf_, ".rodata", nullptr, SHT_PROGBITS, SHF_ALLOC};
+
+  // Uninitialized data section.
+  Elf::Buffer bss_{&elf_, ".bss", nullptr, SHT_NOBITS, SHF_ALLOC | SHF_WRITE};
 
   // External symbols.
   std::unordered_map<string, Elf::Symbol *> symbols_;
-
-  // Generate data sections for tensor data.
-  bool generate_data_ = false;
 };
 
 }  // namespace myelin

@@ -55,27 +55,27 @@ std::unordered_map<string, Type> typemap = {
 };
 
 std::vector<TypeTraits> typetraits = {
-  {DT_INVALID, "void", 0, nullptr},
-  {DT_FLOAT, "float32", sizeof(float), "f32"},
-  {DT_DOUBLE, "float64", sizeof(double), "f64"},
-  {DT_INT32, "int32", sizeof(int32_t), "s32"},
-  {DT_UINT8, "uint8", sizeof(uint8_t), "u8"},
-  {DT_INT16, "int16", sizeof(int16_t), "s16"},
-  {DT_INT8, "int8", sizeof(int8_t), "s8"},
-  {DT_STRING, "string", sizeof(char *), "b64"},
-  {DT_COMPLEX64, "complex64", 2 * sizeof(double), nullptr},
-  {DT_INT64, "int64", sizeof(int64_t), "s64"},
-  {DT_BOOL, "bool", sizeof(bool), "b8"},
-  {DT_QINT8, "qint8", sizeof(int8_t), nullptr},
-  {DT_QUINT8, "quint8", sizeof(uint8_t), nullptr},
-  {DT_QINT32, "qint32", sizeof(int32_t), nullptr},
-  {DT_BFLOAT16, "bfloat16", 2, nullptr},
-  {DT_QINT16, "qint16", sizeof(int16_t), nullptr},
-  {DT_UINT16, "uint16", sizeof(uint16_t), nullptr},
-  {DT_QUINT16, "quint16", sizeof(uint16_t), nullptr},
-  {DT_COMPLEX128, "complex128", 2 * sizeof(float), nullptr},
-  {DT_HALF, "float16", 2, "f16"},
-  {DT_RESOURCE, "resource", 1, nullptr},
+  {DT_INVALID, "void", 0, nullptr, nullptr},
+  {DT_FLOAT, "float32", sizeof(float), "float", "f32"},
+  {DT_DOUBLE, "float64", sizeof(double), "double", "f64"},
+  {DT_INT32, "int32", sizeof(int32_t), "int32_t", "s32"},
+  {DT_UINT8, "uint8", sizeof(uint8_t), "uint8_t", "u8"},
+  {DT_INT16, "int16", sizeof(int16_t), "int16_t", "s16"},
+  {DT_INT8, "int8", sizeof(int8_t), "int8_t", "s8"},
+  {DT_STRING, "string", sizeof(char *), "char *", "b64"},
+  {DT_COMPLEX64, "complex64", 2 * sizeof(double), nullptr, nullptr},
+  {DT_INT64, "int64", sizeof(int64_t), "int64_t", "s64"},
+  {DT_BOOL, "bool", sizeof(bool), "bool", "b8"},
+  {DT_QINT8, "qint8", sizeof(int8_t), nullptr, nullptr},
+  {DT_QUINT8, "quint8", sizeof(uint8_t), nullptr, nullptr},
+  {DT_QINT32, "qint32", sizeof(int32_t), nullptr, nullptr},
+  {DT_BFLOAT16, "bfloat16", 2, nullptr, nullptr},
+  {DT_QINT16, "qint16", sizeof(int16_t), nullptr, nullptr},
+  {DT_UINT16, "uint16", sizeof(uint16_t), nullptr, nullptr},
+  {DT_QUINT16, "quint16", sizeof(uint16_t), nullptr, nullptr},
+  {DT_COMPLEX128, "complex128", 2 * sizeof(float), nullptr, nullptr},
+  {DT_HALF, "float16", 2, nullptr, "f16"},
+  {DT_RESOURCE, "resource", 1, "char *", nullptr},
 };
 
 bool Shape::IsSameSize(const Shape &other) const {
@@ -251,7 +251,7 @@ class FlowFileWriter {
   File *file_;
 };
 
-const string &Attributes::Get(const string &name) const {
+const string &Attributes::GetAttr(const string &name) const {
   static string empty;
   for (auto &attr : *this) {
     if (attr.name == name) return attr.value;
@@ -259,14 +259,14 @@ const string &Attributes::Get(const string &name) const {
   return empty;
 }
 
-int Attributes::Get(const string &name, int defval) const {
+int Attributes::GetAttr(const string &name, int defval) const {
   for (auto &attr : *this) {
     if (attr.name == name) return atoi(attr.value.c_str());
   }
   return defval;
 }
 
-bool Attributes::Get(const string &name, bool defval) const {
+bool Attributes::GetAttr(const string &name, bool defval) const {
   for (auto &attr : *this) {
     if (attr.name == name) {
       return attr.value == "1" || attr.value == "T" || attr.value == "true";
@@ -275,14 +275,21 @@ bool Attributes::Get(const string &name, bool defval) const {
   return defval;
 }
 
-bool Attributes::Has(const string &name) const {
+float Attributes::GetAttr(const string &name, float defval) const {
+  for (auto &attr : *this) {
+    if (attr.name == name) return atof(attr.value.c_str());
+  }
+  return defval;
+}
+
+bool Attributes::HasAttr(const string &name) const {
   for (auto &attr : *this) {
     if (attr.name == name) return true;
   }
   return false;
 }
 
-void Attributes::Set(const string &name, const string &value) {
+void Attributes::SetAttr(const string &name, const string &value) {
   for (auto &attr : *this) {
     if (attr.name == name) {
       attr.value = value;
@@ -292,16 +299,24 @@ void Attributes::Set(const string &name, const string &value) {
   emplace_back(name, value);
 }
 
-void Attributes::Set(const string &name, const char *value) {
-  Set(name, string(value));
+void Attributes::SetAttr(const string &name, const char *value) {
+  SetAttr(name, string(value));
 }
 
-void Attributes::Set(const string &name, int value) {
-  Set(name, std::to_string(value));
+void Attributes::SetAttr(const string &name, int value) {
+  SetAttr(name, std::to_string(value));
 }
 
-void Attributes::Set(const string &name, bool value) {
-  Set(name, value ? "1" : "0");
+void Attributes::SetAttr(const string &name, bool value) {
+  SetAttr(name, value ? "1" : "0");
+}
+
+void Attributes::SetAttr(const string &name, float value) {
+  SetAttr(name, std::to_string(value));
+}
+
+void Attributes::CopyAttrsFrom(const Attributes &other) {
+  for (auto &attr : other) emplace_back(attr);
 }
 
 void Flow::Variable::AddAlias(const string &alias) {
@@ -312,7 +327,7 @@ void Flow::Variable::AddAlias(const string &alias) {
 
 string Flow::Variable::TypeString() const {
   string str;
-  if (ref) str.append("&");
+  if (ref()) str.append("&");
   str.append(TypeTraits::of(type).name());
   if (!shape.scalar()) {
     str.append("[");
@@ -326,7 +341,7 @@ string Flow::Variable::DataString() const {
   // Locate data.
   const char *p = data;
   if (p == nullptr) return "∅";
-  if (ref) {
+  if (ref()) {
     p = *reinterpret_cast<const char * const *>(p);
     if (p == nullptr) return "null";
   }
@@ -416,6 +431,20 @@ void Flow::Operation::AddOutput(Variable *var) {
   outputs.push_back(var);
   CHECK(var->producer == nullptr) << var->name;
   var->producer = this;
+}
+
+int Flow::Operation::InputIndex(const Variable *var) const {
+  for (int i = 0; i < inputs.size(); ++i) {
+    if (inputs[i] == var) return i;
+  }
+  return -1;
+}
+
+int Flow::Operation::OutputIndex(const Variable *var) const {
+  for (int i = 0; i < outputs.size(); ++i) {
+    if (outputs[i] == var) return i;
+  }
+  return -1;
 }
 
 bool Flow::Operation::IsInput(const Variable *var) const {
@@ -525,10 +554,12 @@ void Flow::Function::AddOperation(Operation *op) {
   ops.push_back(op);
 }
 
-void Flow::Connector::AddLink(Variable *var) {
+Flow::Connector *Flow::Connector::AddLink(Variable *var) {
+  CHECK(var != nullptr) << name;
   if (std::find(links.begin(), links.end(), var) == links.end()) {
     links.push_back(var);
   }
+  return this;
 }
 
 bool Flow::Connector::RemoveLink(Variable *var) {
@@ -563,6 +594,12 @@ char *Flow::AllocateMemory(size_t size) {
   return data;
 }
 
+char *Flow::AllocateMemory(const void *data, size_t size) {
+  char *buffer = AllocateMemory(size);
+  memcpy(buffer, data, size);
+  return buffer;
+}
+
 Status Flow::Load(const string &filename) {
   // Load flow file into memory.
   File *file;
@@ -585,8 +622,9 @@ void Flow::Read(const char *data, size_t size) {
   int magic = parser.GetInt();
   CHECK_EQ(magic, kMagic) << "not a flow file";
   int version = parser.GetInt();
-  CHECK(version >= 3 && version <= 4)
+  CHECK(version >= 3 && version <= 5)
       << "unsupported flow file version " << version;
+  if (version >= 5) parser.GetInt();  // unused flags
 
   // Read variables.
   int num_vars = parser.GetInt();
@@ -594,6 +632,9 @@ void Flow::Read(const char *data, size_t size) {
     // Create new variable.
     Variable *var = new Variable;
     vars_.push_back(var);
+
+    // Get flags.
+    if (version >= 5) var->flags = parser.GetInt();
 
     // Get variable name.
     var->name = parser.GetString();
@@ -610,7 +651,7 @@ void Flow::Read(const char *data, size_t size) {
       var->type = DT_INVALID;
     } else {
       if (type[0] == '&') {
-        var->ref = true;
+        var->set_ref();
         type.erase(0, 1);
       }
       const TypeTraits &t = TypeTraits::of(type);
@@ -626,8 +667,11 @@ void Flow::Read(const char *data, size_t size) {
     }
 
     // Get optional variable constant.
-    var->size = parser.GetLong();
-    if (var->size != 0) var->data = parser.Get(var->size);
+    int64 size = parser.GetLong();
+    if (size != 0) {
+      const char *data = parser.Get(size);
+      var->SetData(data, size);
+    }
   }
 
   // Read operations.
@@ -636,6 +680,7 @@ void Flow::Read(const char *data, size_t size) {
     // Create new operation.
     Operation *op = new Operation;
     ops_.push_back(op);
+    if (version >= 5) op->flags = parser.GetInt();
 
     // Get operation name and type.
     op->name = parser.GetString();
@@ -676,6 +721,7 @@ void Flow::Read(const char *data, size_t size) {
     // Create new function.
     Function *func = new Function;
     funcs_.push_back(func);
+    if (version >= 5) func->flags = parser.GetInt();
 
     // Get function name.
     func->name = parser.GetString();
@@ -696,6 +742,7 @@ void Flow::Read(const char *data, size_t size) {
     // Create new connector.
     Connector *cnx = new Connector;
     cnxs_.push_back(cnx);
+    if (version >= 5) cnx->flags = parser.GetInt();
 
     // Get connector name.
     cnx->name = parser.GetString();
@@ -717,6 +764,7 @@ void Flow::Read(const char *data, size_t size) {
       // Create new blob.
       Blob *blob = new Blob;
       blobs_.push_back(blob);
+      if (version >= 5) blob->flags = parser.GetInt();
 
       // Get blob name and type.
       blob->name = parser.GetString();
@@ -727,7 +775,7 @@ void Flow::Read(const char *data, size_t size) {
       for (int j = 0; j < num_attrs; ++j) {
         string name = parser.GetString();
         string value = parser.GetString();
-        blob->attrs.Set(name, value);
+        blob->SetAttr(name, value);
       }
 
       // Get data.
@@ -746,10 +794,14 @@ void Flow::Save(const string &filename, int version) const {
   CHECK_LE(version, kVersion);
   file.WriteInt(kMagic);
   file.WriteInt(version);
+  if (version >= 5) file.WriteInt(0);  // unused flags
 
   // Write variables.
   file.WriteInt(vars_.size());
   for (const Variable *var : vars_) {
+    // Write flags.
+    if (version >= 5) file.WriteInt(var->flags);
+
     // Write name.
     file.WriteString(var->name);
 
@@ -760,7 +812,7 @@ void Flow::Save(const string &filename, int version) const {
     }
 
     // Write type.
-    if (var->ref) {
+    if (var->ref() && version < 5) {
       file.WriteString("&" + TypeTraits::of(var->type).name());
     } else {
       file.WriteString(TypeTraits::of(var->type).name());
@@ -784,6 +836,9 @@ void Flow::Save(const string &filename, int version) const {
   // Write operations.
   file.WriteInt(ops_.size());
   for (Operation *op : ops_) {
+    // Write flags.
+    if (version >= 5) file.WriteInt(op->flags);
+
     // Write name.
     file.WriteString(op->name);
 
@@ -803,8 +858,8 @@ void Flow::Save(const string &filename, int version) const {
     }
 
     // Write attributes.
-    file.WriteInt(op->attrs.size());
-    for (const auto &attr : op->attrs) {
+    file.WriteInt(op->attrs().size());
+    for (const auto &attr : op->attrs()) {
       file.WriteString(attr.name);
       file.WriteString(attr.value);
     }
@@ -813,6 +868,7 @@ void Flow::Save(const string &filename, int version) const {
   // Write functions.
   file.WriteInt(funcs_.size());
   for (const Function *func : funcs_) {
+    if (version >= 5) file.WriteInt(func->flags);
     file.WriteString(func->name);
     file.WriteInt(func->ops.size());
     for (const Operation *op : func->ops) {
@@ -823,6 +879,7 @@ void Flow::Save(const string &filename, int version) const {
   // Write connectors.
   file.WriteInt(cnxs_.size());
   for (const Connector *cnx : cnxs_) {
+    if (version >= 5) file.WriteInt(cnx->flags);
     file.WriteString(cnx->name);
     file.WriteInt(cnx->links.size());
     for (const Variable *link : cnx->links) {
@@ -834,10 +891,11 @@ void Flow::Save(const string &filename, int version) const {
   if (version >= 4) {
     file.WriteInt(blobs_.size());
     for (const Blob *blob : blobs_) {
+      if (version >= 5) file.WriteInt(blob->flags);
       file.WriteString(blob->name);
       file.WriteString(blob->type);
-      file.WriteInt(blob->attrs.size());
-      for (const auto &attr : blob->attrs) {
+      file.WriteInt(blob->attrs().size());
+      for (const auto &attr : blob->attrs()) {
         file.WriteString(attr.name);
         file.WriteString(attr.value);
       }
@@ -870,17 +928,20 @@ void Flow::Analyze(const Transformations &transformations) {
 }
 
 void Flow::InferInputsAndOutputs() {
-  // Connector links are considered both inputs and outputs.
+  // Internal connector links are considered both inputs and outputs.
   for (Connector *cnx : cnxs_) {
     for (Variable *link : cnx->links) {
-      link->in = true;
-      link->out = true;
+      if (link->ref() &&
+          link->producer != nullptr &&
+          !link->consumers.empty()) {
+        link->set_in()->set_out();
+      }
     }
   }
 
   for (Variable *var : vars_) {
     // Constants are not considered inputs or outputs.
-    if (var->data != nullptr) continue;
+    if (var->constant()) continue;
 
     // Check the input and output attributes of the producing op.
     bool input_set = false;
@@ -888,12 +949,12 @@ void Flow::InferInputsAndOutputs() {
     if (var->producer != nullptr) {
       const string &input = var->producer->GetAttr("input");
       if (!input.empty()) {
-        if (input == "1" || input == "true") var->in = true;
+        if (input == "1" || input == "true") var->set_in();
         input_set = true;
       }
       const string &output = var->producer->GetAttr("output");
       if (!output.empty()) {
-        if (output == "1" || output == "true") var->out = true;
+        if (output == "1" || output == "true") var->set_out();
         output_set = true;
       }
     }
@@ -902,7 +963,7 @@ void Flow::InferInputsAndOutputs() {
     // is considered an input to the function.
     if (!input_set) {
       if (var->producer == nullptr || var->producer->inputs.empty()) {
-        var->in = true;
+        var->set_in();
       }
     }
 
@@ -910,7 +971,7 @@ void Flow::InferInputsAndOutputs() {
     // function.
     if (!output_set) {
       if (var->consumers.empty()) {
-        var->out = true;
+        var->set_out();
       }
     }
   }
@@ -948,7 +1009,7 @@ Flow::Operation *Flow::Fuse(Operation *first,
       // Input from first op. Eliminate variable if it is only used as an
       // intermediate result between the first and second op.
       second->RemoveInput(v);
-      if (v->consumers.empty() && !v->out) {
+      if (v->consumers.empty() && !v->out()) {
         first->RemoveOutput(v);
         DeleteVariable(v);
         for (Connector *cnx : cnxs_) cnx->RemoveLink(v);
@@ -965,7 +1026,7 @@ Flow::Operation *Flow::Fuse(Operation *first,
     if (first->IsInput(v)) {
       // Input from second op. Eliminate variable if it is only used as an
       // intermediate result between the first and second op.
-      if (v->consumers.size() == 1 && !v->out) {
+      if (v->usages() == 1 && !v->out()) {
         first->RemoveInput(v);
         second->RemoveOutput(v);
         DeleteVariable(v);
@@ -987,7 +1048,7 @@ Flow::Operation *Flow::Fuse(Operation *first,
   first->type = combined;
 
   // Add attributes from second op to first op.
-  for (auto &attr : second->attrs) {
+  for (auto &attr : second->attrs()) {
     if (!first->HasAttr(attr.name)) {
       first->SetAttr(attr.name, attr.value);
     }
@@ -1173,14 +1234,14 @@ void Flow::Eliminate(Operation *op) {
     Variable *input = op->inputs[0];
     Variable *output = op->outputs[0];
     if (input->type != DT_INVALID && output->type != DT_INVALID) {
-      CHECK_EQ(input->type, output->type);
+      CHECK_EQ(input->type, output->type) << op->name;
     }
     if (input->shape.defined() && output->shape.defined()) {
-      CHECK(input->shape == output->shape);
+      CHECK(input->shape == output->shape) << op->name;
     }
-    if (output->in) input->in = true;
-    if (output->out) input->out = true;
-    if (output->ref) input->ref = true;
+    if (output->in()) input->set_in();
+    if (output->out()) input->set_out();
+    if (output->ref()) input->set_ref();
     for (Operation *target : ops_) {
       for (int i = 0; i < target->inputs.size(); ++i) {
         if (target->inputs[i] == output) {
@@ -1191,7 +1252,7 @@ void Flow::Eliminate(Operation *op) {
 
     // Remove op as consumer of input variable.
     auto f = std::find(input->consumers.begin(), input->consumers.end(), op);
-    CHECK(f != input->consumers.end());
+    CHECK(f != input->consumers.end()) << op->name;
     input->consumers.erase(f);
 
     // Move consumers of output variable to input variable.
@@ -1199,8 +1260,13 @@ void Flow::Eliminate(Operation *op) {
       input->consumers.push_back(consumer);
     }
 
-    // Make input variable an alias for the output variable.
-    input->AddAlias(output->name);
+    // Merge input and output variable names.
+    if (output->out()) {
+      input->AddAlias(input->name);
+      input->name = output->name;
+    } else {
+      input->AddAlias(output->name);
+    }
     for (const string &alias : output->aliases) {
       input->AddAlias(alias);
     }
@@ -1400,7 +1466,7 @@ bool Flow::InferTypes(const Transformations &transformations) {
     auto &typers = transformations.typers();
     for (int t = typers.size() -1; t >= 0; --t) {
       Typer *typer = typers[t];
-      bool done = typer->InferTypes(op);
+      bool done = typer->InferTypes(this, op);
       if (done) break;
     }
 
@@ -1428,14 +1494,67 @@ bool Flow::InferTypes(const Transformations &transformations) {
   return true;
 }
 
+void Flow::Order(Function *func,
+                 std::vector<Operation *> *ops,
+                 std::vector<Variable *> *vars) const {
+  // Add all variables with no producer.
+  vars->clear();
+  for (Variable *var : vars_) {
+    if (var->producer != nullptr) continue;
+    bool used = false;
+    for (Operation *consumer : var->consumers) {
+      if (consumer->func == func) {
+        used = true;
+        break;
+      }
+    }
+    if (used) vars->push_back(var);
+  }
+
+  // Compute the number of missing inputs for each operation.
+  ops->clear();
+  std::unordered_map<Operation *, int> remaining;
+  for (Operation *op : ops_) {
+    if (op->func != func) continue;
+    int missing = 0;
+    for (Variable *var : op->inputs) {
+      if (var->producer != nullptr) missing++;
+    }
+    if (missing == 0) {
+      ops->push_back(op);
+    } else {
+      remaining[op] = missing;
+    }
+  }
+
+  // Keep adding ops that are ready to be computed.
+  for (int i = 0; i < ops->size(); ++i) {
+    // Get the next op that is ready.
+    Operation *op = ops->at(i);
+
+    // Propagate readiness to consumers.
+    for (Variable *v : op->outputs) {
+      vars->push_back(v);
+      for (Operation *consumer : v->consumers) {
+        if (consumer->func != func) continue;
+        if (--remaining[consumer] == 0) {
+          ops->push_back(consumer);
+        }
+      }
+    }
+  }
+}
+
 Flow::Variable *Flow::AddVariable(const string &name,
                                   Type type,
-                                  const Shape &shape) {
+                                  const Shape &shape,
+                                  Variable::Flag flags) {
   Variable *var = new Variable;
   vars_.push_back(var);
   var->name = name;
   var->type = type;
   var->shape = shape;
+  var->flags = flags;
   return var;
 }
 
@@ -1482,6 +1601,14 @@ Flow::Connector *Flow::AddConnector(const string &name) {
   return cnx;
 }
 
+Flow::Connector *Flow::Connect(const std::vector<Variable *> &links) {
+  if (links.empty()) return nullptr;
+  CHECK(links[0] != nullptr);
+  Connector *cnx = AddConnector(links[0]->name);
+  for (Variable *link : links) cnx->AddLink(link);
+  return cnx;
+}
+
 Flow::Blob *Flow::AddBlob(const string &name, const string &type) {
   Blob *blob = new Blob;
   blobs_.push_back(blob);
@@ -1521,7 +1648,7 @@ void Flow::RemoveOperation(Operation *op) {
   for (Flow::Variable *input : op->inputs) {
     auto fc = std::find(input->consumers.begin(), input->consumers.end(), op);
     CHECK(fc != input->consumers.end());
-    input	->consumers.erase(fc);
+    input->consumers.erase(fc);
   }
 
   // Remove outputs.
@@ -1632,9 +1759,11 @@ string Flow::ToString() const {
     StringAppendF(&str, "var %s : %s",
                   var->name.c_str(),
                   var->TypeString().c_str());
-    if (var->in) StringAppendF(&str, " in");
-    if (var->out) StringAppendF(&str, " out");
-    if (var->data != nullptr) {
+    if (var->learnable()) StringAppendF(&str, " learnable");
+    if (var->in()) StringAppendF(&str, " in");
+    if (var->out()) StringAppendF(&str, " out");
+    if (var->unique()) StringAppendF(&str, " unique");
+    if (var->constant()) {
       StringAppendF(&str, ", %lu bytes", var->size);
     }
     StringAppendF(&str, " {\n");
@@ -1666,7 +1795,7 @@ string Flow::ToString() const {
                     output->name.c_str(),
                     output->TypeString().c_str());
     }
-    for (const Attribute &attr : op->attrs) {
+    for (const Attribute &attr : op->attrs()) {
       if (attr.value.size() > 512) {
         StringAppendF(&str, "  %s = <<%lu bytes>>\n",
                       attr.name.c_str(),
@@ -1680,6 +1809,7 @@ string Flow::ToString() const {
     str.append("}\n\n");
   }
   for (const Function *func : funcs_) {
+    if (func->training()) StringAppendF(&str, "training ");
     StringAppendF(&str, "func %s {\n", func->name.c_str());
     for (const Operation *op : func->ops) {
       StringAppendF(&str, "  %s : %s\n", op->name.c_str(), op->type.c_str());
@@ -1702,7 +1832,7 @@ string Flow::ToString() const {
                   blob->name.c_str(),
                   blob->type.c_str(),
                   blob->size);
-    for (const Attribute &attr : blob->attrs) {
+    for (const Attribute &attr : blob->attrs()) {
       StringAppendF(&str, "  %s = %s\n",
                     attr.name.c_str(),
                     attr.value.c_str());

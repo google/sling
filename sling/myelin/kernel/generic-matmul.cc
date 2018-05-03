@@ -215,8 +215,8 @@ class GenericFltMatMatMul : public Kernel {
     Shape a = A->shape();
     Shape b = B->shape();
     Shape c = C->shape();
-    if (transpose_a) a.transpose();
-    if (transpose_b) b.transpose();
+    if (transpose_a) a = a.transpose();
+    if (transpose_b) b = b.transpose();
 
     if (a.dim(0) != c.dim(0)) return false;
     if (a.dim(1) != b.dim(0)) return false;
@@ -518,7 +518,58 @@ class GenericIntVecMatMulAddRelu : public GenericIntVecMatMulBase {
   string Operation() override { return "MatMulAddRelu"; }
 };
 
+// Merge transpose into matmul attributes.
+class TransposeTransformer : public Transformer {
+ public:
+  bool Transform(Flow *flow) override {
+    int updates = 0;
+
+    // Eliminate double transpose.
+    for (Flow::Operation *op : flow->Find("Transpose|Transpose")) {
+      Flow::Operation *t1 = op;
+      Flow::Operation *t2 = t1->inputs[0]->producer;
+      if (t1->outputs[0]->usages() == 1) {
+        t2->outputs[0]->shape = t2->inputs[0]->shape;
+        t1->outputs[0]->shape = t1->inputs[0]->shape;
+        flow->Eliminate(t1);
+        flow->Eliminate(t2);
+        updates++;
+      }
+    }
+
+    // Fold transpose of first argument into matmul.
+    for (Flow::Operation *op : flow->Find("Transpose|MatMul")) {
+      Flow::Operation *matmul = op;
+      Flow::Operation *transpose = matmul->inputs[0]->producer;
+      if (transpose->outputs[0]->usages() == 1) {
+        transpose->outputs[0]->shape = transpose->inputs[0]->shape;
+        flow->Eliminate(transpose);
+        matmul->SetAttr("transpose_a", !matmul->GetAttr("transpose_a", false));
+        updates++;
+      }
+    }
+
+    // Fold transpose of second argument into matmul.
+    for (Flow::Operation *op : flow->Find("Transpose|1:MatMul")) {
+      Flow::Operation *matmul = op;
+      Flow::Operation *transpose = matmul->inputs[1]->producer;
+      if (transpose->outputs[0]->usages() == 1) {
+        transpose->outputs[0]->shape = transpose->inputs[0]->shape;
+        flow->Eliminate(transpose);
+        matmul->SetAttr("transpose_b", !matmul->GetAttr("transpose_b", false));
+        updates++;
+      }
+    }
+
+    return updates > 0;
+  }
+};
+
+
 void RegisterGenericMatMul(Library *library) {
+  // Transformations.
+  library->RegisterTransformer(new TransposeTransformer());
+
   // Computes  : C = A * B
   // Input     : A: float32[k,n] row-major
   //             B: float32[n,m] column-major

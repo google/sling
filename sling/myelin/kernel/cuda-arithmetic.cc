@@ -207,6 +207,9 @@ class CUDACalculate : public CUDAKernel {
         case Express::ABS:
           GenerateUnaryOp("abs", instr, &comp);
           break;
+        case Express::SQRT:
+          GenerateUnaryOp("sqrt.approx", instr, &comp);
+          break;
         case Express::RECIPROCAL:
           GenerateUnaryOp("rcp.approx", instr, &comp);
           break;
@@ -243,7 +246,7 @@ class CUDACalculate : public CUDAKernel {
       case Express::INPUT: {
         // mov reg, [ptr].
         Tensor *input = comp->step->input(instr->args[0]->id);
-        if (input->IsConstant() && input->elements() == 1) {
+        if (input->constant() && input->elements() == 1) {
           // Load scalar constant.
           switch (comp->dtype) {
             case DT_FLOAT:
@@ -308,7 +311,7 @@ class CUDACalculate : public CUDAKernel {
     CHECK_EQ(instr->result->type, Express::OUTPUT);
     PTXReg &src = comp->reg[instr->src];
     Tensor *output = comp->step->output(instr->result->id);
-    CHECK(!output->IsConstant());
+    CHECK(!output->constant());
     ptx->LoadTensorAddress(comp->addr, output);
     if (output->elements() != 1) {
       ptx->emit("add.u64", comp->addr, comp->addr, comp->offset);
@@ -602,7 +605,7 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
   library->Register(new CUDACalculate("CUDATanh", "Tanh", 1));
   library->Register(new CUDACalculate("CUDACalculate", "Calculate"));
 
-  library->Register(new CUDACalculate("CUDANegate", "Negate", 1));
+  library->Register(new CUDACalculate("CUDANeg", "Neg", 1));
   library->Register(new CUDACalculate("CUDAAbs", "Abs", 1));
   library->Register(new CUDACalculate("CUDARelu", "Relu", 1));
   library->Register(new CUDACalculate("CUDASoftsign", "Softsign", 1));

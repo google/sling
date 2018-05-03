@@ -36,7 +36,7 @@ class CUDABasicConcat : public CUDAKernel {
     int n = step->GetAttr("N", step->indegree() - 1);
     if (step->indegree() < n + 1) return false;
     Tensor *axis = step->input(n);
-    if (!axis->IsConstant()) return false;
+    if (!axis->constant()) return false;
     int a = axis->value<int32>();
     if (step->output(0)->shape().outer(a) != 1) return false;
 

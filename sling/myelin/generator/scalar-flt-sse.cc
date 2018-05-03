@@ -113,6 +113,12 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
             &Assembler::maxss, &Assembler::maxsd,
             masm);
         break;
+      case Express::SQRT:
+        GenerateXMMFltOp(instr,
+            &Assembler::sqrtss, &Assembler::sqrtsd,
+            &Assembler::sqrtss, &Assembler::sqrtsd,
+            masm, 0);
+        break;
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;

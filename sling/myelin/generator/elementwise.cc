@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <map>
+
 #include "sling/myelin/generator/elementwise.h"
 
 #define __ masm->
@@ -24,39 +26,75 @@ using namespace jit;
 ElementwiseIndexGenerator::ElementwiseIndexGenerator(
     const Step *step, MacroAssembler *masm) : IndexGenerator(masm) {
   // Get size from first output.
-  CHECK_GE(step->outdegree(), 1);
-  type_ = step->output(0)->type();
-  shape_ = step->output(0)->shape();
+  assign_ = step->type() == "Assign";
+  Tensor *prototype = assign_ ? step->input(0) : step->output(0);
+  type_ = prototype->type();
+  shape_ = prototype->shape();
 
   // Allocate locators for all inputs and outputs.
   input_.resize(step->indegree());
   for (int i = 0; i < step->indegree(); ++i) {
     CHECK(step->input(i)->type() == type_);
-    CHECK(InitializeLocator(step->input(i), &input_[i]));
+    input_[i] = GetLocator(step->input(i));
   }
-  output_.resize(step->outdegree());
-  for (int i = 0; i < step->outdegree(); ++i) {
-    CHECK(step->output(i)->type() == type_);
-    CHECK(step->output(i)->shape() == step->output(0)->shape());
-    CHECK(InitializeLocator(step->output(i), &output_[i]));
+  if (assign_) {
+    // Add assigment locator.
+    output_.resize(1);
+    output_[0] = GetLocator(step->input(0));
+
+    // Optionally output reference to assignment target.
+    if (step->outdegree() == 1) {
+      output_ref_ = step->output(0);
+    }
+  } else {
+    output_.resize(step->outdegree());
+    for (int i = 0; i < step->outdegree(); ++i) {
+      CHECK(step->output(i)->type() == type_);
+      CHECK(step->output(i)->shape() == shape_);
+      output_[i] = GetLocator(step->output(i));
+    }
   }
 }
 
 ElementwiseIndexGenerator::~ElementwiseIndexGenerator() {
   for (auto *i : iterators_) delete i;
+  for (auto *l : locators_) delete l;
 }
 
-bool ElementwiseIndexGenerator::InitializeLocator(Tensor *var, Locator *loc) {
-  // Set variable for locator.
-  loc->var = var;
+ElementwiseIndexGenerator::Iterator *ElementwiseIndexGenerator::GetIterator(
+    IteratorType type,
+    size_t size) {
+  // Try to find existing iterator.
+  for (Iterator *it : iterators_) {
+    if (type == it->type && size == it->size) {
+      return it;
+    }
+  }
+
+  // Create new iterator.
+  Iterator *it = new Iterator(type, size);
+  iterators_.push_back(it);
+  return it;
+}
+
+ElementwiseIndexGenerator::Locator *ElementwiseIndexGenerator::GetLocator(
+    Tensor *var) {
+  // Try to find existing locator.
+  for (Locator *loc : locators_) {
+    if (var == loc->var) return loc;
+  }
+
+  // Create new locator.
+  Locator *loc = new Locator(var);
+  locators_.push_back(loc);
 
   // Determine iterator type for variable.
   if (var->elements() == 1) {
     // Variable only has one element; use a scalar/const iterator.
-    loc->iterator = NewIterator(var->IsConstant() ? CONST : SCALAR);
+    loc->iterator = GetIterator(var->constant() ? CONST : SCALAR, 1);
   } else if (var->shape() == shape_) {
     // Variable has same shape as output; use simple iterator.
-    loc->iterator = NewIterator(SIMPLE);
+    loc->iterator = GetIterator(SIMPLE, shape_.elements());
   } else if (var->rank() <= shape_.rank()) {
     // Find common suffix between variable and output.
     int n = 1;
@@ -74,31 +112,26 @@ bool ElementwiseIndexGenerator::InitializeLocator(Tensor *var, Locator *loc) {
     if (n == var->elements()) {
       if (var->elements() == shape_.elements()) {
         // The variable shape prefix is a one vector so use a simple iterator.
-        loc->iterator = NewIterator(SIMPLE);
+        loc->iterator = GetIterator(SIMPLE, shape_.elements());
       } else {
         // Variable shape is a suffix of the output shape; use a repeated
         // iterator.
         DCHECK(shape_.elements() % n == 0);
-        loc->iterator = NewIterator(REPEAT);
-        loc->iterator->size = n;
+        loc->iterator = GetIterator(REPEAT, n);
       }
     } else if (d1 >= 0 && d2 >= 0 && var->dim(d1) == 1 &&
                var->elements() * shape_.dim(d2) == shape_.elements()) {
       // Create broadcast iterator over one dimension.
-      loc->iterator = NewIterator(BROADCAST);
-      loc->iterator->size = n;
-      loc->iterator->broadcast = shape_.dim(d2);
+      loc->iterator = GetIterator(BROADCAST, n);
+      loc->broadcast = shape_.dim(d2);
     } else {
-      LOG(WARNING) << "Unsupported broadcast: " << var->name()
-                   << " input: " << var->shape().ToString()
-                   << " output: " << shape_.ToString();
-      return false;
+      LOG(FATAL) << "Unsupported broadcast: " << var->name()
+                 << " input: " << var->shape().ToString()
+                 << " output: " << shape_.ToString();
     }
-  } else {
-    return false;
   }
 
-  return true;
+  return loc;
 }
 
 void ElementwiseIndexGenerator::Initialize(size_t vecsize) {
@@ -117,105 +150,117 @@ bool ElementwiseIndexGenerator::AllocateRegisters() {
     if (!offset_.is_valid()) return false;
   }
 
-  // Allocate registers for locators.
-  for (auto &loc : input_) {
-    if (!AllocateLocatorRegisters(&loc)) return false;
-  }
-  for (auto &loc : output_) {
-    if (!AllocateLocatorRegisters(&loc)) return false;
-  }
-
-  // Try to allocate extra base registers as an optimization.
-  if (!single_) {
-    for (auto &loc : input_) {
-      if (loc.base.is_valid()) continue;
-      if (loc.iterator->type == SIMPLE || loc.iterator->type == REPEAT) {
-        loc.base = rr.try_alloc();
-      }
-    }
-    for (auto &loc : output_) {
-      if (loc.base.is_valid()) continue;
-      if (loc.iterator->type == SIMPLE) {
-        loc.base = rr.try_alloc();
-      }
-    }
-  }
-
-  return true;
-}
-
-bool ElementwiseIndexGenerator::AllocateLocatorRegisters(Locator *loc) {
-  Registers &rr = masm_->rr();
-  switch (loc->iterator->type) {
-    case SIMPLE:
-    case SCALAR:
-      // Allocate base register for non-instance variables.
-      if (loc->var->offset() == -1 || loc->var->ref()) {
-        loc->base = rr.try_alloc();
-        if (!loc->base.is_valid()) return false;
-      }
-      break;
-    case CONST:
-      // Constants use pc-relative addressing, so no extra registers are needed.
-      break;
-    case REPEAT:
-      // Allocate base register for non-instance variables.
-      if (loc->var->offset() == -1 || loc->var->ref()) {
-        loc->base = rr.try_alloc();
-        if (!loc->base.is_valid()) return false;
-      }
-
+  // Allocate registers for iterators.
+  for (auto *it : iterators_) {
+    if (it->type == REPEAT || it->type == BROADCAST) {
       // Allocate index register.
-      loc->iterator->offset = rr.try_alloc();
-      if (!loc->iterator->offset.is_valid()) return false;
-      break;
-    case BROADCAST:
-      // Allocate block, index, and broadcast registers.
-      loc->iterator->block = rr.try_alloc();
-      if (!loc->iterator->block.is_valid()) return false;
-      loc->iterator->offset = rr.try_alloc();
-      if (!loc->iterator->offset.is_valid()) return false;
-      loc->iterator->repeat = rr.try_alloc();
-      if (!loc->iterator->repeat.is_valid()) return false;
-      break;
-    default:
-      return false;
-  };
+      it->offset = rr.try_alloc();
+      if (!it->offset.is_valid()) return false;
+    }
+  }
+
+  // Allocate registers for locators.
+  for (auto *loc : locators_) {
+    switch (loc->iterator->type) {
+      case SIMPLE:
+      case SCALAR:
+        // Allocate base register for non-instance variables.
+        if (loc->var->offset() == -1 || loc->var->ref()) {
+          loc->base = rr.try_alloc();
+          if (!loc->base.is_valid()) return false;
+        }
+        break;
+      case CONST:
+        // Constants use pc-relative addressing, so no extra registers are
+        // needed.
+        break;
+      case REPEAT:
+        // Allocate base register for non-instance variables.
+        if (loc->var->offset() == -1 || loc->var->ref()) {
+          loc->base = rr.try_alloc();
+          if (!loc->base.is_valid()) return false;
+        }
+        break;
+      case BROADCAST:
+        // Allocate base and broadcast registers.
+        loc->base = rr.try_alloc();
+        if (!loc->base.is_valid()) return false;
+        loc->repeat = rr.try_alloc();
+        if (!loc->repeat.is_valid()) return false;
+        break;
+      default:
+        return false;
+    };
+  }
+
+  // Assignment target needs a base register.
+  if (output_ref_ != nullptr && !input_[0]->base.is_valid()) {
+    input_[0]->base = rr.try_alloc();
+    if (!input_[0]->base.is_valid()) return false;
+  }
+
+  // Try to allocate extra base registers as an optimization. The base registers
+  // can be shared between local tensors with the same location.
+  if (!single_) {
+    std::map<int, Register> base_regs;
+    for (auto *loc : locators_) {
+      // Do not allocate register if locator already has a base register.
+      if (loc->base.is_valid()) continue;
+
+      // Only simple and repeat iterators can use extra base registers.
+      if (loc->iterator->type == SIMPLE || loc->iterator->type == REPEAT) {
+        if (loc->var->offset() != -1) {
+          // Try to find existing base register for offset in instance.
+          auto f = base_regs.find(loc->var->offset());
+          if (f != base_regs.end()) {
+            // Use shared base register.
+            loc->base = f->second;
+            loc->shared = true;
+          } else {
+            // Try to allocate new base register.
+            loc->base = rr.try_alloc();
+            if (loc->base.is_valid()) {
+              base_regs[loc->var->offset()] = loc->base;
+            }
+          }
+        } else {
+          loc->base = rr.try_alloc();
+        }
+      }
+    }
+  }
 
   return true;
 }
 
-void ElementwiseIndexGenerator::BeginLoop() {
+void ElementwiseIndexGenerator::GenerateInit() {
   // Load tensor addresses and initialize index registers.
   MacroAssembler *masm = masm_;
-  for (auto &loc : input_) {
-    if (loc.base.is_valid()) {
-      __ LoadTensorAddress(loc.base, loc.var);
+  for (auto *loc : locators_) {
+    if (loc->base.is_valid() && !loc->shared) {
+      __ LoadTensorAddress(loc->base, loc->var);
     }
-    if (loc.iterator->block.is_valid()) {
-      __ LoadTensorAddress(loc.iterator->block, loc.var);
-    }
-    if (!single_ && loc.iterator->offset.is_valid()) {
-      __ xorq(loc.iterator->offset, loc.iterator->offset);
-    }
-    if (loc.iterator->repeat.is_valid()) {
-      __ xorq(loc.iterator->repeat, loc.iterator->repeat);
+    if (loc->repeat.is_valid()) {
+      __ xorq(loc->repeat, loc->repeat);
     }
   }
-  for (auto &loc : output_) {
-    if (loc.base.is_valid()) {
-      __ LoadTensorAddress(loc.base, loc.var);
+  for (auto *it : iterators_) {
+    if (!single_ && it->offset.is_valid()) {
+      __ xorq(it->offset, it->offset);
     }
   }
+}
 
+void ElementwiseIndexGenerator::GenerateLoopBegin() {
   // Generate loop start, unless there is only one iteration.
+  MacroAssembler *masm = masm_;
   if (!single_) {
     __ xorq(offset_, offset_);
     __ bind(&begin_);
   }
 }
 
-void ElementwiseIndexGenerator::EndLoop() {
+void ElementwiseIndexGenerator::GenerateLoopEnd() {
   MacroAssembler *masm = masm_;
   if (!single_) {
     // Move to next output element.
@@ -225,15 +270,14 @@ void ElementwiseIndexGenerator::EndLoop() {
     for (Iterator *it : iterators_) {
       if (it->type == REPEAT) {
         size_t repeat_size = element_size() * it->size;
+        __ addq(it->offset, Immediate(vecsize_));
         if ((repeat_size & (repeat_size - 1)) == 0) {
           // The repeat block size is a power of two, so the index can be
           // computed using masking.
-          __ movq(it->offset, offset_);
           __ andq(it->offset, Immediate(repeat_size - 1));
         } else {
           // Increment offset and reset at end of repeat.
           Label l;
-          __ addq(it->offset, Immediate(vecsize_));
           __ cmpq(it->offset, Immediate(repeat_size));
           __ j(less, &l);
           __ xorq(it->offset, it->offset);
@@ -241,22 +285,25 @@ void ElementwiseIndexGenerator::EndLoop() {
         }
       } else if (it->type == BROADCAST) {
         size_t block_size = element_size() * it->size;
-        Label l;
+        Label l1;
         // Move to next inner element block.
         __ addq(it->offset, Immediate(vecsize_));
         __ cmpq(it->offset, Immediate(block_size));
-        __ j(less, &l);
+        __ j(less, &l1);
 
         // Next repetition of block.
-        __ xorq(it->offset, it->offset);   // at end of block, reset index
-        __ incq(it->repeat);               // increment block repeat
-        __ cmpq(it->repeat, Immediate(it->broadcast));
-        __ j(less, &l);
-
-        // Move to next block.
-        __ xorq(it->repeat, it->repeat);  // move to next block
-        __ addq(it->block, Immediate(block_size));
-        __ bind(&l);
+        __ xorq(it->offset, it->offset);
+        for (Locator *loc : locators_) {
+          if (loc->iterator != it) continue;
+          Label l2;
+          __ incq(loc->repeat);
+          __ cmpq(loc->repeat, Immediate(loc->broadcast));
+          __ j(less, &l2);
+          __ xorq(loc->repeat, loc->repeat);
+          __ addq(loc->base, Immediate(block_size));
+          __ bind(&l2);
+        }
+        __ bind(&l1);
       }
     }
 
@@ -265,6 +312,29 @@ void ElementwiseIndexGenerator::EndLoop() {
     __ cmpq(offset_, Immediate(size));
     __ j(less, &begin_);
   }
+
+  // Optionally output reference to assignment target.
+  if (output_ref_ != nullptr) {
+    CHECK(output_ref_->IsLocal());
+    CHECK(output_ref_->ref());
+    CHECK(input_[0]->base.is_valid());
+    __ movq(Operand(masm->instance(), output_ref_->offset()), input_[0]->base);
+  }
+}
+
+bool ElementwiseIndexGenerator::NeedsBroadcast(Express::Var *var) {
+  // Constants do not need broadcasting.
+  if (var->type == Express::NUMBER || var->type == Express::CONST) {
+    return false;
+  }
+
+  // Get locator.
+  CHECK(Valid(var));
+  Locator *loc = LookupLocator(var);
+
+  // Memory variable needs broadcast if it is a scalar value and the vector size
+  // of the generator is more than one element.
+  return vecsize_ > element_size() && loc->var->elements() == 1;
 }
 
 Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
@@ -303,12 +373,12 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
       }
       default:
         LOG(FATAL) << "Unsupported constant type";
-        return Operand(rbp);
+        return Operand(no_reg);
     }
   } else {
     // Get locator.
     CHECK(Valid(var));
-    Locator *loc = GetLocator(var);
+    Locator *loc = LookupLocator(var);
 
     // Return operand for accessing variable.
     switch (loc->iterator->type) {
@@ -343,7 +413,7 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
         }
       case CONST: {
         // Scalar constant in code block, vectorized if needed.
-        DCHECK(loc->var->IsConstant());
+        DCHECK(loc->var->constant());
         int size = loc->var->element_size();
         int repeat = vecsize_ / size;
         DCHECK_EQ(repeat * size, vecsize_);
@@ -372,18 +442,18 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
         }
       case BROADCAST:
         // Return block base plus block offset.
-        return Operand(loc->iterator->block, loc->iterator->offset);
+        return Operand(loc->base, loc->iterator->offset);
       default:
         LOG(FATAL) << "Unsupported iterator type";
-        return Operand(rbp);
+        return Operand(no_reg);
     }
   }
 }
 
 const void *ElementwiseIndexGenerator::data(Express::Var *var) {
   DCHECK_EQ(var->type, Express::CONST);
-  Locator *loc = GetLocator(var);
-  DCHECK(loc->var->IsConstant());
+  Locator *loc = LookupLocator(var);
+  DCHECK(loc->var->IsGlobal());
   return loc->var->data();
 }
 

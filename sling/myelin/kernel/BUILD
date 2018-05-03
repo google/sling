@@ -71,6 +71,16 @@ cc_library(
 )
 
 cc_library(
+  name = "gradients",
+  srcs = ["gradients.cc"],
+  hdrs = ["gradients.h"],
+  deps = [
+    "//sling/myelin:flow",
+    "//sling/myelin:gradient",
+  ],
+)
+
+cc_library(
   name = "tensorflow",
   srcs = ["tensorflow.cc"],
   hdrs = ["tensorflow.h"],
@@ -78,6 +88,7 @@ cc_library(
     ":arithmetic",
     ":avx",
     ":generic",
+    ":gradients",
     ":precompute",
     ":sse",
     "//sling/myelin:compute",

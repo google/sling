@@ -282,7 +282,7 @@ class DragnnLookupSingle : public Kernel {
     CHECK(!v->ref());
     CHECK(!v->out());
     v->set_ref(true);
-    v->set_link(step->input(1));
+    v->Link(step->input(1));
 
     // Embedding matrix must be row-major.
     step->input(1)->SetRequiredOrder(ROW_MAJOR);
@@ -459,7 +459,7 @@ class DragnnLookupUnrolled : public Kernel {
 // Type inference for Dragnn ops.
 class DragnnTyper : public Typer {
  public:
-  bool InferTypes(Flow::Operation *op) override {
+  bool InferTypes(Flow *flow, Flow::Operation *op) override {
     // Infer shape for lookup operation.
     if (op->type == "Lookup") {
       if (op->indegree() == 2 && op->outdegree() == 1) {
@@ -529,8 +529,8 @@ class PrecomputedEmbeddings : public Transformer {
       Flow::Operation *lookup = reshape->inputs[0]->producer;
       if (matmul->indegree() != 2 || !matmul->inputs[1]->constant()) continue;
       if (lookup->indegree() != 2 || !lookup->inputs[1]->constant()) continue;
-      if (lookup->outputs[0]->out) continue;
-      if (reshape->outputs[0]->out) continue;
+      if (lookup->outputs[0]->out()) continue;
+      if (reshape->outputs[0]->out()) continue;
       Flow::Variable *feature = lookup->inputs[0];
       Flow::Variable *embedding = lookup->inputs[1];
       Flow::Variable *transform = matmul->inputs[1];

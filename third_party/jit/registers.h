@@ -107,7 +107,6 @@ struct Register {
   int reg_code;
 };
 
-
 #define DECLARE_REGISTER(R) const Register R = {Register::kCode_##R};
 GENERAL_REGISTERS(DECLARE_REGISTER)
 #undef DECLARE_REGISTER

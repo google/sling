@@ -120,7 +120,8 @@ class SSEFltVecMatMulBase : public Kernel {
     int adders = unrolls;
     if (adders > kMaxAdders) adders = kMaxAdders;
 
-    VLOG(9) << step->name() << ": unrolls=" << unrolls << ", adders=" << adders;
+    step->set_variant("U" + std::to_string(unrolls) +
+                      "A" + std::to_string(adders));
 
     // Allocate general registers.
     Register row = rr.alloc();

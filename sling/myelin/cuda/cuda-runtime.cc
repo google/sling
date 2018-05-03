@@ -26,9 +26,6 @@ namespace myelin {
 
 using namespace jit;
 
-// Base register used for data instance.
-static const Register datareg = rbp;
-
 // Use pinned memory for instance data.
 static const bool pinned_memory = true;
 
@@ -253,6 +250,7 @@ void CUDARuntime::EmitTensorTransfers(const Transfers &xfers,
                                       Cell *cell,
                                       MacroAssembler *masm) {
   // Host to device transfers.
+  Register datareg = masm->instance();
   if (!xfers.host_to_device.empty()) {
     for (auto &t : xfers.host_to_device) {
       VLOG(8) << "Transfer " << t.tensor->name() << " from host to device";

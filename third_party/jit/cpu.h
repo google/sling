@@ -40,6 +40,26 @@ namespace jit {
 // Processor information.
 class ProcessorInformation {
  public:
+  // AVX512 features.
+  enum AVX512Feature {
+    AVX512F,          // AVX-512 Foundation
+    AVX512DQ,         // AVX-512 Doubleword and Quadword Instructions
+    AVX512IFMA,       // AVX-512 Integer Fused Multiply-Add Instructions
+    AVX512PF,         // AVX-512 Prefetch Instructions
+    AVX512ER,         // AVX-512 Exponential and Reciprocal Instructions
+    AVX512CD,         // AVX-512 Conflict Detection Instructions
+    AVX512BW,         // AVX-512 Byte and Word Instructions
+    AVX512VL,         // AVX-512 Vector Length Extensions
+    AVX512VBMI,       // AVX-512 Vector Bit Manipulation Instructions
+    AVX512VBMI2,      // AVX-512 Vector Bit Manipulation Instructions 2
+    AVX512VNNI,       // AVX-512 Vector Neural Network Instructions
+    AVX512BITALG,     // AVX-512 BITALG instructions
+    AVX512VPOPCNTDQ,  // AVX-512 Vector Population Count Double and Quad-word
+    AVX512_4VNNIW,    // AVX-512 4-reg Neural Network Instructions
+    AVX512_4FMAPS,    // AVX-512 4-reg Multiply Accumulation Single precision
+    NUMBER_OF_AVX512_FEATURES
+  };
+
   // Query CPU about supported features.
   ProcessorInformation();
 
@@ -81,6 +101,7 @@ class ProcessorInformation {
   bool has_popcnt() const { return has_popcnt_; }
   bool has_zero_idiom() const { return has_zero_idiom_; }
   bool has_one_idiom() const { return has_one_idiom_; }
+  bool has_avx512(AVX512Feature f) const { return avx512[1 << f]; }
 
  private:
   char vendor_[13];
@@ -113,6 +134,7 @@ class ProcessorInformation {
   bool has_popcnt_ = false;
   bool has_zero_idiom_ = false;
   bool has_one_idiom_ = false;
+  bool avx512[NUMBER_OF_AVX512_FEATURES];
 };
 
 // CPU feature flags.
@@ -127,6 +149,7 @@ enum CpuFeature {
   F16C,
   AVX,
   AVX2,
+  AVX512F,
   FMA3,
   SAHF,
   BMI1,
@@ -149,6 +172,9 @@ class CPU {
     Initialize();
     initialized = true;
   }
+
+  // Return the number of CPUs.
+  static int Processors();
 
   // Return bit mask with supported features.
   static unsigned SupportedFeatures() {

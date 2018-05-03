@@ -83,10 +83,6 @@ class Parser {
     bool reverse;                             // LSTM direction
     myelin::Tensor *profile;                  // LSTM profiling block
 
-    // Connectors.
-    myelin::Connector *control;               // LSTM control layer
-    myelin::Connector *hidden;                // LSTM hidden layer
-
     // Features.
     myelin::Tensor *word_feature;             // word feature
     myelin::Tensor *prefix_feature;           // prefix feature
@@ -110,7 +106,6 @@ class Parser {
   // Feed-forward cell.
   struct FF {
     myelin::Cell *cell;                       // feed-forward cell
-    myelin::Connector *step;                  // FF step hidden activations
     myelin::Tensor *profile;                  // FF profiling block
 
     // Features.
@@ -152,9 +147,8 @@ class Parser {
   // Initialize FF cell.
   void InitFF(const string &name, FF *ff);
 
-  // Lookup cells, connectors, and parameters.
+  // Lookup cells and parameters.
   myelin::Cell *GetCell(const string &name);
-  myelin::Connector *GetConnector(const string &name);
   myelin::Tensor *GetParam(const string &name, bool optional = false);
 
   // Parser network.
@@ -207,13 +201,13 @@ class ParserInstance {
  public:
   ParserInstance(const Parser *parser, Document *document, int begin, int end);
 
-  // Attach connectors for LR LSTM.
+  // Attach channel for LR LSTM.
   void AttachLR(int input, int output);
 
-  // Attach connectors for RL LSTM.
+  // Attach channel for RL LSTM.
   void AttachRL(int input, int output);
 
-  // Attach connectors for FF.
+  // Attach channel for FF.
   void AttachFF(int output);
 
   // Extract features for LSTM.
@@ -242,7 +236,7 @@ class ParserInstance {
   myelin::Instance rl_;
   myelin::Instance ff_;
 
-  // Channels for connectors.
+  // Channels.
   myelin::Channel lr_c_;
   myelin::Channel lr_h_;
   myelin::Channel rl_c_;

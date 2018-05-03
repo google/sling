@@ -197,7 +197,11 @@ Elf::Buffer::Buffer(Elf *elf,
 }
 
 void Elf::Buffer::Add(const void *data, int size) {
-  content.append(reinterpret_cast<const char *>(data), size);
+  if (data != nullptr) {
+    content.append(reinterpret_cast<const char *>(data), size);
+  } else {
+    content.resize(content.size() + size);
+  }
 }
 
 void Elf::Buffer::Add8(uint8_t data) {
@@ -266,7 +270,9 @@ void Elf::Buffer::AddReloc(Buffer *buffer, int type, int addend) {
 }
 
 void Elf::Buffer::Update() {
-  progbits->data = content.data();
+  if (progbits->hdr.sh_type != SHT_NOBITS) {
+    progbits->data = content.data();
+  }
   progbits->hdr.sh_size = content.size();
   if (rela) {
     // Adjust symbol indices for global symbols in relocations.

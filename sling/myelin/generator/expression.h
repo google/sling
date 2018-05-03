@@ -56,16 +56,19 @@ class ExpressionGenerator {
   virtual void Generate(Express::Op *instr, MacroAssembler *masm) = 0;
 
   // Initialize expression generator.
-  void Initalize(const Express &expression,
-                 Type type,
-                 int spare_regs,
-                 IndexGenerator *index);
+  void Initialize(const Express &expression,
+                  Type type,
+                  int spare_regs,
+                  IndexGenerator *index);
 
   // Generate code for loop-invariant part of expression.
   void GenerateInit(MacroAssembler *masm);
 
   // Generate code for loop body.
   void GenerateBody(MacroAssembler *masm);
+
+  // Return register number for variable.
+  int RegisterNumber(Express::VarType type, int id) const;
 
   // Select expression generator for expression that is supported by the CPU.
   static ExpressionGenerator *Select(const Express &expr,
@@ -227,7 +230,7 @@ class ExpressionGenerator {
     Express::Op *instr,
     OpXMMRegReg fltopreg, OpXMMRegReg dblopreg,
     OpXMMRegMem fltopmem, OpXMMRegMem dblopmem,
-    MacroAssembler *masm);
+    MacroAssembler *masm, int argnum = 1);
 
   // Generate two-operand XMM float op with immediate.
   void GenerateXMMFltOp(
@@ -244,6 +247,13 @@ class ExpressionGenerator {
       OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
       MacroAssembler *masm, int argnum = 1);
 
+  // Generate unary XMM float op.
+  void GenerateXMMUnaryFltOp(
+      Express::Op *instr,
+      OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
+      OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
+      MacroAssembler *masm);
+
   // Generate three-operand XMM float op with immediate.
   void GenerateXMMFltOp(
       Express::Op *instr,
@@ -251,6 +261,13 @@ class ExpressionGenerator {
       OpXMMRegRegMemImm fltopmem, OpXMMRegRegMemImm dblopmem,
       int8 imm,
       MacroAssembler *masm, int argnum = 1);
+
+  // Generate unary YMM float op.
+  void GenerateYMMUnaryFltOp(
+      Express::Op *instr,
+      OpYMMRegRegReg fltopreg, OpYMMRegRegReg dblopreg,
+      OpYMMRegRegMem fltopmem, OpYMMRegRegMem dblopmem,
+      MacroAssembler *masm);
 
   // Generate two-operand YMM float op.
   void GenerateYMMFltOp(

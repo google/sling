@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <iostream>
+
 #include "sling/myelin/elf-linker.h"
 
 namespace sling {
@@ -22,10 +24,13 @@ void ElfLinker::BeginCell(Cell *cell) {
   code_.Align(16);
 }
 
-void ElfLinker::AddStep(Step *step, int offset) {
+void ElfLinker::EndStep(Step *step, int offset) {
   // Add entry point for step.
-  elf_.AddSymbol(step->name().c_str(), code_.progbits, STB_LOCAL, STT_FUNC,
-                 0, code_.offset() + offset);
+  if (!step->noop()) {
+    string name = step->name() + ":" + step->kernel()->Name();
+    elf_.AddSymbol(name.c_str(), code_.progbits, STB_LOCAL, STT_FUNC,
+                   0, code_.offset() + offset);
+  }
 }
 
 void ElfLinker::EndCell(Cell *cell,
@@ -71,24 +76,32 @@ void ElfLinker::EndCell(Cell *cell,
 }
 
 void ElfLinker::AddData(Tensor *data) {
-  if (generate_data_) {
+  if (options_.generate_data) {
+    // Determine section for data.
+    auto *s = options_.writeable_data ? &bss_ : &rodata_;
+
     // Ensure alignment of tensor data.
-    data_.Align(data->byte_alignment());
+    s->Align(data->byte_alignment());
 
     // Add symbol for data block.
-    Elf::Symbol *sym = elf_.AddSymbol(data->name().c_str(), data_.progbits,
+    Elf::Symbol *sym = elf_.AddSymbol(data->name().c_str(), s->progbits,
                                       STB_LOCAL, STT_OBJECT,
-                                      data->space(), data_.offset());
+                                      data->space(), s->offset());
     symbols_[data->name()] = sym;
 
     // Output tensor to data section.
-    data_.Add(data->data(), data->space());
+    s->Add(data->data(), data->space());
   }
+}
+
+void ElfLinker::AddDeviceCode(Step *step, const string &code) {
+  std::cout << "GPU code for step " << step->name() << ":\n" << code << "\n";
 }
 
 void ElfLinker::Link() {
   code_.Update();
-  data_.Update();
+  rodata_.Update();
+  bss_.Update();
   elf_.Update();
 }
 

@@ -120,6 +120,12 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
             &Assembler::vmaxps, &Assembler::vmaxpd,
             masm);
         break;
+      case Express::SQRT:
+        GenerateYMMFltOp(instr,
+            &Assembler::vsqrtps, &Assembler::vsqrtpd,
+            &Assembler::vsqrtps, &Assembler::vsqrtpd,
+            masm);
+        break;
       case Express::MULADD132:
         GenerateYMMFltOp(instr,
             &Assembler::vfmadd132ps, &Assembler::vfmadd132pd,

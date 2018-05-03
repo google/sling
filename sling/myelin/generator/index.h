@@ -41,6 +41,9 @@ class IndexGenerator {
   // Return operand for accessing memory variable.
   virtual jit::Operand addr(Express::Var *var) = 0;
 
+  // Check if variable needs to be broadcast to whole vector after loading.
+  virtual bool NeedsBroadcast(Express::Var *var) { return false; }
+
   // Return pointer to constant data.
   virtual const void *data(Express::Var *var) = 0;
 

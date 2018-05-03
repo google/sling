@@ -183,6 +183,7 @@ following structure:
 
 ```
 flow = "flow" <version>
+       <#flags> (unused, from version 5)
        <#vars> var*
        <#ops> op*
        <#funcs> func*
@@ -190,24 +191,31 @@ flow = "flow" <version>
        <#blobs> blob* (from version 4)
 
 var = <name$>
+      <#flags> (IN=1, OUT=2, REF=4, LEARNABLE=8 UNIQUE=16, from version 5)
       <#aliases> <alias$>
       <dtype$>
       <shape>
       <#bytes> value
 
-op = <name$> <type$>
+op = <name$>
+     <#flags> (unused, from version 5)
+     <type$>
      <#inputs> <input$>*
      <#outputs> <output$>*
      <#attrs> attr*
 
-blob = <name$> <type$>
+blob = <name$>
+       <#flags> (unused, from version 5)
+       <type$>
        <#attrs> attr*
        <#bytes> data
 
 func = <name$>
+       <#flags> (TRAINING=1, from version 5)
        <#ops> <op$>
 
 cnx = <name$>
+      <#flags> (unused, from version 5)
       <#vars> <var$>
 
 shape = <#dims> <size>*
@@ -218,7 +226,7 @@ dtype = "float16" | "float32" | "float64" | "int8" | "uint8" |
         "int16" | "uint16" | "int32" | "uint64"
 
 "flow" = 0x776f6c66
-version = 3 | 4
+version = 3 | 4 | 5
 ```
 
 A flow file begins with the _magic_ string "flow" followed by a version number.

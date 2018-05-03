@@ -595,6 +595,154 @@ class AVXFltArgMax : public Kernel {
   }
 };
 
+// Compute L2 norm of input, norm = sqrt(sum(x^2)).
+class Norm : public Kernel {
+ public:
+  string Name() override { return "Norm"; }
+  string Operation() override { return "Norm"; }
+
+  bool Supports(Step *step) override {
+    // Requires CPU with AVX or SSE support.
+    if (!CPU::Enabled(AVX) || !CPU::Enabled(SSE)) return false;
+
+    // Check inputs and outputs.
+    if (step->inputs().size() != 1) return false;
+    if (step->outputs().size() != 1) return false;
+    Tensor *x = step->input(0);
+    Tensor *norm = step->output(0);
+
+    // Check type.
+    if (x->type() != DT_FLOAT) return false;
+    if (norm->type() != DT_FLOAT) return false;
+    if (norm->elements() != 1) return false;
+
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+    Tensor *x = step->input(0);
+    x->SetMiniumAlignment(CPU::Enabled(AVX) ? 32 : 16);
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    // Get input and output.
+    Tensor *x = step->input(0);
+    Tensor *norm = step->output(0);
+
+    // Determine vector size for main block computation.
+    int n = 1;
+    for (int d = 0; d < x->rank(); ++d) n *= x->aligned(d);
+    int vecsize = 1;
+    if (masm->Enabled(AVX) && n >= 8) {
+      vecsize = 8;
+    } else if (masm->Enabled(SSE) && n >= 4) {
+      vecsize = 4;
+    }
+    int m = (n / vecsize) * vecsize;
+    int r = vecsize == 1 ? n : n % vecsize;
+
+    // Assign registers.
+    Register input = masm->rr().alloc();
+    Register output = masm->rr().alloc();
+    Register offset = masm->rr().alloc();
+    YMMRegister sum = masm->mm().allocy();
+    YMMRegister elem = masm->mm().allocy();
+    YMMRegister l2 = masm->mm().allocy();
+
+    // Load tensor locations.
+    __ LoadTensorAddress(input, x);
+    __ LoadTensorAddress(output, norm);
+    __ vxorps(sum, sum, sum);
+
+    // Compute sum of squares for main elements.
+    __ xorq(offset, offset);
+    if (vecsize > 1) {
+      Label l;
+      __ bind(&l);
+      if (masm->Enabled(AVX)) {
+        if (vecsize == 8) {
+          __ vmovaps(elem, Operand(input, offset));
+          if (masm->Enabled(FMA3)) {
+            __ vfmadd231ps(sum, elem, elem);
+          } else {
+            __ vmulps(elem, elem, elem);
+            __ vaddps(sum, sum, elem);
+          }
+        } else {
+          __ vmovaps(elem.xmm(), Operand(input, offset));
+          if (masm->Enabled(FMA3)) {
+            __ vfmadd231ps(sum.xmm(), elem.xmm(), elem.xmm());
+          } else {
+            __ vmulps(elem.xmm(), elem.xmm(), elem.xmm());
+            __ vaddps(sum.xmm(), sum.xmm(), elem.xmm());
+          }
+        }
+      } else {
+        __ vmovaps(elem.xmm(), Operand(input, offset));
+        __ mulps(elem.xmm(), elem.xmm());
+        __ addps(sum.xmm(), elem.xmm());
+      }
+      if (m > vecsize || r > 0) {
+        __ addq(offset, Immediate(vecsize * sizeof(float)));
+      }
+      if (m > vecsize) {
+        __ cmpq(offset, Immediate(m * sizeof(float)));
+        __ j(less, &l);
+      }
+
+      // Reduce sum.
+      if (masm->Enabled(AVX)) {
+        if (vecsize == 8) {
+          __ vperm2f128(elem, sum, sum, 1);
+          __ vhaddps(sum, sum, elem);
+        }
+        __ vhaddps(sum, sum, sum);
+        __ vhaddps(sum, sum, sum);
+      } else {
+        __ haddps(sum.xmm(), sum.xmm());
+        __ haddps(sum.xmm(), sum.xmm());
+      }
+    }
+
+    // Compute sum of squares for residual elements.
+    if (r > 0) {
+      Label l;
+      __ bind(&l);
+      if (masm->Enabled(AVX)) {
+        __ vmovss(elem, Operand(input, offset));
+        if (masm->Enabled(FMA3)) {
+          __ vfmadd231ss(sum.xmm(), elem.xmm(), elem.xmm());
+        } else {
+          __ vmulss(elem, elem, elem);
+          __ vaddss(sum, sum, elem);
+        }
+      } else {
+        __ movss(elem.xmm(), Operand(input, offset));
+        __ mulss(elem.xmm(), elem.xmm());
+        __ addss(sum.xmm(), elem.xmm());
+      }
+      if (r > 1) {
+        __ addq(offset, Immediate(sizeof(float)));
+        __ cmpq(offset, Immediate(n * sizeof(float)));
+        __ j(less, &l);
+      }
+    }
+
+    // Take square root of sum.
+    if (masm->Enabled(AVX)) {
+      __ vsqrtss(l2.xmm(), sum.xmm(), sum.xmm());
+      __ vmovss(Operand(output), l2);
+    } else {
+      __ sqrtss(l2.xmm(), sum.xmm());
+      __ movss(Operand(output), l2.xmm());
+    }
+  }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements() * 3 + 5;
+  }
+};
+
 void RegisterAVXMath(Library *library) {
   // Computes  : y = tanh(x) element-wise
   // Input     : x: float32[d1,...,dn]
@@ -622,6 +770,12 @@ void RegisterAVXMath(Library *library) {
   // Output    : y: int32/int64
   // Requires  : AVX
   library->Register(new AVXFltArgMax());
+
+  // Computes  : y = |x|
+  // Input     : x: float32[d1,...,dn]
+  // Output    : y: float32
+  // Requires  : AVX or SSE
+  library->Register(new Norm());
 }
 
 }  // namespace myelin

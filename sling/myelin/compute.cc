@@ -466,6 +466,13 @@ bool Library::Singleton(const string &op,
   return false;
 }
 
+void Tensor::Link(Tensor *link) {
+  next_link_->prev_link_ = link->prev_link_;
+  link->prev_link_->next_link_ = next_link_;
+  next_link_ = link;
+  link->prev_link_ = this;
+}
+
 void Tensor::MinAlign(const Shape &align) {
   CHECK_LE(align.rank(), minalign_.rank());
   for (int d = 0; d < align.rank(); ++d) {
@@ -502,7 +509,7 @@ bool Tensor::Compatible(const Tensor *other) const {
     int s1 = dim(d1--);
     int s2 = other->dim(d2--);
     if (s1 == -1 || s1 == 1) continue;
-    if (s2 == -1 || d2 == 1) continue;
+    if (s2 == -1 || s2 == 1) continue;
     if (s1 != s2) return false;
   }
   return true;
@@ -534,6 +541,15 @@ bool Tensor::HasSameShape(const Tensor *other) const {
   return shape() == other->shape();
 }
 
+bool Tensor::HasDenseLayout() const {
+  bool singular = true;
+  for (int d = 0; d < rank(); ++d) {
+    if (dim(d) != 1) singular = false;
+    if (dim(d) % minalign(d) != 0 && !singular) return false;
+  }
+  return true;
+}
+
 int Tensor::ConsumerTask() const {
   int consumer_task = -2;
   for (Step *step : consumers_) {
@@ -559,8 +575,57 @@ string Tensor::TypeString() const {
   return str;
 }
 
+string Tensor::ToString(const char *data, bool deref) const {
+  // Resolve references.
+  if (deref && ref()) data = *reinterpret_cast<const char * const *>(data);
+
+  // Check for shape and null.
+  if (!shape().defined()) return "*";
+  if (data == nullptr) return "null";
+
+  // Get type traits for elements.
+  const TypeTraits &traits = TypeTraits::of(type());
+
+  // Output tensor as string.
+  string str;
+  if (rank() == 0) {
+    // Scalar.
+    str = traits.str(data);
+  } else if (rank() == 1) {
+    // Vector.
+    str.append("[");
+    for (int r = 0; r < dim(0); ++r) {
+      if (r > 0) str.append(",");
+      str.append(traits.str(data + offset(r)));
+    }
+    str.append("]");
+  } else if (rank() == 2) {
+    // Matrix.
+    str.append("[");
+    for (int r = 0; r < dim(0); ++r) {
+      if (r > 0) str.append(",");
+      str.append("[");
+      for (int c = 0; c < dim(1); ++c) {
+        if (c > 0) str.append(",");
+        str.append(traits.str(data + offset(r, c)));
+      }
+      str.append("]");
+    }
+    str.append("]");
+  } else {
+    str = "<<" + std::to_string(rank()) + "D tensor>>";
+  }
+
+  return str;
+}
+
+Channel::Channel(const Tensor *format) : format_(format) {
+  EnsureAlignment(&alignment_, jit::CPU::CacheLineSize());
+  EnsureAlignment(&alignment_, format->byte_alignment());
+}
+
 Channel::~Channel() {
-  runtime()->FreeChannel(data_, connector_->placement());
+  runtime()->FreeChannel(data_, placement());
 }
 
 void Channel::resize(int n) {
@@ -574,10 +639,27 @@ void Channel::resize(int n) {
 
   // Clear new elements.
   if (n > size_) {
-    size_t pos = size_ * connector_->size();
-    size_t bytes = (n - size_) * connector_->size();
-    runtime()->ClearChannel(data_, pos, bytes, connector_->placement());
+    size_t element_size = format_->size();
+    size_t pos = size_ * element_size;
+    size_t bytes = (n - size_) * element_size;
+    runtime()->ClearChannel(data_, pos, bytes, placement());
   }
+
+  // Change size.
+  size_ = n;
+}
+
+void Channel::reset(int n) {
+  // Allocate more space if needed.
+  if (n > capacity_) {
+    int cap = capacity_ * 2;
+    if (cap < n) cap = n;
+    if (cap < 8) cap = 8;
+    reserve(cap);
+  }
+
+  // Clear all elements.
+  runtime()->ClearChannel(data_, 0, n * format_->size(), placement());
 
   // Change size.
   size_ = n;
@@ -589,21 +671,39 @@ void Channel::reserve(int n) {
   if (n == capacity_) return;
 
   // Allocate or reallocate data buffer.
+  size_t element_size = format_->size();
   data_ = runtime()->AllocateChannel(data_,
-                                     size_ * connector_->size(),
-                                     n * connector_->size(),
-                                     connector_->alignment(),
-                                     connector_->placement());
+                                     size_ * element_size,
+                                     n * element_size,
+                                     alignment_,
+                                     placement());
 
   // Change capacity.
   capacity_ = n;
 }
 
+void Channel::zero(int n) {
+  runtime()->ClearChannel(data_, n * format_->size(), format_->size(),
+                          placement());
+}
+
+string Channel::ToString() const {
+  string str;
+  for (int i = 0; i < size_; ++i) {
+    str.append(std::to_string(i));
+    str.append(": ");
+    str.append(format_->ToString(at(i), false));
+    str.append("\n");
+  }
+  return str;
+}
+
 ProfileSummary::ProfileSummary(Cell *cell) : cell_(cell) {
-  CHECK(cell->profile() != nullptr);
-  int size = cell->profile()->elements();
-  data_ = new int64[size];
-  for (int i = 0; i < size; ++i) data_[i] = 0;
+  if (cell->profile()) {
+    int size = cell->profile()->elements();
+    data_ = new int64[size];
+    for (int i = 0; i < size; ++i) data_[i] = 0;
+  }
 }
 
 ProfileSummary::~ProfileSummary() {
@@ -624,7 +724,6 @@ void Instance::Clear() {
 
 string Instance::ToString(Tensor *param) const {
   // Locate parameter in instance.
-  if (!param->shape().defined()) return "*";
   char *p;
   char *buffer = nullptr;
   if (param->placement() == DEVICE) {
@@ -632,46 +731,11 @@ string Instance::ToString(Tensor *param) const {
     p = buffer = runtime()->FetchTensorFromDevice(this, param);
   } else {
     p  = data_ + param->offset();
-    if (param->ref()) {
-      if (param->placement() & DEVICE) return "<<device ref>>";
-      p = *reinterpret_cast<char **>(p);
-    }
-  }
-  if (p == nullptr) return "null";
-
-  // Get type traits for elements.
-  const TypeTraits &traits = TypeTraits::of(param->type());
-
-  // Output tensor as string.
-  string str;
-  if (param->rank() == 0) {
-    // Scalar.
-    str = traits.str(p);
-  } else if (param->rank() == 1) {
-    // Vector.
-    str.append("[");
-    for (int r = 0; r < param->dim(0); ++r) {
-      if (r > 0) str.append(",");
-      str.append(traits.str(p + param->offset(r)));
-    }
-    str.append("]");
-  } else if (param->rank() == 2) {
-    // Matrix.
-    str.append("[");
-    for (int r = 0; r < param->dim(0); ++r) {
-      if (r > 0) str.append(",");
-      str.append("[");
-      for (int c = 0; c < param->dim(1); ++c) {
-        if (c > 0) str.append(",");
-        str.append(traits.str(p + param->offset(r, c)));
-      }
-      str.append("]");
-    }
-    str.append("]");
-  } else {
-    str = "<<" + std::to_string(param->rank()) + "D tensor>>";
+    if (param->ref() && (param->placement() & DEVICE)) return "<<device ref>>";
   }
 
+  // Convert tensor to string.
+  string str = param->ToString(p);
   free(buffer);
   return str;
 }
@@ -713,7 +777,7 @@ bool Step::AllowInPlace(int input, int output, bool preserved) {
   Tensor *t = in;
   while (t != nullptr) {
     if (!preserved) {
-      if (t->IsConstant()) return false;
+      if (t->constant()) return false;
       if (t->consumers().size() != 1) return false;
       if (t->out()) return false;
     }
@@ -727,7 +791,8 @@ bool Step::AllowInPlace(int input, int output, bool preserved) {
 
   // Share input and output.
   out->set_shared(in);
-  if (out->shape() == in->shape()) out->set_link(in);
+  if (out->shape() == in->shape()) out->Link(in);
+
   return true;
 }
 
@@ -764,7 +829,7 @@ Network::Network() {
 Network::~Network() {
   for (auto *m : memory_) MemFree(m);
   for (auto *t : parameters_) delete t;
-  for (auto *t : constants_) {
+  for (auto *t : globals_) {
     if (t->shared() == nullptr) {
       if (t->device_data_ != DEVICE_NULL) {
         runtime_->RemoveTensorFromDevice(t);
@@ -774,12 +839,42 @@ Network::~Network() {
   }
   for (auto *c : cells_) delete c;
   for (auto *s : steps_) delete s;
-  for (auto *c : connectors_) delete c;
 }
 
-Tensor *Network::GetParameter(const string &name) const {
-  auto f = names_.find(name);
-  return f == names_.end() ? nullptr : f->second;
+void Network::SaveLearnedWeights(Flow *flow) {
+  // Find all learnable variables in flow.
+  for (Flow::Variable *var : flow->vars()) {
+    if (!var->learnable()) continue;
+
+    // Find tensor for variable.
+    Tensor *tensor = LookupParameter(var->name);
+    if (tensor == nullptr) continue;
+
+    // If tensor data has standard layout we can copy the data directly.
+    // Otherwise, tensor data is copied element-by-element.
+    if (tensor->HasStandardLayout()) {
+      // Copy directly.
+      var->size = tensor->size();
+      var->data = flow->AllocateMemory(var->size);
+      memcpy(var->data, tensor->data(), var->size);
+    } else {
+      // Allocate data.
+      int elements = tensor->shape().elements();
+      int element_size = tensor->element_size();
+      var->size = elements * element_size;
+      char *dst = flow->AllocateMemory(var->size);
+      char *src = tensor->data();
+      var->data = dst;
+
+      // Copy elements one at a time.
+      for (int i = 0; i < elements; ++i) {
+        size_t offset = tensor->LinearOffset(i);
+        memcpy(dst, src + offset, element_size);
+        dst += element_size;
+      }
+    }
+    var->clear_learnable();
+  }
 }
 
 char *Network::AllocateMemory(size_t size, int alignment) {
@@ -815,12 +910,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   for (Flow::Variable *var : flow.vars()) {
     Tensor *tensor = new Tensor();
     tensors[var] = tensor;
-    if (var->data != nullptr) {
-      constants_.push_back(tensor);
-      tensor->data_ = var->data;
-    } else {
+    tensor->constant_ = var->constant();
+    tensor->local_ = !var->global();
+    if (tensor->local_) {
       parameters_.push_back(tensor);
       tensor->required_order_ = options_.parameter_element_order;
+    } else {
+      globals_.push_back(tensor);
     }
     tensor->name_ = var->name;
     names_[var->name] = tensor;
@@ -828,7 +924,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       names_[alias] = tensor;
     }
     tensor->type_ = var->type;
-    tensor->ref_ = var->ref;
+    tensor->ref_ = var->ref();
     tensor->shape_ = var->shape;
     tensor->aligned_ = var->shape;
     tensor->minalign_.fill(var->rank(), 1);
@@ -836,58 +932,43 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     tensor->byte_alignment_ = TypeTraits::of(var->type).size();
 
     // Input variables are initially placed in host memory.
-    tensor->in_ = var->in;
-    if (var->in) {
+    tensor->in_ = var->in();
+    if (var->in()) {
       tensor->current_placement_ = HOST;
       tensor->placement_ = HOST;
     }
 
     // Output variables must be available on the host after the computation.
-    tensor->out_ = var->out;
-    if (var->out) tensor->placement_ = HOST;
+    tensor->out_ = var->out();
+    if (var->out()) tensor->placement_ = HOST;
+
+    // Initialize constant tensors with data from the flow variable so they can
+    // be used before tensor data allocation.
+    if (tensor->constant()) {
+      tensor->data_ = var->data;
+      tensor->size_ = var->size;
+      size_t stride = TypeTraits::of(tensor->type()).size();
+      for (int d = tensor->rank() - 1; d >= 0; --d) {
+        tensor->stride_.set(d, stride);
+        stride *= tensor->shape_.dim(d);
+      }
+    }
   }
 
-  // Create connectors between variables.
+  // Link tensors in each connector.
   for (Flow::Connector *cnx : flow.cnxs()) {
-    // Connectors must have at least one link.
-    if (cnx->links.empty()) {
-      LOG(WARNING) << "Skipping empty connector: " << cnx->name;
-      continue;
-    }
-
-    // Create new connector.
-    Connector *connector = new Connector(this);
-    connectors_.push_back(connector);
-
-    // Create tensor for connector.
-    Tensor *t = new Tensor();
-    t->name_ = cnx->name;
-    t->required_order_ = ROW_MAJOR;
-    connector->type_ = t;
-    tensors[connector] = t;
-
-    // Initialize connector tensor from first link.
-    Tensor *prototype = tensors[cnx->links[0]];
-    t->type_ = prototype->type_;
-    t->shape_ = prototype->shape_;
-    t->shape_.set(0, -1);
-    t->minalign_ = prototype->minalign_;
-    t->aligned_ = prototype->aligned_;
-    t->stride_ = prototype->stride_;
-    t->byte_alignment_ = prototype->byte_alignment_;
-
-    // Link tensors to connector.
-    for (Flow::Variable *link : cnx->links) {
-      CHECK(link->ref);
-      connector->links_.push_back(tensors[link]);
-      tensors[link]->link_ = t;
+    if (cnx->links.empty()) continue;
+    Tensor *t = tensors[cnx->links[0]];
+    for (int i = 1; i < cnx->links.size(); ++i) {
+      Tensor *l = tensors[cnx->links[i]];
+      l->Link(t);
     }
   }
 
   // Let linker configure network before compilation.
   linker_->BeginNetwork(this);
 
-  // Find kernels for implementing each step.
+  // Create steps for all the operations.
   std::unordered_map<Flow::Function *, Cell *> cells;
   for (Flow::Operation *op : flow.ops()) {
     // Create step for operation.
@@ -895,7 +976,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     steps_.push_back(step);
     step->name_ = op->name;
     step->type_ = op->type;
-    step->attributes_ = op->attrs;
+    step->CopyAttrsFrom(*op);
 
     // Set or create cell for step.
     Cell *cell = cells[op->func];
@@ -917,7 +998,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       tensor->consumers_.push_back(step);
 
       // Assign input parameter to cell.
-      if (step->cell_ != nullptr && !tensor->IsConstant()) {
+      if (step->cell_ != nullptr && tensor->IsLocal()) {
         if (tensor->cell_ != nullptr && tensor->cell_ != step->cell_) {
           LOG(FATAL) << tensor->name_ << " belongs to both "
                      << tensor->cell_->name_ << " and "
@@ -936,7 +1017,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       tensor->producer_ = step;
 
       // Assign output parameter to cell.
-      if (step->cell_ != nullptr && !tensor->IsConstant()) {
+      if (step->cell_ != nullptr && tensor->IsLocal()) {
         if (tensor->cell_ != nullptr && tensor->cell_ != step->cell_) {
           LOG(FATAL) << tensor->name_ << " belongs to both "
                      << tensor->cell_->name_ << " and "
@@ -963,8 +1044,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       }
       step->task_index_ = taskidx;
     }
+  }
 
-    // Find kernel for implementing the operation.
+  // Find kernels for implementing each step.
+  for (Step *step : steps_) {
     auto &kernels = library.Lookup(step->type());
     for (int k = kernels.size() - 1; k >= 0; --k) {
       Kernel *kernel = kernels[k];
@@ -972,7 +1055,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         // Check that kernel location is compatible with task placement.
         bool compatible = true;
         if (step->task_index_ != -1) {
-          auto &task = cell->tasks_[step->task_index_];
+          auto &task = step->cell()->tasks_[step->task_index_];
           Placement location = kernel->Location();
           if (task.placement == NOWHERE) {
             // Task has not been placed yet. Use the kernel location for
@@ -1001,6 +1084,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
     VLOG(3) << "Step " << step->name() << " implemented by "
             << step->kernel_->Name();
+
+    // Let kernel adjust the input and output data alignment requirements.
+    step->kernel_->Adjust(step);
   }
 
   // Add tensors for profiling.
@@ -1025,7 +1111,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       profile->type_ = DT_INT64;
       profile->shape_.assign(size);
       profile->size_ = profile->space_ = size * sizeof(int64);
-      profile->ref_ = options_.external_profiler;
+      profile->ref_ = options_.ref_profiler();
       profile->aligned_ = profile->shape_;
       profile->minalign_.assign(sizeof(int64));
       profile->stride_.assign(sizeof(int64));
@@ -1039,11 +1125,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
   }
 
-  // Let kernels adjust the input and output data alignment requirements.
-  for (Step *step : steps_) {
-    step->kernel_->Adjust(step);
-  }
-
   // Propagate constraints between linked tensors.
   bool again = true;
   while (again) {
@@ -1052,8 +1133,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     again = false;
     for (auto it : tensors) {
       Tensor *t = it.second;
-      Tensor *l = t->link_;
-      if (l == nullptr) continue;
+      Tensor *l = t->next_link_;
+      if (l == t) continue;
 
       // Check type compatibility between linked tensors.
       if (t->type_ != l->type_ || !t->Compatible(l)) {
@@ -1084,6 +1165,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         dt--;
         dl--;
       }
+      t->require_dense_ |= l->require_dense_;
+      l->require_dense_ |= t->require_dense_;
 
       // Propagate order constraints.
       if (t->required_order_ != l->required_order_) {
@@ -1136,16 +1219,12 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Check for dense encoding conflicts.
-    if (tensor->require_dense_) {
-      for (int d = 0; d < tensor->rank(); ++d) {
-        if (tensor->dim(d) % tensor->minalign(d) != 0) {
-          LOG(ERROR) << "Conflicting dense encoding requirements for "
-                     << tensor->name()
-                     << " shape " << tensor->shape().ToString()
-                     << " align " << tensor->minalign().ToString();
-          return false;
-        }
-      }
+    if (tensor->require_dense_ && !tensor->HasDenseLayout()) {
+      LOG(ERROR) << "Conflicting dense encoding requirements for "
+                 << tensor->name()
+                 << " shape " << tensor->shape().ToString()
+                 << " align " << tensor->minalign().ToString();
+      return false;
     }
 
     // Compute stride size for each dimension.
@@ -1207,46 +1286,15 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
   }
 
-  // Compute alignment and placement for connectors.
-  for (Connector *connector : connectors_) {
-    Tensor *t = connector->type_;
-    EnsureAlignment(&connector->alignment_, t->byte_alignment_);
-    EnsureAlignment(&connector->alignment_, jit::CPU::CacheLineSize());
-
-    for (Tensor *link : connector->links_) {
-      if (link->producer_ != nullptr) {
-        connector->AddPlace(link->producer_->placement());
-      }
-      for (Step *consumer : link->consumers_) {
-        connector->AddPlace(consumer->placement());
-      }
-    }
-
-    if (connector->placement_ == EVERYWHERE) {
-      LOG(ERROR) << "Connector " << connector->name()
-                 << " crosses host/device boundary";
-      return false;
-    }
-
-    VLOG(5) << "Connector " << connector->name() << ": " << t->TypeString()
-            << " min " << t->minalign_.ToString()
-            << ":" << connector->alignment_
-            << " aligned " << t->aligned_.ToString()
-            << " size " << t->size_
-            << " stride " << t->stride_.ToString()
-            << " order " << ordername[t->order_]
-            << " on " << placename[connector->placement_];
-  }
-
-  // Move all variables that are shared with a constant to the constant pool.
+  // Move all variables that are shared with a global to the global pool.
   for (auto it = parameters_.begin(); it != parameters_.end();) {
     // Check if tensor is shared with a constant.
     Tensor *t = *it;
-    if (t->shared_ != nullptr && t->shared_->IsConstant()) {
-      // Move variable to constant pool.
-      VLOG(5) << "Convert " << t->name() << " to constant";
+    if (t->shared_ != nullptr && t->shared_->data_ != nullptr) {
+      // Move variable to global pool.
+      VLOG(5) << "Convert " << t->name() << " to global";
       it = parameters_.erase(it);
-      constants_.push_back(t);
+      globals_.push_back(t);
     } else {
       ++it;
     }
@@ -1308,11 +1356,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
   }
 
-  // Copy and align constants.
-  for (Tensor *tensor : constants_) {
+  // Allocate globals.
+  for (Tensor *tensor : globals_) {
     if (tensor->shared_ != nullptr) {
-      // Shared constant. Copy reference to data.
-      CHECK(tensor->shared_->IsConstant());
+      // Shared tensor. Copy reference to data.
       tensor->data_ = tensor->shared_->data_;
       tensor->AddNewPlace(HOST);
       if (tensor->placement_ & DEVICE) {
@@ -1365,9 +1412,18 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     masm.Prologue();
     runtime_->GeneratePrologue(cell, &masm);
 
-    // Increment the invocation counter.
+    // Generate profiling prologue.
     if (options_.profiling) {
-      // Invocation counter is the first element of the timing block.
+      // Load global profile summary.
+      if (options_.global_profiler) {
+        cell->profile_summary_ = new ProfileSummary(cell);
+        masm.load_extern(jit::rdi, cell->profile_summary_->data(),
+                         cell->name_ + "_profile");
+        masm.movq(jit::Operand(masm.instance(), cell->profile_->offset_),
+                  jit::rdi);
+      }
+
+      // Increment the invocation counter.
       masm.IncrementInvocations(cell->profile()->offset());
 
       // Start runtime profiler.
@@ -1406,6 +1462,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
     // Let kernels generate code for each step.
     int stepnum = 0;
+    int64 flops = 0;
     for (Step *step : cell->steps_) {
       if (step->task_index_ == -1) {
         // Wait for completion of all inputs.
@@ -1445,9 +1502,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
                 << reinterpret_cast<uint64 *>(pc)
                 << " with " << step->kernel_->Name()
                 << " on " << placename[step->placement()];
-        linker_->AddStep(step, pc);
+        linker_->BeginStep(step, pc);
         step->kernel_->Generate(step, &masm);
         if (masm.pc_offset() == pc) step->noop_ = true;
+        linker_->EndStep(step, pc);
 
         // No registers are preserved between steps, so reset register
         // allocation.
@@ -1524,6 +1582,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
           }
         }
       }
+
+      // Sum complexity for cell.
+      if (options_.flops_address) {
+        int64 complexity = step->complexity();
+        if (complexity > 0) flops += complexity;
+      }
+
       stepnum++;
     }
 
@@ -1548,6 +1613,11 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     if (options_.profiling) {
       int timing = cell->profile()->offset();
       masm.TimeStep(timing, 1 * sizeof(int64));
+    }
+
+    // Update global FLOPs counter for performance measurements.
+    if (options_.flops_address) {
+      masm.UpdateCounter(options_.flops_address, flops);
     }
 
     // Generate epilogue for main cell computation.
@@ -1685,65 +1755,68 @@ char *Network::AllocateTensor(Tensor *tensor) {
   memset(data, 0, tensor->size_);
 
   // Copy data.
-  if (tensor->rank() == 0 || tensor->rank() == 1) {
-    // Vectors and scalars can just be copied regardless of alignment and
-    // order.
-    memcpy(data, tensor->data_, tensor->size_);
-  } else if (tensor->rank() == 2) {
-    // Copy matrix one element at a time.
-    const char *src = tensor->data_;
-    int element_size = tensor->element_size();
-    for (int r = 0; r < tensor->dim(0); ++r) {
-      for (int c = 0; c < tensor->dim(1); ++c) {
-        memcpy(data + tensor->offset(r, c), src, element_size);
-        src += element_size;
-      }
-    }
-  } else if (tensor->rank() == 3) {
-    const char *src = tensor->data_;
-    int element_size = tensor->element_size();
-    for (int r = 0; r < tensor->dim(0); ++r) {
-      for (int c = 0; c < tensor->dim(1); ++c) {
-        for (int k = 0; k < tensor->dim(2); ++k) {
-          memcpy(data + tensor->offset(r, c, k), src, element_size);
+  if (tensor->constant()) {
+    if (tensor->HasStandardLayout()) {
+      // Tensors with standard layout can be copied directly.
+      memcpy(data, tensor->data_, tensor->size_);
+    } else {
+      // Copy tensor one element at a time.
+      const char *src = tensor->data_;
+      int element_size = tensor->element_size();
+      if (tensor->rank() == 2) {
+        for (int r = 0; r < tensor->dim(0); ++r) {
+          for (int c = 0; c < tensor->dim(1); ++c) {
+            memcpy(data + tensor->offset(r, c), src, element_size);
+            src += element_size;
+          }
+        }
+      } else if (tensor->rank() == 3) {
+        for (int r = 0; r < tensor->dim(0); ++r) {
+          for (int c = 0; c < tensor->dim(1); ++c) {
+            for (int k = 0; k < tensor->dim(2); ++k) {
+              memcpy(data + tensor->offset(r, c, k), src, element_size);
+              src += element_size;
+            }
+          }
+        }
+      } else {
+        for (int i = 0; i < tensor->elements(); ++i) {
+          memcpy(data + tensor->LinearOffset(i), src, element_size);
           src += element_size;
         }
       }
     }
-  } else if (tensor->rank() == 4) {
-    const char *src = tensor->data_;
-    int element_size = tensor->element_size();
-    for (int r = 0; r < tensor->dim(0); ++r) {
-      for (int c = 0; c < tensor->dim(1); ++c) {
-        for (int k = 0; k < tensor->dim(2); ++k) {
-          for (int l = 0; l < tensor->dim(3); ++l) {
-            memcpy(data + tensor->offset(r, c, k, l), src, element_size);
-            src += element_size;
-          }
-        }
-      }
-    }
-  } else {
-    LOG(ERROR) << tensor->rank() << "D tensor not supported: "
-               << tensor->name();
-    return nullptr;
   }
 
   return data;
 }
 
-Cell *Network::GetCell(const string &name) const {
+Cell *Network::LookupCell(const string &name) const {
   for (Cell *cell : cells_) {
     if (cell->name() == name) return cell;
   }
   return nullptr;
 }
 
-Connector *Network::GetConnector(const string &name) const {
-  for (Connector *connector : connectors_) {
-    if (connector->name() == name) return connector;
-  }
-  return nullptr;
+Cell *Network::GetCell(const string &name) const {
+  Cell *cell = LookupCell(name);
+  CHECK(cell != nullptr) << "Unknown cell: " << name;
+  return cell;
+}
+
+Tensor *Network::LookupParameter(const string &name) const {
+  auto f = names_.find(name);
+  return f == names_.end() ? nullptr : f->second;
+}
+
+Tensor *Network::GetParameter(const string &name) const {
+  Tensor *tensor = LookupParameter(name);
+  CHECK(tensor != nullptr) << "Unknown parameter: " << name;
+  return tensor;
+}
+
+Tensor *Cell::LookupParameter(const string &name) const {
+  return network_->LookupParameter(name);
 }
 
 Tensor *Cell::GetParameter(const string &name) const {
@@ -1793,11 +1866,15 @@ string Cell::ToString() const {
         if (t->out()) str.append("output ");
         str.append("var ");
       }
-      StringAppendF(&str, "%s: %s  // offset %lu size %lu\n",
+      StringAppendF(&str, "%s: %s  // offset %lu size %lu alignment %d",
                     t->name().c_str(),
                     t->TypeString().c_str(),
                     t->offset(),
-                    t->space());
+                    t->space(), t->byte_alignment());
+      if (t->linked()) {
+        StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
+      }
+      str.append("\n");
       prev_offset = t->offset();
     }
     if (t->placement() & DEVICE) on_device = true;
@@ -1816,37 +1893,46 @@ string Cell::ToString() const {
           if (t->out()) str.append("output ");
           str.append("device var ");
         }
-        StringAppendF(&str, "%s: %s  // offset %lu size %lu\n",
+        StringAppendF(&str, "%s: %s  // offset %lu size %lu alignment %d",
                       t->name().c_str(),
                       t->TypeString().c_str(),
                       t->device_offset(),
-                      t->space());
+                      t->space(), t->byte_alignment());
+        if (t->linked()) {
+          StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
+        }
+        str.append("\n");
         prev_offset = t->device_offset();
       }
     }
   }
 
-  // Output constants used by cell.
-  std::vector<Tensor *> constants;
+  // Output globals used by cell.
+  std::vector<Tensor *> globals;
   for (Step *step : steps_) {
     for (Tensor *input : step->inputs()) {
-      if (input->IsConstant() && !Contains(constants, input)) {
-        constants.push_back(input);
+      if (input->IsGlobal() && !Contains(globals, input)) {
+        globals.push_back(input);
       }
     }
   }
-  if (!constants.empty()) {
+  if (!globals.empty()) {
     str.append("\n");
-    for (Tensor *t : constants) {
+    for (Tensor *t : globals) {
       str.append("  ");
       if (t->placement() != HOST) {
         str.append(placename[t->placement()]);
         str.append(" ");
       }
-      StringAppendF(&str, "const %s: %s   // size %lu\n",
+      StringAppendF(&str, "%s %s: %s   // size %lu alignment %d",
+                    t->constant() ? "const" : "global",
                     t->name().c_str(),
                     t->TypeString().c_str(),
-                    t->size());
+                    t->size(), t->byte_alignment());
+      if (t->linked()) {
+        StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
+      }
+      str.append("\n");
     }
   }
 

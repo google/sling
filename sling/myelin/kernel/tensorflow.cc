@@ -18,6 +18,7 @@
 #include "sling/myelin/kernel/arithmetic.h"
 #include "sling/myelin/kernel/avx.h"
 #include "sling/myelin/kernel/generic.h"
+#include "sling/myelin/kernel/gradients.h"
 #include "sling/myelin/kernel/sse.h"
 #include "sling/myelin/kernel/precompute.h"
 
@@ -32,6 +33,7 @@ void RegisterTensorflowLibrary(Library *library) {
   RegisterAVXLibrary(library);
   RegisterArithmeticLibrary(library);
   RegisterPrecomputeLibrary(library);
+  RegisterStandardGradients(library);
 }
 
 }  // namespace myelin
