@@ -1,6 +1,0 @@
-[submodule "third_party/zlib/upstream"]
-	path = third_party/zlib/upstream
-	url = https://github.com/madler/zlib.git
-[submodule "third_party/protobuf"]
-	path = third_party/protobuf
-	url = https://github.com/google/protobuf.git

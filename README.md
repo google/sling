@@ -3,12 +3,15 @@
 [![Build Status](https://travis-ci.org/google/sling.svg?branch=caspar)](https://travis-ci.org/google/sling)
 
 SLING CASPAR is a parser for annotating text with frame semantic annotations.
-This is the second generation of the SLING parser. The first generation, SEMPAR, can be found [here](https://github.com/google/sling). CASPAR is intended to generate parses in a cascaded way (i.e. a staggered fashion).
+This is the second generation of the SLING parser. The first generation, SEMPAR,
+can be found [here](https://github.com/google/sling). CASPAR is intended to
+parse using cascades which are handling different parts of the transition
+action space.
 
-The basic CASPAR parser is a general transition-based frame semantic parser using
-bi-directional LSTMs for input encoding and a Transition Based Recurrent Unit
-(TBRU) for output decoding. It is a jointly trained model using only the text
-tokens as input and the transition system has been designed to output frame
+The basic CASPAR parser is a general transition-based frame semantic parser
+using bi-directional LSTMs for input encoding and a Transition Based Recurrent
+Unit (TBRU) for output decoding. It is a jointly trained model using only the
+text tokens as input and the transition system has been designed to output frame
 graphs directly without any intervening symbolic representation.
 
 ![SLING neural network architecture.](./doc/report/network.svg)
@@ -52,21 +55,31 @@ for m in doc.mentions:
 
 ## Installation
 
-First, make sure that the repository is cloned with `--recursive`, so that you
-get all the submodules.
+First, clone the GitHub repository and switch to the caspar branch.
 
 ```shell
-git clone --recursive https://github.com/google/sling.git
+git clone https://github.com/google/sling.git
+cd sling
+git checkout caspar
 ```
 
-The parser trainer uses Python v2.7 and PyTorch for training,
-so they need to be installed. Additionally,
 SLING uses [Bazel](https://bazel.build/) as the build system, so you need to
-install Bazel in order to build the SLING parser.
+[install Bazel](https://docs.bazel.build/versions/master/install.html) in order
+to build the SLING parser.
+
+```shell
+sudo apt-get install pkg-config zip g++ zlib1g-dev unzip python
+wget -P /tmp https://github.com/bazelbuild/bazel/releases/download/0.13.0/bazel-0.13.0-installer-linux-x86_64.sh
+chmod +x /tmp/bazel-0.13.0-installer-linux-x86_64.sh
+sudo /tmp/bazel-0.13.0-installer-linux-x86_64.sh
+```
+
+The parser trainer uses Python v2.7 and PyTorch for training, so they need to be
+installed.
 
 ```shell
 # Change to your favorite version as needed.
-sudo pip install http://download.pytorch.org/whl/cpu/torch-0.3.1-cp27-cp27mu-linux_x86_64.whl 
+sudo pip install http://download.pytorch.org/whl/cpu/torch-0.3.1-cp27-cp27mu-linux_x86_64.whl
 ```
 
 ## Building
@@ -79,12 +92,13 @@ Build system: Bazel<br>
 You can test your installation by building a few important targets.
 
 ```shell
+git checkout caspar
 bazel build -c opt sling/nlp/parser sling/nlp/parser/tools:all
 ```
 
-Next, build and link to the SLING Python module since it will be used
-by the trainer. But first, remember to switch to the caspar branch since
-it implements all functionality inside CASPAR.
+Next, build and link to the SLING Python module since it will be used by the
+trainer. But first, remember to switch to the caspar branch since it implements
+all functionality inside CASPAR.
 
 ```shell
 git checkout caspar
@@ -92,8 +106,9 @@ bazel build -c opt sling/pyapi:pysling.so
 sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
 ```
 
-**NOTE:** 
-*  In case you are using an older version of GCC (< v5), you may want to comment out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
+**NOTE:**
+*  In case you are using an older version of GCC (< v5), you may want to comment
+out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
 
 ## Training
 
@@ -104,8 +119,8 @@ detail.
 
 ### Data preparation
 
-The first step consists of preparing the commons store (also called global store). This has frame and
-schema definitions for all types and roles of interest, e.g.
+The first step consists of preparing the commons store (also called global store).
+This has frame and schema definitions for all types and roles of interest, e.g.
 `/saft/person` or `/pb/love-01` or `/pb/arg0`. In order to build the commons store
 for the OntoNotes-based parser you need to checkout PropBank in a directory
 parallel to the SLING directory:
@@ -351,7 +366,7 @@ Modules: Sempar(
 * At any point, the best performing checkpoint will be available as a Myelin flow file
   in `<output folder>/pytorch.best.flow`.
 
-**NOTE:** 
+**NOTE:**
 * If you wish to modify the default set of features,
 then you would have to modify the [feature specification code](sling/nlp/parser/trainer/spec.py#L212).
 

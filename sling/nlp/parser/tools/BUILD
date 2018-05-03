@@ -25,8 +25,7 @@ cc_binary(
     "//sling/base",
     "//sling/file:posix",
     "//sling/nlp/parser/trainer:frame-evaluation",
-    "//third_party/zlib:miniunzip",
-    "//third_party/zlib:zlib",
+    "//third_party/zlib",
   ],
 )
 
