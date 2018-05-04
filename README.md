@@ -382,7 +382,7 @@ curl -o /tmp/conll-2003-sempar.tar.gz http://www.jbox.dk/sling/conll-2003-sempar
 tar -xvf /tmp/conll-2003-sempar.tar.gz
 ```
 
-See [local/conll2003/README.md](local/conll2003/README.md) for instructions on how to train a parser.
+See the `README.md` file in [conll-2003-sempar.tar.gz](http://www.jbox.dk/sling/conll-2003-sempar.tar.gz) for instructions on how to train a parser using this corpus.
 
 ## Parsing
 
