@@ -53,3 +53,12 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "perf",
+  srcs = ["perf.cc"],
+  hdrs = ["perf.h"],
+  deps = [
+    ":base",
+  ],
+)
+

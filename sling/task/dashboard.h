@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "sling/base/types.h"
-#include "sling/file/file.h"
 #include "sling/http/http-server.h"
 #include "sling/http/static-content.h"
 #include "sling/task/job.h"
@@ -64,9 +63,6 @@ class Dashboard : public Monitor {
   void OnJobDone(Job *job) override;
 
  private:
-  // Get max CPU temperature.
-  float GetCPUTemperature();
-
   // Status for active or completed job.
   struct JobStatus {
     JobStatus(Job *job) : job(job) {}
@@ -95,15 +91,6 @@ class Dashboard : public Monitor {
 
   // Completion time.
   int64 end_time_;
-
-  // Peak memory usage.
-  int64 peak_memory_ = 0;
-
-  // Thermal devices.
-  std::vector<string> thermal_devices_;
-
-  // Peak CPU temperature.
-  float peak_temp_ = 0.0;
 
   // Mutex for serializing access to dashboard.
   Mutex mu_;

@@ -48,10 +48,9 @@ class Status {
     }
   }
 
-  // Status comparison. This only compares success vs failure and ignores
-  // the error code.
-  bool operator==(const Status &s) const { return s.state_ == state_; }
-  bool operator!=(const Status &s) const { return s.state_ != state_; }
+  // Status comparison.
+  bool operator==(const Status &s) const { return s.code() == code(); }
+  bool operator!=(const Status &s) const { return s.code() != code(); }
 
   // Returns true iff the status indicates success.
   bool ok() const { return state_ == nullptr; }

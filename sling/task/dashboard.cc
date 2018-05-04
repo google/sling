@@ -16,15 +16,15 @@
 
 #include <time.h>
 #include <unistd.h>
-#include <sys/resource.h>
 #include <sstream>
+
+#include "sling/base/perf.h"
 
 namespace sling {
 namespace task {
 
 Dashboard::Dashboard() {
   start_time_ = time(0);
-  File::Match("/sys/class/thermal/thermal_zone*/temp", &thermal_devices_);
 }
 
 Dashboard::~Dashboard() {
@@ -95,29 +95,16 @@ string Dashboard::GetStatus() {
   out << "]";
 
   // Output resource usage.
-  struct rusage ru;
-  if (getrusage(RUSAGE_SELF, &ru) == 0) {
-    int64 utime = ru.ru_utime.tv_sec * 1000000LL + ru.ru_utime.tv_usec;
-    int64 stime = ru.ru_stime.tv_sec * 1000000LL + ru.ru_stime.tv_usec;
-    int64 mem = ru.ru_maxrss * 1024LL;
-    if (mem > peak_memory_) peak_memory_ = mem;
-    if (!running) mem = peak_memory_;
-    int64 ioread = ru.ru_inblock;
-    int64 iowrite = ru.ru_oublock;
-    out << ",\"utime\":" << utime;
-    out << ",\"stime\":" << stime;
-    out << ",\"mem\":" << mem;
-    out << ",\"ioread\":" << ioread;
-    out << ",\"iowrite\":" << iowrite;
-  }
-
-  // Get CPU temperature.
-  float temperature = GetCPUTemperature();
-  if (temperature > 0.0) {
-    if (temperature > peak_temp_) peak_temp_ = temperature;
-    if (!running) temperature = peak_temp_;
-    out << ",\"temperature\":" << temperature;
-  }
+  Perf perf;
+  perf.Sample();
+  out << ",\"utime\":" << perf.utime();
+  out << ",\"stime\":" << perf.stime();
+  out << ",\"mem\":" << (running ? perf.memory() : Perf::peak_memory_usage());
+  out << ",\"ioread\":" << perf.ioread();
+  out << ",\"iowrite\":" << perf.iowrite();
+  out << ",\"flops\":" << perf.flops();
+  out << ",\"temperature\":"
+      << (running ? perf.cputemp() : Perf::peak_cpu_temperature());
 
   out << "}";
   return out.str();
@@ -171,18 +158,6 @@ void Dashboard::Finalize(int timeout) {
     for (int wait = 0; wait < timeout && status_ != SYNCHED; ++wait) sleep(1);
   }
   status_ = TERMINAL;
-}
-
-float Dashboard::GetCPUTemperature() {
-  float temp = 0.0;
-  for (const string &dev : thermal_devices_) {
-    string data;
-    if (File::ReadContents(dev, &data)) {
-      float value = std::stoi(data) / 1000.0;
-      if (value > temp) temp = value;
-    }
-  }
-  return temp;
 }
 
 }  // namespace task

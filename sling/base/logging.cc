@@ -102,7 +102,7 @@ std::ostream* CheckOpMessageBuilder::ForVar2() {
 }
 
 string *CheckOpMessageBuilder::NewString() {
-  *stream_ << ")";
+  *stream_ << ") ";
   return new string(stream_->str());
 }
 

@@ -211,6 +211,9 @@ Status RecordReader::Fill() {
 }
 
 Status RecordReader::Read(Record *record) {
+  // Check for end of file.
+  if (Done()) return Status(1, "EOF");
+
   // Keep reading until we read a data record.
   for (;;) {
     // Fill input buffer if it is nearly empty.

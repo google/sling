@@ -99,6 +99,7 @@ app.controller('StatusCtrl', function($scope, $http, $rootScope) {
     var res = {};
     res.time = status.time;
     res.cpu = (status.utime + status.stime) / 1000000;
+    res.gflops = status.flops / 1e9;
     res.ram = status.mem;
     res.io = status.ioread + status.iowrite;
     var census = {};
@@ -108,11 +109,13 @@ app.controller('StatusCtrl', function($scope, $http, $rootScope) {
     census.temp = status.temperature;
     if (status.finished) {
       census.cpu = res.cpu / runtime;
+      census.gflops = res.gflops / runtime;
       census.ram = res.ram;
       census.io = res.io / runtime;
     } else if (resources) {
       var dt = res.time - resources.time;
       census.cpu = (res.cpu - resources.cpu) / dt;
+      census.gflops = (res.gflops - resources.gflops) / dt;
       census.ram = res.ram;
       census.io = (res.io - resources.io) / dt;
     }

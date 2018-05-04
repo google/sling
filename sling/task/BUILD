@@ -67,7 +67,7 @@ cc_library(
     ":app",
     ":job",
     "//sling/base",
-    "//sling/file",
+    "//sling/base:perf",
     "//sling/file:embed",
     "//sling/http:http-server",
     "//sling/http:static-content",
