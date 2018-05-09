@@ -12,11 +12,7 @@ addons:
     packages:
       - wget
       - pkg-config
-      - g++-4.8
-
-install:
-  - sudo pip install protobuf==3.4.0
-  - sudo pip install https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.4.0-cp27-none-linux_x86_64.whl
+      - g++-7.3
 
 before_install:
   - wget https://github.com/bazelbuild/bazel/releases/download/0.8.0/bazel_0.8.0-linux-x86_64.deb
@@ -24,4 +20,3 @@ before_install:
 
 script:
   - tools/buildall.sh
-
