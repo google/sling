@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <math.h>
+
 #include "sling/util/embeddings.h"
 
 #include "sling/base/logging.h"
@@ -40,6 +42,16 @@ bool EmbeddingReader::Next() {
   // Read embedding vector.
   char *data = reinterpret_cast<char *>(embedding_.data());
   CHECK(input_.Read(data, dim_ * sizeof(float)));
+
+  // Optionally normalize embedding vector to unit length.
+  if (normalize_) {
+    float sum = 0.0;
+    for (int i = 0; i < dim_; ++i) sum += data[i] * data[i];
+    if (sum > 0.0) {
+      float l2 = sqrt(sum);
+      for (int i = 0; i < dim_; ++i) data[i] /= l2;
+    }
+  }
 
   // Read newline.
   char ch;

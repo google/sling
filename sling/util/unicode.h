@@ -63,6 +63,13 @@ enum UnicodeCategory {
   CHARBIT_WHITESPACE                = 0x80,
 };
 
+// String normalization flags.
+enum NormalizationFlags {
+  NORMALIZE_LETTERS     = 0x01,  // lowercase and remove diacritics
+  NORMALIZE_DIGITS      = 0x02,  // replace all digits with 9
+  NORMALIZE_PUNCTUATION = 0x04,  // remove punctuation
+};
+
 class Unicode {
  public:
    // Return Unicode category for code point.
@@ -107,6 +114,7 @@ class Unicode {
    // Normalize code point to by lowercasing and removing punctuation and
    // diacritics. Return zero for code points that should be removed.
    static int Normalize(int c);
+   static int Normalize(int c, NormalizationFlags flags);
 };
 
 class UTF8 {
@@ -162,13 +170,27 @@ class UTF8 {
   }
 
   // Normalize UTF8 encoded string for matching.
-  static void Normalize(const char *s, int len, string *normalized);
+  static void Normalize(const char *s, int len, NormalizationFlags flags,
+                        string *normalized);
+  static void Normalize(const string &str, NormalizationFlags flags,
+                        string *normalized) {
+    Normalize(str.data(), str.size(), flags, normalized);
+  }
+  static void Normalize(const char *s, int len, string *normalized) {
+    Normalize(s, len, NORMALIZE_LETTERS, normalized);
+  }
   static void Normalize(const string &str, string *normalized) {
     Normalize(str.data(), str.size(), normalized);
   }
 
   // Convert string to title case, i.e. make the first letter uppercase.
   static void ToTitleCase(const string &str, string *titlecased);
+
+  // Check if all characters are punctuation characters.
+  static bool IsPunctuation(const char *s, int len);
+  static bool IsPunctuation(const string &str) {
+    return IsPunctuation(str.data(), str.size());
+  }
 };
 
 }  // namespace sling

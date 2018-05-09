@@ -92,7 +92,7 @@ class AffixTable {
   void Read(InputStream *stream);
 
   // Write affix table to output stream.
-  void Write(OutputStream *stream);
+  void Write(OutputStream *stream) const;
 
   // Adds all prefixes/suffixes of the word up to the maximum length to the
   // table. The longest affix is returned. The pointers in the affix can be

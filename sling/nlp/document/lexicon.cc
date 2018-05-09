@@ -22,27 +22,25 @@
 namespace sling {
 namespace nlp {
 
-void Lexicon::InitWords(const char *data, size_t size) {
+void Lexicon::InitWords(Vocabulary::Iterator *words) {
   // Initialize mapping from words to ids.
-  const static char kTerminator = '\n';
-  vocabulary_.Init(data, size, kTerminator);
+  vocabulary_.Init(words);
 
   // Initialize mapping from ids to words.
-  words_.resize(vocabulary_.size());
-  const char *current = data;
-  const char *end = data + size;
+  words_.resize(words->Size());
   int index = 0;
-  while (current < end) {
-    // Find next word.
-    const char *next = current;
-    while (next < end && *next != kTerminator) next++;
-    if (next == end) break;
-
-    // Initialize item for word.
-    words_[index].word.assign(current, next - current);
-
-    current = next + 1;
+  words->Reset();
+  Text word;
+  while (words->Next(&word, nullptr)) {
+    words_[index].word.assign(word.data(), word.size());
     index++;
+  }
+}
+
+void Lexicon::WriteVocabulary(string *buffer, char terminator) const {
+  for (const Entry &e : words_) {
+    buffer->append(e.word);
+    buffer->push_back(terminator);
   }
 }
 
@@ -65,6 +63,34 @@ void Lexicon::InitSuffixes(const char *data, size_t size) {
   // Pre-compute the longest suffix for all words in lexicon.
   for (Entry &entry : words_) {
     entry.suffix = suffixes_.GetLongestAffix(entry.word);
+  }
+}
+
+void Lexicon::WritePrefixes(string *buffer) const {
+  StringOutputStream stream(buffer);
+  prefixes_.Write(&stream);
+}
+
+void Lexicon::WriteSuffixes(string *buffer) const {
+  StringOutputStream stream(buffer);
+  suffixes_.Write(&stream);
+}
+
+void Lexicon::BuildPrefixes(int max_prefix) {
+  prefixes_.Reset(max_prefix);
+  if (max_prefix > 0) {
+    for (Entry &entry : words_) {
+      entry.prefix = prefixes_.AddAffixesForWord(entry.word);
+    }
+  }
+}
+
+void Lexicon::BuildSuffixes(int max_suffix) {
+  suffixes_.Reset(max_suffix);
+  if (max_suffix > 0) {
+    for (Entry &entry : words_) {
+      entry.suffix = suffixes_.AddAffixesForWord(entry.word);
+    }
   }
 }
 

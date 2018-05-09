@@ -138,3 +138,20 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "lexical-encoder",
+  srcs = ["lexical-encoder.cc"],
+  hdrs = ["lexical-encoder.h"],
+  deps = [
+    ":document",
+    ":features",
+    ":lexicon",
+    "//sling/myelin:builder",
+    "//sling/myelin:compute",
+    "//sling/myelin:flow",
+    "//sling/myelin:gradient",
+    "//sling/myelin:rnn",
+    "//sling/util:embeddings",
+  ],
+)
+

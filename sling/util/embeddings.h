@@ -46,6 +46,10 @@ class EmbeddingReader {
   // Current embedding.
   const std::vector<float> &embedding() { return embedding_; }
 
+  // Normalize embedding vectors to unit length.
+  bool normalize() const { return normalize_; }
+  void set_normalize(bool normalize) { normalize_ = normalize; }
+
  private:
   // Read next word from input.
   void NextWord(string *output);
@@ -68,6 +72,9 @@ class EmbeddingReader {
 
   // Current embedding vector.
   std::vector<float> embedding_;
+
+  // Normalize embedding vectors to unit length.
+  bool normalize_ = false;
 };
 
 // Write embeddings in Mikolov format.

@@ -120,7 +120,9 @@ bool Unicode::IsPunctuation(int c) {
     (1 << CHARCAT_CONNECTOR_PUNCTUATION) |
     (1 << CHARCAT_OTHER_PUNCTUATION) |
     (1 << CHARCAT_INITIAL_QUOTE_PUNCTUATION) |
-    (1 << CHARCAT_FINAL_QUOTE_PUNCTUATION);
+    (1 << CHARCAT_FINAL_QUOTE_PUNCTUATION) |
+    (1 << CHARCAT_MODIFIER_SYMBOL) |
+    (1 << CHARCAT_OTHER_SYMBOL);
 
   if (c & unicode_tab_mask) return false;
   int category = unicode_cat_tab[c] & CHARCAT_MASK;
@@ -140,6 +142,20 @@ int Unicode::ToUpper(int c) {
 int Unicode::Normalize(int c) {
   if (c & unicode_tab_mask) return c;
   return unicode_normalize_tab[c];
+}
+
+int Unicode::Normalize(int c, NormalizationFlags flags) {
+  if (c & unicode_tab_mask) return c;
+  if (flags & NORMALIZE_LETTERS) {
+    c = unicode_normalize_tab[c];
+  }
+  if (flags & NORMALIZE_DIGITS) {
+    if (IsDigit(c)) c = '9';
+  }
+  if (flags & NORMALIZE_PUNCTUATION) {
+    if (IsPunctuation(c)) c = 0;
+  }
+  return c;
 }
 
 int UTF8::Length(const char *s, int len) {
@@ -384,7 +400,8 @@ void UTF8::Lowercase(const char *s, int len, string *result) {
   }
 }
 
-void UTF8::Normalize(const char *s, int len, string *normalized) {
+void UTF8::Normalize(const char *s, int len, NormalizationFlags flags,
+                     string *normalized) {
   // Clear output string.
   normalized->clear();
 
@@ -394,16 +411,16 @@ void UTF8::Normalize(const char *s, int len, string *normalized) {
   while (s < end) {
     uint8 c = *reinterpret_cast<const uint8 *>(s);
     if (c & 0x80) break;
-    int normal = unicode_normalize_tab[c];
-    if (normal > 0) normalized->push_back(normal);
+    int ch = Unicode::Normalize(c, flags);
+    if (ch > 0) normalized->push_back(ch);
     s++;
   }
 
   // Handle any remaining part of the string which can contain multi-byte
   // characters.
   while (s < end) {
-    int normal = Unicode::Normalize(Decode(s));
-    if (normal > 0) Encode(normal, normalized);
+    int ch = Unicode::Normalize(Decode(s), flags);
+    if (ch > 0) Encode(ch, normalized);
     s = Next(s);
   }
 }
@@ -423,6 +440,27 @@ void UTF8::ToTitleCase(const string &str, string *titlecased) {
     // Just copy string.
     titlecased->assign(str);
   }
+}
+
+bool UTF8::IsPunctuation(const char *s, int len) {
+  // Try fast check where all characters are below 128.
+  const char *end = s + len;
+  while (s < end) {
+    uint8 c = *reinterpret_cast<const uint8 *>(s);
+    if (c & 0x80) break;
+    if (!Unicode::IsPunctuation(c)) return false;
+    s++;
+  }
+
+  // Handle any remaining part of the string which can contain multi-byte
+  // characters.
+  while (s < end) {
+    int code = Unicode::Normalize(Decode(s));
+    if (!Unicode::IsPunctuation(code)) return false;
+    s = Next(s);
+  }
+
+  return true;
 }
 
 }  // namespace sling

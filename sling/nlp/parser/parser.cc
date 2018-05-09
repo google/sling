@@ -79,7 +79,8 @@ void Parser::Load(Store *store, const string &model) {
   // Load lexicon.
   myelin::Flow::Blob *vocabulary = flow.DataBlock("lexicon");
   CHECK(vocabulary != nullptr);
-  lexicon_.InitWords(vocabulary->data, vocabulary->size);
+  Vocabulary::BufferIterator it(vocabulary->data, vocabulary->size, '\n');
+  lexicon_.InitWords(&it);
   bool normalize = vocabulary->GetAttr("normalize_digits", false);
   int oov = vocabulary->GetAttr("oov", -1);
   lexicon_.set_normalize_digits(normalize);

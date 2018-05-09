@@ -21,14 +21,16 @@
 namespace sling {
 namespace nlp {
 
-void DocumentFeatures::Extract(const Document &document) {
-  features_.resize(document.num_tokens());
+void DocumentFeatures::Extract(const Document &document, int begin, int end) {
+  if (end == -1) end = document.num_tokens();
+  int length = end - begin;
+  features_.resize(length);
   bool extract_prefixes = lexicon_->prefixes().size() != 0;
   bool extract_suffixes = lexicon_->suffixes().size() != 0;
   int oov = lexicon_->oov();
   bool in_quote = false;
-  for (int i = 0; i < document.num_tokens(); ++i) {
-    string word = document.token(i).text();
+  for (int i = 0; i < length; ++i) {
+    string word = document.token(begin + i).text();
     TokenFeatures &f = features_[i];
     f.hyphen = NO_HYPHEN;
     f.quote = NO_QUOTE;

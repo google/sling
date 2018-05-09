@@ -112,7 +112,7 @@ void AffixTable::Read(InputStream *stream) {
   }
 }
 
-void AffixTable::Write(OutputStream *stream) {
+void AffixTable::Write(OutputStream *stream) const {
   Output output(stream);
   output.WriteVarint32(type_);
   output.WriteVarint32(max_length_);

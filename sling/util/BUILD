@@ -42,6 +42,11 @@ cc_library(
 )
 
 cc_library(
+  name = "random",
+  hdrs = ["random.h"],
+)
+
+cc_library(
   name = "thread",
   srcs = ["thread.cc"],
   hdrs = [
@@ -96,6 +101,7 @@ cc_library(
   deps = [
     ":fingerprint",
     "//sling/base",
+    "//sling/string:text",
   ],
 )
 

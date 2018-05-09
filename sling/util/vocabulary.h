@@ -16,8 +16,12 @@
 #define SLING_UTIL_VOCABULARY_H_
 
 #include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "sling/base/types.h"
+#include "sling/string/text.h"
 
 namespace sling {
 
@@ -28,17 +32,88 @@ namespace sling {
 // these would be rare.
 class Vocabulary {
  public:
+  // Iterator for word vocabulary.
+  class Iterator {
+   public:
+    virtual ~Iterator() = default;
+
+    // Returns the size of the word vocabulary.
+    virtual int Size() = 0;
+
+    // Reset iterator to beginning.
+    virtual void Reset() = 0;
+
+    // Get next word in vocabulary, returning false if there are no more words.
+    virtual bool Next(Text *word, int *count) = 0;
+  };
+
+  // Vocabulary iterator for data buffer with words. Each word is terminated
+  // by the terminator character.
+  class BufferIterator : public Iterator {
+   public:
+    BufferIterator(const char *data, size_t size, char terminator = 0)
+      : data_(data), end_(data + size), current_(data),
+        terminator_(terminator) {}
+
+    // Iterator interface.
+    int Size() override;
+    void Reset() override;
+    bool Next(Text *word, int *count) override;
+
+   private:
+    const char *data_;       // begining of data buffer
+    const char *end_;        // end of data buffer
+    const char *current_;    // current position of iterator
+    char terminator_;        // word terminator character
+  };
+
+  // Vocabulary iterator for word vector.
+  class VectorIterator : public Iterator {
+   public:
+    VectorIterator(const std::vector<string> &words) : words_(words) {}
+
+    // Iterator interface.
+    int Size() override;
+    void Reset() override;
+    bool Next(Text *word, int *count) override;
+
+   private:
+    const std::vector<string> &words_;
+    int current_ = 0;
+  };
+
+  // Vocabulary iterator for word map.
+  template<class T> class MapIterator : public Iterator {
+   public:
+    MapIterator(const T &words) : words_(words), current_(words_.begin()) {}
+
+    // Iterator interface.
+    int Size() override { return words_.size(); }
+    void Reset() override { current_ = words_.begin(); }
+    bool Next(Text *word, int *count) override {
+      if (current_ == words_.end()) return false;
+      const string &str = current_->first;
+      word->set(str.data(), str.size());
+      if (count != nullptr) *count = current_->second;
+      ++current_;
+      return true;
+    }
+
+   private:
+    const T &words_;
+    typename T::const_iterator current_;
+  };
+
+  typedef MapIterator<std::unordered_map<string, int>> HashMapIterator;
+  typedef MapIterator<std::vector<std::pair<string, int>>> VectorMapIterator;
+
   ~Vocabulary();
 
-  // Initialize dictionary from list of words. The words in the data buffer
-  // are terminated by the terminator character.
-  void Init(const char *data, size_t size, char terminator = 0);
+  // Initialize dictionary from list of words.
+  void Init(Iterator *words);
 
-  // Lookup word in dictionary. Returns - 1 if word is not found.
-  int64 Lookup(const char *word, size_t size) const;
-  int64 Lookup(const string &word) const {
-    return Lookup(word.data(), word.size());
-  }
+  // Look up word in dictionary. Returns - 1 if word is not found.
+  int64 Lookup(Text word) const;
 
   // Return the vocabulary size.
   int size() const { return size_; }

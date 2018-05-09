@@ -20,17 +20,52 @@
 
 namespace sling {
 
+int Vocabulary::BufferIterator::Size() {
+  int n = 0;
+  for (const char *p = data_; p < end_; p++) {
+    if (*p == terminator_) n++;
+  }
+  return n;
+}
+
+void Vocabulary::BufferIterator::Reset() {
+  current_ = data_;
+}
+
+bool Vocabulary::BufferIterator::Next(Text *word, int *count) {
+  const char *next = current_;
+  while (next < end_ && *next != terminator_) next++;
+  if (next == end_) return false;
+  word->set(current_, next - current_);
+  if (count != nullptr) *count = 1;
+  current_ = next + 1;
+  return true;
+}
+
+int Vocabulary::VectorIterator::Size() {
+  return words_.size();
+}
+
+void Vocabulary::VectorIterator::Reset() {
+  current_ = 0;
+}
+
+bool Vocabulary::VectorIterator::Next(Text *word, int *count) {
+  if (current_ == words_.size()) return false;
+  const string &str = words_[current_++];
+  word->set(str.data(), str.size());
+  if (count != nullptr) *count = 1;
+  return true;
+}
+
 Vocabulary::~Vocabulary() {
   delete [] buckets_;
   delete [] items_;
 }
 
-void Vocabulary::Init(const char *data, size_t size, char terminator) {
-  // Count the number of items in the lexicon.
-  size_ = 0;
-  for (int i = 0; i < size; ++i) {
-    if (data[i] == terminator) size_++;
-  }
+void Vocabulary::Init(Iterator *words) {
+  // Get number of items in the lexicon.
+  size_ = words->Size();
   num_buckets_ = size_;
 
   // Allocate items and buckets. We allocate one extra bucket to mark the end of
@@ -40,20 +75,13 @@ void Vocabulary::Init(const char *data, size_t size, char terminator) {
   buckets_ = new Bucket[num_buckets_ + 1];
 
   // Build item for each word in the lexicon.
-  const char *current = data;
-  const char *end = data + size;
+  words->Reset();
+  Text word;
   int64 index = 0;
-  while (current < end) {
-    // Find next word.
-    const char *next = current;
-    while (next < end && *next != terminator) next++;
-    if (next == end) break;
-
+  while (words->Next(&word, nullptr)) {
     // Initialize item for word.
-    items_[index].hash = Fingerprint(current, next - current);
+    items_[index].hash = Fingerprint(word.data(), word.size());
     items_[index].value = index;
-
-    current = next + 1;
     index++;
   }
 
@@ -74,8 +102,8 @@ void Vocabulary::Init(const char *data, size_t size, char terminator) {
   while (bucket < num_buckets_) buckets_[++bucket] = &items_[size_];
 };
 
-int64 Vocabulary::Lookup(const char *word, size_t size) const {
-  uint64 hash = Fingerprint(word, size);
+int64 Vocabulary::Lookup(Text word) const {
+  uint64 hash = Fingerprint(word.data(), word.size());
   int b = hash % num_buckets_;
   Item *item = buckets_[b];
   Item *end = buckets_[b + 1];

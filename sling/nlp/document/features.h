@@ -73,7 +73,7 @@ class DocumentFeatures {
   DocumentFeatures(const Lexicon *lexicon) : lexicon_(lexicon) {}
 
   // Extract features from document.
-  void Extract(const Document &document);
+  void Extract(const Document &document, int begin = 0, int end = -1);
 
   // Get features for token.
   int word(int index) const {
