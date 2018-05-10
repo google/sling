@@ -30,7 +30,7 @@ class FrameProcessor : public Processor {
   // Task processor implementation.
   void Start(Task *task) override;
   void Receive(Channel *channel, Message *message) override;
-  void Done(Task *task);
+  void Done(Task *task) override;
 
   // Called to initialize commons store.
   virtual void InitCommons(Task *task);

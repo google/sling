@@ -25,7 +25,7 @@ namespace sling {
 namespace myelin {
 
 // CUDA handles.
-typedef unsigned long long CUdeviceptr;
+typedef unsigned long int CUdeviceptr;
 typedef int CUdevice;
 typedef struct CUctx_st *CUcontext;
 typedef struct CUmod_st *CUmodule;

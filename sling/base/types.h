@@ -26,35 +26,25 @@
 #include <stdint.h>
 #include <string>
 
-// Use std::string
+// Use std::string.
 using std::string;
 
-// Standard typedefs
-typedef unsigned char       uchar;
-typedef signed char         schar;
-typedef signed char         int8;
-typedef short               int16;
-typedef int                 int32;
-#ifdef _MSC_VER
-typedef __int64             int64;
-#else
-typedef long long           int64;
-#endif
+// Standard typedefs.
+typedef int8_t int8;
+typedef int16_t int16;
+typedef int32_t int32;
+typedef int64_t int64;
 
-typedef unsigned char       uint8;
-typedef unsigned short      uint16;
-typedef unsigned int        uint32;
-#ifdef _MSC_VER
-typedef unsigned __int64    uint64;
-#else
-typedef unsigned long long  uint64;
-#endif
+typedef uint8_t uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t  uint64;
 
 // A type to represent a Unicode code-point value. As of Unicode 4.0,
 // such values require up to 21 bits.
 // (For type-checking on pointers, make this explicitly signed,
 // and it should always be the signed version of whatever int32 is.)
-typedef signed int         char32;
+typedef signed int char32;
 
 //  A type to represent a natural machine word (for e.g. efficiently
 // scanning through memory for checksums or index searching). Don't use
@@ -63,7 +53,7 @@ typedef signed int         char32;
 // (http://www.opengroup.org/public/tech/aspen/lp64_wp.htm), hence
 // their ints are only 32 bits. We want to use the same fundamental
 // type on all archs if possible to preserve *printf() compatibility.
-typedef unsigned long      uword_t;
+typedef unsigned long uword_t;
 
 // long long macros to be used because gcc and vc++ use different suffixes,
 // and different size specifiers in format strings

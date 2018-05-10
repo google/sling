@@ -56,9 +56,6 @@ class Gradients : public FlowBuilder {
   // Get reference to primal variable.
   Flow::Variable *GetReference(Flow::Variable *x);
 
-  // Primal function.
-  Flow::Function *primal_;
-
   // Mapping from primal variables to adjoint.
   std::unordered_map<Flow::Variable *, Flow::Variable *> adjoints_;
 

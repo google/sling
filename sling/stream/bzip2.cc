@@ -30,8 +30,7 @@ namespace sling {
 
 BZip2Compressor::BZip2Compressor(OutputStream *sink,
                                  int block_size,
-                                 int compression_level)
-    : sink_(sink) {
+                                 int compression_level) {
   memset(&stream_, 0, sizeof(stream_));
   CHECK(BZ2_bzCompressInit(&stream_, compression_level, 0, 0) == BZ_OK);
 }

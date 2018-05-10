@@ -357,7 +357,6 @@ inline string SimpleItoa(int32 i) {
   return string(buf, FastInt32ToBufferLeft(i, buf));
 }
 
-// We need this overload because otherwise SimpleItoa(5U) wouldn't compile.
 inline string SimpleItoa(uint32 i) {
   char buf[16];  // longest is 4294967295
   return string(buf, FastUInt32ToBufferLeft(i, buf));
@@ -368,26 +367,9 @@ inline string SimpleItoa(int64 i) {
   return string(buf, FastInt64ToBufferLeft(i, buf));
 }
 
-// We need this overload because otherwise SimpleItoa(5ULL) wouldn't compile.
 inline string SimpleItoa(uint64 i) {
   char buf[32];  // longest is 18446744073709551615
   return string(buf, FastUInt64ToBufferLeft(i, buf));
-}
-
-inline string SimpleItoa(long i) {
-  if (sizeof(i) == 64 / 8) {
-    return SimpleItoa(static_cast<int64>(i));
-  } else if (sizeof(i) == 32 / 8) {
-    return SimpleItoa(static_cast<int32>(i));
-  }
-}
-
-inline string SimpleItoa(unsigned long i) {
-  if (sizeof(i) == 64 / 8) {
-    return SimpleItoa(static_cast<uint64>(i));
-  } else if (sizeof(i) == 32 / 8) {
-    return SimpleItoa(static_cast<uint32>(i));
-  }
 }
 
 // SimpleAtoi converts a string to an integer.
@@ -397,8 +379,7 @@ inline string SimpleItoa(unsigned long i) {
 // the corresponding integer type.
 //
 // Returns true if parsing was successful.
-template <typename int_type>
-bool ABSL_MUST_USE_RESULT SimpleAtoi(const char *s, int_type *out) {
+template <typename int_type> bool SimpleAtoi(const char *s, int_type *out) {
   // Must be of integer type (not pointer type), with more than 16-bitwidth.
   static_assert(sizeof(*out) == 4 || sizeof(*out) == 8,
                 "SimpleAtoi works with 32 or 64 bit ints");
@@ -423,8 +404,7 @@ bool ABSL_MUST_USE_RESULT SimpleAtoi(const char *s, int_type *out) {
   }
 }
 
-template <typename int_type>
-bool ABSL_MUST_USE_RESULT SimpleAtoi(const string &s, int_type *out) {
+template <typename int_type> bool SimpleAtoi(const string &s, int_type *out) {
   return SimpleAtoi(s.c_str(), out);
 }
 
@@ -471,15 +451,6 @@ string SimpleItoaWithCommas(int32 i);
 string SimpleItoaWithCommas(uint32 i);
 string SimpleItoaWithCommas(int64 i);
 string SimpleItoaWithCommas(uint64 i);
-#ifdef _LP64
-inline string SimpleItoaWithCommas(size_t i) {
-  return SimpleItoaWithCommas(static_cast<uint64>(i));
-}
-
-inline string SimpleItoaWithCommas(ptrdiff_t i) {
-  return SimpleItoaWithCommas(static_cast<int64>(i));
-}
-#endif
 
 // ----------------------------------------------------------------------
 // ItoaKMGT()

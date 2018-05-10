@@ -24,7 +24,6 @@ cc_library(
     "//sling/string:text",
     "//sling/util:city",
   ],
-  copts = ["-Wno-maybe-uninitialized"],
 )
 
 cc_library(

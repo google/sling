@@ -640,10 +640,6 @@ char *FastInt64ToBuffer(int64 i, char *buffer) {
   return buffer;
 }
 
-// Offset into buffer where FastInt32ToBuffer places the end of string
-// nul character.  Also used by FastInt32ToBufferLeft
-static const int kFastInt32ToBufferOffset = 11;
-
 char *FastInt32ToBuffer(int32 i, char *buffer) {
   FastInt32ToBufferLeft(i, buffer);
   return buffer;
@@ -705,13 +701,6 @@ const char two_ASCII_digits[100][2] = {
   {'9', '0'}, {'9', '1'}, {'9', '2'}, {'9', '3'}, {'9', '4'},
   {'9', '5'}, {'9', '6'}, {'9', '7'}, {'9', '8'}, {'9', '9'}
 };
-
-static inline void PutTwoDigits(int i, char *p) {
-  DCHECK_GE(i, 0);
-  DCHECK_LT(i, 100);
-  p[0] = two_ASCII_digits[i][0];
-  p[1] = two_ASCII_digits[i][1];
-}
 
 // ----------------------------------------------------------------------
 // FastInt32ToBufferLeft()
@@ -1239,7 +1228,7 @@ string ItoaKMGT(int64 i) {
     val = i;
   }
 
-  return StringPrintf("%s%lld%s", sign, val, suffix);
+  return StringPrintf("%s%ld%s", sign, val, suffix);
 }
 
 }  // namespace sling

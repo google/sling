@@ -51,7 +51,7 @@ class TextFileReader : public Process {
     Counter *bytes_read = task->GetCounter("text_bytes_read");
 
     // Read lines from file and output to output channel.
-    int64 max_lines = task->Get("max_lines", 0LL);
+    int64 max_lines = task->Get("max_lines", 0L);
     int64 num_lines = 0;
     string line;
     while (file.ReadLine(&line)) {

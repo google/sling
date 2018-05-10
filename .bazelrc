@@ -1,9 +1,11 @@
 build --color=yes
+build --cxxopt=-Wno-unknown-warning-option
+build --cxxopt=-Wno-unused-command-line-argument
 build --cxxopt=-Wno-deprecated
 build --cxxopt=-Wno-sign-compare
 build --cxxopt=-Wno-unused-local-typedefs
 build --spawn_strategy=standalone
 
-# You may want to comment out the following line on older versions of GCC (< v5). 
+# You may want to comment out the following line on older versions of GCC (< v5).
 build --cxxopt=-D_GLIBCXX_USE_CXX11_ABI=0
 

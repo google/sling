@@ -24,24 +24,24 @@ PySequenceMethods PyArray::sequence;
 PyTypeObject PyItems::type;
 
 PyMethodDef PyArray::methods[] = {
-  {"store", (PyCFunction) &PyArray::GetStore, METH_NOARGS, ""},
-  {"data", (PyCFunction) &PyArray::Data, METH_KEYWORDS, ""},
+  {"store", PYFUNC(PyArray::GetStore), METH_NOARGS, ""},
+  {"data", PYFUNC(PyArray::Data), METH_KEYWORDS, ""},
   {nullptr}
 };
 
 void PyArray::Define(PyObject *module) {
   InitType(&type, "sling.Array", sizeof(PyArray), false);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyArray::Dealloc);
-  type.tp_str = &PyArray::Str;
-  type.tp_iter = &PyArray::Items;
-  type.tp_hash = &PyArray::Hash;
+  type.tp_dealloc = method_cast<destructor>(&PyArray::Dealloc);
+  type.tp_str = method_cast<reprfunc>(&PyArray::Str);
+  type.tp_iter = method_cast<getiterfunc>(&PyArray::Items);
+  type.tp_hash = method_cast<hashfunc>(&PyArray::Hash);
   type.tp_methods = methods;
 
   type.tp_as_sequence = &sequence;
-  sequence.sq_length = &PyArray::Size;
-  sequence.sq_item = &PyArray::GetItem;
-  sequence.sq_ass_item = &PyArray::SetItem;
-  sequence.sq_contains = &PyArray::Contains;
+  sequence.sq_length = method_cast<lenfunc>(&PyArray::Size);
+  sequence.sq_item = method_cast<ssizeargfunc>(&PyArray::GetItem);
+  sequence.sq_ass_item = method_cast<ssizeobjargproc>(&PyArray::SetItem);
+  sequence.sq_contains = method_cast<objobjproc>(&PyArray::Contains);
 
   RegisterType(&type, module, "Array");
 }
@@ -167,9 +167,9 @@ bool PyArray::Writable() {
 
 void PyItems::Define(PyObject *module) {
   InitType(&type, "sling.Items", sizeof(PyItems), false);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyItems::Dealloc);
-  type.tp_iter = &PyItems::Self;
-  type.tp_iternext = &PyItems::Next;
+  type.tp_dealloc = method_cast<destructor>(&PyItems::Dealloc);
+  type.tp_iter = method_cast<getiterfunc>(&PyItems::Self);
+  type.tp_iternext = method_cast<iternextfunc>(&PyItems::Next);
   RegisterType(&type);
 }
 

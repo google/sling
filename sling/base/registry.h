@@ -76,6 +76,15 @@ class ComponentMetadata {
   // Returns component name.
   const char *name() const { return name_; }
 
+  // Returns class name.
+  const char *class_name() const { return class_name_; }
+
+  // Returns file name.
+  const char *file() const { return file_; }
+
+  // Returns line.
+  int line() const { return line_; }
+
   // Metadata objects can be linked in a list.
   ComponentMetadata *link() const { return link_; }
   void set_link(ComponentMetadata *link) { link_ = link; }

@@ -90,21 +90,17 @@ class LogMessageFatal : public LogMessage {
 // declared in classes and not defined to be used as arguments to CHECK* macros.
 // It's not encouraged though.
 template <typename T>
-inline const T& GetReferenceableValue(const T &t) { return t; }
+inline const T &GetReferenceableValue(const T &t) { return t; }
 
-inline char GetReferenceableValue(char t) { return t; }
-inline unsigned char GetReferenceableValue(unsigned char t) { return t; }
-inline signed char GetReferenceableValue(signed char t) { return t; }
-inline short GetReferenceableValue(short t) { return t; }
-inline unsigned short GetReferenceableValue(unsigned short t) { return t; }
-inline int GetReferenceableValue(int t) { return t; }
-inline unsigned int GetReferenceableValue(unsigned int t) { return t; }
-inline long GetReferenceableValue(long t) { return t; }
-inline unsigned long GetReferenceableValue(unsigned long t) { return t; }
-inline long long GetReferenceableValue(long long t) { return t; }
-inline unsigned long long GetReferenceableValue(unsigned long long t) {
-  return t;
-}
+inline uint8 GetReferenceableValue(uint8 t) { return t; }
+inline uint16 GetReferenceableValue(uint16 t) { return t; }
+inline uint32 GetReferenceableValue(uint32 t) { return t; }
+inline uint64 GetReferenceableValue(uint64 t) { return t; }
+
+inline int8 GetReferenceableValue(int8 t) { return t; }
+inline int16 GetReferenceableValue(int16 t) { return t; }
+inline int32 GetReferenceableValue(int32 t) { return t; }
+inline int64 GetReferenceableValue(int64 t) { return t; }
 
 // This formats a value for a failing CHECK_XX statement.  Ordinarily, it uses
 // the definition for operator<<, with a few special cases below.

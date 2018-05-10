@@ -29,19 +29,19 @@ static task::Dashboard *dashboard = nullptr;
 PyTypeObject PyJob::type;
 
 PyMethodDef PyJob::methods[] = {
-  {"start", (PyCFunction) &PyJob::Start, METH_NOARGS, ""},
-  {"wait", (PyCFunction) &PyJob::Wait, METH_NOARGS, ""},
-  {"done", (PyCFunction) &PyJob::Done, METH_NOARGS, ""},
-  {"wait_for", (PyCFunction) &PyJob::WaitFor, METH_O, ""},
-  {"counters", (PyCFunction) &PyJob::Counters, METH_NOARGS, ""},
+  {"start", PYFUNC(PyJob::Start), METH_NOARGS, ""},
+  {"wait", PYFUNC(PyJob::Wait), METH_NOARGS, ""},
+  {"done", PYFUNC(PyJob::Done), METH_NOARGS, ""},
+  {"wait_for", PYFUNC(PyJob::WaitFor), METH_O, ""},
+  {"counters", PYFUNC(PyJob::Counters), METH_NOARGS, ""},
   {nullptr}
 };
 
 void PyJob::Define(PyObject *module) {
   InitType(&type, "sling.api.Job", sizeof(PyJob), true);
 
-  type.tp_init = reinterpret_cast<initproc>(&PyJob::Init);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyJob::Dealloc);
+  type.tp_init = method_cast<initproc>(&PyJob::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyJob::Dealloc);
   type.tp_methods = methods;
 
   RegisterType(&type, module, "Job");

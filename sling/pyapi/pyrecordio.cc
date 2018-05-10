@@ -31,12 +31,12 @@ static bool CheckIO(Status status) {
 }
 
 PyMethodDef PyRecordReader::methods[] = {
-  {"close", (PyCFunction) &PyRecordReader::Close, METH_NOARGS, ""},
-  {"read", (PyCFunction) &PyRecordReader::Read, METH_VARARGS, ""},
-  {"tell", (PyCFunction) &PyRecordReader::Tell, METH_NOARGS, ""},
-  {"seek", (PyCFunction) &PyRecordReader::Seek, METH_O, ""},
-  {"rewind", (PyCFunction) &PyRecordReader::Rewind, METH_NOARGS, ""},
-  {"done", (PyCFunction) &PyRecordReader::Done, METH_NOARGS, ""},
+  {"close", PYFUNC(PyRecordReader::Close), METH_NOARGS, ""},
+  {"read", PYFUNC(PyRecordReader::Read), METH_VARARGS, ""},
+  {"tell", PYFUNC(PyRecordReader::Tell), METH_NOARGS, ""},
+  {"seek", PYFUNC(PyRecordReader::Seek), METH_O, ""},
+  {"rewind", PYFUNC(PyRecordReader::Rewind), METH_NOARGS, ""},
+  {"done", PYFUNC(PyRecordReader::Done), METH_NOARGS, ""},
 
   {nullptr}
 };
@@ -44,10 +44,10 @@ PyMethodDef PyRecordReader::methods[] = {
 void PyRecordReader::Define(PyObject *module) {
   InitType(&type, "sling.RecordReader", sizeof(PyRecordReader), true);
 
-  type.tp_init = reinterpret_cast<initproc>(&PyRecordReader::Init);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyRecordReader::Dealloc);
-  type.tp_iter = &PyRecordReader::Self;
-  type.tp_iternext = &PyRecordReader::Next;
+  type.tp_init = method_cast<initproc>(&PyRecordReader::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyRecordReader::Dealloc);
+  type.tp_iter = method_cast<getiterfunc>(&PyRecordReader::Self);
+  type.tp_iternext = method_cast<iternextfunc>(&PyRecordReader::Next);
   type.tp_methods = methods;
 
   RegisterType(&type, module, "RecordReader");
@@ -142,17 +142,17 @@ PyObject *PyRecordReader::Self() {
 }
 
 PyMethodDef PyRecordWriter::methods[] = {
-  {"close", (PyCFunction) &PyRecordWriter::Close, METH_NOARGS, ""},
-  {"write", (PyCFunction) &PyRecordWriter::Write, METH_VARARGS, ""},
-  {"tell", (PyCFunction) &PyRecordWriter::Tell, METH_NOARGS, ""},
+  {"close", PYFUNC(PyRecordWriter::Close), METH_NOARGS, ""},
+  {"write", PYFUNC(PyRecordWriter::Write), METH_VARARGS, ""},
+  {"tell", PYFUNC(PyRecordWriter::Tell), METH_NOARGS, ""},
   {nullptr}
 };
 
 void PyRecordWriter::Define(PyObject *module) {
   InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter), true);
 
-  type.tp_init = reinterpret_cast<initproc>(&PyRecordWriter::Init);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyRecordWriter::Dealloc);
+  type.tp_init = method_cast<initproc>(&PyRecordWriter::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyRecordWriter::Dealloc);
   type.tp_methods = methods;
 
   RegisterType(&type, module, "RecordWriter");

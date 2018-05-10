@@ -62,7 +62,7 @@ class Reshape : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
-  Placement Location() { return NOWHERE; }
+  Placement Location() override { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;
@@ -95,7 +95,7 @@ class Squeeze : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
-  Placement Location() { return NOWHERE; }
+  Placement Location() override { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;
@@ -128,7 +128,7 @@ class ExpandDims : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
-  Placement Location() { return NOWHERE; }
+  Placement Location() override { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;
@@ -250,7 +250,7 @@ class Pack : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
-  Placement Location() { return NOWHERE; }
+  Placement Location() override { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;
@@ -282,7 +282,7 @@ class Unpack : public Kernel {
     CHECK(step->input(0)->SharedWith(step->output(0)));
   }
 
-  Placement Location() { return NOWHERE; }
+  Placement Location() override { return NOWHERE; }
 
   int64 Complexity(const Step *step) override {
     return 0;

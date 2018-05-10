@@ -37,6 +37,7 @@ cc_library(
   copts = [
     "-O3",
     "-Wno-unused-variable",
+    "-Wno-unused-private-field",
     "-Wno-implicit-function-declaration",
   ],
 )

@@ -25,34 +25,34 @@ PySequenceMethods PyFrame::sequence;
 PyTypeObject PySlots::type;
 
 PyMethodDef PyFrame::methods[] = {
-  {"data", (PyCFunction) &PyFrame::Data, METH_KEYWORDS, ""},
-  {"append", (PyCFunction) &PyFrame::Append, METH_VARARGS, ""},
-  {"extend", (PyCFunction) &PyFrame::Extend, METH_O, ""},
-  {"store", (PyCFunction) &PyFrame::GetStore, METH_NOARGS, ""},
-  {"islocal", (PyCFunction) &PyFrame::IsLocal, METH_NOARGS, ""},
-  {"isglobal", (PyCFunction) &PyFrame::IsGlobal, METH_NOARGS, ""},
+  {"data", PYFUNC(PyFrame::Data), METH_KEYWORDS, ""},
+  {"append", PYFUNC(PyFrame::Append), METH_VARARGS, ""},
+  {"extend", PYFUNC(PyFrame::Extend), METH_O, ""},
+  {"store", PYFUNC(PyFrame::GetStore), METH_NOARGS, ""},
+  {"islocal", PYFUNC(PyFrame::IsLocal), METH_NOARGS, ""},
+  {"isglobal", PYFUNC(PyFrame::IsGlobal), METH_NOARGS, ""},
   {nullptr}
 };
 
 void PyFrame::Define(PyObject *module) {
   InitType(&type, "sling.Frame", sizeof(PyFrame), false);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyFrame::Dealloc);
-  type.tp_getattro = &PyFrame::GetAttr;
-  type.tp_setattro = &PyFrame::SetAttr;
-  type.tp_str = &PyFrame::Str;
-  type.tp_iter = &PyFrame::Slots;
-  type.tp_call = &PyFrame::Find;
-  type.tp_hash = &PyFrame::Hash;
-  type.tp_richcompare = &PyFrame::Compare;
+  type.tp_dealloc = method_cast<destructor>(&PyFrame::Dealloc);
+  type.tp_getattro = method_cast<getattrofunc>(&PyFrame::GetAttr);
+  type.tp_setattro = method_cast<setattrofunc>(&PyFrame::SetAttr);
+  type.tp_str = method_cast<reprfunc>(&PyFrame::Str);
+  type.tp_iter = method_cast<getiterfunc>(&PyFrame::Slots);
+  type.tp_call = method_cast<ternaryfunc>(&PyFrame::Find);
+  type.tp_hash = method_cast<hashfunc>(&PyFrame::Hash);
+  type.tp_richcompare = method_cast<richcmpfunc>(&PyFrame::Compare);
   type.tp_methods = methods;
 
   type.tp_as_mapping = &mapping;
-  mapping.mp_length = &PyFrame::Size;
-  mapping.mp_subscript = &PyFrame::Lookup;
-  mapping.mp_ass_subscript = &PyFrame::Assign;
+  mapping.mp_length = method_cast<lenfunc>(&PyFrame::Size);
+  mapping.mp_subscript = method_cast<binaryfunc>(&PyFrame::Lookup);
+  mapping.mp_ass_subscript = method_cast<objobjargproc>(&PyFrame::Assign);
 
   type.tp_as_sequence = &sequence;
-  sequence.sq_contains = &PyFrame::Contains;
+  sequence.sq_contains = method_cast<objobjproc>(&PyFrame::Contains);
 
   RegisterType(&type, module, "Frame");
 }
@@ -356,9 +356,9 @@ bool PyFrame::CompatibleStore(PyFrame *other) {
 
 void PySlots::Define(PyObject *module) {
   InitType(&type, "sling.Slots", sizeof(PySlots), false);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PySlots::Dealloc);
-  type.tp_iter = &PySlots::Self;
-  type.tp_iternext = &PySlots::Next;
+  type.tp_dealloc = method_cast<destructor>(&PySlots::Dealloc);
+  type.tp_iter = method_cast<getiterfunc>(&PySlots::Self);
+  type.tp_iternext = method_cast<iternextfunc>(&PySlots::Next);
   RegisterType(&type, module, "Slots");
 }
 

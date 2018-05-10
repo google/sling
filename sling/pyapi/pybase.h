@@ -19,6 +19,15 @@
 
 namespace sling {
 
+template <class Dest, class Source>
+inline Dest method_cast(const Source &source) {
+  Dest dest;
+  memcpy(&dest, &source, sizeof(dest));
+  return dest;
+}
+
+#define PYFUNC(method) method_cast<PyCFunction>(&method)
+
 // Base class for Python wrapper objects. This has the Python object header
 // information for reference counting and type information.
 struct PyBase : public PyVarObject {

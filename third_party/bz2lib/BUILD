@@ -19,7 +19,10 @@ cc_library(
     "bzlib_private.h",
   ],
   copts = [
+    "-Wno-unknown-warning-option",
+    "-Wno-unused-const-variable",
     "-Wno-unused-but-set-variable",
+    "-Wno-unused-private-field",
     "-DBZ_NO_STDIO",
   ]
 )

@@ -114,14 +114,6 @@ struct HTTPHeader {
   char *value;
 };
 
-// HTTP socket address.
-class HTTPSocketAddress {
- public:
- private:
-  // Socket address structure.
-  struct sockaddr_in address_;
-};
-
 // HTTP server configuration.
 struct HTTPServerOptions {
   // Number of worker threads.
@@ -294,10 +286,6 @@ class HTTPConnection {
   // HTTP connection list.
   HTTPConnection *next_;
   HTTPConnection *prev_;
-
-  // Client and server address.
-  HTTPSocketAddress client_addr;
-  HTTPSocketAddress server_addr;
 
   // Current HTTP request for connection.
   HTTPRequest *request_;

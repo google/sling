@@ -23,8 +23,7 @@ namespace sling {
 
 GZipCompressor::GZipCompressor(OutputStream *sink,
                                int block_size,
-                               int compression_level)
-    : sink_(sink) {
+                               int compression_level) {
   memset(&stream_, 0, sizeof(stream_));
   CHECK(deflateInit(&stream_, compression_level) == Z_OK);
 }

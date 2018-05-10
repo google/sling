@@ -62,7 +62,7 @@ class PTXMacroAssembler : public PTXAssembler {
 class CUDAKernel : public Kernel {
  public:
   // Run kernel on CUDA device.
-  Placement Location() { return DEVICE; }
+  Placement Location() override { return DEVICE; }
 
   // Checks if CUDA is supported by runtime.
   bool Supports(Step *step) override;

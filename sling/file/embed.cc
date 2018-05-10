@@ -95,7 +95,7 @@ class InternalFile : public File {
     return Status::OK;
   }
 
-  Status Stat(FileStat *stat) {
+  Status Stat(FileStat *stat) override {
     stat->size = file_->size;
     stat->mtime = file_->mtime;
     stat->is_file = true;
@@ -163,7 +163,7 @@ class InternalDirectory : public File {
     return Status::OK;
   }
 
-  Status Stat(FileStat *stat) {
+  Status Stat(FileStat *stat) override {
     stat->size = 0;
     stat->mtime = 0;
     stat->is_file = false;
@@ -272,7 +272,7 @@ class InternalFileSystem : public FileSystem {
     return Status(ENOSYS, "DeleteFile not supported", filename);
   }
 
-  Status Stat(const string &filename, FileStat *stat) {
+  Status Stat(const string &filename, FileStat *stat) override {
     File *file = LookupFile(filename);
     if (file == nullptr) return Status(ENOENT, "File not found", filename);
     CHECK(file->Stat(stat));

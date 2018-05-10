@@ -36,13 +36,6 @@ class GZipCompressor : public OutputStream {
   int64 ByteCount() const override;
 
  private:
-  // Sink for compressed output.
-  OutputStream *sink_;
-
-  // Compression buffer.
-  char *buffer_;
-  int size_;
-
   // Compressor.
   z_stream stream_;
 };

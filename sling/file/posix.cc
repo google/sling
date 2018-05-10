@@ -125,7 +125,7 @@ class PosixFile : public File {
     return Status::OK;
   }
 
-  Status Stat(FileStat *stat) {
+  Status Stat(FileStat *stat) override {
     struct stat st;
     if (fstat(fd_, &st) != 0) return IOError(filename_, errno);
     stat->size = st.st_size;
@@ -224,7 +224,7 @@ class PosixFileSystem : public FileSystem {
     return Status::OK;
   }
 
-  Status Stat(const string &filename, FileStat *stat) {
+  Status Stat(const string &filename, FileStat *stat) override {
     struct stat st;
     if (::stat(filename.c_str(), &st) != 0) return IOError(filename, errno);
     stat->size = st.st_size;

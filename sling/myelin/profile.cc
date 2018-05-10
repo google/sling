@@ -107,7 +107,7 @@ string Profile::ASCIIReport() const {
   jit::ProcessorInformation cpu;
   string report;
   StringAppendF(&report,
-      "Profile for %lld invocations of %s with %lld operations\n",
+      "Profile for %ld invocations of %s with %ld operations\n",
       invocations_,
       cell()->name().c_str(),
       complexity());

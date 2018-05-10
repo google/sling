@@ -122,8 +122,8 @@ string CUDADevice::ToString() const {
   int64 bandwidth = memory_transfer_rate() * (bus_width() / 8);
   char str[256];
   snprintf(str, sizeof(str), "%s, SM %d.%d, %lu MB RAM, "
-           "%d cores @ %lld MHz, "
-           "%lld GB/s bandwidth (%d-bits @ %lld Mhz), "
+           "%d cores @ %ld MHz, "
+           "%ld GB/s bandwidth (%d-bits @ %ld Mhz), "
            "%d KB L2 cache, "
            "CUDA v%d.%d",
            name.c_str(),
@@ -312,7 +312,7 @@ void PTXAssembler::Generate(string *ptx) {
     ptx->append(std::to_string(i));
     ptx->append(" = ");
     char str[32];
-    snprintf(str, sizeof(str), "0x%llx", addresses_[i]);
+    snprintf(str, sizeof(str), "0x%lx", addresses_[i]);
     ptx->append(str);
     ptx->append(";\n");
   }

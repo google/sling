@@ -28,30 +28,30 @@ PySequenceMethods PyStore::sequence;
 PyTypeObject PySymbols::type;
 
 PyMethodDef PyStore::methods[] = {
-  {"freeze", (PyCFunction) &PyStore::Freeze, METH_NOARGS, ""},
-  {"load", (PyCFunction) &PyStore::Load, METH_VARARGS | METH_KEYWORDS, ""},
-  {"save", (PyCFunction) &PyStore::Save, METH_VARARGS | METH_KEYWORDS, ""},
-  {"parse", (PyCFunction) &PyStore::Parse, METH_VARARGS| METH_KEYWORDS, ""},
-  {"frame", (PyCFunction) &PyStore::NewFrame, METH_O, ""},
-  {"array", (PyCFunction) &PyStore::NewArray, METH_O, ""},
-  {"globals", (PyCFunction) &PyStore::Globals, METH_NOARGS, ""},
+  {"freeze", PYFUNC(PyStore::Freeze), METH_NOARGS, ""},
+  {"load", PYFUNC(PyStore::Load), METH_VARARGS | METH_KEYWORDS, ""},
+  {"save", PYFUNC(PyStore::Save), METH_VARARGS | METH_KEYWORDS, ""},
+  {"parse", PYFUNC(PyStore::Parse), METH_VARARGS| METH_KEYWORDS, ""},
+  {"frame", PYFUNC(PyStore::NewFrame), METH_O, ""},
+  {"array", PYFUNC(PyStore::NewArray), METH_O, ""},
+  {"globals", PYFUNC(PyStore::Globals), METH_NOARGS, ""},
   {nullptr}
 };
 
 void PyStore::Define(PyObject *module) {
   InitType(&type, "sling.Store", sizeof(PyStore), true);
 
-  type.tp_init = reinterpret_cast<initproc>(&PyStore::Init);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PyStore::Dealloc);
-  type.tp_iter = &PyStore::Symbols;
+  type.tp_init = method_cast<initproc>(&PyStore::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyStore::Dealloc);
+  type.tp_iter = method_cast<getiterfunc>(&PyStore::Symbols);
   type.tp_methods = methods;
 
   type.tp_as_mapping = &mapping;
-  mapping.mp_length = &PyStore::Size;
-  mapping.mp_subscript = &PyStore::Lookup;
+  mapping.mp_length = method_cast<lenfunc>(&PyStore::Size);
+  mapping.mp_subscript = method_cast<binaryfunc>(&PyStore::Lookup);
 
   type.tp_as_sequence = &sequence;
-  sequence.sq_contains = &PyStore::Contains;
+  sequence.sq_contains = method_cast<objobjproc>(&PyStore::Contains);
 
   RegisterType(&type, module, "Store");
 }
@@ -541,9 +541,9 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
 
 void PySymbols::Define(PyObject *module) {
   InitType(&type, "sling.Symbols", sizeof(PySymbols), false);
-  type.tp_dealloc = reinterpret_cast<destructor>(&PySymbols::Dealloc);
-  type.tp_iter = &PySymbols::Self;
-  type.tp_iternext = &PySymbols::Next;
+  type.tp_dealloc = method_cast<destructor>(&PySymbols::Dealloc);
+  type.tp_iter = method_cast<getiterfunc>(&PySymbols::Self);
+  type.tp_iternext = method_cast<iternextfunc>(&PySymbols::Next);
   RegisterType(&type, module, "Symbols");
 }
 
