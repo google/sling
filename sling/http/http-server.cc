@@ -329,10 +329,14 @@ void HTTPServer::Worker() {
     // Get new events.
     int rc = epoll_wait(pollfd_, events, max_events, 2000);
     if (stop_) break;
-    if (rc == 0 || errno == EAGAIN) continue;
+    if (errno == EAGAIN) continue;
     if (rc < 0) {
       LOG(ERROR) << Error("epoll_wait");
       break;
+    }
+    if (rc == 0) {
+      ShutdownIdleConnections();
+      continue;
     }
 
     // Process events.
@@ -364,14 +368,20 @@ void HTTPServer::Worker() {
             conn->state_ = HTTP_STATE_TERMINATE;
           }
 
-          // Update expected events.
-          ev->events = 0;
-          if (conn->AwaitsInput()) ev->events |= EPOLLIN;
-          if (conn->HasOutput()) ev->events |= EPOLLOUT;
-          rc = epoll_ctl(pollfd_, EPOLL_CTL_MOD, conn->sock_, ev);
-          if (rc < 0) LOG(ERROR) << Error("epoll_ctl");
-          VLOG(5) << "Done processing in state " << conn->state_
-                  << ", events " << ev->events;
+          if (conn->state_ == HTTP_STATE_TERMINATE) {
+            conn->Shutdown();
+            VLOG(5) << "Shutdown HTTP connection";
+          } else {
+            // Update expected events.
+            ev->events = 0;
+            if (conn->AwaitsInput()) ev->events |= EPOLLIN;
+            if (conn->HasOutput()) ev->events |= EPOLLOUT;
+            rc = epoll_ctl(pollfd_, EPOLL_CTL_MOD, conn->sock_, ev);
+            if (rc < 0) LOG(ERROR) << Error("epoll_ctl");
+            conn->last_ = time(0);
+            VLOG(5) << "Done processing in state " << conn->state_
+                    << ", events " << ev->events;
+          }
         }
       }
     }
@@ -437,6 +447,20 @@ void HTTPServer::RemoveConnection(HTTPConnection *conn) {
   conn->next_ = conn->prev_ = nullptr;
 }
 
+void HTTPServer::ShutdownIdleConnections() {
+  if (options_.max_idle <= 0) return;
+  MutexLock lock(&mu_);
+  time_t expire = time(0) - options_.max_idle;
+  HTTPConnection *conn = connections_;
+  while (conn != nullptr) {
+    if (conn->last_ < expire) {
+      conn->Shutdown();
+      VLOG(5) << "Shut down idle connection";
+    }
+    conn = conn->next_;
+  }
+}
+
 HTTPConnection::HTTPConnection(HTTPServer *server, int sock)
     : server_(server), sock_(sock) {
   next_ = prev_ = nullptr;
@@ -446,6 +470,7 @@ HTTPConnection::HTTPConnection(HTTPServer *server, int sock)
   state_ = HTTP_STATE_IDLE;
   header_state_ = HDR_STATE_FIRSTWORD;
   keep_ = false;
+  last_ = time(0);
 }
 
 HTTPConnection::~HTTPConnection() {
@@ -514,10 +539,9 @@ Status HTTPConnection::Process(int events) {
       // Fall through
 
     case HTTP_STATE_READ_BODY:
+      // Check if any input data is ready.
+      if ((events & EPOLLIN) == 0) return Status::OK;
       while (request_body_.size() < request_->content_length()) {
-        // Check if any input data is ready.
-        if ((events & EPOLLIN) == 0) return Status::OK;
-
         // Receive more data.
         Status st = Recv(&request_body_, &done);
         if (!st.ok()) return st;
@@ -654,6 +678,10 @@ Status HTTPConnection::Send(HTTPBuffer *buffer, bool *done) {
   }
   buffer->start += rc;
   return Status::OK;
+}
+
+void HTTPConnection::Shutdown() {
+  shutdown(sock_, SHUT_RDWR);
 }
 
 void HTTPConnection::Dispatch() {

@@ -17,6 +17,7 @@
 
 #include <netinet/in.h>
 #include <string.h>
+#include <time.h>
 #include <string>
 
 #include "sling/base/status.h"
@@ -122,6 +123,9 @@ struct HTTPServerOptions {
   // Number of events per worker poll.
   int max_events = 1;
 
+  // Maximum idle time (in seconds) before connection is shut down.
+  int max_idle = 600;
+
   // Initial buffer size.
   int initial_bufsiz = 1 << 10;
 
@@ -191,6 +195,9 @@ class HTTPServer {
 
   // Remove connection from server.
   void RemoveConnection(HTTPConnection *conn);
+
+  // Shut down idle connections.
+  void ShutdownIdleConnections();
 
   // Server configuration.
   HTTPServerOptions options_;
@@ -277,11 +284,17 @@ class HTTPConnection {
   // be sent without blocking has been sent.
   Status Send(HTTPBuffer *buffer, bool *done);
 
+  // Shut down connection.
+  void Shutdown();
+
   // HTTP server for connection.
   HTTPServer *server_;
 
   // Socket for connection.
   int sock_;
+
+  // Last time event was received on connection.
+  time_t last_;
 
   // HTTP connection list.
   HTTPConnection *next_;
