@@ -1,4 +1,4 @@
-# SLING Guide
+# SLING Frames
 
 ## Introduction <a name="intro">
 
@@ -780,12 +780,6 @@ The `Schemata` class can be used for constructing frames from the schema
 templates using the `Schemata::Construct()` method. The `Schemata` class can
 also be used for projecting frames though mappings and doing subsumption
 checking.
-
-<!--
-TODO(googleuser):
-  - Public and private ids
-  - Internal architecture
--->
 
 ## Appendix A: Simpsons toy example <a name="toy-frames">
 
