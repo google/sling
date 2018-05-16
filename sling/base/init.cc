@@ -20,10 +20,6 @@
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
 
-DEFINE_int32(v, 0, "Log level for VLOG");
-DEFINE_int32(loglevel, 0, "Discard messages logged at a lower severity");
-DEFINE_bool(logtostderr, true, "Log messages to stderr");
-
 namespace sling {
 
 // Linked list of module initializers.
@@ -55,10 +51,6 @@ void InitProgram(int *argc, char ***argv) {
     Flag::SetUsageMessage(usage);
     if (Flag::ParseCommandLineFlags(argc, *argv, true) != 0) exit(1);
   }
-
-  // Initialize logging.
-  LogMessage::set_log_level(FLAGS_loglevel);
-  LogMessage::set_vlog_level(FLAGS_v);
 
   // Run module initializers.
   RunModuleInitializers();

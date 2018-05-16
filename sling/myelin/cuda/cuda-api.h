@@ -20,12 +20,13 @@
 #define SLING_MYELIN_CUDA_CUDA_API_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 
 namespace sling {
 namespace myelin {
 
 // CUDA handles.
-typedef unsigned long int CUdeviceptr;
+typedef uint64_t CUdeviceptr;
 typedef int CUdevice;
 typedef struct CUctx_st *CUcontext;
 typedef struct CUmod_st *CUmodule;

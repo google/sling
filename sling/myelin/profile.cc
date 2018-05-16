@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <inttypes.h>
 #include <math.h>
 #include <algorithm>
 #include <map>
@@ -107,7 +108,7 @@ string Profile::ASCIIReport() const {
   jit::ProcessorInformation cpu;
   string report;
   StringAppendF(&report,
-      "Profile for %ld invocations of %s with %ld operations\n",
+      "Profile for %" PRId64 " invocations of %s with %" PRId64 " operations\n",
       invocations_,
       cell()->name().c_str(),
       complexity());

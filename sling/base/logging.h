@@ -37,12 +37,10 @@ class LogMessage : public std::basic_ostringstream<char> {
   ~LogMessage();
 
   // Minimum severity for LOG statements.
-  static int log_level() { return loglevel; }
-  static void set_log_level(int level) { loglevel = level; }
+  static int log_level();
 
   // Minimum log level for VLOG statements.
-  static int vlog_level() { return vloglevel; }
-  static void set_vlog_level(int level) { vloglevel = level; }
+  static int vlog_level();
 
  protected:
   void GenerateLogMessage();
@@ -51,9 +49,6 @@ class LogMessage : public std::basic_ostringstream<char> {
   const char *fname_;
   int line_;
   int severity_;
-
-  static int loglevel;   // log level for LOG
-  static int vloglevel;  // log level for VLOG
 };
 
 // LogMessageFatal ensures the process will exit in failure after

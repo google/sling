@@ -452,17 +452,6 @@ string SimpleItoaWithCommas(uint32 i);
 string SimpleItoaWithCommas(int64 i);
 string SimpleItoaWithCommas(uint64 i);
 
-// ----------------------------------------------------------------------
-// ItoaKMGT()
-//    Description: converts an integer to a string
-//    Truncates values to K, G, M or T as appropriate
-//    Opposite of atoi_kmgt()
-//    e.g. 3000 -> 2K   57185920 -> 45M
-//
-//    Return value: string
-// ----------------------------------------------------------------------
-string ItoaKMGT(int64 i);
-
 }  // namespace sling
 
 #endif  // SLING_STRING_NUMBERS_H_

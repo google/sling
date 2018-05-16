@@ -385,7 +385,7 @@ void Job::ChannelCompleted(Channel *channel) {
   MutexLock lock(&mu_);
   LOG(INFO) << "Channel " << channel->id() << " completed";
 
-  event_dispatcher_->Schedule([this, channel]() {
+  event_dispatcher_->Schedule([channel]() {
     // Notify consumer that one of its input channels has been closed.
     channel->consumer().task()->OnClose(channel);
   });

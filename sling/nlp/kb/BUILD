@@ -56,4 +56,3 @@ cc_binary(
     "//sling/string:strcat",
   ],
 )
-

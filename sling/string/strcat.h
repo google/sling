@@ -52,8 +52,8 @@ struct AlphaNum {
       : text(digits, FastUInt32ToBufferLeft(u32, digits) - &digits[0]) {}
   AlphaNum(int64 i64)
       : text(digits, FastInt64ToBufferLeft(i64, digits) - &digits[0]) {}
-  AlphaNum(uint64 u64)
-      : text(digits, FastUInt64ToBufferLeft(u64, digits) - &digits[0]) {}
+  AlphaNum(size_t ss)
+      : text(digits, FastUInt64ToBufferLeft(ss, digits) - &digits[0]) {}
 
   AlphaNum(float f)
     : text(digits, strlen(FloatToBuffer(f, digits))) {}

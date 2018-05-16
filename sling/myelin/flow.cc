@@ -14,6 +14,7 @@
 
 #include "sling/myelin/flow.h"
 
+#include <inttypes.h>
 #include <algorithm>
 #include <queue>
 #include <unordered_map>
@@ -1764,7 +1765,7 @@ string Flow::ToString() const {
     if (var->out()) StringAppendF(&str, " out");
     if (var->unique()) StringAppendF(&str, " unique");
     if (var->constant()) {
-      StringAppendF(&str, ", %lu bytes", var->size);
+      StringAppendF(&str, ", %" PRIu64 " bytes", var->size);
     }
     StringAppendF(&str, " {\n");
     if (var->producer != nullptr) {
@@ -1828,7 +1829,7 @@ string Flow::ToString() const {
   }
 
   for (const Blob *blob : blobs_) {
-    StringAppendF(&str, "blob %s : %s { %lu bytes\n",
+    StringAppendF(&str, "blob %s : %s { %" PRIu64 " bytes\n",
                   blob->name.c_str(),
                   blob->type.c_str(),
                   blob->size);

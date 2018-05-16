@@ -30,6 +30,7 @@ cc_library(
   deps = [
     "//sling/base",
     "//sling/string:ctype",
+    "//sling/string:printf",
     "//sling/string:strcat",
     "//sling/string:text",
   ],

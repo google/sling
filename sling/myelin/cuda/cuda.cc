@@ -14,6 +14,7 @@
 
 #include "sling/myelin/cuda/cuda.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <mutex>
@@ -118,22 +119,24 @@ string CUDADevice::ToString() const {
   int version;
   CHECK_CUDA(cuDriverGetVersion(&version));
   string name = Name();
-  size_t memory = TotalMemory();
-  int64 bandwidth = memory_transfer_rate() * (bus_width() / 8);
+  int memory_mb = TotalMemory()  >> 20;
+  int bandwidth_gbs = memory_transfer_rate() * (bus_width() / 8) / 1000000000;
+  int clock_rate_mhz = clock_rate() / 1000000;
+  int ram_xfer_rate_mhz = memory_transfer_rate() / 1000000;
   char str[256];
-  snprintf(str, sizeof(str), "%s, SM %d.%d, %lu MB RAM, "
-           "%d cores @ %ld MHz, "
-           "%ld GB/s bandwidth (%d-bits @ %ld Mhz), "
+  snprintf(str, sizeof(str), "%s, SM %d.%d, %d MB RAM, "
+           "%d cores @ %d MHz, "
+           "%d GB/s bandwidth (%d-bits @ %d Mhz), "
            "%d KB L2 cache, "
            "CUDA v%d.%d",
            name.c_str(),
            capability_ / 10, capability_ % 10,
-           memory >> 20,
+           memory_mb,
            cores(),
-           clock_rate() / 1000000,
-           bandwidth / 1000000000,
+           clock_rate_mhz,
+           bandwidth_gbs,
            bus_width(),
-           memory_transfer_rate() / 1000000,
+           ram_xfer_rate_mhz,
            l2_cache_size() >> 10,
            version / 1000, version % 1000);
   return str;
@@ -312,7 +315,8 @@ void PTXAssembler::Generate(string *ptx) {
     ptx->append(std::to_string(i));
     ptx->append(" = ");
     char str[32];
-    snprintf(str, sizeof(str), "0x%lx", addresses_[i]);
+    uint64 addr = addresses_[i];
+    snprintf(str, sizeof(str), "0x%" PRIx64, addr);
     ptx->append(str);
     ptx->append(";\n");
   }

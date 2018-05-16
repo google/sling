@@ -29,10 +29,6 @@ cc_library(
     ":ctype",
     "//sling/base",
   ],
-  copts = [
-    "-Wno-sign-compare",
-    "-Wno-deprecated",
-  ],
 )
 
 cc_library(
@@ -41,13 +37,7 @@ cc_library(
   srcs = ["numbers.cc"],
   deps = [
     ":ctype",
-    ":printf",
     "//sling/base",
-  ],
-  copts = [
-    "-Wno-narrowing",
-    "-Wno-sign-compare",
-    "-Wno-deprecated",
   ],
 )
 
@@ -69,10 +59,6 @@ cc_library(
     ":numbers",
     ":text",
     "//sling/base",
-  ],
-  copts = [
-    "-Wno-sign-compare",
-    "-Wno-deprecated",
   ],
 )
 

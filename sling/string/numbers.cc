@@ -33,7 +33,6 @@
 #include "sling/base/logging.h"
 #include "sling/base/strtoint.h"
 #include "sling/string/ctype.h"
-#include "sling/string/printf.h"
 
 namespace sling {
 
@@ -1193,42 +1192,6 @@ string SimpleItoaWithCommas(uint64 i) {
     // For this unrolling, we check if i == 0 in the main while loop
   }
   return string(p, local + sizeof(local));
-}
-
-// ----------------------------------------------------------------------
-// ItoaKMGT()
-//    Description: converts an integer to a string
-//    Truncates values to a readable unit: K, G, M or T
-//    Opposite of atoi_kmgt()
-//    e.g. 100 -> "100" 1500 -> "1500"  4000 -> "3K"   57185920 -> "45M"
-//
-//    Return value: string
-// ----------------------------------------------------------------------
-string ItoaKMGT(int64 i) {
-  const char *sign = "", *suffix = "";
-  if (i < 0) {
-    // We lose some accuracy if the caller passes LONG_LONG_MIN, but
-    // that's OK as this function is only for human readability
-    if (i == std::numeric_limits<int64>::min()) i++;
-    sign = "-";
-    i = -i;
-  }
-
-  int64 val;
-
-  if ((val = (i >> 40)) > 1) {
-    suffix = "T";
-  } else if ((val = (i >> 30)) > 1) {
-    suffix = "G";
-  } else if ((val = (i >> 20)) > 1) {
-    suffix = "M";
-  } else if ((val = (i >> 10)) > 1) {
-    suffix = "K";
-  } else {
-    val = i;
-  }
-
-  return StringPrintf("%s%ld%s", sign, val, suffix);
 }
 
 }  // namespace sling
