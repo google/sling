@@ -153,7 +153,7 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
           GenerateXMMFltOp(instr,
               &Assembler::roundss, &Assembler::roundsd,
               &Assembler::roundss, &Assembler::roundsd,
-              kRoundDown, masm);
+              round_down, masm);
         } else {
           UNSUPPORTED;
         }

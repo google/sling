@@ -70,29 +70,31 @@ enum ScaleFactor {
   times_pointer_size = (kPointerSize == 8) ? times_8 : times_4
 };
 
+enum LoadMode {
+  full = 0,
+  broadcast = 1,
+};
+
 class Operand {
  public:
   // [base + disp/r]
-  explicit Operand(Register base, int32_t disp = 0);
+  explicit Operand(Register base, int32_t disp = 0, LoadMode load = full);
 
   // [base + index*scale + disp/r]
   Operand(Register base,
           Register index,
           ScaleFactor scale = times_1,
-          int32_t disp = 0);
+          int32_t disp = 0,
+          LoadMode load = full);
 
   // [index*scale + disp/r]
   Operand(Register index,
           ScaleFactor scale,
-          int32_t disp = 0);
-
-  // Offset from existing memory operand.
-  // Offset is added to existing displacement as 32-bit signed values and
-  // this must not overflow.
-  Operand(const Operand &base, int32_t offset);
+          int32_t disp = 0,
+          LoadMode load = full);
 
   // [rip + disp/r]
-  explicit Operand(Label *label);
+  explicit Operand(Label *label, LoadMode load = full);
 
   // Whether the generated instruction will have a REX prefix.
   bool requires_rex() const { return rex_ != 0; }
@@ -101,10 +103,14 @@ class Operand {
   // instruction.
   int operand_size() const { return len_; }
 
+  // Whather the operand should be broadcast to all destination vector elements.
+  LoadMode load() const { return load_; }
+
  private:
-  byte rex_;     // register extension
-  byte buf_[9];  // operand encoding
-  byte len_;     // operand encoding size
+  byte rex_;       // register extension
+  byte buf_[9];    // operand encoding
+  byte len_;       // operand encoding size
+  LoadMode load_;  // broadcast operand (avx512)
 
   // Set the ModR/M byte without an encoded 'reg' register. The
   // register is encoded later as part of the emit_operand operation.
@@ -155,6 +161,29 @@ class Operand {
   friend class Assembler;
 };
 
+// Operation masking.
+enum MaskOp {
+  merging = 0,
+  zeroing = 1,
+};
+
+class Mask {
+ public:
+  Mask(OpmaskRegister reg, MaskOp op) : reg_(reg), op_(op) {}
+
+  OpmaskRegister reg() const { return reg_; }
+  MaskOp op() const { return op_; }
+
+ private:
+  // Mask register.
+  OpmaskRegister reg_;
+
+  // Masking operation.
+  MaskOp op_;
+};
+
+const Mask nomask = Mask(k0, merging);
+
 // Assembler for generating Intel x86-64 machine code.
 class Assembler : public CodeGenerator {
  public:
@@ -189,6 +218,50 @@ class Assembler : public CodeGenerator {
   enum VectorLength { kL128 = 0x0, kL256 = 0x4, kLIG = kL128, kLZ = kL128 };
   enum VexW { kW0 = 0x0, kW1 = 0x80, kWIG = kW0 };
   enum LeadingOpcode { k0F = 0x1, k0F38 = 0x2, k0F3A = 0x3 };
+
+  // EVEX prefix encodings.
+  enum EvexFlags {
+    EVEX_ENDS   = (1 << 0),   // non-destructive source
+    EVEX_ENDD   = (1 << 1),   // non-destructive destination
+    EVEX_EDDS   = (1 << 2),   // destructive destination and source
+
+    EVEX_LIG    = (1 << 3),   // EVEX.LL ignored
+    EVEX_L128   = (1 << 4),   // EVEX.LL 128-bit operands
+    EVEX_L256   = (1 << 5),   // EVEX.LL 256-bit operands
+    EVEX_L512   = (1 << 6),   // EVEX.LL 512-bit operands
+
+    EVEX_P66    = (1 << 7),   // EVEX.PP 0x66 prefix
+    EVEX_PF2    = (1 << 8),   // EVEX.PP 0xF2 prefix
+    EVEX_PF3    = (1 << 9),   // EVEX.PP 0xF3 prefix
+
+    EVEX_M0F    = (1 << 10),  // VEX.MM 0x0F leading opcode
+    EVEX_M0F38  = (1 << 11),  // VEX.MM 0x0F38 leading opcode
+    EVEX_M0F3A  = (1 << 12),  // VEX.MM 0x0F3A leading opcode
+
+    EVEX_W0     = (1 << 13),  // EVEX.W=0
+    EVEX_W1     = (1 << 14),  // EVEX.W=1
+    EVEX_WIG    = (1 << 15),  // EVEX.W ignored
+
+    EVEX_BCST   = (1 << 16),  // EVEX.B broadcast
+    EVEX_ER     = (1 << 17),  // static-rounding
+    EVEX_SAE    = (1 << 18),  // suppress all exceptions
+
+    EVEX_R0     = (1 << 19),   // rounding mode bit 0
+    EVEX_R1     = (1 << 20),   // rounding mode bit 1
+
+    EVEX_IMM    = (1 << 21),  // immediate operand
+
+    EVEX_DT1    = (1 << 22),   // 1-byte data type
+    EVEX_DT2    = (1 << 23),   // 2-byte data type
+    EVEX_DT4    = (1 << 24),   // 4-byte data type
+    EVEX_DT8    = (1 << 25),   // 8-byte data type
+    EVEX_DT16   = (1 << 26),   // 16-byte data type
+    EVEX_DT32   = (1 << 27),   // 32-byte data type
+    EVEX_DT64   = (1 << 28),   // 64-byte data type
+
+    EVEX_BT4    = (1 << 29),   // 4-byte broadcast data type
+    EVEX_BT8    = (1 << 30),   // 8-byte broadcast data type
+  };
 
   // Code generation
   //
@@ -772,10 +845,6 @@ class Assembler : public CodeGenerator {
   void movmskps(Register dst, XMMRegister src);
 
   // SSE2 instructions.
-  void sse2_instr(XMMRegister dst, XMMRegister src, byte prefix, byte escape,
-                  byte opcode);
-  void sse2_instr(XMMRegister dst, const Operand &src, byte prefix, byte escape,
-                  byte opcode);
 #define DECLARE_SSE2_INSTRUCTION(instruction, prefix, escape, opcode) \
   void instruction(XMMRegister dst, XMMRegister src) {                \
     sse2_instr(dst, src, 0x##prefix, 0x##escape, 0x##opcode);         \
@@ -788,11 +857,6 @@ class Assembler : public CodeGenerator {
 #undef DECLARE_SSE2_INSTRUCTION
 
   // SSSE3 instructions.
-  void ssse3_instr(XMMRegister dst, XMMRegister src, byte prefix, byte escape1,
-                   byte escape2, byte opcode);
-  void ssse3_instr(XMMRegister dst, const Operand &src, byte prefix,
-                   byte escape1, byte escape2, byte opcode);
-
 #define DECLARE_SSSE3_INSTRUCTION(instruction, prefix, escape1, escape2,     \
                                   opcode)                                    \
   void instruction(XMMRegister dst, XMMRegister src) {                       \
@@ -811,10 +875,6 @@ class Assembler : public CodeGenerator {
   void haddps(XMMRegister dst, const Operand &src);
 
   // SSE4 instructions.
-  void sse4_instr(XMMRegister dst, XMMRegister src, byte prefix, byte escape1,
-                  byte escape2, byte opcode);
-  void sse4_instr(XMMRegister dst, const Operand &src, byte prefix,
-                  byte escape1, byte escape2, byte opcode);
 #define DECLARE_SSE4_INSTRUCTION(instruction, prefix, escape1, escape2,     \
                                  opcode)                                    \
   void instruction(XMMRegister dst, XMMRegister src) {                      \
@@ -913,15 +973,6 @@ class Assembler : public CodeGenerator {
   void cvtdq2pd(XMMRegister dst, const Operand &src);
 
   // AVX instructions.
-  void vinstr(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2,
-              SIMDPrefix pp, LeadingOpcode m, VexW w);
-  void vinstr(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
-              SIMDPrefix pp, LeadingOpcode m, VexW w, int sl = 0);
-  void vinstr(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2,
-              SIMDPrefix pp, LeadingOpcode m, VexW w);
-  void vinstr(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
-              SIMDPrefix pp, LeadingOpcode m, VexW w, int sl = 0);
-
 #define DECLARE_SSE2_AVX_INSTRUCTION(instruction, prefix, escape, opcode)    \
   void v##instruction(XMMRegister dst, XMMRegister src1, XMMRegister src2) { \
     vinstr(0x##opcode, dst, src1, src2, k##prefix, k##escape, kW0);          \
@@ -1373,28 +1424,6 @@ class Assembler : public CodeGenerator {
     vinstr(0x4B, dst, src1, src2, k66, k0F3A, kW0, 1);
     emit(mask.code() << 4);
   }
-
-  void vsd(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2) {
-    vinstr(op, dst, src1, src2, kF2, k0F, kWIG);
-  }
-  void vsd(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
-           int sl = 0) {
-    vinstr(op, dst, src1, src2, kF2, k0F, kWIG, sl);
-  }
-  void vsd(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2) {
-    vinstr(op, dst, src1, src2, kF2, k0F, kWIG);
-  }
-  void vsd(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
-           int sl = 0) {
-    vinstr(op, dst, src1, src2, kF2, k0F, kWIG, sl);
-  }
-
-  void vss(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vss(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
-           int sl = 0);
-  void vss(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
-  void vss(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
-           int sl = 0);
 
   void vmovss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
     vss(0x10, dst, src1, src2);
@@ -2127,7 +2156,6 @@ class Assembler : public CodeGenerator {
     vinstr(0x53, dst, ymm0, src, kNone, k0F, kWIG);
   }
 
-
   void vsqrtss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
     vinstr(0x51, dst, src1, src2, kF3, k0F, kWIG);
   }
@@ -2140,7 +2168,6 @@ class Assembler : public CodeGenerator {
   void vsqrtsd(XMMRegister dst, XMMRegister src1, const Operand &src2) {
     vinstr(0x51, dst, src1, src2, kF2, k0F, kWIG);
   }
-
 
   void vsqrtps(XMMRegister dst, XMMRegister src) {
     vinstr(0x51, dst, xmm0, src, kNone, k0F, kWIG);
@@ -2169,20 +2196,6 @@ class Assembler : public CodeGenerator {
 
   void vzeroall();
   void vzeroupper();
-
-  void vps(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vps(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
-           int sl = 0);
-  void vps(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
-  void vps(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
-           int sl = 0);
-
-  void vpd(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vpd(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
-           int sl = 0);
-  void vpd(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
-  void vpd(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
-           int sl = 0);
 
   // Scalar single XMM FMA instructions.
   void vfmadd132ss(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
@@ -2484,15 +2497,226 @@ class Assembler : public CodeGenerator {
     vfmad(0xba, dst, src1, src2);
   }
 
-  void vfmas(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vfmas(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
-  void vfmas(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
-  void vfmas(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
+  // AVX-512 opmask register instructions.
+  void kmovb(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x90, k1, k2, k66, k0F, kW0);
+  }
+  void kmovb(OpmaskRegister k1, const Operand &src) {
+    kinstr(0x90, k1, src, k66, k0F, kW0);
+  }
+  void kmovb(const Operand &dst, OpmaskRegister k1) {
+    kinstr(0x91, dst, k1, k66, k0F, kW0);
+  }
+  void kmovb(OpmaskRegister k1, Register src) {
+    kinstr(0x92, k1, src, k66, k0F, kW0);
+  }
+  void kmovb(Register dst,  OpmaskRegister k1) {
+    kinstr(0x93, dst, k1, k66, k0F, kW0);
+  }
 
-  void vfmad(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-  void vfmad(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
-  void vfmad(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
-  void vfmad(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
+  void kmovw(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x90, k1, k2, kNone, k0F, kW0);
+  }
+  void kmovw(OpmaskRegister k1, const Operand &src) {
+    kinstr(0x90, k1, src, kNone, k0F, kW0);
+  }
+  void kmovw(const Operand &dst, OpmaskRegister k1) {
+    kinstr(0x91, dst, k1, kNone, k0F, kW0);
+  }
+  void kmovw(OpmaskRegister k1, Register src) {
+    kinstr(0x92, k1, src, kNone, k0F, kW0);
+  }
+  void kmovw(Register dst,  OpmaskRegister k1) {
+    kinstr(0x93, dst, k1, kNone, k0F, kW0);
+  }
+
+  void kmovd(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x90, k1, k2, k66, k0F, kW1);
+  }
+  void kmovd(OpmaskRegister k1, const Operand &src) {
+    kinstr(0x90, k1, src, k66, k0F, kW1);
+  }
+  void kmovd(const Operand &dst, OpmaskRegister k1) {
+    kinstr(0x91, dst, k1, k66, k0F, kW1);
+  }
+  void kmovd(OpmaskRegister k1, Register src) {
+    kinstr(0x92, k1, src, kF2, k0F, kW0);
+  }
+  void kmovd(Register dst,  OpmaskRegister k1) {
+    kinstr(0x93, dst, k1, kF2, k0F, kW0);
+  }
+
+  void kmovq(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x90, k1, k2, kNone, k0F, kW1);
+  }
+  void kmovq(OpmaskRegister k1, const Operand &src) {
+    kinstr(0x90, k1, src, kNone, k0F, kW1);
+  }
+  void kmovq(const Operand &dst, OpmaskRegister k1) {
+    kinstr(0x91, dst, k1, kNone, k0F, kW1);
+  }
+  void kmovq(OpmaskRegister k1, Register src) {
+    kinstr(0x92, k1, src, kF2, k0F, kW1);
+  }
+  void kmovq(Register dst,  OpmaskRegister k1) {
+    kinstr(0x93, dst, k1, kF2, k0F, kW1);
+  }
+
+  void kandb(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x41, k1, k2, k3, k66, k0F, kW0);
+  }
+  void kandw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x41, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kandd(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x41, k1, k2, k3, k66, k0F, kW1);
+  }
+  void kandq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x41, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  void korb(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x45, k1, k2, k3, k66, k0F, kW0);
+  }
+  void korw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x45, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kord(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x45, k1, k2, k3, k66, k0F, kW1);
+  }
+  void korq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x45, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  void knotb(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x44, k1, k2, k66, k0F, kW0);
+  }
+  void knotw(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x44, k1, k2, kNone, k0F, kW0);
+  }
+  void knotd(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x44, k1, k2, k66, k0F, kW1);
+  }
+  void knotq(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x44, k1, k2, kNone, k0F, kW1);
+  }
+
+  void kxorb(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x47, k1, k2, k3, k66, k0F, kW0);
+  }
+  void kxorw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x47, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kxord(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x47, k1, k2, k3, k66, k0F, kW1);
+  }
+  void kxorq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x47, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  void kandnb(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x42, k1, k2, k3, k66, k0F, kW0);
+  }
+  void kandnw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x42, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kandnd(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x42, k1, k2, k3, k66, k0F, kW1);
+  }
+  void kandnq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x42, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  void kxnorb(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x46, k1, k2, k3, k66, k0F, kW0);
+  }
+  void kxnorw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x46, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kxnord(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x46, k1, k2, k3, k66, k0F, kW1);
+  }
+  void kxnorq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x46, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  void kshiftlb(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x32, k1, k2, imm8, k66, k0F3A, kW0);
+  }
+  void kshiftlw(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x32, k1, k2, imm8, k66, k0F3A, kW1);
+  }
+  void kshiftld(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x33, k1, k2, imm8, k66, k0F3A, kW0);
+  }
+  void kshiftlq(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x33, k1, k2, imm8, k66, k0F3A, kW1);
+  }
+
+  void kshiftrb(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x30, k1, k2, imm8, k66, k0F3A, kW0);
+  }
+  void kshiftrw(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x30, k1, k2, imm8, k66, k0F3A, kW1);
+  }
+  void kshiftrd(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x31, k1, k2, imm8, k66, k0F3A, kW0);
+  }
+  void kshiftrq(OpmaskRegister k1, OpmaskRegister k2, int8_t imm8) {
+    kinstr(0x31, k1, k2, imm8, k66, k0F3A, kW1);
+  }
+
+  void ktestb(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x99, k1, k2, k66, k0F, kW0);
+  }
+  void ktestw(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x99, k1, k2, kNone, k0F, kW0);
+  }
+  void ktestd(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x99, k1, k2, k66, k0F, kW1);
+  }
+  void ktestq(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x99, k1, k2, kNone, k0F, kW1);
+  }
+
+  void kortestb(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x98, k1, k2, k66, k0F, kW0);
+  }
+  void kortestw(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x98, k1, k2, kNone, k0F, kW0);
+  }
+  void kortestd(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x98, k1, k2, k66, k0F, kW1);
+  }
+  void kortestq(OpmaskRegister k1, OpmaskRegister k2) {
+    kinstr(0x98, k1, k2, kNone, k0F, kW1);
+  }
+
+  void kunpckbw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4B, k1, k2, k3, k66, k0F, kW0);
+  }
+  void kunpckwd(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4B, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kunpckdq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4B, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  void kaddb(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4A, k1, k2, k3, k66, k0F, kW0);
+  }
+  void kaddw(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4A, k1, k2, k3, kNone, k0F, kW0);
+  }
+  void kaddd(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4A, k1, k2, k3, k66, k0F, kW1);
+  }
+  void kaddq(OpmaskRegister k1, OpmaskRegister k2, OpmaskRegister k3) {
+    kinstr(0x4A, k1, k2, k3, kNone, k0F, kW1);
+  }
+
+  // AVX-512F instructions.
+  #include "third_party/jit/avx512.h"
 
   // BMI instructions.
   void andnq(Register dst, Register src1, Register src2) {
@@ -2866,7 +3090,7 @@ class Assembler : public CodeGenerator {
     }
   }
 
-  // Emit vex prefix.
+  // Emit VEX prefix.
   void emit_vex2_byte0() { emit(0xc5); }
 
   void emit_vex2_byte1(XMMRegister reg, XMMRegister v, VectorLength l,
@@ -2933,11 +3157,17 @@ class Assembler : public CodeGenerator {
     emit_vex_prefix(ireg, ivreg, rm, l, pp, mm, w);
   }
 
+  // Emit EVEX prefix.
+  void emit_evex_prefix(ZMMRegister reg, ZMMRegister vreg, ZMMRegister rm,
+                        Mask mask, int flags);
+  void emit_evex_prefix(ZMMRegister reg, ZMMRegister vreg, const Operand &rm,
+                        Mask mask, int flags);
+
   // Emit the ModR/M byte, and optionally the SIB byte and
   // 1- or 4-byte offset for a memory operand.  Also encodes
   // the second operand of the operation, a register or operation
   // subcode, into the reg field of the ModR/M byte.
-  void emit_operand(Register reg, const Operand &adr, int sl = 0) {
+  void emit_operand(Register reg, const Operand &adr, int sl = 0, int tl = 0) {
     emit_operand(reg.low_bits(), adr, sl);
   }
 
@@ -2947,7 +3177,8 @@ class Assembler : public CodeGenerator {
   // The sl parameter encodes the instruction suffix length, i.e. the number
   // of bytes in the instruction after the operand. Currently only suffix
   // lengths of 0 and 1 are supported.
-  void emit_operand(int rm, const Operand &adr, int sl = 0);
+  // The ts parameter encodes the tuple size used for EVEX disp8*N compression.
+  void emit_operand(int rm, const Operand &adr, int sl = 0, int ts = 0);
 
   // Emit a ModR/M byte with registers coded in the reg and rm_reg fields.
   void emit_modrm(Register reg, Register rm_reg) {
@@ -2968,6 +3199,11 @@ class Assembler : public CodeGenerator {
   void emit_sse_operand(XMMRegister dst, Register src);
   void emit_sse_operand(Register dst, XMMRegister src);
   void emit_sse_operand(XMMRegister dst);
+
+  void emit_sse_operand(ZMMRegister dst, ZMMRegister src);
+  void emit_sse_operand(ZMMRegister reg, const Operand &adr, int flags);
+  void emit_sse_operand(ZMMRegister dst, Register src);
+  void emit_sse_operand(Register dst, ZMMRegister src);
 
   // Emit machine code for one of the operations ADD, ADC, SUB, SBC,
   // AND, OR, XOR, or CMP.  The encodings of these operations are all
@@ -3207,7 +3443,128 @@ class Assembler : public CodeGenerator {
 
   void emit_prefetch(const Operand &src, int subcode);
 
-  // Most BMI instructions are similiar.
+  // SSE2 instruction encoding.
+  void sse2_instr(XMMRegister dst, XMMRegister src, byte prefix, byte escape,
+                  byte opcode);
+  void sse2_instr(XMMRegister dst, const Operand &src, byte prefix, byte escape,
+                  byte opcode);
+
+  // SSE3 instruction encoding.
+  void ssse3_instr(XMMRegister dst, XMMRegister src, byte prefix, byte escape1,
+                   byte escape2, byte opcode);
+  void ssse3_instr(XMMRegister dst, const Operand &src, byte prefix,
+                   byte escape1, byte escape2, byte opcode);
+
+  // SSE4 instruction encoding.
+  void sse4_instr(XMMRegister dst, XMMRegister src, byte prefix, byte escape1,
+                  byte escape2, byte opcode);
+  void sse4_instr(XMMRegister dst, const Operand &src, byte prefix,
+                  byte escape1, byte escape2, byte opcode);
+
+  // AVX instruction encoding.
+  void vinstr(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void vinstr(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
+              SIMDPrefix pp, LeadingOpcode m, VexW w, int sl = 0);
+  void vinstr(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void vinstr(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
+              SIMDPrefix pp, LeadingOpcode m, VexW w, int sl = 0);
+
+  void vsd(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2) {
+    vinstr(op, dst, src1, src2, kF2, k0F, kWIG);
+  }
+  void vsd(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
+           int sl = 0) {
+    vinstr(op, dst, src1, src2, kF2, k0F, kWIG, sl);
+  }
+  void vsd(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2) {
+    vinstr(op, dst, src1, src2, kF2, k0F, kWIG);
+  }
+  void vsd(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
+           int sl = 0) {
+    vinstr(op, dst, src1, src2, kF2, k0F, kWIG, sl);
+  }
+
+  void vss(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vss(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
+           int sl = 0);
+  void vss(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vss(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
+           int sl = 0);
+
+  void vps(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vps(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
+           int sl = 0);
+  void vps(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vps(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
+           int sl = 0);
+
+  void vpd(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vpd(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2,
+           int sl = 0);
+  void vpd(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vpd(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2,
+           int sl = 0);
+
+  // FMA instruction encoding.
+  void vfmas(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vfmas(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
+  void vfmas(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vfmas(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
+
+  void vfmad(byte op, XMMRegister dst, XMMRegister src1, XMMRegister src2);
+  void vfmad(byte op, XMMRegister dst, XMMRegister src1, const Operand &src2);
+  void vfmad(byte op, YMMRegister dst, YMMRegister src1, YMMRegister src2);
+  void vfmad(byte op, YMMRegister dst, YMMRegister src1, const Operand &src2);
+
+  // AVX-512 opmask instruction encoding.
+  void kinstr(byte op, OpmaskRegister k1, OpmaskRegister k2,
+              OpmaskRegister k3, SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void kinstr(byte op, OpmaskRegister k1, OpmaskRegister k2,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void kinstr(byte op, OpmaskRegister k1, OpmaskRegister k2, int8_t imm8,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void kinstr(byte op, OpmaskRegister k1, const Operand &src,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void kinstr(byte op, const Operand &dst, OpmaskRegister k1,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void kinstr(byte op, OpmaskRegister k1, Register src,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+  void kinstr(byte op, Register dst, OpmaskRegister k1,
+              SIMDPrefix pp, LeadingOpcode m, VexW w);
+
+  // AVX-512 instruction encoding.
+  static int evex_round(RoundingMode er) {
+    return er == noround ? 0 : (er * EVEX_R0) | EVEX_ER;
+  }
+
+  void zinstr(byte op, ZMMRegister dst, ZMMRegister src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, ZMMRegister dst, const Operand &src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, const Operand &dst, ZMMRegister src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, ZMMRegister dst, ZMMRegister src1, ZMMRegister src2,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, ZMMRegister dst, ZMMRegister src1, const Operand &src2,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, const Operand &dst, ZMMRegister src1, ZMMRegister src2,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, ZMMRegister dst, ZMMRegister src1, Register src2,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, ZMMRegister dst, Register src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, Register dst, ZMMRegister src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, Register dst, const Operand &src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, OpmaskRegister k, ZMMRegister src1, ZMMRegister src2,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, OpmaskRegister k, ZMMRegister src1, const Operand &src2,
+              int8_t imm8, Mask mask, int flags);
+
+  // BMI instruction encoding.
   void bmi1q(byte op, Register reg, Register vreg, Register rm);
   void bmi1q(byte op, Register reg, Register vreg, const Operand &rm);
   void bmi1l(byte op, Register reg, Register vreg, Register rm);

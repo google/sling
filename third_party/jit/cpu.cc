@@ -203,6 +203,7 @@ const char *ProcessorInformation::architecture() {
       return "Skylake";
 
     case 0x063D:
+    case 0x064F:
       return "Broadwell";
 
     case 0x063C:

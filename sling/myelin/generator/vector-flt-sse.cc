@@ -222,7 +222,7 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
       GenerateXMMFltOp(instr,
           &Assembler::roundps, &Assembler::roundpd,
           &Assembler::roundps, &Assembler::roundpd,
-          kRoundDown, masm);
+          round_down, masm);
     } else {
       UNSUPPORTED;
     }

@@ -202,7 +202,7 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         GenerateYMMFltOp(instr,
             &Assembler::vroundps, &Assembler::vroundpd,
             &Assembler::vroundps, &Assembler::vroundpd,
-            kRoundDown, masm);
+            round_down, masm);
         break;
       case Express::CVTFLTINT:
         GenerateYMMFltOp(instr,

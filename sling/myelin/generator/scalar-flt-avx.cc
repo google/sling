@@ -181,7 +181,7 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
         GenerateShift(instr, masm, true, 23);
         break;
       case Express::FLOOR:
-        GenerateRound(instr, masm, kRoundDown);
+        GenerateRound(instr, masm, round_down);
         break;
       case Express::CVTFLTINT:
       case Express::CVTINTFLT:

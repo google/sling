@@ -189,7 +189,7 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
         GenerateXMMFltOp(instr,
             &Assembler::vroundps, &Assembler::vroundpd,
             &Assembler::vroundps, &Assembler::vroundpd,
-            kRoundDown, masm);
+            round_down, masm);
         break;
       case Express::CVTFLTINT:
         GenerateXMMFltOp(instr,

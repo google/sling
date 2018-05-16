@@ -356,7 +356,7 @@ class AVXFltExpBase : public Kernel {
       __ vmulps(m, x, log2ef);
       __ vaddps(m, m, half);
     }
-    __ vroundps(m, m, kRoundDown);
+    __ vroundps(m, m, round_down);
 
     // Get r = x - m*ln(2). If no FMA instructions are available, m*ln(2) is
     // subtracted out in two parts, m*C1+m*C2 = m*ln(2), to avoid accumulating

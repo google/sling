@@ -60,7 +60,7 @@ namespace jit {
   V(r14)                     \
   V(r15)
 
-// CPU Registers.
+// General CPU registers.
 struct Register {
   enum Code {
 #define REGISTER_CODE(R) kCode_##R,
@@ -120,7 +120,7 @@ const Register arg_reg_4 = {Register::kCode_rcx};
 const Register arg_reg_5 = {Register::kCode_r8};
 const Register arg_reg_6 = {Register::kCode_r9};
 
-// SIMD registers.
+// 128-bit SIMD registers (xmm).
 #define SIMD128_REGISTERS(V) \
   V(xmm0)                   \
   V(xmm1)                   \
@@ -181,6 +181,7 @@ SIMD128_REGISTERS(DECLARE_REGISTER)
 #undef DECLARE_REGISTER
 const XMMRegister no_xmm_reg = {XMMRegister::kCode_no_reg};
 
+// 256-bit SIMD registers (ymm).
 #define SIMD256_REGISTERS(V) \
   V(ymm0)                   \
   V(ymm1)                   \
@@ -245,6 +246,166 @@ struct YMMRegister {
 SIMD256_REGISTERS(DECLARE_REGISTER)
 #undef DECLARE_REGISTER
 const YMMRegister no_ymm_reg = {YMMRegister::kCode_no_reg};
+
+// 512/256/128-bit SIMD registers (zmm).
+#define SIMD512_REGISTERS(V) \
+  V(zmm0)                   \
+  V(zmm1)                   \
+  V(zmm2)                   \
+  V(zmm3)                   \
+  V(zmm4)                   \
+  V(zmm5)                   \
+  V(zmm6)                   \
+  V(zmm7)                   \
+  V(zmm8)                   \
+  V(zmm9)                   \
+  V(zmm10)                  \
+  V(zmm11)                  \
+  V(zmm12)                  \
+  V(zmm13)                  \
+  V(zmm14)                  \
+  V(zmm15)                  \
+  V(zmm16)                  \
+  V(zmm17)                  \
+  V(zmm18)                  \
+  V(zmm19)                  \
+  V(zmm20)                  \
+  V(zmm21)                  \
+  V(zmm22)                  \
+  V(zmm23)                  \
+  V(zmm24)                  \
+  V(zmm25)                  \
+  V(zmm26)                  \
+  V(zmm27)                  \
+  V(zmm28)                  \
+  V(zmm29)                  \
+  V(zmm30)                  \
+  V(zmm31)
+
+struct ZMMRegister {
+  enum Code {
+#define REGISTER_CODE(R) kCode_##R,
+    SIMD512_REGISTERS(REGISTER_CODE)
+#undef REGISTER_CODE
+    kAfterLast,
+    kCode_no_reg = -1
+  };
+
+  static const int kMaxNumRegisters = Code::kAfterLast;
+
+  enum SizeCode {
+    VectorLength128 = kMaxNumRegisters * 0,
+    VectorLength256 = kMaxNumRegisters * 1,
+    VectorLength512 = kMaxNumRegisters * 2,
+    VectorLengthMask = kMaxNumRegisters * 3,
+  };
+
+  static ZMMRegister from_code(int code) {
+    ZMMRegister result = {code | VectorLength512};
+    return result;
+  }
+
+  bool is_valid() const {
+    int code = reg_code & ~VectorLengthMask;
+    return 0 <= code && code < kMaxNumRegisters;
+  }
+
+  bool is(ZMMRegister reg) const { return reg_code == reg.reg_code; }
+
+  XMMRegister xmm() const {
+    XMMRegister result = {code()};
+    return result;
+  }
+
+  YMMRegister ymm() const {
+    YMMRegister result = {code()};
+    return result;
+  }
+
+  ZMMRegister zmm(SizeCode size = VectorLength512) const {
+    ZMMRegister result = {code() | size};
+    return result;
+  }
+
+  ZMMRegister x() const { return zmm(VectorLength128); }
+  ZMMRegister y() const { return zmm(VectorLength256); }
+  ZMMRegister z() const { return zmm(VectorLength512); }
+
+  int code() const {
+    DCHECK(is_valid());
+    return reg_code  & ~VectorLengthMask;
+  }
+
+  SizeCode size() const {
+    DCHECK(is_valid());
+    return static_cast<SizeCode>(reg_code  & VectorLengthMask);
+  }
+
+  int size_bits() const {
+    return reg_code / kMaxNumRegisters;
+  }
+
+  // Return bits of the register code. Used when encoding registers
+  // in modR/M, SIB, and opcode bytes.
+  int low_bits() const { return reg_code & 0x7; }
+  int mid_bit() const { return (reg_code >> 3) & 0x01; }
+  int high_bit() const { return (reg_code >> 4) & 0x01; }
+  int high_bits() const { return (reg_code >> 3) & 0x03; }
+
+  // Register code where the top bits are the size code (ssrrrrr).
+  int reg_code;
+};
+
+#define DECLARE_REGISTER(R) \
+    const ZMMRegister R = ZMMRegister::from_code(ZMMRegister::kCode_##R);
+SIMD512_REGISTERS(DECLARE_REGISTER)
+#undef DECLARE_REGISTER
+const ZMMRegister no_zmm_reg = {ZMMRegister::kCode_no_reg};
+
+// Opmask registers.
+#define OPMASK_REGISTERS(V) \
+  V(k0)                   \
+  V(k1)                   \
+  V(k2)                   \
+  V(k3)                   \
+  V(k4)                   \
+  V(k5)                   \
+  V(k6)                   \
+  V(k7)
+
+struct OpmaskRegister {
+  enum Code {
+#define REGISTER_CODE(R) kCode_##R,
+    OPMASK_REGISTERS(REGISTER_CODE)
+#undef REGISTER_CODE
+    kAfterLast,
+    kCode_no_reg = -1
+  };
+
+  static const int kMaxNumRegisters = Code::kAfterLast;
+
+  static OpmaskRegister from_code(int code) {
+    OpmaskRegister result = {code};
+    return result;
+  }
+
+  bool is_valid() const { return 0 <= reg_code && reg_code < kMaxNumRegisters; }
+
+  bool is(OpmaskRegister reg) const { return reg_code == reg.reg_code; }
+
+  int code() const {
+    DCHECK(is_valid());
+    return reg_code;
+  }
+
+  // Register code.
+  int reg_code;
+};
+
+#define DECLARE_REG(R) const OpmaskRegister R = {OpmaskRegister::kCode_##R};
+OPMASK_REGISTERS(DECLARE_REG)
+#undef DECLARE_REG
+const OpmaskRegister no_opmask_reg = {OpmaskRegister::kCode_no_reg};
 
 // Condition flags.
 enum Condition {
@@ -316,10 +477,11 @@ inline Condition CommuteCondition(Condition cc) {
 
 // Rounding mode.
 enum RoundingMode {
-  kRoundToNearest = 0x0,
-  kRoundDown = 0x1,
-  kRoundUp = 0x2,
-  kRoundToZero = 0x3
+  noround       = -1,
+  round_nearest = 0x0,
+  round_down    = 0x1,
+  round_up      = 0x2,
+  round_to_zero = 0x3
 };
 
 }  // namespace jit
