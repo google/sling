@@ -23,11 +23,9 @@ import torch.nn as nn
 sys.path.insert(0, "sling/nlp/parser/trainer")
 from parser_state import ParserState
 
-sys.path.insert(0, "sling/nlp/parser/trainer/flow")
-
-import nn as flownn
-import flow as flow
-import builder as builder
+import sling.myelin.nn as flownn
+import sling.myelin.flow as flow
+import sling.myelin.builder as builder
 
 Param = nn.Parameter
 Var = torch.autograd.Variable
@@ -627,5 +625,4 @@ class Sempar(nn.Module):
 
     finish_concat_op(ff, ff_concat_op)
     fl.save(flow_file)
-
 
