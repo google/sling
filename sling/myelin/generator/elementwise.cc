@@ -129,6 +129,13 @@ ElementwiseIndexGenerator::Locator *ElementwiseIndexGenerator::GetLocator(
                  << " input: " << var->shape().ToString()
                  << " output: " << shape_.ToString();
     }
+  } else if (var->shape().outer(shape_.rank()) == 1) {
+    // The variable shape prefix is a one vector so use a simple iterator.
+    loc->iterator = GetIterator(SIMPLE, var->elements());
+  } else {
+    LOG(FATAL) << "Unsupported iterator: " << var->name() << " with shape "
+               << var->shape().ToString()
+               << " to output shape " << shape_.ToString();
   }
 
   return loc;

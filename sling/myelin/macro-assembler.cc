@@ -141,8 +141,8 @@ int Registers::num_free() const {
   return n;
 }
 
-int SIMDRegisters::try_alloc() {
-  for (int r = 0; r < kNumRegisters; ++r) {
+int SIMDRegisters::try_alloc(bool extended) {
+  for (int r = 0; r < (extended ? kNumZRegisters : kNumXRegisters); ++r) {
     if ((used_regs_ & (1 << r)) == 0) {
       use(r);
       return r;
@@ -151,10 +151,27 @@ int SIMDRegisters::try_alloc() {
   return -1;
 }
 
-int SIMDRegisters::alloc() {
-  int r = try_alloc();
+int SIMDRegisters::alloc(bool extended) {
+  int r = try_alloc(extended);
   CHECK(r != -1) << "SIMD register overflow";
   return r;
+}
+
+OpmaskRegister OpmaskRegisters::try_alloc() {
+  for (int r = 0; r < kNumRegisters; ++r) {
+    OpmaskRegister k = OpmaskRegister::from_code(r);
+    if (!used(k)) {
+      use(k);
+      return k;
+    }
+  }
+  return no_opmask_reg;
+}
+
+OpmaskRegister OpmaskRegisters::alloc() {
+  OpmaskRegister k = try_alloc();
+  CHECK(k.is_valid()) << "Opmask register overflow";
+  return k;
 }
 
 void StaticData::AddData(const void *buffer, int size, int repeat) {
@@ -489,6 +506,15 @@ void MacroAssembler::Multiply(jit::Register reg, int64 scalar) {
   }
 }
 
+OpmaskRegister MacroAssembler::LoadMask(int n, OpmaskRegister k) {
+  if (!k.is_valid()) k = kk_.alloc();
+  Register r = rr_.alloc();
+  movq(r, Immediate((1 << n) - 1));
+  kmovq(k, r);
+  rr_.release(r);
+  return k;
+}
+
 void MacroAssembler::UpdateCounter(int64 *counter, int64 value) {
   CHECK(!rr_.used(rdi));
   movp(rdi, counter);
@@ -585,6 +611,7 @@ void MacroAssembler::TimeStep(int offset, int disp) {
 void MacroAssembler::ResetRegisterUsage() {
   rr_.reset();
   mm_.reset();
+  kk_.reset();
   rr_.use(datareg);
   if (options_.profiling) rr_.use(tsreg);
 }

@@ -28,6 +28,7 @@ ExpressionGenerator *CreateVectorFltSSEGenerator();
 ExpressionGenerator *CreateScalarFltAVXGenerator();
 ExpressionGenerator *CreateVectorFltAVX128Generator();
 ExpressionGenerator *CreateVectorFltAVX256Generator();
+ExpressionGenerator *CreateVectorFltAVX512Generator();
 ExpressionGenerator *CreateScalarIntGenerator();
 ExpressionGenerator *CreateVectorIntSSEGenerator();
 ExpressionGenerator *CreateVectorIntAVX128Generator();
@@ -41,6 +42,7 @@ void ExpressionGenerator::Initialize(const Express &expression,
   expression_.Copy(expression);
   type_ = type;
   index_ = index;
+  index_->set_extended_regs(ExtendedRegs());
 
   // Optimize expression.
   bool fma = model_.fm_reg_reg_reg;
@@ -83,7 +85,17 @@ ExpressionGenerator *ExpressionGenerator::Select(const Express &expr,
   ExpressionGenerator *generator = nullptr;
   switch (type) {
     case DT_FLOAT:
-      if (CPU::Enabled(AVX)) {
+      if (CPU::Enabled(AVX512F)) {
+        if (IsVector(size, 16)) {
+          generator = CreateVectorFltAVX512Generator();
+        } else if (IsVector(size, 8)) {
+          generator = CreateVectorFltAVX256Generator();
+        } else if (IsVector(size, 4)) {
+          generator = CreateVectorFltAVX128Generator();
+        } else {
+          generator = CreateScalarFltAVXGenerator();
+        }
+      } else if (CPU::Enabled(AVX)) {
         if (IsVector(size, 8)) {
           generator = CreateVectorFltAVX256Generator();
         } else if (IsVector(size, 4)) {
@@ -101,7 +113,17 @@ ExpressionGenerator *ExpressionGenerator::Select(const Express &expr,
       break;
 
     case DT_DOUBLE:
-      if (CPU::Enabled(AVX)) {
+      if (CPU::Enabled(AVX512F)) {
+        if (IsVector(size, 8)) {
+          generator = CreateVectorFltAVX512Generator();
+        } else if (IsVector(size, 4)) {
+          generator = CreateVectorFltAVX256Generator();
+        } else if (IsVector(size, 2)) {
+          generator = CreateVectorFltAVX128Generator();
+        } else {
+          generator = CreateScalarFltAVXGenerator();
+        }
+      } else if (CPU::Enabled(AVX)) {
         if (IsVector(size, 4)) {
           generator = CreateVectorFltAVX256Generator();
         } else if (IsVector(size, 2)) {
@@ -391,6 +413,66 @@ void ExpressionGenerator::GenerateYMMVectorMove(
         break;
       case DT_DOUBLE:
         __ vmovapd(addr(instr->result), ymm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateZMMMoveMemToReg(
+    ZMMRegister dst,
+    const Operand &src,
+    MacroAssembler *masm) {
+  switch (type_) {
+    case DT_FLOAT:
+      __ vmovaps(dst, src);
+      break;
+    case DT_DOUBLE:
+      __ vmovapd(dst, src);
+      break;
+    default: UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateZMMVectorMove(
+    Express::Op *instr,
+    MacroAssembler *masm) {
+  if (instr->dst != -1 && instr->src != -1) {
+    // MOV reg,reg
+    switch (type_) {
+      case DT_FLOAT:
+        __ vmovaps(zmm(instr->dst), zmm(instr->src));
+        break;
+      case DT_DOUBLE:
+        __ vmovapd(zmm(instr->dst), zmm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else if (instr->dst != -1 && instr->src == -1) {
+    // MOV reg,[mem]
+    if (index_->NeedsBroadcast(instr->args[0])) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vbroadcastss(zmm(instr->dst), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ vbroadcastsd(zmm(instr->dst), addr(instr->args[0]));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      GenerateZMMMoveMemToReg(zmm(instr->dst), addr(instr->args[0]), masm);
+    }
+  } else if (instr->dst == -1 && instr->src != -1) {
+    // MOV [mem],reg
+    switch (type_) {
+      case DT_FLOAT:
+        __ vmovaps(addr(instr->result), zmm(instr->src));
+        break;
+      case DT_DOUBLE:
+        __ vmovapd(addr(instr->result), zmm(instr->src));
         break;
       default: UNSUPPORTED;
     }
@@ -850,6 +932,129 @@ void ExpressionGenerator::GenerateYMMFltOp(
       case DT_DOUBLE:
         (masm->*dblopmem)(ymm(instr->dst), ymm(instr->src),
                           addr(instr->args[argnum]), imm);
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateZMMFltOp(
+    Express::Op *instr,
+    OpZMMRegReg fltopreg, OpZMMRegReg dblopreg,
+    OpZMMRegRegR fltopregr, OpZMMRegRegR dblopregr,
+    OpZMMRegMem fltopmem, OpZMMRegMem dblopmem,
+    MacroAssembler *masm, int argnum) {
+  if (instr->dst != -1 && instr->src != -1) {
+    // OP reg,reg
+    switch (type_) {
+      case DT_FLOAT:
+        if (fltopreg != nullptr) {
+          (masm->*fltopreg)(zmm(instr->dst), zmm(instr->src), nomask);
+        } else {
+          (masm->*fltopregr)(zmm(instr->dst), zmm(instr->src), nomask, noround);
+        }
+        break;
+      case DT_DOUBLE:
+        if (dblopreg != nullptr) {
+          (masm->*dblopreg)(zmm(instr->dst), zmm(instr->src), nomask);
+        } else {
+          (masm->*dblopregr)(zmm(instr->dst), zmm(instr->src), nomask, noround);
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  } else if (instr->dst != -1 && instr->src == -1) {
+    // OP reg,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(zmm(instr->dst), addr(instr->args[argnum]), nomask);
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(zmm(instr->dst), addr(instr->args[argnum]), nomask);
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateZMMFltOp(
+    Express::Op *instr,
+    OpZMMRegRegImm fltopreg, OpZMMRegRegImm dblopreg,
+    OpZMMRegMemImm fltopmem, OpZMMRegMemImm dblopmem,
+    int8 imm,
+    MacroAssembler *masm, int argnum) {
+  if (instr->dst != -1 && instr->src != -1) {
+    // OP reg,reg,imm
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopreg)(zmm(instr->dst), zmm(instr->src), imm, nomask);
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopreg)(zmm(instr->dst), zmm(instr->src), imm, nomask);
+        break;
+      default: UNSUPPORTED;
+    }
+  } else if (instr->dst != -1 && instr->src == -1) {
+    // OP reg,reg,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(zmm(instr->dst), addr(instr->args[argnum]), imm,
+                          nomask);
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(zmm(instr->dst), addr(instr->args[argnum]), imm,
+                          nomask);
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateZMMFltOp(
+    Express::Op *instr,
+    OpZMMRegRegReg fltopreg, OpZMMRegRegReg dblopreg,
+    OpZMMRegRegRegR fltopregr, OpZMMRegRegRegR dblopregr,
+    OpZMMRegRegMem fltopmem, OpZMMRegRegMem dblopmem,
+    MacroAssembler *masm, int argnum) {
+  if (instr->dst != -1 && instr->src != -1 && instr->src2 != -1) {
+    // OP reg,reg,reg
+    switch (type_) {
+      case DT_FLOAT:
+        if (fltopreg != nullptr) {
+          (masm->*fltopreg)(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+                            nomask);
+        } else {
+          (masm->*fltopregr)(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+                             nomask, noround);
+        }
+        break;
+      case DT_DOUBLE:
+        if (dblopreg != nullptr) {
+          (masm->*dblopreg)(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+                            nomask);
+        } else {
+          (masm->*dblopregr)(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+                            nomask, noround);
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  } else if (instr->dst != -1 && instr->src != -1 && instr->src2 == -1) {
+    // OP reg,reg,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(zmm(instr->dst), zmm(instr->src),
+                          addr(instr->args[argnum]), nomask);
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(zmm(instr->dst), zmm(instr->src),
+                          addr(instr->args[argnum]), nomask);
         break;
       default: UNSUPPORTED;
     }

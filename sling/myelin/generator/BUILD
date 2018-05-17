@@ -29,6 +29,7 @@ cc_library(
     "vector-flt-sse.cc",
     "vector-flt-avx128.cc",
     "vector-flt-avx256.cc",
+    "vector-flt-avx512.cc",
     "scalar-int.cc",
     "vector-int-sse.cc",
     "vector-int-avx128.cc",

@@ -72,6 +72,9 @@ class Optimizer {
   // Apply gradients to update learnable parameters.
   virtual void Apply(std::vector<Instance *> &gradients);
 
+  // Decay learning rate. Returns new learning rate.
+  virtual float DecayLearningRate() { return 0.0; }
+
   // Data instance for optimizer.
   Instance *data() const { return data_; }
 
@@ -99,12 +102,19 @@ class Optimizer {
   Instance *data_ = nullptr;
 };
 
-// Stocastic gradient descent optimizer.
+// Stochastic gradient descent optimizer.
 class GradientDescentOptimizer : public Optimizer {
  public:
-  // Learning rate.
-  float alpha() const { return *data_->Get<float>(alpha_); }
-  void set_alpha(float alpha) { *data_->Get<float>(alpha_) = alpha; }
+  // Decay learning rate.
+  float DecayLearningRate() override;
+
+  // Initial learning rate.
+  float learning_rate() const { return lr_; }
+  void set_learning_rate(float lr) { lr_ = lr; }
+
+  // Learning rate decay.
+  float decay() const { return decay_; }
+  void set_decay(float decay) { decay_ = decay; }
 
   // Regularization parameter for L2 regularization.
   float lambda() const { return lambda_; }
@@ -118,7 +128,9 @@ class GradientDescentOptimizer : public Optimizer {
   void BuildOptimizer(const GradientMap &gradmap, FlowBuilder *update) override;
   void InitializeOptimizer() override;
 
-  Tensor *alpha_ = nullptr;         // learning rate
+  Tensor *alpha_ = nullptr;         // current learning rate
+  float lr_ = 0.01;                 // initial learning rate
+  float decay_  = 1.0;              // learning rate decay
   float clipping_threshold_ = 0.0;  // norm clipping threshold (0=no clipping)
   float lambda_ = 0.0;              // regularization parameter (0=none)
 };
@@ -131,13 +143,20 @@ class AdamOptimizer : public Optimizer {
   // Apply gradients to update learnable parameters.
   void Apply(std::vector<Instance *> &gradients) override;
 
+  // Decay learning rate.
+  float DecayLearningRate() override;
+
+  // Learning rate.
+  float learning_rate() const { return lr_; }
+  void set_learning_rate(float lr) { lr_ = lr; }
+
+  // Learning rate decay.
+  float decay() const { return decay_; }
+  void set_decay(float decay) { decay_ = decay; }
+
   // Norm clipping threshold.
   float clipping_threshold() const { return clipping_threshold_; }
   void set_clipping_threshold(float t) { clipping_threshold_ = t; }
-
-  // Learning rate.
-  float alpha() const { return alpha_; }
-  void set_alpha(float alpha) { alpha_ = alpha; }
 
   // The exponential decay rate for the first moment estimates.
   float beta1() const { return beta1_; }
@@ -155,10 +174,14 @@ class AdamOptimizer : public Optimizer {
   void BuildOptimizer(const GradientMap &gradmap, FlowBuilder *update) override;
   void InitializeOptimizer() override;
 
-  float alpha_ = 0.001;             // learning rate
+  Tensor *alpha_ = nullptr;         // current learning rate
+  float lr_ = 0.01;                 // initial learning rate
+  float decay_  = 1.0;              // learning rate decay
+
   float beta1_ = 0.9;               // mean decay rate
   float beta2_ = 0.999;             // variance decay rate
   float epsilon_ = 1e-8;            // underflow correction
+
   float clipping_threshold_ = 0.0;  // norm clipping threshold (0=no clipping)
 };
 

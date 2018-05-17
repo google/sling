@@ -32,6 +32,10 @@ class IndexGenerator {
   IndexGenerator(MacroAssembler *masm) : masm_(masm) {}
   virtual ~IndexGenerator() = default;
 
+  // Extended register set.
+  bool extended_regs() const { return extended_regs_; }
+  void set_extended_regs(bool enable) { extended_regs_ = enable; }
+
   // Initialize index generator.
   virtual void Initialize(size_t vecsize) = 0;
 
@@ -55,6 +59,9 @@ class IndexGenerator {
   jit::YMMRegister ymm(int idx) {
     return jit::YMMRegister::from_code(mmregs_[idx]);
   }
+  jit::ZMMRegister zmm(int idx) {
+    return jit::ZMMRegister::from_code(mmregs_[idx]);
+  }
 
   // Return auxiliary register.
   jit::Register aux(int idx) { return aux_[idx]; }
@@ -64,6 +71,9 @@ class IndexGenerator {
   jit::YMMRegister ymmaux(int idx) {
     return jit::YMMRegister::from_code(mmaux_[idx]);
   }
+  jit::ZMMRegister zmmaux(int idx) {
+    return jit::ZMMRegister::from_code(mmaux_[idx]);
+  }
 
   // Reserve fixed register for generating instructions that operate on
   // special registers.
@@ -72,18 +82,21 @@ class IndexGenerator {
   // Reserve registers used for holding intermediate values in expressions.
   void ReserveRegisters(int count);
   void ReserveXMMRegisters(int count);
-  void ReserveAuxYMMRegisters(int count);
+  void ReserveYMMRegisters(int count);
+  void ReserveZMMRegisters(int count);
 
   // Reserve auxiliary registers for expression generators that need extra
   // registers for compiling expression operations.
   void ReserveAuxRegisters(int count);
   void ReserveAuxXMMRegisters(int count);
-  void ReserveYMMRegisters(int count);
+  void ReserveAuxYMMRegisters(int count);
+  void ReserveAuxZMMRegisters(int count);
 
  protected:
   MacroAssembler *masm_;              // macro assembler for code generation
 
  private:
+  bool extended_regs_ = false;        // use extended register set
   std::vector<jit::Register> fixed_;  // reserved fixed registers
   std::vector<jit::Register> regs_;   // reserved temporary registers
   std::vector<int> mmregs_;           // reserved SIMD registers (xmm/ymm)

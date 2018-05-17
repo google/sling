@@ -37,7 +37,7 @@ bool IndexGenerator::AllocateRegisters() {
     if (!r.is_valid()) ok = false;
   }
   for (auto &m : mmregs_) {
-    m = masm_->mm().try_alloc();
+    m = masm_->mm().try_alloc(extended_regs_);
     if (m == -1) ok = false;
   }
 
@@ -47,7 +47,7 @@ bool IndexGenerator::AllocateRegisters() {
     if (!r.is_valid()) ok = false;
   }
   for (auto &m : mmaux_) {
-    m = masm_->mm().try_alloc();
+    m = masm_->mm().try_alloc(extended_regs_);
     if (m == -1) ok = false;
   }
 
@@ -76,17 +76,25 @@ void IndexGenerator::ReserveXMMRegisters(int count) {
   }
 }
 
+void IndexGenerator::ReserveYMMRegisters(int count) {
+  ReserveXMMRegisters(count);
+}
+
+void IndexGenerator::ReserveZMMRegisters(int count) {
+  ReserveXMMRegisters(count);
+}
+
 void IndexGenerator::ReserveAuxXMMRegisters(int count) {
   for (int n = 0; n < count; ++n) {
     mmaux_.push_back(-1);
   }
 }
 
-void IndexGenerator::ReserveYMMRegisters(int count) {
-  ReserveXMMRegisters(count);
+void IndexGenerator::ReserveAuxYMMRegisters(int count) {
+  ReserveAuxXMMRegisters(count);
 }
 
-void IndexGenerator::ReserveAuxYMMRegisters(int count) {
+void IndexGenerator::ReserveAuxZMMRegisters(int count) {
   ReserveAuxXMMRegisters(count);
 }
 

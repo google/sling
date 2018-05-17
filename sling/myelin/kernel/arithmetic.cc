@@ -246,7 +246,8 @@ struct Expression {
       CHECK(expr.AllocateRegisters()) << "Register overflow";
 
       // Count the number of spare SIMD registers.
-      while (masm.mm().try_alloc() != -1) spare_regs++;
+      bool extended = expr.index.extended_regs();
+      while (masm.mm().try_alloc(extended) != -1) spare_regs++;
     }
     return spare_regs;
   }
@@ -725,10 +726,13 @@ class Softmax : public Kernel {
   void Adjust(Step *step) override {
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
-    x->SetMiniumAlignment(CPU::Enabled(AVX) ? 32 : 16);
+    int align = 16;
+    if (CPU::Enabled(AVX)) align = 32;
+    if (CPU::Enabled(AVX512F)) align = 64;
+    x->SetMiniumAlignment(align);
     x->RequireDense();
     x->RequireStandardOrder();
-    y->SetMiniumAlignment(CPU::Enabled(AVX) ? 32 : 16);
+    y->SetMiniumAlignment(align);
     y->RequireDense();
     y->RequireStandardOrder();
     step->AllowInPlace(0, 0);
@@ -755,7 +759,9 @@ class Softmax : public Kernel {
 
     // Determine vector size for main block computation.
     int vecsize = 1;
-    if (masm->Enabled(AVX) && n >= 8) {
+    if (masm->Enabled(AVX512F) && n >= 16) {
+      vecsize = 16;
+    } else if (masm->Enabled(AVX) && n >= 8) {
       vecsize = 8;
     } else if (masm->Enabled(SSE) && n >= 4) {
       vecsize = 4;
@@ -767,9 +773,9 @@ class Softmax : public Kernel {
     Register input = masm->rr().alloc();
     Register output = masm->rr().alloc();
     Register offset = masm->rr().alloc();
-    YMMRegister sum = masm->mm().allocy();
-    YMMRegister elem = masm->mm().allocy();
-    YMMRegister max = masm->mm().allocy();
+    ZMMRegister sum = masm->mm().allocz(false);
+    ZMMRegister elem = masm->mm().allocz(false);
+    ZMMRegister max = masm->mm().allocz(false);
     SIMDRegisters basemm = masm->mm();
 
     // Load tensor locations.
@@ -783,8 +789,10 @@ class Softmax : public Kernel {
     // For numerical stability we compute softmax(x)=softmax(x-max(x)), so first
     // we find the maximum input element. Initialize max to -inf.
     float neginf = -INFINITY;
-    if (masm->Enabled(AVX)) {
-      __ vmovaps(max, masm->GetConstant(neginf, 8)->address());
+    if (masm->Enabled(AVX512F)) {
+      __ vmovaps(max, masm->GetConstant(neginf, 16)->address());
+    } else if (masm->Enabled(AVX)) {
+      __ vmovaps(max.ymm(), masm->GetConstant(neginf, 8)->address());
     } else {
       __ movaps(max.xmm(), masm->GetConstant(neginf, 4)->address());
     }
@@ -802,7 +810,7 @@ class Softmax : public Kernel {
       // Find max element for next block.
       expression.generator->GenerateBody(masm);
       if (masm->Enabled(AVX)) {
-        __ vmaxps(max, max, expression.ymm(0));
+        __ vmaxps(max.ymm(), max.ymm(), expression.ymm(0));
       } else {
         __ maxps(max.xmm(), expression.xmm(0));
       }
@@ -817,14 +825,18 @@ class Softmax : public Kernel {
 
       // Reduce max element vector.
       if (masm->Enabled(AVX)) {
-        if (vecsize > 4) {
-          __ vperm2f128(elem, ymm0, ymm0, 1);
+        if (vecsize > 8) {
+          __ vshuff32x4(elem, max, max, 0x0E);
           __ vmaxps(max, max, elem);
         }
-        __ vpermilps(elem, max, 0x0E);
-        __ vmaxps(max, max, elem);
-        __ vpermilps(elem, max, 0x01);
-        __ vmaxps(max, max, elem);
+        if (vecsize > 4) {
+          __ vperm2f128(elem.ymm(), max.ymm(), max.ymm(), 1);
+          __ vmaxps(max.ymm(), max.ymm(), elem.ymm());
+        }
+        __ vpermilps(elem.ymm(), max.ymm(), 0x0E);
+        __ vmaxps(max.ymm(), max.ymm(), elem.ymm());
+        __ vpermilps(elem.ymm(), max.ymm(), 0x01);
+        __ vmaxps(max.ymm(), max.ymm(), elem.ymm());
       } else {
         __ shufps(elem.xmm(), max.xmm(), 0x0E);
         __ maxps(max.xmm(), elem.xmm());
@@ -845,7 +857,7 @@ class Softmax : public Kernel {
       __ bind(&l);
       expression.generator->GenerateBody(masm);
       if (masm->Enabled(AVX)) {
-        __ vmaxss(max, max, expression.ymm(0));
+        __ vmaxss(max.ymm(), max.ymm(), expression.ymm(0));
       } else {
         __ maxss(max.xmm(), expression.xmm(0));
       }
@@ -860,8 +872,10 @@ class Softmax : public Kernel {
     }
 
     // Clear sum register.
-    if (masm->Enabled(AVX)) {
+    if (masm->Enabled(AVX512F)) {
       __ vxorps(sum, sum, sum);
+    } else if (masm->Enabled(AVX)) {
+      __ vxorps(sum.ymm(), sum.ymm(), sum.ymm());
     } else {
       __ xorps(sum.xmm(), sum.xmm());
     }
@@ -872,12 +886,14 @@ class Softmax : public Kernel {
       UnaryExpression expression(expr, masm, input, output, offset, m);
 
       // Broadcast max value over vector.
-      YMMRegister i0 = expression.ymm(0);
-      if (masm->Enabled(AVX2)) {
+      ZMMRegister i0 = expression.zmm(0);
+      if (masm->Enabled(AVX512F)) {
         __ vbroadcastss(i0, max);
+      } else if (masm->Enabled(AVX2)) {
+        __ vbroadcastss(i0.ymm(), max.ymm());
       } else if (masm->Enabled(AVX)) {
-        __ vshufps(i0, max, max, 0);
-        __ vperm2f128(i0, i0, i0, 0);
+        __ vshufps(i0.ymm(), max.ymm(), max.ymm(), 0);
+        __ vperm2f128(i0.ymm(), i0.ymm(), i0.ymm(), 0);
       } else {
         __ movaps(i0.xmm(), max.xmm());
         __ shufps(i0.xmm(), i0.xmm(), 0);
@@ -892,8 +908,10 @@ class Softmax : public Kernel {
       expression.generator->GenerateBody(masm);
 
       // Sum up results.
-      if (masm->Enabled(AVX)) {
-        __ vaddps(sum, sum, expression.ymm(1));
+      if (masm->Enabled(AVX512F)) {
+        __ vaddps(sum, sum, expression.zmm(1));
+      } else if (masm->Enabled(AVX)) {
+        __ vaddps(sum.ymm(), sum.ymm(), expression.ymm(1));
       } else {
         __ addps(sum.xmm(), expression.xmm(1));
       }
@@ -908,12 +926,16 @@ class Softmax : public Kernel {
 
       // Reduce sum.
       if (masm->Enabled(AVX)) {
-        if (vecsize > 4) {
-          __ vperm2f128(elem, sum, sum, 1);
-          __ vhaddps(sum, sum, elem);
+        if (vecsize > 8) {
+          __ vshuff32x4(elem, sum, sum, 0x0E);
+          __ vaddps(sum, sum, elem);
         }
-        __ vhaddps(sum, sum, sum);
-        __ vhaddps(sum, sum, sum);
+        if (vecsize > 4) {
+          __ vperm2f128(elem.ymm(), sum.ymm(), sum.ymm(), 1);
+          __ vhaddps(sum.ymm(), sum.ymm(), elem.ymm());
+        }
+        __ vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
+        __ vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
       } else {
         __ haddps(sum.xmm(), sum.xmm());
         __ haddps(sum.xmm(), sum.xmm());
@@ -928,7 +950,7 @@ class Softmax : public Kernel {
 
       // Loop over all residual elements.
       if (masm->Enabled(AVX)) {
-        __ vmovaps(expression.ymm(0), max);
+        __ vmovaps(expression.ymm(0), max.ymm());
       } else {
         __ movaps(expression.xmm(0), max.xmm());
       }
@@ -941,7 +963,7 @@ class Softmax : public Kernel {
 
       // Sum up results.
       if (masm->Enabled(AVX)) {
-        __ vaddss(sum, sum, expression.ymm(1));
+        __ vaddss(sum.ymm(), sum.ymm(), expression.ymm(1));
       } else {
         __ addss(sum.xmm(), expression.xmm(1));
       }
@@ -956,13 +978,16 @@ class Softmax : public Kernel {
     }
 
     // Compute 1/sum for normalization. Multiplication is faster than division.
-    if (masm->Enabled(AVX)) {
+    if (masm->Enabled(AVX512F)) {
+      __ vrcpss(sum.xmm(), sum.xmm(), sum.xmm());
+      __ vbroadcastss(sum, sum);
+    } else if (masm->Enabled(AVX)) {
       __ vrcpss(sum.xmm(), sum.xmm(), sum.xmm());
       if (masm->Enabled(AVX2)) {
-        __ vbroadcastss(sum, sum);
+        __ vbroadcastss(sum.ymm(), sum.ymm());
       } else {
-        __ vshufps(sum, sum, sum, 0);
-        __ vperm2f128(sum, sum, sum, 0);
+        __ vshufps(sum.ymm(), sum.ymm(), sum.ymm(), 0);
+        __ vperm2f128(sum.ymm(), sum.ymm(), sum.ymm(), 0);
       }
     } else {
       __ rcpss(sum.xmm(), sum.xmm());
@@ -975,8 +1000,10 @@ class Softmax : public Kernel {
       UnaryExpression expression(postexpr, masm, output, output, offset, m);
 
       // Load scaling factor.
-      if (masm->Enabled(AVX)) {
-        __ vmovaps(expression.ymm(0), sum);
+      if (masm->Enabled(AVX512F)) {
+        __ vmovaps(expression.zmm(0), sum);
+      } else if (masm->Enabled(AVX)) {
+        __ vmovaps(expression.ymm(0), sum.ymm());
       } else {
         __ movaps(expression.xmm(0), sum.xmm());
       }
@@ -1006,7 +1033,7 @@ class Softmax : public Kernel {
 
       // Load scaling factor.
       if (masm->Enabled(AVX)) {
-        __ vmovaps(expression.ymm(0), sum);
+        __ vmovaps(expression.ymm(0), sum.ymm());
       } else {
         __ movaps(expression.xmm(0), sum.xmm());
       }
@@ -1101,6 +1128,7 @@ class Softmax : public Kernel {
     int reg(int id) { return generator->RegisterNumber(Express::REGISTER, id); }
     YMMRegister ymm(int id) { return index.ymm(reg(id)); }
     XMMRegister xmm(int id) { return index.xmm(reg(id)); }
+    ZMMRegister zmm(int id) { return index.zmm(reg(id)); }
 
     UnaryIndexGenerator index;
     ExpressionGenerator *generator;

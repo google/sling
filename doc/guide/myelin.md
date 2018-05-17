@@ -30,8 +30,8 @@ file:
 ```python
 from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
-from flow import Flow
-from flow import FlowBuilder
+from sling.myelin import Flow
+from sling.myelin import Builder
 
 # Import data.
 mnist = input_data.read_data_sets("/tmp/mnist", one_hot=True)
@@ -57,7 +57,7 @@ for _ in range(1000):
 
 # Save model to flow file.
 flow = Flow()
-builder = FlowBuilder(sess, flow)
+builder = Builder(sess, flow)
 builder.add(flow.func("classifier"), [x], [y])
 flow.save("/tmp/mnist.flow")
 ```
@@ -74,8 +74,8 @@ a flow file:
 
 ```python
 import tensorflow as tf
-from flow import Flow
-from flow import FlowBuilder
+from sling.myelin import Flow
+from sling.myelin import Builder
 
 # Load Tensorflow checkpoint.
 sess = tf.Session()
@@ -84,7 +84,7 @@ saver.restore(sess, '/tmp/mnist.ckpt')
 
 # Create Myelin flow.
 flow = Flow()
-builder = FlowBuilder(sess, flow)
+builder = Builder(sess, flow)
 
 # Extract flow from graph.
 inputs = [sess.graph.get_tensor_by_name("x:0")]

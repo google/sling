@@ -193,7 +193,13 @@ void GradientDescentOptimizer::BuildOptimizer(const GradientMap &gradmap,
 void GradientDescentOptimizer::InitializeOptimizer() {
   // Set initial learning rate.
   alpha_ = GetParameter(name_ + "/alpha");
-  set_alpha(0.01);
+  *data_->Get<float>(alpha_) = lr_;
+}
+
+float GradientDescentOptimizer::DecayLearningRate() {
+  float &lr = *data_->Get<float>(alpha_);
+  lr *= decay_;
+  return lr;
 }
 
 void AdamOptimizer::BuildOptimizer(const GradientMap &gradmap,
@@ -209,7 +215,7 @@ void AdamOptimizer::BuildOptimizer(const GradientMap &gradmap,
   FlowBuilder &tf = *update;
 
   // Add hyperparameter inputs.
-  auto *alpha = tf.Name(tf.Const(alpha_), "alpha");
+  auto *alpha = tf.Var("alpha", DT_FLOAT, {})->set_in()->set_out();
   auto *beta1 = tf.Name(tf.Const(beta1_), "beta1");
   auto *beta2 = tf.Name(tf.Const(beta2_), "beta2");
   auto *epsilon = tf.Name(tf.Const(epsilon_), "epsilon");
@@ -224,8 +230,8 @@ void AdamOptimizer::BuildOptimizer(const GradientMap &gradmap,
   auto *beta2_t = tf.Accumulate(beta2_t_var, tf.Mul(beta2_t_var, beta2));
 
   // Compute learning rate.
-  auto *lr = tf.Div(tf.Mul(tf.Sqrt(tf.Sub(tf.One(), beta2_t)), alpha),
-                    tf.Sub(tf.One(), beta1_t));
+  auto *lr = tf.Mul(alpha, tf.Div(tf.Sqrt(tf.Sub(tf.One(), beta2_t)),
+                                  tf.Sub(tf.One(), beta1_t)));
 
   // Optionally add hyperparameter for gradient clipping.
   Flow::Variable *threshold = nullptr;
@@ -270,6 +276,10 @@ void AdamOptimizer::BuildOptimizer(const GradientMap &gradmap,
 }
 
 void AdamOptimizer::InitializeOptimizer() {
+  // Set initial learning rate.
+  alpha_ = GetParameter(name_ + "/alpha");
+  *data_->Get<float>(alpha_) = lr_;
+
   // Initialize bias correction parameters.
   auto *beta1_t = GetParameter(name_ + "/beta1_t");
   auto *beta2_t = GetParameter(name_ + "/beta2_t");
@@ -279,6 +289,12 @@ void AdamOptimizer::InitializeOptimizer() {
 
 void AdamOptimizer::Apply(std::vector<Instance *> &gradients) {
   Optimizer::Apply(gradients);
+}
+
+float AdamOptimizer::DecayLearningRate() {
+  float &lr = *data_->Get<float>(alpha_);
+  lr *= decay_;
+  return lr;
 }
 
 }  // namespace myelin

@@ -23,17 +23,33 @@ namespace myelin {
 using namespace jit;
 
 // Allocate registers for unrolling.
-static int AllocateYMMUnrolls(MacroAssembler *masm,
-                              int vector_size,
-                              int max_unrolls,
-                              std::vector<YMMRegister> *regs) {
+static int SIMDUnrolls(int size, int vecsize, int max_unrolls) {
   int unrolls = 0;
   for (int i = 1; i <= max_unrolls; ++i) {
-    int batch_size = i * 8;
-    if (vector_size >= batch_size && vector_size % batch_size == 0) unrolls = i;
+    int batch_size = i * vecsize;
+    if (size >= batch_size && size % batch_size == 0) unrolls = i;
   }
+  return unrolls;
+}
+
+static int AllocateYMMUnrolls(MacroAssembler *masm,
+                              int size,
+                              int max_unrolls,
+                              std::vector<YMMRegister> *regs) {
+  int unrolls = SIMDUnrolls(size, 8, max_unrolls);
   for (int i = 0; i < std::max(unrolls, 1); ++i) {
     regs->push_back(masm->mm().allocy());
+  }
+  return unrolls;
+}
+
+static int AllocateZMMUnrolls(MacroAssembler *masm,
+                              int size,
+                              int max_unrolls,
+                              std::vector<ZMMRegister> *regs) {
+  int unrolls = SIMDUnrolls(size, 16, max_unrolls);
+  for (int i = 0; i < std::max(unrolls, 1); ++i) {
+    regs->push_back(masm->mm().allocz());
   }
   return unrolls;
 }
@@ -824,14 +840,15 @@ class PoolingGather : public Kernel {
     Tensor *v = step->output(0);
 
     // Align to one ymm/xmm register.
-    int byte_alignment = (CPU::Enabled(AVX) ? 256 : 128) / 8;
-    M->SetMiniumAlignment(byte_alignment);
-    v->SetMiniumAlignment(byte_alignment);
+    int align = 4;
+    if (CPU::Enabled(AVX)) align = 8;
+    if (CPU::Enabled(AVX512F)) align = 16;
+    M->SetMiniumAlignment(align * sizeof(float));
+    v->SetMiniumAlignment(align * sizeof(float));
 
     // Embedding matrix must be row-major.
     M->SetRequiredOrder(ROW_MAJOR);
-    int minalign = CPU::Enabled(AVX) ? 8 : 4;
-    if (M->dim(1) >= minalign) M->MinAlign({1, minalign});
+    if (M->dim(1) >= align) M->MinAlign({1, align});
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -864,6 +881,12 @@ class PoolingGather : public Kernel {
     __ xorq(fidx, fidx);
     if (pooling_ == AVG) {
       __ xorq(fcnt, fcnt);
+    }
+
+    // Set up mask.
+    OpmaskRegister mask = masm->kk().alloc();
+    if (CPU::Enabled(AVX512F) && n % 16 != 0) {
+      __ LoadMask(n % 16, mask);
     }
 
     // Find first (non-negative) feature.
@@ -914,7 +937,53 @@ class PoolingGather : public Kernel {
     __ addq(src, acc);
 
     // Update output vector with embedding vector for feature.
-    if (masm->Enabled(AVX)) {
+    if (masm->Enabled(AVX512F)) {
+      // Combine elements using AVX512 vectors.
+      std::vector<ZMMRegister> elem;
+      int main = (n / 16) * 16;
+      int unrolls = AllocateZMMUnrolls(masm, main, 4, &elem);
+      if (unrolls > 0) {
+        Label next;
+        __ xorq(ofs, ofs);
+        __ bind(&next);
+        for (int i = 0; i < unrolls; ++i) {
+          int disp = i * 16 * sizeof(float);
+          __ vmovaps(elem[i], Operand(src, ofs, times_1, disp));
+        }
+        for (int i = 0; i < unrolls; ++i) {
+          int disp = i * 16 * sizeof(float);
+          if (pooling_ == MAX) {
+            __ vmaxps(elem[i], elem[i], Operand(output, ofs, times_1, disp));
+          } else {
+            __ vaddps(elem[i], elem[i], Operand(output, ofs, times_1, disp));
+          }
+        }
+        for (int i = 0; i < unrolls; ++i) {
+          int disp = i * 16 * sizeof(float);
+          __ vmovaps(Operand(output, ofs, times_1, disp), elem[i]);
+        }
+
+        if (16 * unrolls > main) {
+          __ addq(ofs, Immediate(8 * unrolls * sizeof(float)));
+          __ cmpq(ofs, Immediate(main * sizeof(float)));
+          __ j(less, &next);
+        }
+      }
+
+      // Combine residual elements.
+      if (n % 16 > 0) {
+        int disp = main * sizeof(float);
+        __ vmovaps(elem[0], Operand(src, disp), Mask(mask, zeroing));
+        if (pooling_ == MAX) {
+          __ vmaxps(elem[0], elem[0], Operand(output, disp),
+                    Mask(mask, zeroing));
+        } else {
+          __ vaddps(elem[0], elem[0], Operand(output, disp),
+                    Mask(mask, zeroing));
+        }
+        __ vmovaps(Operand(output, disp), elem[0], Mask(mask, merging));
+      }
+    } else if (masm->Enabled(AVX)) {
       // Combine elements using AVX vectors.
       std::vector<YMMRegister> elem;
       int main = (n / 8) * 8;
@@ -1000,7 +1069,40 @@ class PoolingGather : public Kernel {
 
     // Compute average.
     if (pooling_ == AVG) {
-      if (masm->Enabled(AVX)) {
+      if (masm->Enabled(AVX512F)) {
+        // Compute 1/fcnt.
+        ZMMRegister scalar = masm->mm().allocz();
+        __ vcvtqsi2ss(scalar.xmm(), scalar.xmm(), fcnt);
+        __ vrcpss(scalar.xmm(), scalar.xmm(), scalar.xmm());
+        __ vbroadcastss(scalar, scalar);
+
+        // Multiply all output elements with scalar to get the average.
+        std::vector<ZMMRegister> elem;
+        int main = (n / 16) * 16;
+        int unrolls = AllocateZMMUnrolls(masm, main, 4, &elem);
+        if (unrolls > 0) {
+          Label next;
+          __ xorq(ofs, ofs);
+          __ bind(&next);
+          for (int i = 0; i < unrolls; ++i) {
+            int disp = i * 16 * sizeof(float);
+            __ vmulps(elem[i], scalar, Operand(output, ofs, times_1, disp));
+          }
+          for (int i = 0; i < unrolls; ++i) {
+            int disp = i * 16 * sizeof(float);
+            __ vmovaps(Operand(output, ofs, times_1, disp), elem[i]);
+          }
+          __ addq(ofs, Immediate(16 * unrolls * sizeof(float)));
+          __ cmpq(ofs, Immediate(main * sizeof(float)));
+          __ j(less, &next);
+        }
+        if (n % 16 > 0) {
+          int disp = main * sizeof(float);
+          __ vmulps(elem[0], scalar, Operand(output, disp),
+                    Mask(mask, zeroing));
+          __ vmovaps(Operand(output, disp), elem[0], Mask(mask, merging));
+        }
+      } else if (masm->Enabled(AVX)) {
         // Compute 1/fcnt.
         YMMRegister scalar = masm->mm().allocy();
         __ vcvtqsi2ss(scalar.xmm(), scalar.xmm(), fcnt);
@@ -1112,16 +1214,19 @@ class ScatterAdd : public Kernel {
     Tensor *var = step->input(0);
     Tensor *value = step->input(2);
 
-    // Align to one ymm/xmm register.
-    int byte_alignment = (CPU::Enabled(AVX) ? 256 : 128) / 8;
-    var->SetMiniumAlignment(byte_alignment);
-    value->SetMiniumAlignment(byte_alignment);
+    // Align to one SIMD register.
+    int align = 4;
+    if (CPU::Enabled(AVX)) align = 8;
+    if (CPU::Enabled(AVX512F)) align = 16;
+    var->SetMiniumAlignment(align * sizeof(float));
+    value->SetMiniumAlignment(align * sizeof(float));
 
     // Embedding matrix must be row-major.
     var->SetRequiredOrder(ROW_MAJOR);
     int minalign = 1;
     if (var->dim(1) >= 4) minalign = 4;
     if (CPU::Enabled(AVX) && var->dim(1) >= 8) minalign = 8;
+    if (CPU::Enabled(AVX512F) && var->dim(1) >= 16) minalign = 16;
     var->MinAlign({1, minalign});
   }
 
@@ -1142,7 +1247,7 @@ class ScatterAdd : public Kernel {
     Register valaddr = masm->rr().alloc();
     Register fidx = masm->rr().alloc();
     Register src = masm->rr().alloc();
-    YMMRegister factor = masm->mm().allocy();
+    ZMMRegister factor = masm->mm().allocz(false);
 
     // Load tensor locations.
     __ LoadTensorAddress(varaddr, var);
@@ -1152,12 +1257,20 @@ class ScatterAdd : public Kernel {
     // Load scaling value.
     if (scaler) {
       __ LoadTensorAddress(src, scaler);
-      if (masm->Enabled(AVX)) {
+      if (masm->Enabled(AVX512F)) {
         __ vbroadcastss(factor, Operand(src));
+      } else if (masm->Enabled(AVX)) {
+        __ vbroadcastss(factor.ymm(), Operand(src));
       } else {
         __ movss(factor.xmm(), Operand(src));
         __ shufps(factor.xmm(), factor.xmm(), 0);
       }
+    }
+
+    // Set up mask.
+    OpmaskRegister mask = masm->kk().alloc();
+    if (CPU::Enabled(AVX512F) && n % 16 != 0) {
+      __ LoadMask(n % 16, mask);
     }
 
     // Loop over features.
@@ -1179,7 +1292,52 @@ class ScatterAdd : public Kernel {
     __ addq(acc, varaddr);
 
     // Add (scaled) input vector for feature to embedding vector.
-    if (masm->Enabled(AVX)) {
+    if (masm->Enabled(AVX512F)) {
+      // Update elements using AVX-512 vectors.
+      std::vector<ZMMRegister> elem;
+      int main = (n / 16) * 16;
+      int unrolls = AllocateZMMUnrolls(masm, main, 4, &elem);
+      if (unrolls > 0) {
+        Label next;
+        __ xorq(ofs, ofs);
+        __ bind(&next);
+        for (int i = 0; i < unrolls; ++i) {
+          int disp = i * 16 * sizeof(float);
+          if (scale_) {
+            __ vmulps(elem[i], factor, Operand(valaddr, ofs, times_1, disp));
+          } else {
+            __ vmovaps(elem[i], Operand(valaddr, ofs, times_1, disp));
+          }
+        }
+        for (int i = 0; i < unrolls; ++i) {
+          int disp = i * 16 * sizeof(float);
+          __ vaddps(elem[i], elem[i], Operand(acc, ofs, times_1, disp));
+        }
+        for (int i = 0; i < unrolls; ++i) {
+          int disp = i * 16 * sizeof(float);
+          __ vmovaps(Operand(acc, ofs, times_1, disp), elem[i]);
+        }
+        if (16 * unrolls > main) {
+          __ addq(ofs, Immediate(8 * unrolls * sizeof(float)));
+          __ cmpq(ofs, Immediate(main * sizeof(float)));
+          __ j(less, &next);
+        }
+      }
+
+      // Update residual elements.
+      if (n % 16 != 0) {
+        int disp = main * sizeof(float);
+        if (scale_) {
+          __ vmulps(elem[0], factor, Operand(valaddr, disp),
+                    Mask(mask, zeroing));
+        } else {
+          __ vmovups(elem[0], Operand(valaddr, disp), Mask(mask, zeroing));
+        }
+        __ vaddps(elem[0], elem[0], Operand(acc, disp),
+                  Mask(mask, zeroing));
+        __ vmovups(Operand(acc, disp), elem[0], Mask(mask, merging));
+      }
+    } else if (masm->Enabled(AVX)) {
       // Update elements using AVX vectors.
       std::vector<YMMRegister> elem;
       int main = (n / 8) * 8;
@@ -1191,7 +1349,8 @@ class ScatterAdd : public Kernel {
         for (int i = 0; i < unrolls; ++i) {
           int disp = i * 8 * sizeof(float);
           if (scale_) {
-            __ vmulps(elem[i], factor, Operand(valaddr, ofs, times_1, disp));
+            __ vmulps(elem[i], factor.ymm(),
+                      Operand(valaddr, ofs, times_1, disp));
           } else {
             __ vmovaps(elem[i], Operand(valaddr, ofs, times_1, disp));
           }
@@ -1226,12 +1385,12 @@ class ScatterAdd : public Kernel {
       for (int i = 0; i < n % 4; ++i) {
         int r = i % std::max(unrolls, 1);
         if (scale_) {
-          __ vmulss(elem[r], factor, Operand(valaddr, disp));
+          __ vmulss(elem[r].xmm(), factor.xmm(), Operand(valaddr, disp));
         } else {
-          __ vmovss(elem[r], Operand(valaddr, disp));
+          __ vmovss(elem[r].xmm(), Operand(valaddr, disp));
         }
-        __ vaddss(elem[r], elem[r], Operand(acc, disp));
-        __ vmovss(Operand(acc, disp), elem[r]);
+        __ vaddss(elem[r].xmm(), elem[r].xmm(), Operand(acc, disp));
+        __ vmovss(Operand(acc, disp), elem[r].xmm());
         disp += sizeof(float);
       }
     } else {

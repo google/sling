@@ -621,7 +621,10 @@ class Norm : public Kernel {
 
   void Adjust(Step *step) override {
     Tensor *x = step->input(0);
-    x->SetMiniumAlignment(CPU::Enabled(AVX) ? 32 : 16);
+    int align = 16;
+    if (CPU::Enabled(AVX)) align = 32;
+    if (CPU::Enabled(AVX512F)) align = 64;
+    x->SetMiniumAlignment(align);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -630,10 +633,13 @@ class Norm : public Kernel {
     Tensor *norm = step->output(0);
 
     // Determine vector size for main block computation.
+    bool avx512 = masm->Enabled(AVX512F);
     int n = 1;
     for (int d = 0; d < x->rank(); ++d) n *= x->aligned(d);
     int vecsize = 1;
-    if (masm->Enabled(AVX) && n >= 8) {
+    if (avx512 && n > 1) {
+      vecsize = 16;
+    } else if (masm->Enabled(AVX) && n >= 8) {
       vecsize = 8;
     } else if (masm->Enabled(SSE) && n >= 4) {
       vecsize = 4;
@@ -645,59 +651,80 @@ class Norm : public Kernel {
     Register input = masm->rr().alloc();
     Register output = masm->rr().alloc();
     Register offset = masm->rr().alloc();
-    YMMRegister sum = masm->mm().allocy();
-    YMMRegister elem = masm->mm().allocy();
-    YMMRegister l2 = masm->mm().allocy();
+    ZMMRegister sum = masm->mm().allocz(false);
+    ZMMRegister elem = masm->mm().allocz(false);
+    ZMMRegister l2 = masm->mm().allocz(false);
+    OpmaskRegister mask = masm->kk().alloc();
 
     // Load tensor locations.
     __ LoadTensorAddress(input, x);
     __ LoadTensorAddress(output, norm);
-    __ vxorps(sum, sum, sum);
+    if (avx512) {
+      __ vxorps(sum, sum, sum);
+    } else {
+      __ vxorps(sum.ymm(), sum.ymm(), sum.ymm());
+    }
 
     // Compute sum of squares for main elements.
     __ xorq(offset, offset);
     if (vecsize > 1) {
-      Label l;
-      __ bind(&l);
-      if (masm->Enabled(AVX)) {
-        if (vecsize == 8) {
+      if (m > 0) {
+        Label l;
+        __ bind(&l);
+        if (avx512) {
           __ vmovaps(elem, Operand(input, offset));
-          if (masm->Enabled(FMA3)) {
-            __ vfmadd231ps(sum, elem, elem);
+          __ vfmadd231ps(sum, elem, elem);
+        } else if (masm->Enabled(AVX)) {
+          if (vecsize == 8) {
+            __ vmovaps(elem.ymm(), Operand(input, offset));
+            if (masm->Enabled(FMA3)) {
+              __ vfmadd231ps(sum.ymm(), elem.ymm(), elem.ymm());
+            } else {
+              __ vmulps(elem.ymm(), elem.ymm(), elem.ymm());
+              __ vaddps(sum.ymm(), sum.ymm(), elem.ymm());
+            }
           } else {
-            __ vmulps(elem, elem, elem);
-            __ vaddps(sum, sum, elem);
+            __ vmovaps(elem.xmm(), Operand(input, offset));
+            if (masm->Enabled(FMA3)) {
+              __ vfmadd231ps(sum.xmm(), elem.xmm(), elem.xmm());
+            } else {
+              __ vmulps(elem.xmm(), elem.xmm(), elem.xmm());
+              __ vaddps(sum.xmm(), sum.xmm(), elem.xmm());
+            }
           }
         } else {
           __ vmovaps(elem.xmm(), Operand(input, offset));
-          if (masm->Enabled(FMA3)) {
-            __ vfmadd231ps(sum.xmm(), elem.xmm(), elem.xmm());
-          } else {
-            __ vmulps(elem.xmm(), elem.xmm(), elem.xmm());
-            __ vaddps(sum.xmm(), sum.xmm(), elem.xmm());
-          }
+          __ mulps(elem.xmm(), elem.xmm());
+          __ addps(sum.xmm(), elem.xmm());
         }
-      } else {
-        __ vmovaps(elem.xmm(), Operand(input, offset));
-        __ mulps(elem.xmm(), elem.xmm());
-        __ addps(sum.xmm(), elem.xmm());
+        if (m > vecsize || r > 0) {
+          __ addq(offset, Immediate(vecsize * sizeof(float)));
+        }
+        if (m > vecsize) {
+          __ cmpq(offset, Immediate(m * sizeof(float)));
+          __ j(less, &l);
+        }
       }
-      if (m > vecsize || r > 0) {
-        __ addq(offset, Immediate(vecsize * sizeof(float)));
-      }
-      if (m > vecsize) {
-        __ cmpq(offset, Immediate(m * sizeof(float)));
-        __ j(less, &l);
+
+      // Compute residual for AVX512 mode using masking.
+      if (avx512 && r > 0) {
+        __ LoadMask(r, mask);
+        __ vmovaps(elem, Operand(input, offset), Mask(mask, zeroing));
+        __ vfmadd231ps(sum, elem, elem);
       }
 
       // Reduce sum.
       if (masm->Enabled(AVX)) {
-        if (vecsize == 8) {
-          __ vperm2f128(elem, sum, sum, 1);
-          __ vhaddps(sum, sum, elem);
+        if (vecsize == 16) {
+          __ vshuff32x4(elem, sum, sum, 0x0E);
+          __ vaddps(sum, sum, elem);
         }
-        __ vhaddps(sum, sum, sum);
-        __ vhaddps(sum, sum, sum);
+        if (vecsize == 8) {
+          __ vperm2f128(elem.ymm(), sum.ymm(), sum.ymm(), 1);
+          __ vhaddps(sum.ymm(), sum.ymm(), elem.ymm());
+        }
+        __ vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
+        __ vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
       } else {
         __ haddps(sum.xmm(), sum.xmm());
         __ haddps(sum.xmm(), sum.xmm());
@@ -705,16 +732,16 @@ class Norm : public Kernel {
     }
 
     // Compute sum of squares for residual elements.
-    if (r > 0) {
+    if (!avx512 && r > 0) {
       Label l;
       __ bind(&l);
       if (masm->Enabled(AVX)) {
-        __ vmovss(elem, Operand(input, offset));
+        __ vmovss(elem.xmm(), Operand(input, offset));
         if (masm->Enabled(FMA3)) {
           __ vfmadd231ss(sum.xmm(), elem.xmm(), elem.xmm());
         } else {
-          __ vmulss(elem, elem, elem);
-          __ vaddss(sum, sum, elem);
+          __ vmulss(elem.xmm(), elem.xmm(), elem.xmm());
+          __ vaddss(sum.xmm(), sum.xmm(), elem.xmm());
         }
       } else {
         __ movss(elem.xmm(), Operand(input, offset));
@@ -731,7 +758,7 @@ class Norm : public Kernel {
     // Take square root of sum.
     if (masm->Enabled(AVX)) {
       __ vsqrtss(l2.xmm(), sum.xmm(), sum.xmm());
-      __ vmovss(Operand(output), l2);
+      __ vmovss(Operand(output), l2.xmm());
     } else {
       __ sqrtss(l2.xmm(), sum.xmm());
       __ movss(Operand(output), l2.xmm());

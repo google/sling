@@ -284,6 +284,13 @@ class RecipeParser {
     }
     next();
 
+    // Parse single qualifier (only used for testing).
+    bool single = false;
+    if (is('\'')) {
+      single = true;
+      next();
+    }
+
     // Parse variable id.
     int id = 0;
     int digits = 0;
@@ -295,8 +302,9 @@ class RecipeParser {
     if (digits == 0) Error("Variable id expected in expression");
 
     // Return variable.
-    // type could be unitialized at this point
-    return expr_->Variable(type, id);
+    Express::Var *var = expr_->Variable(type, id);
+    var->single = single;
+    return var;
   }
 
   // Output error.
@@ -674,16 +682,10 @@ bool Express::TryToEliminateOps() {
 }
 
 void Express::Hoist(int limit) {
-  // Collect all existing cached variables.
-  std::set<Var *> cached;
+  // Collect all existing hoisted variables.
+  std::set<Var *> hoisted;
   for (int i = 0; i < body_; ++i) {
-    cached.insert(ops_[i]->result);
-  }
-
-  // Single element inputs and constants are also considered as cached since
-  // these are by definition loop invariant.
-  for (Var *var : vars_) {
-    if (var->type == NUMBER || var->single) cached.insert(var);
+    hoisted.insert(ops_[i]->result);
   }
 
   // Hoist const loads outside the body until limit reached.
@@ -693,7 +695,7 @@ void Express::Hoist(int limit) {
     Var *candidate = nullptr;
     for (Var *v : vars_) {
       if (v->type == CONST || v->type == NUMBER) {
-        if (cached.count(v) == 0) {
+        if (hoisted.count(v) == 0) {
           if (candidate == nullptr || v->usages() > candidate->usages()) {
             candidate = v;
           }
@@ -720,10 +722,19 @@ void Express::Hoist(int limit) {
     assign->Assign(temp);
     assign->AddArgument(candidate);
     body_++;
-    cached.insert(candidate);
+    hoisted.insert(candidate);
+    hoisted.insert(temp);
     new_temps++;
   }
   if (new_temps > 0) CompactTempVars();
+
+  // Single element inputs and constants are also considered hoisted since
+  // these are by definition loop invariant.
+  for (Var *var : vars_) {
+    if (var->type == NUMBER || var->type == CONST || var->single) {
+      hoisted.insert(var);
+    }
+  }
 
   // Hoist loop-invariant operations.
   bool again = true;
@@ -735,7 +746,7 @@ void Express::Hoist(int limit) {
       // Check if all arguments are cached.
       bool invariant = true;
       for (Var *arg : op->args) {
-        if (cached.count(arg) == 0) {
+        if (hoisted.count(arg) == 0) {
           invariant = false;
           break;
         }
@@ -745,7 +756,7 @@ void Express::Hoist(int limit) {
       if (invariant) {
         for (int j = i; j > body_; --j) ops_[j] = ops_[j - 1];
         ops_[body_++] = op;
-        cached.insert(op->result);
+        hoisted.insert(op->result);
         again = true;
         break;
       }

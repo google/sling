@@ -22,9 +22,9 @@ namespace myelin {
 using namespace jit;
 
 // Generate vector float expression using AVX and YMM registers.
-class VectorFltAVX256Generator : public ExpressionGenerator {
+class VectorFltAVX512Generator : public ExpressionGenerator {
  public:
-  VectorFltAVX256Generator() {
+  VectorFltAVX512Generator() {
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -42,26 +42,15 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
     }
   }
 
-  string Name() override { return "VFltAVX256"; }
+  string Name() override { return "VFltAVX512"; }
 
-  int VectorSize() override { return YMMRegSize; }
+  int VectorSize() override { return ZMMRegSize; }
+
+  bool ExtendedRegs() override { return true; }
 
   void Reserve() override {
-    // Reserve YMM registers.
-    index_->ReserveYMMRegisters(instructions_.NumRegs());
-
-    // Allocate auxiliary registers.
-    int num_mm_aux = 0;
-    if (!CPU::Enabled(AVX2)) {
-      if (instructions_.Has(Express::SHR23) ||
-          instructions_.Has(Express::SHL23)) {
-        num_mm_aux = std::max(num_mm_aux, 1);
-      }
-      if (instructions_.Has(Express::SUBINT)) {
-        num_mm_aux = std::max(num_mm_aux, 3);
-      }
-    }
-    index_->ReserveAuxYMMRegisters(num_mm_aux);
+    // Reserve ZMM registers.
+    index_->ReserveZMMRegisters(instructions_.NumRegs());
   }
 
   void Generate(Express::Op *instr, MacroAssembler *masm) override {
@@ -73,91 +62,104 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
           // between integer and floating point units.
           switch (type_) {
             case DT_FLOAT:
-              __ vxorps(ymm(instr->dst), ymm(instr->dst), ymm(instr->dst));
+              __ vxorps(zmm(instr->dst), zmm(instr->dst), zmm(instr->dst));
               break;
             case DT_DOUBLE:
-              __ vxorpd(ymm(instr->dst), ymm(instr->dst), ymm(instr->dst));
+              __ vxorpd(zmm(instr->dst), zmm(instr->dst), zmm(instr->dst));
               break;
             default: UNSUPPORTED;
           }
         } else {
-          GenerateYMMVectorMove(instr, masm);
+          GenerateZMMVectorMove(instr, masm);
         }
         break;
       case Express::ADD:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vaddps, &Assembler::vaddpd,
             &Assembler::vaddps, &Assembler::vaddpd,
             masm);
         break;
       case Express::SUB:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vsubps, &Assembler::vsubpd,
             &Assembler::vsubps, &Assembler::vsubpd,
             masm);
         break;
       case Express::MUL:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vmulps, &Assembler::vmulpd,
             &Assembler::vmulps, &Assembler::vmulpd,
             masm);
         break;
       case Express::DIV:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vdivps, &Assembler::vdivpd,
             &Assembler::vdivps, &Assembler::vdivpd,
             masm);
         break;
       case Express::MIN:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
             &Assembler::vminps, &Assembler::vminpd,
+            nullptr, nullptr,
             &Assembler::vminps, &Assembler::vminpd,
             masm);
         break;
       case Express::MAX:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
             &Assembler::vmaxps, &Assembler::vmaxpd,
+            nullptr, nullptr,
             &Assembler::vmaxps, &Assembler::vmaxpd,
             masm);
         break;
       case Express::SQRT:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vsqrtps, &Assembler::vsqrtpd,
             &Assembler::vsqrtps, &Assembler::vsqrtpd,
             masm);
         break;
       case Express::MULADD132:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vfmadd132ps, &Assembler::vfmadd132pd,
             &Assembler::vfmadd132ps, &Assembler::vfmadd132pd,
             masm, 2);
         break;
       case Express::MULADD213:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vfmadd213ps, &Assembler::vfmadd213pd,
             &Assembler::vfmadd213ps, &Assembler::vfmadd213pd,
             masm, 2);
         break;
       case Express::MULADD231:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vfmadd231ps, &Assembler::vfmadd231pd,
             &Assembler::vfmadd231ps, &Assembler::vfmadd231pd,
             masm, 2);
         break;
       case Express::MULSUB132:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vfmsub132ps, &Assembler::vfmsub132pd,
             &Assembler::vfmsub132ps, &Assembler::vfmsub132pd,
             masm, 2);
         break;
       case Express::MULSUB213:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vfmsub213ps, &Assembler::vfmsub213pd,
             &Assembler::vfmsub213ps, &Assembler::vfmsub213pd,
             masm, 2);
         break;
       case Express::MULSUB231:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
+            nullptr, nullptr,
             &Assembler::vfmsub231ps, &Assembler::vfmsub231pd,
             &Assembler::vfmsub231ps, &Assembler::vfmsub231pd,
             masm, 2);
@@ -175,20 +177,23 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         GenerateCompare(instr, masm, CMP_NGE_UQ);
         break;
       case Express::AND:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
             &Assembler::vandps, &Assembler::vandpd,
+            nullptr, nullptr,
             &Assembler::vandps, &Assembler::vandpd,
             masm);
         break;
       case Express::OR:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
             &Assembler::vorps, &Assembler::vorpd,
+            nullptr, nullptr,
             &Assembler::vorps, &Assembler::vorpd,
             masm);
         break;
       case Express::ANDNOT:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
             &Assembler::vandnps, &Assembler::vandnpd,
+            nullptr, nullptr,
             &Assembler::vandnps, &Assembler::vandnpd,
             masm);
         break;
@@ -199,25 +204,31 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         GenerateShift(instr, masm, true, 23);
         break;
       case Express::FLOOR:
-        GenerateYMMFltOp(instr,
-            &Assembler::vroundps, &Assembler::vroundpd,
-            &Assembler::vroundps, &Assembler::vroundpd,
+        GenerateZMMFltOp(instr,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
             round_down, masm);
         break;
       case Express::CVTFLTINT:
-        GenerateYMMFltOp(instr,
+        GenerateZMMFltOp(instr,
             &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
+            nullptr, nullptr,
             &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
             masm);
         break;
       case Express::CVTINTFLT:
-        GenerateYMMFltOp(instr,
-            &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
+        GenerateZMMFltOp(instr,
+            nullptr, &Assembler::vcvtdq2pd,
+            &Assembler::vcvtdq2ps, nullptr,
             &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
             masm);
         break;
       case Express::SUBINT:
-        GenerateIntegerSubtract(instr, masm);
+        GenerateZMMFltOp(instr,
+            &Assembler::vpsubd, &Assembler::vpsubq,
+            nullptr, nullptr,
+            &Assembler::vpsubd, &Assembler::vpsubq,
+            masm);
         break;
       default:
         UNSUPPORTED;
@@ -227,94 +238,92 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
   // Generate left/right shift.
   void GenerateShift(Express::Op *instr, MacroAssembler *masm,
                      bool left, int bits) {
-    // Make sure source is in a register.
-    CHECK(instr->dst != -1);
-    int src = instr->src;
-    if (instr->src == -1) {
-      GenerateYMMMoveMemToReg(ymm(instr->dst), addr(instr->args[0]), masm);
-      src = instr->dst;
-    }
-
-    if (CPU::Enabled(AVX2)) {
-      // Shift ymm register.
+    if (instr->dst != -1 && instr->src != -1) {
       switch (type_) {
         case DT_FLOAT:
           if (left) {
-            __ vpslld(ymm(instr->dst), ymm(src), bits);
+            __ vpslld(zmm(instr->dst), zmm(instr->src), bits);
           } else {
-            __ vpsrld(ymm(instr->dst), ymm(src), bits);
+            __ vpsrld(zmm(instr->dst), zmm(instr->src), bits);
           }
           break;
         case DT_DOUBLE:
           if (left) {
-            __ vpsllq(ymm(instr->dst), ymm(src), bits);
+            __ vpsllq(zmm(instr->dst), zmm(instr->src), bits);
           } else {
-            __ vpsrlq(ymm(instr->dst), ymm(src), bits);
+            __ vpsrlq(zmm(instr->dst), zmm(instr->src), bits);
+          }
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->dst != -1 && instr->src == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          if (left) {
+            __ vpslld(zmm(instr->dst), addr(instr->args[0]), bits);
+          } else {
+            __ vpsrld(zmm(instr->dst), addr(instr->args[0]), bits);
+          }
+          break;
+        case DT_DOUBLE:
+          if (left) {
+            __ vpsllq(zmm(instr->dst), addr(instr->args[0]), bits);
+          } else {
+            __ vpsrlq(zmm(instr->dst), addr(instr->args[0]), bits);
           }
           break;
         default: UNSUPPORTED;
       }
     } else {
-      // Shift ymm register by shifting lo and hi xmm registers.
-      __ vextractf128(xmmaux(0), ymm(src), 1);
-      if (left) {
-        __ vpslld(xmmaux(0), xmmaux(0), bits);
-        __ vpslld(xmm(instr->dst), xmm(src), bits);
-      } else {
-        __ vpsrld(xmmaux(0), xmmaux(0), bits);
-        __ vpsrld(xmm(instr->dst), xmm(src), bits);
-      }
-      __ vinsertf128(ymm(instr->dst), ymm(instr->dst), xmmaux(0), 1);
-    }
-  }
-
-  // Generate integer subtract.
-  void GenerateIntegerSubtract(Express::Op *instr, MacroAssembler *masm) {
-    if (CPU::Enabled(AVX2)) {
-      GenerateYMMFltOp(instr,
-          &Assembler::vpsubd, &Assembler::vpsubq,
-          &Assembler::vpsubd, &Assembler::vpsubq,
-          masm);
-    } else {
-      // Move second operand to register.
-      CHECK(instr->dst != -1);
-      YMMRegister src2;
-      if (instr->src2 != -1) {
-        src2 = ymm(instr->src2);
-      } else {
-        GenerateYMMMoveMemToReg(ymmaux(0), addr(instr->args[1]), masm);
-        src2 = ymmaux(0);
-      }
-
-      // Subtract upper and lower parts separately.
-      __ vextractf128(xmmaux(1), ymm(instr->src), 1);
-      __ vextractf128(xmmaux(2), src2, 1);
-      switch (type_) {
-        case DT_FLOAT:
-          __ vpsubd(xmmaux(1), xmmaux(1), xmmaux(2));
-          __ vpsubd(xmm(instr->dst), xmm(instr->src), src2.xmm());
-          break;
-        case DT_DOUBLE:
-          __ vpsubq(xmmaux(1), xmmaux(1), xmmaux(2));
-          __ vpsubq(xmm(instr->dst), xmm(instr->src), src2.xmm());
-          break;
-        default: UNSUPPORTED;
-      }
-      __ vinsertf128(ymm(instr->dst), ymm(instr->dst), xmmaux(1), 1);
+      UNSUPPORTED;
     }
   }
 
   // Generate compare.
   void GenerateCompare(Express::Op *instr, MacroAssembler *masm, int8 code) {
-    GenerateYMMFltOp(instr,
-        &Assembler::vcmpps, &Assembler::vcmppd,
-        &Assembler::vcmpps, &Assembler::vcmppd,
-        code, masm);
+    // Allocate mask register.
+    OpmaskRegister mask = masm->kk().alloc();
+
+    // Allocate mask.
+    auto *ones = masm->GetConstant<int32>(-1, 16);
+
+    // Compare operands.
+    if (instr->src != -1 && instr->src2 != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vcmpps(mask, zmm(instr->src), zmm(instr->src2), code);
+          break;
+        case DT_DOUBLE:
+          __ vcmppd(mask, zmm(instr->src), zmm(instr->src2), code);
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->src != -1 && instr->src2 == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vcmpps(mask, zmm(instr->src), addr(instr->args[1]), code);
+          break;
+        case DT_DOUBLE:
+          __ vcmppd(mask, zmm(instr->src), addr(instr->args[1]), code);
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      UNSUPPORTED;
+    }
+
+    if (instr->dst != -1) {
+      // Put mask into destination register.
+      __ vmovaps(zmm(instr->dst), ones->address(), Mask(mask, zeroing));
+    } else {
+      UNSUPPORTED;
+    }
+    masm->kk().release(mask);
   }
 };
 
-ExpressionGenerator *CreateVectorFltAVX256Generator() {
-  return new VectorFltAVX256Generator();
+ExpressionGenerator *CreateVectorFltAVX512Generator() {
+  return new VectorFltAVX512Generator();
 }
 
 }  // namespace myelin
