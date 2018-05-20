@@ -91,7 +91,7 @@ int PyStore::Init(PyObject *args, PyObject *kwds) {
 }
 
 void PyStore::Dealloc() {
-  store->Release();
+  if (store != nullptr) store->Release();
   if (pyglobals != nullptr) Py_DECREF(pyglobals);
   Free();
 }
