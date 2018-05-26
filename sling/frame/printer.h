@@ -46,6 +46,7 @@ class Printer {
   void set_shallow(bool shallow) { shallow_ = shallow; }
   void set_global(bool global) { global_ = global; }
   void set_byref(bool byref) { byref_ = byref; }
+  void set_utf8(bool utf8) { utf8_ = utf8; }
 
  private:
   // Returns true if the output should be indented.
@@ -60,6 +61,13 @@ class Printer {
   void WriteChars(char ch1, char ch2) {
     output_->WriteChar(ch1);
     output_->WriteChar(ch2);
+  }
+
+  // Prints UTF-8 encoded character from input buffer.
+  int WriteUTF8(const unsigned char *str, const unsigned char *end);
+  int WriteUTF8(const char *str, const char *end) {
+    return WriteUTF8(reinterpret_cast<unsigned const char *>(str),
+                     reinterpret_cast<unsigned const char *>(end));
   }
 
   // Prints quoted string with escapes.
@@ -106,6 +114,9 @@ class Printer {
 
   // Output anonymous frames by reference using index ids.
   bool byref_ = true;
+
+  // Allow UTF-8 in strings and identifiers.
+  bool utf8_ = false;
 
   // Mapping of frames that have been printed mapped to their ids.
   HandleMap<Handle> references_;

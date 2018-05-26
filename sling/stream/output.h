@@ -35,6 +35,9 @@ class Output {
 
   // Writes 'size' bytes to output.
   void Write(const char *data, int size);
+  void Write(const unsigned char *data, int size) {
+    Write(reinterpret_cast<const char *>(data), size);
+  }
 
   // Writes string to output.
   void Write(Text str) { Write(str.data(), str.size()); }

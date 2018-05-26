@@ -17,6 +17,7 @@
 
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "sling/base/types.h"
 #include "sling/file/repository.h"
@@ -30,6 +31,8 @@ namespace nlp {
 // Phrase table for looking up entities based on name fingerprints.
 class PhraseTable {
  public:
+  typedef std::vector<std::pair<Handle, int>> MatchList;
+
   ~PhraseTable() { delete entity_table_; }
 
   // Load phrase repository from file.
@@ -37,6 +40,10 @@ class PhraseTable {
 
   // Find all entities matching a phrase fingerprint.
   void Lookup(uint64 fp, Handles *matches);
+
+  // Find all entities matching a phrase fingerprint and return list of
+  // frames and counts.
+  void Lookup(uint64 fp, MatchList *matches);
 
  private:
   // Entity phrase with entity index and frequency.

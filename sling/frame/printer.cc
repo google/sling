@@ -90,7 +90,7 @@ void Printer::PrintAll() {
 
 void Printer::PrintString(const StringDatum *str) {
   // Escape types.
-  enum Escaping {NONE, NEWLINE, RETURN, TAB, QUOTE, BSLASH, HEX};
+  enum Escaping {NONE, NEWLINE, RETURN, TAB, QUOTE, BSLASH, UTF, HEX};
 
   // Escape type for each character.
   static Escaping escaping[256] = {
@@ -110,22 +110,22 @@ void Printer::PrintString(const StringDatum *str) {
     NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,    // 0x68
     NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,    // 0x70
     NONE, NONE, NONE, NONE, NONE, NONE, NONE, HEX,     // 0x78
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0x80
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0x88
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0x90
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0x98
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xA0
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xA8
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xB0
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xB8
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xC0
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xC8
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xD0
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xD8
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xE0
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xE8
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xF0
-    HEX, HEX, HEX, HEX, HEX, HEX, HEX, HEX,            // 0xF8
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0x80
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0x88
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0x90
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0x98
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xA0
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xA8
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xB0
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xB8
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xC0
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xC8
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xD0
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xD8
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xE0
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xE8
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xF0
+    UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xF8
   };
 
   // Hexadecimal digits.
@@ -146,7 +146,7 @@ void Printer::PrintString(const StringDatum *str) {
     }
 
     // Output all characters before the escaped character.
-    if (t != s) output_->Write(reinterpret_cast<char *>(s), t - s);
+    if (t != s) output_->Write(s, t - s);
 
     // Escape character.
     switch (escape) {
@@ -156,6 +156,12 @@ void Printer::PrintString(const StringDatum *str) {
       case TAB: WriteChars('\\', 't'); t++; break;
       case QUOTE: WriteChars('\\', '"'); t++; break;
       case BSLASH: WriteChars('\\', '\\'); t++; break;
+      case UTF:
+        if (utf8_) {
+          t += WriteUTF8(t, end);
+          break;
+        }
+        // Fall through.
       case HEX:
         WriteChars('\\', 'x');
         WriteChar(hexdigit[*t >> 4]);
@@ -257,14 +263,32 @@ void Printer::PrintSymbol(const SymbolDatum *symbol, bool reference) {
   const char *p = name->data();
   const char *end = p + name->size();
   DCHECK(p != end);
-  if (!ascii_isalpha(*p) && *p != '/' && *p != '_') WriteChar('\\');
-  WriteChar(*p++);
-  while (p < end) {
-    char c = *p++;
-    if (!ascii_isalnum(c) && c != '/' && c != '_' && c != '-') {
+  if (utf8_) {
+    if (!ascii_isalpha(*p) && *p != '/' && *p != '_' && (*p & 0x80) == 0) {
       WriteChar('\\');
     }
-    WriteChar(c);
+    p += WriteUTF8(p, end);
+    while (p < end) {
+      if (*p & 0x80) {
+        p += WriteUTF8(p, end);
+      } else {
+        char c = *p++;
+        if (!ascii_isalnum(c) && c != '/' && c != '_' && c != '-') {
+          WriteChar('\\');
+        }
+        WriteChar(c);
+      }
+    }
+  } else {
+    if (!ascii_isalpha(*p) && *p != '/' && *p != '_') WriteChar('\\');
+    WriteChar(*p++);
+    while (p < end) {
+      char c = *p++;
+      if (!ascii_isalnum(c) && c != '/' && c != '_' && c != '-') {
+        WriteChar('\\');
+      }
+      WriteChar(c);
+    }
   }
 }
 
@@ -305,6 +329,29 @@ void Printer::PrintFloat(float number) {
   char buffer[kFastToBufferSize];
   char *str = FloatToBuffer(number, buffer);
   output_->Write(str, strlen(str));
+}
+
+int Printer::WriteUTF8(const unsigned char *str, const unsigned char *end) {
+  // Get UTF8 length.
+  DCHECK(str != end);
+  int code = *str;
+  int n;
+  if (code <= 0x7f) {
+    n = 1;
+  } else if (code <= 0x7ff) {
+    n = 2;
+  } else if (code <= 0xffff) {
+    n = 3;
+  } else {
+    n = 4;
+  }
+
+  // Check boundaries.
+  if (str + n > end) n = 1;
+
+  // Output UTF8-encoded code point.
+  output_->Write(str, n);
+  return n;
 }
 
 }  // namespace sling

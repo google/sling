@@ -16,19 +16,31 @@
 
 #include "sling/string/text.h"
 
-#include <ext/hash_set>
 #include <string.h>
 #include <algorithm>
-#include <climits>
 #include <string>
 
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
-#include "sling/string/memutil.h"
 
 namespace sling {
 
 const Text::size_type Text::npos = size_type(-1);
+
+static const char *memmatch(const char *haystack, size_t hlen,
+                            const char *needle, size_t nlen) {
+  if (nlen == 0) return haystack;  // even if haylen is 0
+  if (hlen < nlen) return nullptr;
+
+  const char *match;
+  const char *hayend = haystack + hlen - nlen + 1;
+  while ((match = static_cast<const char *>(memchr(haystack, needle[0],
+                                                   hayend - haystack)))) {
+    if (memcmp(match, needle, nlen) == 0) return match;
+    haystack = match + 1;
+  }
+  return nullptr;
+}
 
 Text::Text(Text other, ssize_t pos)
     : ptr_(other.ptr_ + pos), length_(other.length_ - pos) {
@@ -91,7 +103,6 @@ ssize_t Text::rfind(Text t, size_type pos) const {
 
 // Search range is [0..pos] inclusive.  If pos == npos, search everything.
 ssize_t Text::rfind(char c, size_type pos) const {
-  // Note: memrchr() is not available on Windows.
   if (length_ <= 0) return npos;
   ssize_t end = std::min(pos, static_cast<size_type>(length_ - 1));
   for (ssize_t i = end; i >= 0; --i) {

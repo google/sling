@@ -54,6 +54,25 @@ void PhraseTable::Lookup(uint64 fp, Handles *matches) {
   }
 }
 
+void PhraseTable::Lookup(uint64 fp, MatchList *matches) {
+  matches->clear();
+  int bucket = fp % phrase_index_.num_buckets();
+  const PhraseItem *phrase = phrase_index_.GetBucket(bucket);
+  const PhraseItem *end = phrase_index_.GetBucket(bucket + 1);
+  while (phrase < end) {
+    if (phrase->fingerprint() == fp) {
+      const EntityPhrase *entities = phrase->entities();
+      for (int i = 0; i < phrase->num_entities(); ++i) {
+        Handle entity = (*entity_table_)[entities[i].index];
+        int count = entities[i].count;
+        matches->emplace_back(entity, count);
+      }
+      break;
+    }
+    phrase = phrase->next();
+  }
+}
+
 }  // namespace nlp
 }  // namespace sling
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-bazel build -c opt \
+bazel build -c opt $* \
   sling/base:* \
   sling/file:* \
   sling/frame:* \

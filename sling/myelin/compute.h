@@ -728,8 +728,8 @@ class Step : public Attributes {
   bool NeedsSynchronization();
 
  private:
-   // Step name from flow operation.
-   string name_;
+  // Step name from flow operation.
+  string name_;
 
   // Operation type for step.
   string type_;

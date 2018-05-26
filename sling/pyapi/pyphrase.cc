@@ -23,6 +23,7 @@ PyTypeObject PyPhraseTable::type;
 
 PyMethodDef PyPhraseTable::methods[] = {
   {"lookup", PYFUNC(PyPhraseTable::Lookup), METH_O, ""},
+  {"query", PYFUNC(PyPhraseTable::Query), METH_O, ""},
   {nullptr}
 };
 
@@ -76,6 +77,30 @@ PyObject *PyPhraseTable::Lookup(PyObject *obj) {
   PyObject *result = PyList_New(matches.size());
   for (int i = 0; i < matches.size(); ++i) {
     PyList_SetItem(result, i, pystore->PyValue(matches[i]));
+  }
+
+  return result;
+}
+
+PyObject *PyPhraseTable::Query(PyObject *obj) {
+  // Get phrase.
+  char *phrase = PyString_AsString(obj);
+  if (phrase == nullptr) return nullptr;
+
+  // Compute phrase fingerprint.
+  uint64 fp = tokenizer->Fingerprint(phrase);
+
+  // Get matching items.
+  nlp::PhraseTable::MatchList matches;
+  phrase_table->Lookup(fp, &matches);
+
+  // Create list of matching items.
+  PyObject *result = PyList_New(matches.size());
+  for (int i = 0; i < matches.size(); ++i) {
+    PyObject *match = PyTuple_New(2);
+    PyTuple_SetItem(match, 0, pystore->PyValue(matches[i].first));
+    PyTuple_SetItem(match, 1, PyInt_FromLong(matches[i].second));
+    PyList_SetItem(result, i, match);
   }
 
   return result;
