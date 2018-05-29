@@ -29,11 +29,13 @@ A more detailed description of the SLING parser can be found in this paper:
 
 ## More information ...
 
-  * [Installation and Building](doc/guide/install.md)
-  * [Training a Parser](doc/guide/training.md)
-  * [Running the Parser](doc/guide/parsing.md)
-  * [Semantic Frames](doc/guide/frames.md)
-  * [Myelin - Neural network JIT compiler](doc/guide/myelin.md)
+  * [Installation and building](doc/guide/install.md)
+  * [Training a parser](doc/guide/training.md)
+  * [Running the parser](doc/guide/parsing.md)
+  * [Semantic frames](doc/guide/frames.md)
+  * [SLING Python API](doc/guide/pyapi.md)
+  * [Myelin neural network JIT compiler](doc/guide/myelin.md)
+  * [Wikipedia and Wikidata processing](doc/guide/wikiflow.md)
 
 ## Credits
 

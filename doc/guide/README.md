@@ -1,8 +1,10 @@
 # SLING Guides
 
-  * [SLING Installation and Building](install.md)
-  * [Training a SLING Parser](training.md)
+  * [SLING installation and building](install.md)
+  * [Training a SLING parser](training.md)
   * [Parsing with SLING](parsing.md)
-  * [SLING Frames](frames.md)
-  * [Myelin - Neural network JIT compiler](myelin.md)
+  * [SLING frames](frames.md)
+  * [SLING Python API](pyapi.md)
+  * [Myelin neural network JIT compiler](myelin.md)
+  * [Wikipedia and Wikidata processing](wikiflow.md)
 

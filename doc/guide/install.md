@@ -7,7 +7,7 @@ the wheel with pip and download a pre-trained parser model. On a Linux machine
 with Python 2.7 you can install a pre-built wheel:
 
 ```
-sudo pip install http://www.jbox.dk/sling/sling-1.0.0-cp27-none-linux_x86_64.whl
+sudo pip install http://www.jbox.dk/sling/sling-2.0.0-cp27-none-linux_x86_64.whl
 ```
 and download the pre-trained model:
 ```
@@ -55,6 +55,7 @@ installed.
 
 ```shell
 sudo pip install http://download.pytorch.org/whl/cpu/torch-0.3.1-cp27-cp27mu-linux_x86_64.whl
+sudo pip install psutil
 ```
 
 ## Building
@@ -64,7 +65,7 @@ Languages: C++, Python 2.7, assembler<br>
 CPU: Intel x64 or compatible<br>
 Build system: Bazel<br>
 
-You can test your installation by building a few important targets. But first, 
+You can test your installation by building a few important targets. But first,
 remember to switch to the caspar branch since it implements the CASPAR
 functionality.
 
@@ -85,4 +86,6 @@ sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
 **NOTE:**
 *  In case you are using an older version of GCC (< v5), you may want to comment
 out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
+* We currently do not support OSX, but you can check out issue #189 for help on 
+building on OSX.
 
