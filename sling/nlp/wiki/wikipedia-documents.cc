@@ -515,7 +515,6 @@ class CategoryItemExtractor : public task::FrameProcessor {
  private:
   // Symbols.
   Name n_page_category_{names_, "/wp/page/category"};
-  Name n_page_item_{names_, "/wp/page/item"};
   Name n_category_{names_, "/w/item/category"};
 };
 
@@ -555,7 +554,7 @@ class CategoryItemMerger : public task::Reducer {
 
   // Symbols.
   Names names_;
-  Name n_category_{names_, "/w/category"};
+  Name n_category_{names_, "/w/item/category"};
 };
 
 REGISTER_TASK_PROCESSOR("category-item-merger", CategoryItemMerger);
