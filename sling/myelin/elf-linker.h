@@ -34,6 +34,9 @@ class ElfLinker : public Linker {
 
     // Generate writeable uninitalized data section with model parameters.
     bool writeable_data = false;
+
+    // Code alignment.
+    int code_align = 16;
   };
 
   ElfLinker(const Options &options) : options_(options) {}

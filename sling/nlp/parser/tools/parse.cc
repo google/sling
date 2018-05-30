@@ -37,6 +37,7 @@
 #include "sling/base/flags.h"
 #include "sling/frame/object.h"
 #include "sling/frame/serialization.h"
+#include "sling/myelin/profile.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-source.h"
 #include "sling/nlp/document/document-tokenizer.h"
@@ -238,14 +239,11 @@ int main(int argc, char *argv[]) {
 
   // Output profile report.
   if (FLAGS_profile) {
-    myelin::Profile lr(&parser.profile()->lr);
-    std::cout << lr.ASCIIReport() << "\n";
-
-    myelin::Profile rl(&parser.profile()->rl);
-    std::cout << rl.ASCIIReport() << "\n";
-
-    myelin::Profile ff(&parser.profile()->ff);
-    std::cout << ff.ASCIIReport() << "\n";
+    for (auto *cell : parser.network().cells()) {
+      myelin::Profile profile(cell->profile_summary());
+      string report = profile.ASCIIReport();
+      std::cout << report << "\n";
+    }
   }
 
   return 0;

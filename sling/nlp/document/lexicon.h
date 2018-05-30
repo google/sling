@@ -47,7 +47,9 @@ class Lexicon {
   void BuildSuffixes(int max_suffix);
 
   // Look up word in vocabulary. Return OOV if word is not found.
-  int LookupWord(const string &word) const;
+  // Sets 'changed' to true if the returned id corresponds to a
+  // normalized version of 'word' and not its original form.
+  int LookupWord(const string &word, bool *changed) const;
 
   // Return number of words in vocabulary.
   size_t size() const { return words_.size(); }

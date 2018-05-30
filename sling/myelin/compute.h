@@ -317,6 +317,11 @@ class Tensor {
   // Check if alignment is conflicting with other requirements.
   bool SupportsAlignment(const Shape &align) const;
 
+  // Check if pointer is aligned properly for tensor.
+  bool IsAligned(void *ptr) {
+    return (reinterpret_cast<size_t>(ptr) & (byte_alignment_ - 1)) == 0;
+  }
+
   // Check if tensor can support order.
   bool SupportsOrder(Order order);
 
@@ -791,7 +796,7 @@ class Channel {
 
   // Return pointer to channel element.
   char *at(int index) const {
-    return data_ + (index * format_->size());
+    return data_ + (index * element_size_);
   }
 
   // Add element to channel and return the last element.
@@ -824,6 +829,9 @@ class Channel {
 
   // A tensor describing the element type of the channel.
   const Tensor *format_;
+
+  // Element size.
+  int element_size_;
 
   // Byte alignment.
   int alignment_ = kMinDataAlignment;
@@ -980,6 +988,7 @@ class Instance {
   void Set(Tensor *param, Channel *channel, int index = 0) {
     DCHECK(param->ref()) << param->name();
     DCHECK(param->cell() == cell_) << param->name();
+    DCHECK(param->IsAligned(channel->at(index))) << param->name();
     *reinterpret_cast<char **>(data_ + param->offset()) = channel->at(index);
   }
 
@@ -996,6 +1005,7 @@ class Instance {
     DCHECK(param->IsLocal()) << param->name();
     DCHECK(param->ref()) << param->name();
     DCHECK(param->cell() == cell_) << param->name();
+    DCHECK(param->IsAligned(address)) << param->name();
     *reinterpret_cast<void **>(data_ + param->offset()) = address;
   }
 

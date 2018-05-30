@@ -165,7 +165,8 @@ class Resources:
   def load(self,
            commons_path,
            train_path,
-           word_embeddings_path=None):
+           word_embeddings_path=None,
+           small_spec=False):
     print "Loading training resources"
     print "Initial memory usage", mem()
     self.commons_path = commons_path
@@ -178,7 +179,7 @@ class Resources:
         train_path, self.commons, self.schema, gold=True, loop=False)
     print "Pointed to training corpus in", train_path, mem()
 
-    self.spec = Spec()
+    self.spec = Spec(small_spec)
     self.spec.commons_path = commons_path
     self.spec.build(self.commons, self.train)
     print "After building spec", mem()

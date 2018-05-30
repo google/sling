@@ -9,6 +9,7 @@ cc_binary(
     "//sling/file:posix",
     "//sling/frame:object",
     "//sling/frame:serialization",
+    "//sling/myelin:profile",
     "//sling/nlp/document",
     "//sling/nlp/document:document-source",
     "//sling/nlp/document:document-tokenizer",

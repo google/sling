@@ -20,9 +20,9 @@ import sys
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, "sling/nlp/parser/trainer")
 from parser_state import ParserState
 
+from sling.myelin.lexical_encoder import LexicalEncoder
 import sling.myelin.nn as flownn
 import sling.myelin.flow as flow
 import sling.myelin.builder as builder
@@ -31,7 +31,7 @@ Param = nn.Parameter
 Var = torch.autograd.Variable
 
 # Utility for dumping a (list of) PyTorch tensor/variable.
-def fstr(var):
+def fstr(var, fmt="%.9f"):
   if type(var) is tuple and len(var) == 1: var = var[0]
 
   dim = var.dim()
@@ -39,7 +39,7 @@ def fstr(var):
     var = var.view(1, -1)
   ls = var.data.numpy().tolist()
   if type(ls[0]) is list: ls = ls[0]
-  ls = ["%.9f" % x for x in ls]
+  ls = [fmt % x for x in ls]
   return "[" + ",".join(ls) + "]"
 
 
@@ -188,18 +188,12 @@ class Sempar(nn.Module):
     self.spec = spec
 
     # LSTM Embeddings.
-    self.lr_embeddings = []
-    self.rl_embeddings = []
+    self.lstm_embeddings = []
     for f in spec.lstm_features:
-      lr_embedding = nn.EmbeddingBag(f.vocab_size, f.dim, mode='sum')
-      self.add_module('lr_lstm_embedding_' + f.name, lr_embedding)
-      self.lr_embeddings.append(lr_embedding)
-      f.lr_embedding = lr_embedding
-
-      rl_embedding = nn.EmbeddingBag(f.vocab_size, f.dim, mode='sum')
-      self.add_module('rl_lstm_embedding_' + f.name, rl_embedding)
-      self.rl_embeddings.append(rl_embedding)
-      f.rl_embedding = rl_embedding
+      embedding = nn.EmbeddingBag(f.vocab_size, f.dim, mode='sum')
+      self.add_module('lstm_embedding_' + f.name, embedding)
+      self.lstm_embeddings.append(embedding)
+      f.embedding = embedding
 
     # LR and RL LSTM cells.
     self.lr_lstm = DragnnLSTM(spec.lstm_input_dim, spec.lstm_hidden_dim)
@@ -234,15 +228,12 @@ class Sempar(nn.Module):
     # where 'dim' is the dimensionality of the embedding.
     for f in self.spec.lstm_features:
       coeff = 1.0 / math.sqrt(f.dim)
-      lr = f.lr_embedding.weight.data
-      rl = f.rl_embedding.weight.data
-      lr.normal_()
-      lr.mul_(coeff)
-      rl.normal_()
-      rl.mul_(coeff)
+      data = f.embedding.weight.data
+      data.normal_()
+      data.mul_(coeff)
 
       # Override with pre-trained word embeddings, if provided.
-      if f.name == "words" and self.spec.word_embeddings is not None:
+      if f.name == "word" and self.spec.word_embeddings is not None:
         indices = torch.LongTensor(self.spec.word_embedding_indices)
         data = torch.Tensor(self.spec.word_embeddings)
 
@@ -309,18 +300,16 @@ class Sempar(nn.Module):
     raw_features = self.spec.raw_lstm_features(document)
     length = document.size()
 
-    # Each of {lr,rl}_inputs should have shape (length, lstm_input_dim).
-    lr_inputs = self._embedding_lookup(self.lr_embeddings, raw_features)
-    rl_inputs = self._embedding_lookup(self.rl_embeddings, raw_features)
-    assert length == lr_inputs.size(0)
-    assert length == rl_inputs.size(0)
+    # 'lstm_inputs' should have shape (length, lstm_input_dim).
+    lstm_inputs = self._embedding_lookup(self.lstm_embeddings, raw_features)
+    assert length == lstm_inputs.size(0)
 
-    lr_out, _ = self.lr_lstm.forward(lr_inputs)
+    lr_out, _ = self.lr_lstm.forward(lstm_inputs)
 
     # Note: Negative strides are not supported, otherwise we would just do:
-    #   rl_input = rl_inputs[::-1]
+    #   rl_input = lstm_inputs[::-1]
     inverse_indices = torch.arange(length - 1, -1, -1).long()
-    rl_inputs = rl_inputs[inverse_indices]
+    rl_inputs = lstm_inputs[inverse_indices]
     rl_out, _ = self.rl_lstm.forward(rl_inputs)
     rl_out.reverse()
 
@@ -389,7 +378,7 @@ class Sempar(nn.Module):
 
 
   # Makes a forward pass over 'document'.
-  def forward(self, document, train=False, debug=False):
+  def forward(self, document, train=False):
     # Compute LSTM outputs for all tokens.
     lr_out, rl_out, _ = self._lstm_outputs(document)
 
@@ -442,8 +431,6 @@ class Sempar(nn.Module):
 
         action = actions.table[predicted]
         state.advance(action)
-        if debug:
-          print "Predicted", action, "at rank ", rank
 
       return state
 
@@ -503,7 +490,10 @@ class Sempar(nn.Module):
   def write_flow(self, flow_file):
     fl = flow.Flow()
     spec = self.spec
-    spec.write_flow(fl)
+
+    # Specify the encoder.
+    lstm_embeddings = [e.weight.data.numpy() for e in self.lstm_embeddings]
+    lex = LexicalEncoder(fl, spec, lstm_embeddings, self.lr_lstm, self.rl_lstm)
 
     # Adds a flow variable that will store raw indices for the given feature.
     def index_vars(bldr, feature_spec):
@@ -530,29 +520,6 @@ class Sempar(nn.Module):
       axis = bldr.const(1, "int32")
       op.add_input(axis)
 
-    # Specify LSTMs.
-    lr = builder.Builder(fl, "lr_lstm")
-    lr_input = lr.var(name="input", shape=[1, spec.lstm_input_dim])
-    flow_lr_lstm = flownn.LSTM(lr, input=lr_input, size=spec.lstm_hidden_dim)
-    self.lr_lstm.copy_to_flow_lstm(flow_lr_lstm)
-    lr_concat_op = lr.rawop(optype="ConcatV2", name="concat")
-    lr_concat_op.add_output(lr_input)
-
-    rl = builder.Builder(fl, "rl_lstm")
-    rl_input = rl.var(name="input", shape=[1, spec.lstm_input_dim])
-    flow_rl_lstm = flownn.LSTM(rl, input=rl_input, size=spec.lstm_hidden_dim)
-    self.rl_lstm.copy_to_flow_lstm(flow_rl_lstm)
-    rl_concat_op = rl.rawop(optype="ConcatV2", name="concat")
-    rl_concat_op.add_output(rl_input)
-
-    # Add LSTM inputs.
-    for feature in spec.lstm_features:
-      write_fixed_feature(feature, feature.lr_embedding, lr, lr_concat_op)
-      write_fixed_feature(feature, feature.rl_embedding, rl, rl_concat_op)
-
-    finish_concat_op(lr, lr_concat_op)
-    finish_concat_op(rl, rl_concat_op)
-
     # Specify the FF unit.
     ff = builder.Builder(fl, "ff")
     ff_input = ff.var(name="input", shape=[1, spec.ff_input_dim])
@@ -578,12 +545,13 @@ class Sempar(nn.Module):
       return l
 
     # Add links to the two LSTMs.
-    ff_lr = link(ff, "lr_lstm", spec.lstm_hidden_dim, flow_lr_lstm.cnx_hidden)
-    ff_rl = link(ff, "rl_lstm", spec.lstm_hidden_dim, flow_rl_lstm.cnx_hidden)
+    ff_lr = link(ff, "lr_lstm", spec.lstm_hidden_dim, lex.lr_lstm.cnx_hidden)
+    ff_rl = link(ff, "rl_lstm", spec.lstm_hidden_dim, lex.rl_lstm.cnx_hidden)
 
     # Add link and connector for previous FF steps.
     ff_cnx = ff.cnx("step", args=[])
     ff_steps = link(ff, "steps", spec.ff_hidden_dim, ff_cnx, False)
+    ff_cnx.add(flow_ff.hidden_out)
 
     # Add FF's input variables.
     for feature in spec.ff_fixed_features:

@@ -21,7 +21,7 @@ namespace myelin {
 
 void ElfLinker::BeginCell(Cell *cell) {
   // Align code buffer before generating new cell computation function.
-  code_.Align(16);
+  code_.Align(options_.code_align);
 }
 
 void ElfLinker::EndStep(Step *step, int offset) {

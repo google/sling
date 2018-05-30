@@ -296,7 +296,8 @@ def train(args):
   resources = utils.Resources()
   resources.load(commons_path=args.commons,
                  train_path=args.train_corpus,
-                 word_embeddings_path=args.word_embeddings)
+                 word_embeddings_path=args.word_embeddings,
+                 small_spec=args.small)
 
   sempar = Sempar(resources.spec)
   sempar.initialize()
@@ -354,6 +355,10 @@ if __name__ == '__main__':
                help='PyTorch model file',
                default='',
                type=str)
+  flags.define('--small',
+               help='Small dimensions (for testing)',
+               default=False,
+               type=bool)
   flags.parse()
 
   if flags.arg.mode == "train":

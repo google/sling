@@ -620,8 +620,16 @@ string Tensor::ToString(const char *data, bool deref) const {
 }
 
 Channel::Channel(const Tensor *format) : format_(format) {
-  EnsureAlignment(&alignment_, jit::CPU::CacheLineSize());
+  // Use the stride of the first dimension as the element size to ensure
+  // proper alignment of the elements in the channel array.
+  DCHECK(format->order() == ROW_MAJOR) << format->name();
+  DCHECK_GE(format->rank(), 1) << format->name();
+  DCHECK_EQ(format->dim(0), 1) << format->name();
+  element_size_ = format->stride(0);
+
+  // Channel are aligned to the element alignment and cache lines.
   EnsureAlignment(&alignment_, format->byte_alignment());
+  EnsureAlignment(&alignment_, jit::CPU::CacheLineSize());
 }
 
 Channel::~Channel() {
@@ -639,9 +647,8 @@ void Channel::resize(int n) {
 
   // Clear new elements.
   if (n > size_) {
-    size_t element_size = format_->size();
-    size_t pos = size_ * element_size;
-    size_t bytes = (n - size_) * element_size;
+    size_t pos = size_ * element_size_;
+    size_t bytes = (n - size_) * element_size_;
     runtime()->ClearChannel(data_, pos, bytes, placement());
   }
 
@@ -659,7 +666,7 @@ void Channel::reset(int n) {
   }
 
   // Clear all elements.
-  runtime()->ClearChannel(data_, 0, n * format_->size(), placement());
+  runtime()->ClearChannel(data_, 0, n * element_size_, placement());
 
   // Change size.
   size_ = n;
@@ -671,10 +678,9 @@ void Channel::reserve(int n) {
   if (n == capacity_) return;
 
   // Allocate or reallocate data buffer.
-  size_t element_size = format_->size();
   data_ = runtime()->AllocateChannel(data_,
-                                     size_ * element_size,
-                                     n * element_size,
+                                     size_ * element_size_,
+                                     n * element_size_,
                                      alignment_,
                                      placement());
 
@@ -683,8 +689,7 @@ void Channel::reserve(int n) {
 }
 
 void Channel::zero(int n) {
-  runtime()->ClearChannel(data_, n * format_->size(), format_->size(),
-                          placement());
+  runtime()->ClearChannel(data_, n * element_size_, element_size_, placement());
 }
 
 string Channel::ToString() const {
@@ -1229,6 +1234,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
     // Compute stride size for each dimension.
     size_t size = TypeTraits::of(tensor->type()).size();
+    int outer;
     if (tensor->order_ == ROW_MAJOR) {
       for (int d = tensor->rank() - 1; d >= 0; --d) {
         tensor->stride_.set(d, size);
@@ -1238,6 +1244,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->aligned_.set(d, align);
         size *= align;
       }
+      outer = 0;
     } else {
       for (int d = 0; d < tensor->rank(); ++d) {
         tensor->stride_.set(d, size);
@@ -1247,7 +1254,20 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->aligned_.set(d, align);
         size *= align;
       }
+      outer = tensor->rank();
     }
+
+    // For tensors where the size of the outer dimension is one, the stride of
+    // the first dimension is adjusted to the byte alignment requirement for the
+    // tensor. This ensures that channels allocated using this tensor as the
+    // format will have the correct alignment for all the elements.
+    if (tensor->rank() > 1 &&
+        tensor->shape_.dim(outer) == 1 &&
+        size % tensor->byte_alignment_ != 0) {
+      tensor->stride_.set(outer, Align(size, tensor->byte_alignment_));
+    }
+
+    // Set tensor size.
     tensor->size_ = size;
     tensor->space_ = tensor->ref() ? sizeof(void *) : size;
 

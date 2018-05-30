@@ -68,33 +68,12 @@ void Parser::Load(Store *store, const string &model) {
   if (use_gpu_) network_.set_runtime(&cudart);
   CHECK(network_.Compile(flow, library_));
 
-  // Initialize cells.
-  InitLSTM("lr_lstm", &lr_, false);
-  InitLSTM("rl_lstm", &rl_, true);
+  // Initialize lexical encoder.
+  encoder_.Initialize(network_);
+  encoder_.LoadLexicon(&flow);
+
+  // Initialize feed-forward cell.
   InitFF("ff", &ff_);
-
-  // Initialize profiling.
-  if (ff_.cell->profile()) profile_ = new Profile(this);
-
-  // Load lexicon.
-  myelin::Flow::Blob *vocabulary = flow.DataBlock("lexicon");
-  CHECK(vocabulary != nullptr);
-  Vocabulary::BufferIterator it(vocabulary->data, vocabulary->size, '\n');
-  lexicon_.InitWords(&it);
-  bool normalize = vocabulary->GetAttr("normalize_digits", false);
-  int oov = vocabulary->GetAttr("oov", -1);
-  lexicon_.set_normalize_digits(normalize);
-  lexicon_.set_oov(oov);
-
-  // Load affix tables.
-  myelin::Flow::Blob *prefix_table = flow.DataBlock("prefixes");
-  if (prefix_table != nullptr) {
-    lexicon_.InitPrefixes(prefix_table->data, prefix_table->size);
-  }
-  myelin::Flow::Blob *suffix_table = flow.DataBlock("suffixes");
-  if (suffix_table != nullptr) {
-    lexicon_.InitSuffixes(suffix_table->data, suffix_table->size);
-  }
 
   // Load commons and action stores.
   myelin::Flow::Blob *commons = flow.DataBlock("commons");
@@ -116,41 +95,9 @@ void Parser::Load(Store *store, const string &model) {
   roles_.Init(actions_);
 }
 
-void Parser::InitLSTM(const string &name, LSTM *lstm, bool reverse) {
-  // Get cell.
-  lstm->cell = GetCell(name);
-  lstm->reverse = reverse;
-  lstm->profile = lstm->cell->profile();
-
-  // Get feature inputs.
-  lstm->word_feature = GetParam(name + "/words", true);
-  lstm->prefix_feature = GetParam(name + "/prefix", true);
-  lstm->suffix_feature = GetParam(name + "/suffix", true);
-  lstm->hyphen_feature = GetParam(name + "/hyphen", true);
-  lstm->caps_feature = GetParam(name + "/capitalization", true);
-  lstm->punct_feature = GetParam(name + "/punctuation", true);
-  lstm->quote_feature = GetParam(name + "/quote", true);
-  lstm->digit_feature = GetParam(name + "/digit", true);
-
-  // Get feature sizes.
-  if (lstm->prefix_feature != nullptr) {
-    lstm->prefix_size = lstm->prefix_feature->elements();
-  }
-  if (lstm->suffix_feature != nullptr) {
-    lstm->suffix_size = lstm->suffix_feature->elements();
-  }
-
-  // Get links.
-  lstm->c_in = GetParam(name + "/c_in");
-  lstm->c_out = GetParam(name + "/c_out");
-  lstm->h_in = GetParam(name + "/h_in");
-  lstm->h_out = GetParam(name + "/h_out");
-}
-
 void Parser::InitFF(const string &name, FF *ff) {
   // Get cell.
   ff->cell = GetCell(name);
-  ff->profile = ff->cell->profile();
 
   // Get feature inputs.
   ff->lr_focus_feature = GetParam(name + "/lr", true);
@@ -202,55 +149,24 @@ void Parser::InitFF(const string &name, FF *ff) {
   ff->lr_lstm = GetParam(name + "/link/lr_lstm");
   ff->rl_lstm = GetParam(name + "/link/rl_lstm");
   ff->steps = GetParam(name + "/steps");
+
   ff->hidden = GetParam(name + "/hidden");
   ff->output = GetParam(name + "/output");
   ff->prediction = GetParam(name + "/prediction", true);
 }
 
 void Parser::Parse(Document *document) const {
-  // Extract lexical features from document.
-  DocumentFeatures features(&lexicon_);
-  features.Extract(*document);
-
   // Parse each sentence of the document.
   for (SentenceIterator s(document); s.more(); s.next()) {
     // Initialize parser model instance data.
     ParserInstance data(this, document, s.begin(), s.end());
-    ParserState &state = data.state_;
+    LexicalEncoderInstance &encoder = data.encoder_;
 
-    // Compute left-to-right LSTM.
-    for (int i = 0; i < s.length(); ++i) {
-      // Attach hidden and control layers.
-      data.lr_.Clear();
-      int in = i > 0 ? i - 1 : s.length();
-      int out = i;
-      data.AttachLR(in, out);
-
-      // Extract features.
-      data.ExtractFeaturesLSTM(s.begin() + out, features, lr_, &data.lr_);
-
-      // Compute LSTM cell.
-      if (profile_) data.lr_.set_profile(&profile_->lr);
-      data.lr_.Compute();
-    }
-
-    // Compute right-to-left LSTM.
-    for (int i = 0; i < s.length(); ++i) {
-      // Attach hidden and control layers.
-      data.rl_.Clear();
-      int in = s.length() - i;
-      int out = in - 1;
-      data.AttachRL(in, out);
-
-      // Extract features.
-      data.ExtractFeaturesLSTM(s.begin() + out, features, rl_, &data.rl_);
-
-      // Compute LSTM cell.
-      if (profile_) data.rl_.set_profile(&profile_->rl);
-      data.rl_.Compute();
-    }
+    // Run the lexical encoder.
+    auto bilstm = encoder.Compute(*document, s.begin(), s.end());
 
     // Run FF to predict transitions.
+    ParserState &state = data.state_;
     bool done = false;
     int steps_since_shift = 0;
     int step = 0;
@@ -260,13 +176,12 @@ void Parser::Parse(Document *document) const {
 
       // Attach instance to recurrent layers.
       data.ff_.Clear();
-      data.AttachFF(step);
+      data.AttachFF(step, bilstm);
 
       // Extract features.
       data.ExtractFeaturesFF(step);
 
       // Predict next action.
-      if (profile_) data.ff_.set_profile(&profile_->ff);
       data.ff_.Compute();
       int prediction = 0;
       if (fast_fallback_) {
@@ -358,108 +273,20 @@ myelin::Tensor *Parser::GetParam(const string &name, bool optional) {
 ParserInstance::ParserInstance(const Parser *parser, Document *document,
                                int begin, int end)
     : parser_(parser),
+      encoder_(parser->encoder()),
       state_(document->store(), begin, end),
-      lr_(parser->lr_.cell),
-      rl_(parser->rl_.cell),
       ff_(parser->ff_.cell),
-      lr_c_(parser->lr_.c_in),
-      lr_h_(parser->lr_.h_in),
-      rl_c_(parser->rl_.c_in),
-      rl_h_(parser->rl_.h_in),
       ff_step_(parser->ff_.hidden) {
-  // Add one extra element to LSTM activations for boundary element.
-  int length = end - begin;
-  lr_c_.resize(length + 1);
-  lr_h_.resize(length + 1);
-  rl_c_.resize(length + 1);
-  rl_h_.resize(length + 1);
-
   // Reserve two transitions per token.
+  int length = end - begin;
   ff_step_.reserve(length * 2);
 }
 
-void ParserInstance::AttachLR(int input, int output) {
-  lr_.Set(parser_->lr_.c_in, &lr_c_, input);
-  lr_.Set(parser_->lr_.c_out, &lr_c_, output);
-  lr_.Set(parser_->lr_.h_in, &lr_h_, input);
-  lr_.Set(parser_->lr_.h_out, &lr_h_, output);
-}
-
-void ParserInstance::AttachRL(int input, int output) {
-  rl_.Set(parser_->rl_.c_in, &rl_c_, input);
-  rl_.Set(parser_->rl_.c_out, &rl_c_, output);
-  rl_.Set(parser_->rl_.h_in, &rl_h_, input);
-  rl_.Set(parser_->rl_.h_out, &rl_h_, output);
-}
-
-void ParserInstance::AttachFF(int output) {
-  ff_.Set(parser_->ff_.lr_lstm, &lr_h_);
-  ff_.Set(parser_->ff_.rl_lstm, &rl_h_);
+void ParserInstance::AttachFF(int output, const myelin::BiChannel &bilstm) {
+  ff_.Set(parser_->ff_.lr_lstm, bilstm.lr);
+  ff_.Set(parser_->ff_.rl_lstm, bilstm.rl);
   ff_.Set(parser_->ff_.steps, &ff_step_);
   ff_.Set(parser_->ff_.hidden, &ff_step_, output);
-}
-
-void ParserInstance::ExtractFeaturesLSTM(int token,
-                                         const DocumentFeatures &features,
-                                         const Parser::LSTM &lstm,
-                                         myelin::Instance *data) {
-  // Extract word feature.
-  if (lstm.word_feature) {
-    *data->Get<int>(lstm.word_feature) = features.word(token);
-  }
-
-  // Extract prefix feature.
-  if (lstm.prefix_feature) {
-    Affix *affix = features.prefix(token);
-    int *a = data->Get<int>(lstm.prefix_feature);
-    for (int n = 0; n < lstm.prefix_size; ++n) {
-      if (affix != nullptr) {
-        *a++ = affix->id();
-        affix = affix->shorter();
-      } else {
-        *a++ = -2;
-      }
-    }
-  }
-
-  // Extract suffix feature.
-  if (lstm.suffix_feature) {
-    Affix *affix = features.suffix(token);
-    int *a = data->Get<int>(lstm.suffix_feature);
-    for (int n = 0; n < lstm.suffix_size; ++n) {
-      if (affix != nullptr) {
-        *a++ = affix->id();
-        affix = affix->shorter();
-      } else {
-        *a++ = -2;
-      }
-    }
-  }
-
-  // Extract hyphen feature.
-  if (lstm.hyphen_feature) {
-    *data->Get<int>(lstm.hyphen_feature) = features.hyphen(token);
-  }
-
-  // Extract capitalization feature.
-  if (lstm.caps_feature) {
-    *data->Get<int>(lstm.caps_feature) = features.capitalization(token);
-  }
-
-  // Extract punctuation feature.
-  if (lstm.punct_feature) {
-    *data->Get<int>(lstm.punct_feature) = features.punctuation(token);
-  }
-
-  // Extract quote feature.
-  if (lstm.quote_feature) {
-    *data->Get<int>(lstm.quote_feature) = features.quote(token);
-  }
-
-  // Extract digit feature.
-  if (lstm.digit_feature) {
-    *data->Get<int>(lstm.digit_feature) = features.digit(token);
-  }
 }
 
 void ParserInstance::ExtractFeaturesFF(int step) {

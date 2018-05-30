@@ -70,13 +70,10 @@ cc_library(
     "//sling/frame:store",
     "//sling/myelin:compute",
     "//sling/myelin:flow",
-    "//sling/myelin:profile",
     "//sling/myelin/kernel:cuda",
     "//sling/myelin/kernel:dragnn",
     "//sling/myelin/kernel:tensorflow",
     "//sling/nlp/document",
-    "//sling/nlp/document:features",
-    "//sling/nlp/document:lexicon",
+    "//sling/nlp/document:lexical-encoder",
   ],
 )
-

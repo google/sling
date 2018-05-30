@@ -36,11 +36,12 @@ void DocumentFeatures::Extract(const Document &document, int begin, int end) {
     f.quote = NO_QUOTE;
 
     // Look up word in lexicon.
-    f.word = lexicon_->LookupWord(word);
+    bool changed = false;
+    f.word = lexicon_->LookupWord(word, &changed);
 
     // Look up longest prefix.
     if (extract_prefixes) {
-      if (f.word != oov) {
+      if (f.word != oov && !changed) {
         f.prefix = lexicon_->prefix(f.word);
       } else {
         f.prefix = lexicon_->prefixes().GetLongestAffix(word);
@@ -49,7 +50,7 @@ void DocumentFeatures::Extract(const Document &document, int begin, int end) {
 
     // Look up longest suffix.
     if (extract_suffixes) {
-      if (f.word != oov) {
+      if (f.word != oov && !changed) {
         f.suffix = lexicon_->suffix(f.word);
       } else {
         f.suffix = lexicon_->suffixes().GetLongestAffix(word);

@@ -199,6 +199,9 @@ class LexicalEncoder {
   // Save lexicon.
   void SaveLexicon(myelin::Flow *flow) const { lex_.SaveLexicon(flow); }
 
+  // Load lexicon.
+  void LoadLexicon(myelin::Flow *flow) { lex_.LoadLexicon(flow); }
+
  private:
   // Lexical feature extractor with embeddings.
   LexicalFeatures lex_;

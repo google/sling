@@ -94,7 +94,7 @@ void Lexicon::BuildSuffixes(int max_suffix) {
   }
 }
 
-int Lexicon::LookupWord(const string &word) const {
+int Lexicon::LookupWord(const string &word, bool *changed) const {
   // Lookup word in vocabulary.
   int id = vocabulary_.Lookup(word);
 
@@ -112,6 +112,7 @@ int Lexicon::LookupWord(const string &word) const {
         if (c >= '0' && c <= '9') c = '9';
       }
       id = vocabulary_.Lookup(normalized);
+      if (changed != nullptr) *changed = true;
     }
   }
 

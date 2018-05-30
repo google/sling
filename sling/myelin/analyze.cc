@@ -45,6 +45,7 @@ DEFINE_string(graph, "", "DOT file name for flow");
 DEFINE_bool(consts, true, "Include constants in DOT graph");
 DEFINE_string(datagraph, "", "DOT file name prefix for data profile");
 DEFINE_int32(batch, 1, "Batch size");
+DEFINE_int32(codealign, 16, "Alignment of code objects");
 DEFINE_string(o, "", "ELF object output file for generated code");
 DEFINE_bool(gendata, false, "Output tensor data to ELF object file");
 DEFINE_bool(genrwdata, false, "Allocate space for tensor data in object file");
@@ -161,6 +162,7 @@ int main(int argc, char *argv[]) {
         linker_opts.generate_data = true;
         linker_opts.writeable_data = true;
       }
+      linker_opts.code_align = FLAGS_codealign;
       linker = new ElfLinker(linker_opts);
       network.set_linker(linker);
     }

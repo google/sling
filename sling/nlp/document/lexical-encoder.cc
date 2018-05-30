@@ -188,8 +188,8 @@ void LexicalFeatures::Initialize(const Network &net) {
   prefix_feature_ = net.LookupParameter(name_ + "/prefix");
   suffix_feature_ = net.LookupParameter(name_ + "/suffix");
   hyphen_feature_ = net.LookupParameter(name_ + "/hyphen");
-  caps_feature_ = net.LookupParameter(name_ + "/caps");
-  punct_feature_ = net.LookupParameter(name_ + "/punct");
+  caps_feature_ = net.LookupParameter(name_ + "/capitalization");
+  punct_feature_ = net.LookupParameter(name_ + "/punctuation");
   quote_feature_ = net.LookupParameter(name_ + "/quote");
   digit_feature_ = net.LookupParameter(name_ + "/digit");
   feature_vector_ = net.GetParameter(name_ + "/feature_vector");
@@ -226,7 +226,7 @@ int LexicalFeatures::LoadWordEmbeddings(const string &filename) {
   int found = 0;
   while (reader.Next()) {
     // Check if word is in vocabulary
-    int row = lexicon_.LookupWord(reader.word());
+    int row = lexicon_.LookupWord(reader.word(), nullptr);
     if (row == lexicon_.oov()) continue;
 
     // Copy embedding to matrix.

@@ -36,6 +36,10 @@ class Builder:
     v.shape = shape
     return v
 
+  def rename(self, var, new_suffix):
+    var.name = self.func.name + "/" + new_suffix
+    return var
+
   def cnx(self, name, args):
     c = self.flow.cnx(self.func.name + "/" + name)
     for a in args:
@@ -106,6 +110,21 @@ class Builder:
       n = name + "_" + str(index)
       if n not in self.flow.vars: return n
       index += 1
+
+  def concat(self, args, name=None):
+    op = self.rawop("ConcatV2", name)
+    op.dtype = args[0].type
+    shape = [args[0].shape[0], 0]
+    for arg in args:
+      op.add_input(arg)
+      shape[1] += arg.shape[1]
+    op.add_attr("N", len(args))
+    axis = self.const(1, DT_INT)
+    op.add_input(axis)
+    result = self.var(op.name + ":0", shape=shape)
+    op.add_output(result)
+
+    return op.outputs[0]
 
   def add(self, x, y, name=None):
     return self.op("Add", [x, y], name)

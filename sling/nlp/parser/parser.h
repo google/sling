@@ -26,10 +26,8 @@
 #include "sling/frame/store.h"
 #include "sling/myelin/compute.h"
 #include "sling/myelin/flow.h"
-#include "sling/myelin/profile.h"
 #include "sling/nlp/document/document.h"
-#include "sling/nlp/document/features.h"
-#include "sling/nlp/document/lexicon.h"
+#include "sling/nlp/document/lexical-encoder.h"
 #include "sling/nlp/parser/action-table.h"
 #include "sling/nlp/parser/parser-state.h"
 #include "sling/nlp/parser/roles.h"
@@ -42,18 +40,6 @@ class ParserInstance;
 // Frame semantics parser model.
 class Parser {
  public:
-  // Profile summary for each cell.
-  struct Profile {
-    Profile(Parser *parser)
-      : lr(parser->lr_.cell), rl(parser->rl_.cell), ff(parser->ff_.cell) {}
-
-    myelin::ProfileSummary lr;                // profile summary for LR LSTM
-    myelin::ProfileSummary rl;                // profile summary for RL LSTM
-    myelin::ProfileSummary ff;                // profile summary for FF
-  };
-
-  ~Parser() { delete profile_; }
-
   // Load and initialize parser model.
   void Load(Store *store, const string &filename);
 
@@ -63,7 +49,7 @@ class Parser {
   // Enable profiling. Must be called before Load().
   void EnableProfiling() {
     network_.options().profiling = true;
-    network_.options().external_profiler = true;
+    network_.options().global_profiler = true;
   }
 
   // Enable fast fallback. Must be called before Load().
@@ -72,41 +58,16 @@ class Parser {
   // Run parser on GPU if available. Must be called before Load().
   void EnableGPU();
 
-  // Return profile summary for parser.
-  Profile *profile() const { return profile_; }
+  // Neural network for parser.
+  const myelin::Network &network() const { return network_; }
+
+  // Return the lexical encoder.
+  const LexicalEncoder &encoder() const { return encoder_; }
 
  private:
-  // LSTM cell.
-  struct LSTM {
-    // Cell.
-    myelin::Cell *cell;                       // LSTM cell
-    bool reverse;                             // LSTM direction
-    myelin::Tensor *profile;                  // LSTM profiling block
-
-    // Features.
-    myelin::Tensor *word_feature;             // word feature
-    myelin::Tensor *prefix_feature;           // prefix feature
-    myelin::Tensor *suffix_feature;           // suffix feature
-    myelin::Tensor *hyphen_feature;           // hyphenation feature
-    myelin::Tensor *caps_feature;             // capitalization feature
-    myelin::Tensor *punct_feature;            // punctuation feature
-    myelin::Tensor *quote_feature;            // quote feature
-    myelin::Tensor *digit_feature;            // digit feature
-
-    int prefix_size = 0;                      // max prefix length
-    int suffix_size = 0;                      // max suffix length
-
-    // Links.
-    myelin::Tensor *c_in;                     // link to LSTM control input
-    myelin::Tensor *c_out;                    // link to LSTM control output
-    myelin::Tensor *h_in;                     // link to LSTM hidden input
-    myelin::Tensor *h_out;                    // link to LSTM hidden output
-  };
-
   // Feed-forward cell.
   struct FF {
     myelin::Cell *cell;                       // feed-forward cell
-    myelin::Tensor *profile;                  // FF profiling block
 
     // Features.
     myelin::Tensor *lr_focus_feature;         // LR LSTM input focus feature
@@ -141,9 +102,6 @@ class Parser {
     myelin::Tensor *prediction;               // link to FF argmax
   };
 
-  // Initialize LSTM cell.
-  void InitLSTM(const string &name, LSTM *lstm, bool reverse);
-
   // Initialize FF cell.
   void InitFF(const string &name, FF *ff);
 
@@ -155,19 +113,14 @@ class Parser {
   myelin::Library library_;
   myelin::Network network_;
 
-  // Cells.
-  LSTM lr_;                                   // left-to-right LSTM cell
-  LSTM rl_;                                   // right-to-left LSTM cell
-  FF ff_;                                     // feed-forward cell
+  // Lexical encoder.
+  LexicalEncoder encoder_;
 
-  // Profile summary.
-  Profile *profile_ = nullptr;
+  // Feed-forward cell.
+  FF ff_;
 
   // Number of output actions.
   int num_actions_;
-
-  // Lexicon.
-  Lexicon lexicon_;
 
   // Global store for parser.
   Store *store_ = nullptr;
@@ -201,20 +154,8 @@ class ParserInstance {
  public:
   ParserInstance(const Parser *parser, Document *document, int begin, int end);
 
-  // Attach channel for LR LSTM.
-  void AttachLR(int input, int output);
-
-  // Attach channel for RL LSTM.
-  void AttachRL(int input, int output);
-
   // Attach channel for FF.
-  void AttachFF(int output);
-
-  // Extract features for LSTM.
-  void ExtractFeaturesLSTM(int token,
-                           const DocumentFeatures &features,
-                           const Parser::LSTM &lstm,
-                           myelin::Instance *data);
+  void AttachFF(int output, const myelin::BiChannel &bilstm);
 
   // Extract features for FF.
   void ExtractFeaturesFF(int step);
@@ -228,19 +169,16 @@ class ParserInstance {
   // Parser model.
   const Parser *parser_;
 
+  // Instance for lexical encoding computation.
+  LexicalEncoderInstance encoder_;
+
   // Parser transition state.
   ParserState state_;
 
-  // Instances for network computations.
-  myelin::Instance lr_;
-  myelin::Instance rl_;
+  // Instance for network computations.
   myelin::Instance ff_;
 
   // Channels.
-  myelin::Channel lr_c_;
-  myelin::Channel lr_h_;
-  myelin::Channel rl_c_;
-  myelin::Channel rl_h_;
   myelin::Channel ff_step_;
 
   // Frame creation and focus steps.
