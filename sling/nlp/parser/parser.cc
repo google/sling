@@ -92,6 +92,7 @@ void Parser::Load(Store *store, const string &model) {
   actions_.Init(store);
   num_actions_ = actions_.NumActions();
   CHECK_GT(num_actions_, 0);
+  frame_limit_ = actions_.frame_limit();
   roles_.Init(actions_);
 }
 

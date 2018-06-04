@@ -42,6 +42,7 @@ class Actions:
     self.max_refer_target = None
     self.max_embed_target = None
     self.max_elaborate_source = None
+    self.frame_limit = None
 
     # Short-cuts for ids of SHIFT and STOP actions.
     self.shift_index = None
@@ -139,6 +140,7 @@ class Actions:
     table["/table/max_refer_target"] = self.max_refer_target
     table["/table/max_embed_target"] = self.max_embed_target
     table["/table/max_elaborate_source"] = self.max_elaborate_source
+    table["/table/frame_limit"] = self.frame_limit
 
     def fill(f, name, val):
       if val is not None:

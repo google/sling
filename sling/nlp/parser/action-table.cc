@@ -125,6 +125,7 @@ void ActionTable::Init(Store *store) {
   max_assign_source_ = top.GetInt("/table/max_assign_source");
   max_span_length_ = top.GetInt("/table/max_span_length");
   max_actions_per_token_ = top.GetInt("/table/max_actions_per_token");
+  frame_limit_ = top.GetInt("/table/frame_limit");
 
   // Compute the overall max index.
   if (max_index_ < max_refer_target_) max_index_ = max_refer_target_;
@@ -232,6 +233,7 @@ string ActionTable::Serialize(const Store *global, int percentile) const {
   top.Add("/table/max_assign_source", assign_source_.PercentileBin(percentile));
   top.Add("/table/max_span_length", span_length_.PercentileBin(percentile));
   top.Add("/table/max_actions_per_token", max_actions_per_token_);
+  top.Add("/table/frame_limit", frame_limit_);
 
   // Save the actions index.
   Handle action_type = GetSymbol(&store, "/table/action/type");

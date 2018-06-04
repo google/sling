@@ -106,7 +106,7 @@ class Spec:
       # Fixed feature dimensionalities.
       self.oov_features = False
       self.words_dim = 4
-      self.suffixes_dim = 2 
+      self.suffixes_dim = 2
       self.fallback_dim = 2  # dimensionality of each fallback feature
       self.roles_dim = 2
 
@@ -161,6 +161,7 @@ class Spec:
   def _build_action_table(self, corpora):
     corpora.rewind()
     self.actions = Actions()
+    self.actions.frame_limit = self.frame_limit
     for document in corpora:
       assert document.size() == 0 or len(document.gold) > 0
       for action in document.gold:

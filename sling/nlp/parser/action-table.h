@@ -81,6 +81,7 @@ class ActionTable {
   int max_assign_source() const { return max_assign_source_; }
   int max_embed_target() const { return max_embed_target_; }
   int max_elaborate_source() const { return max_elaborate_source_; }
+  int frame_limit() const { return frame_limit_; }
 
   // Saves the action table to 'file'. 'global' is optionally used to lookup
   // global symbols used as action arguments. 'percentile' is used to compute
@@ -167,6 +168,7 @@ class ActionTable {
   int max_connect_source_;
   int max_connect_target_;
   int max_assign_source_;
+  int frame_limit_ = 5;
 
   // Maximum of all the above indices.
   int max_index_ = 0;
