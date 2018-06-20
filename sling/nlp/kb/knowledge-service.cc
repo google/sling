@@ -194,6 +194,7 @@ void KnowledgeService::HandleGetItem(HTTPRequest *request,
   FetchProperties(item, &info);
   b.Add(n_properties_, Array(ws.store(), info.properties));
   b.Add(n_xrefs_, Array(ws.store(), info.xrefs));
+  b.Add(n_categories_, Array(ws.store(), info.categories));
 
   // Set item image.
   if (!info.image.IsNil()) {
@@ -210,6 +211,15 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
   // Collect properties and values.
   HandleMap<Handles *> property_map;
   for (const Slot &s : item) {
+    // Collect categories.
+    if (s.name == n_category_) {
+      Builder b(item.store());
+      Frame cat(item.store(), s.value);
+      GetStandardProperties(cat, &b);
+      info->categories.push_back(b.Create().handle());
+      continue;
+    }
+
     // Skip non-property slots.
     if (properties_.find(s.name) == properties_.end()) continue;
 

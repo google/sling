@@ -245,6 +245,10 @@ class Document(object):
       parts.append(token.text)
     return ''.join(parts)
 
+  def tolex(self):
+    self.update()
+    return sling.api.tolex(self.frame)
+
   def remove_annotations(self):
     if len(self.mentions) > 0:
       self.mentions = []

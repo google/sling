@@ -6,6 +6,7 @@ cc_library(
     "pyapi.cc",
     "pyarray.cc",
     "pybase.cc",
+    "pydate.cc",
     "pyframe.cc",
     "pymisc.cc",
     "pyparser.cc",
@@ -17,6 +18,7 @@ cc_library(
   hdrs = [
     "pyarray.h",
     "pybase.h",
+    "pydate.h",
     "pyframe.h",
     "pymisc.h",
     "pyparser.h",
@@ -35,7 +37,9 @@ cc_library(
     "//sling/nlp/document",
     "//sling/nlp/wiki:phrase-table",
     "//sling/nlp/document:document-tokenizer",
+    "//sling/nlp/document:lex",
     "//sling/nlp/document:phrase-tokenizer",
+    "//sling/nlp/kb:calendar",
     "//sling/nlp/parser",
     "//sling/task:dashboard",
     "//sling/task:job",
@@ -44,7 +48,9 @@ cc_library(
   ],
   copts = [
     "-Wno-pmf-conversions",
-  ]
+    "-Wno-write-strings",
+    "-Wno-invalid-offsetof",
+  ],
 )
 
 cc_library(

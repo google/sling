@@ -71,6 +71,16 @@ Frame Span::Evoked() const {
   return Frame::nil();
 }
 
+void Span::AllEvoked(Handles *evoked) const {
+  evoked->clear();
+  Handle n_evokes = document_->names_->n_evokes.handle();
+  for (const Slot &slot : mention_) {
+    if (slot.name == n_evokes) {
+      evoked->push_back(slot.value);
+    }
+  }
+}
+
 bool Span::Evokes(Handle type) const {
   Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
@@ -340,6 +350,22 @@ void Document::RemoveMention(Handle handle, Span *span) {
       break;
     }
   }
+}
+
+int Document::Locate(int position) const {
+  int index = 0;
+  int len = tokens_.size();
+  while (len > 0) {
+    int width = len / 2;
+    int mid = index + width;
+    if (tokens_[mid].begin() < position) {
+      index = mid + 1;
+      len -=  width + 1;
+    } else {
+      len = width;
+    }
+  }
+  return index;
 }
 
 uint64 Document::PhraseFingerprint(int begin, int end) {

@@ -233,6 +233,11 @@ class Object : public Root {
   // Returns a display name for the object.
   string DebugString() const { return store_->DebugString(handle_); }
 
+  // Returns fingerprint for object.
+  uint64 Fingerprint(uint64 seed = 0) const {
+    return store_->Fingerprint(handle_, seed);
+  }
+
   // Returns handle for value.
   Handle handle() const { return handle_; }
 

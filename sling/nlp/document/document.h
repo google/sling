@@ -170,6 +170,9 @@ class Span {
   // Returns the first evoked frame.
   Frame Evoked() const;
 
+  // Returns all evoked frames.
+  void AllEvoked(Handles *evoked) const;
+
   // Checks if span evokes a certain type of frame.
   bool Evokes(Handle type) const;
   bool Evokes(const Name &type) const;
@@ -267,6 +270,9 @@ class Document {
   // Return document tokens.
   const std::vector<Token> &tokens() const { return tokens_; }
 
+  // Locate token index containing text position.
+  int Locate(int position) const;
+
   // Return fingerprint for token in document.
   uint64 TokenFingerprint(int token) const {
     return tokens_[token].fingerprint();
@@ -342,6 +348,14 @@ class Document {
   }
   MentionRange EvokingSpans(const Frame &frame) {
     return MentionRange(mentions_.equal_range(frame.handle()));
+  }
+
+  // Returns the number of spans evoking a frame.
+  int EvokingSpanCount(Handle handle) {
+    return mentions_.count(handle);
+  }
+  int EvokingSpanCount(const Frame &frame) {
+    return mentions_.count(frame.handle());
   }
 
   // Clears annotations (mentions and themes) from document.

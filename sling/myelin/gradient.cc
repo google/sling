@@ -122,6 +122,8 @@ Flow::Function *Gradient(Flow *flow,
   Gradients g(flow, func, vars);
   for (int i = ops.size() - 1; i >= 0; --i) {
     Flow::Operation *op = ops[i];
+    if (op->is(Flow::Operation::NOGRADIENT)) continue;
+
     auto f = library.gradients().find(op->type);
     if (f == library.gradients().end()) {
       LOG(FATAL) << "No gradient function for " << op->type;

@@ -173,6 +173,27 @@
             </table>
           </div>
 
+          <!-- Item categories card -->
+          <div class="card" ng-show="hasCategories()">
+            <div class="card-toolbar" layout="row" layout-align="start center">
+              <span class="md-headline">Categories</span>
+              <span flex></span>
+              <md-button class="md-icon-button">
+                <i class="material-icons">expand_less</i>
+              </md-button>
+            </div>
+
+            <table class="prop-tab">
+              <tr class="prop-row" ng-repeat="c in item.categories">
+                <td class="prop-value">
+                  <a ng-href="{{itemUrl(c.ref)}}">
+                    {{c.text.substr(c.text.indexOf(':') + 1)}}
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </div>
+
         </div>
         <div layout="column" layout-align="start stretch" flex="30">
 

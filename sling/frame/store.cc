@@ -56,6 +56,14 @@ const Store::Options Store::kDefaultOptions;
 static inline uint64 HashBytes(const void *ptr, size_t len) {
   return CityHash64(reinterpret_cast<const char *>(ptr), len);
 }
+static inline uint64 HashMix(const void *ptr, size_t len,
+                             uint64 seed0, uint64 seed1) {
+  return CityHash64WithSeeds(reinterpret_cast<const char *>(ptr), len,
+                             seed0, seed1);
+}
+static inline uint64 HashMix(uint64 fp1, uint64 fp2) {
+  return CityHash64Mix(fp1, fp2);
+}
 
 void Region::reserve(size_t bytes) {
   size_t used = size();
@@ -831,6 +839,69 @@ SymbolDatum *Store::LocalSymbol(SymbolDatum *symbol) {
   InsertSymbol(local);
 
   return local;
+}
+
+uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
+  // Fingerprint mixing constants.
+  enum FingerprintSeed : uint64 {
+    FP_NUMBER =  0xd1ac3c3a168f9a23,
+    FP_STRING =  0xedbf08a562d55ca0,
+    FP_FRAME =   0x07a535307e971126,
+    FP_SYMBOL =  0x06c498392bf66124,
+    FP_ARRAY =   0x7e71d2f093c19cd1,
+    FP_NIL =     0xe958f32bf433420c,
+    FP_INVALID = 0x159ba7c32c364f9b,
+  };
+
+  if (handle.IsNumber()) {
+    // Use the bit pattern of the integer or float for hashing.
+    return HashMix(HashMix(seed, FP_NUMBER), handle.bits);
+  } else {
+    if (handle.IsNil()) return HashMix(seed, FP_NIL);
+    const Datum *datum = GetObject(handle);
+    if (datum->IsFrame()) {
+      const FrameDatum *frame = datum->AsFrame();
+      if (frame->IsNamed()) {
+        // Use the (first) frame id for hashing.
+        Handle id = frame->get(Handle::id());
+        DCHECK(!id.IsNil());
+        const SymbolDatum *symbol = GetSymbol(id);
+        return HashMix(seed, symbol->hash.bits);
+      } else {
+        // Hash all slots in frame.
+        uint64 fp = HashMix(seed, FP_FRAME);
+        for (const Slot *s = frame->begin(); s < frame->end(); ++s) {
+          fp = Fingerprint(s->name, fp);
+          fp = Fingerprint(s->value, fp);
+        }
+        return fp;
+      }
+    } else {
+      switch (datum->typebits()) {
+        case STRING: {
+          // Hash string content.
+          const StringDatum *str = datum->AsString();
+          return HashMix(str->data(), str->size(), seed, FP_STRING);
+        }
+        case SYMBOL: {
+          // Use pre-computed symbol hash for fingerprint.
+          const SymbolDatum *symbol = datum->AsSymbol();
+          return HashMix(HashMix(seed, FP_SYMBOL), symbol->hash.bits);
+        }
+        case ARRAY: {
+          // Hash all elements of the array.
+          const ArrayDatum *array = datum->AsArray();
+          uint64 fp = HashMix(seed, FP_ARRAY);
+          for (const Handle *h = array->begin(); h < array->end(); ++h) {
+            fp = Fingerprint(*h, fp);
+          }
+          return fp;
+        }
+        default:
+          return HashMix(seed, FP_INVALID);
+      }
+    }
+  }
 }
 
 void Store::ReplaceProxy(ProxyDatum *proxy, FrameDatum *frame) {

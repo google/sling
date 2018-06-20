@@ -12,67 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SLING_PYAPI_PYPARSER_H_
-#define SLING_PYAPI_PYPARSER_H_
+#ifndef SLING_PYAPI_PYDATE_H_
+#define SLING_PYAPI_PYDATE_H_
 
-#include "sling/frame/store.h"
-#include "sling/nlp/document/document-tokenizer.h"
-#include "sling/nlp/parser/parser.h"
+#include "sling/nlp/kb/calendar.h"
 #include "sling/pyapi/pybase.h"
 #include "sling/pyapi/pystore.h"
 
 namespace sling {
 
-// Python wrapper for tokenizer.
-struct PyTokenizer : public PyBase {
-  // Initialize tokenizer wrapper.
+// Python wrapper for date.
+struct PyDate : public PyBase {
+  // Initialize date wrapper.
   int Init(PyObject *args, PyObject *kwds);
 
-  // Deallocate tokenizer wrapper.
+  // Deallocate date wrapper.
   void Dealloc();
 
-  // Tokenize text and return document frame with tokens.
-  PyObject *Tokenize(PyObject *args);
-
-  // Parse LEX-encoded text and return document with tokens, spans, and frames.
-  PyObject *Lex(PyObject *args);
-
-  // Document tokenizer.
-  nlp::DocumentTokenizer *tokenizer;
+  // Date object.
+  nlp::Date date;
 
   // Registration.
   static PyTypeObject type;
   static PyMethodDef methods[];
+  static PyMemberDef members[];
   static void Define(PyObject *module);
 };
 
-// Python wrapper for parser.
-struct PyParser : public PyBase {
-  // Initialize parser wrapper.
+// Python wrapper for calendar.
+struct PyCalendar : public PyBase {
+  // Initialize calendar wrapper.
   int Init(PyObject *args, PyObject *kwds);
 
-  // Deallocate parser wrapper.
+  // Deallocate record reader wrapper.
   void Dealloc();
 
-  // Parse document.
-  PyObject *Parse(PyObject *args);
+  // Convert date to human-readable string.
+  PyObject *Str(PyObject *obj);
 
-  // Document parser.
-  nlp::Parser *parser;
+  // Convert date to string or integer value.
+  PyObject *Value(PyObject *obj);
 
-  // Commons store for parser.
+  // Return frames for date parts.
+  PyObject *Day(PyObject *obj);
+  PyObject *Month(PyObject *obj);
+  PyObject *Year(PyObject *obj);
+  PyObject *Decade(PyObject *obj);
+  PyObject *Century(PyObject *obj);
+  PyObject *Millennium(PyObject *obj);
+
+  // Get date object.
+  PyDate *GetDate(PyObject *obj);
+
+  // Store for calendar frames.
   PyStore *pystore;
 
+  // Calendar.
+  nlp::Calendar *calendar;
+
   // Registration.
   static PyTypeObject type;
   static PyMethodDef methods[];
   static void Define(PyObject *module);
 };
-
-// Return document frame in LEX-encoded format.
-PyObject *PyToLex(PyObject *self, PyObject *args);
 
 }  // namespace sling
 
-#endif  // SLING_PYAPI_PYPARSER_H_
+#endif  // SLING_PYAPI_PYDATE_H_
 

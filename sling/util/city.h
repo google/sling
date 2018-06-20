@@ -66,6 +66,9 @@ uint64 CityHash64WithSeed(const char *buf, size_t len, uint64 seed);
 uint64 CityHash64WithSeeds(const char *buf, size_t len,
                            uint64 seed0, uint64 seed1);
 
+// Mix two hashes.
+uint64 CityHash64Mix(uint64 fp1, uint64 fp2);
+
 // Hash function for a byte array.  Most useful in 32-bit binaries.
 uint32 CityHash32(const char *buf, size_t len);
 

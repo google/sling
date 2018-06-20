@@ -80,6 +80,9 @@ struct PyFrame : public PyBase, public Root {
   // Check if frame is global.
   PyObject *IsGlobal();
 
+  // Resolve frame by following is: chain.
+  PyObject *Resolve();
+
   // Check if frame can be modified.
   bool Writable();
 

@@ -693,7 +693,7 @@ def save_workflow_log(path):
   if not active: return False
   if path is None or len(path) == 0: return False
   if not os.path.exists(path): return False
-  logfn = path + "/" + time.strftime("%Y%d%m-%H%M%S") + ".json"
+  logfn = path + "/" + time.strftime("%Y%m%d-%H%M%S") + ".json"
   logfile = open(logfn, "w")
   logfile.write(statistics())
   logfile.close()

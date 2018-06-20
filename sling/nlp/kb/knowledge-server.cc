@@ -28,13 +28,17 @@ using namespace sling::nlp;
 int main(int argc, char *argv[]) {
   InitProgram(&argc, &argv);
 
-  LOG(INFO) << "Start HTTP server";
+  LOG(INFO) << "Start HTTP server on port " << FLAGS_port;
   HTTPServerOptions options;
   HTTPServer http(options, FLAGS_port);
 
   KnowledgeService kb;
   kb.Load(FLAGS_kb, FLAGS_names);
   kb.Register(&http);
+
+  http.Register("/", [](HTTPRequest *req, HTTPResponse *rsp) {
+    rsp->RedirectTo("/kb");
+  });
 
   CHECK(http.Start());
 

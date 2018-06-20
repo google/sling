@@ -34,81 +34,105 @@ static const char *parse_number(const char *p, const char *end, int *value) {
   return p;
 }
 
-Date::Date(const Object &object) {
-  year_ = month_ = day_ = 0;
-  precision_ = NONE;
+void Date::Init(const Object &object) {
+  year = month = day = 0;
+  precision = NONE;
   if (object.IsInt()) {
     int num = object.AsInt();
     CHECK(num > 0);
-    if (num >= 1000000) {
-      // YYYYMMDD
-      year_ = num / 10000;
-      month_ = (num % 10000) / 100;
-      day_ = num % 100;
-      precision_ = DAY;
-    } else if (num >= 10000) {
-      // YYYYMM
-      year_ = num / 100;
-      month_ = num % 100;
-      precision_ = MONTH;
-    } else if (num >= 1000) {
-      // YYYY
-      year_ = num;
-      precision_ = YEAR;
-    } else if (num >= 100) {
-      // YYY*
-      year_ = num * 10;
-      precision_ = DECADE;
-    } else if (num >= 10) {
-      // YY**
-      year_ = num * 100 + 1;
-      precision_ = CENTURY;
-    } else {
-      // Y***
-      year_ = num * 1000 + 1;
-      precision_ = MILLENNIUM;
-    }
+    ParseFromNumber(num);
   } else if (object.IsString()) {
-    // Parse string date format: [+-]YYYY-MM-DDT00:00:00Z.
     Text datestr = object.AsString().text();
-    const char *p = datestr.data();
-    const char *end = p + datestr.size();
+    ParseFromString(datestr);
+  } else if (object.IsFrame()) {
+    Frame frame = object.AsFrame();
+    ParseFromFrame(frame);
+  }
+}
 
-    // Parse + and - for AD and BC.
-    bool bc = false;
-    if (p < end && *p == '+') {
-      p++;
-    } else if (p < end && *p == '-') {
-      bc = true;
-      p++;
-    }
+void Date::ParseFromNumber(int num) {
+  if (num >= 1000000) {
+    // YYYYMMDD
+    year = num / 10000;
+    month = (num % 10000) / 100;
+    day = num % 100;
+    precision = DAY;
+  } else if (num >= 10000) {
+    // YYYYMM
+    year = num / 100;
+    month = num % 100;
+    precision = MONTH;
+  } else if (num >= 1000) {
+    // YYYY
+    year = num;
+    precision = YEAR;
+  } else if (num >= 100) {
+    // YYY*
+    year = num * 10;
+    precision = DECADE;
+  } else if (num >= 10) {
+    // YY**
+    year = num * 100 + 1;
+    precision = CENTURY;
+  } else {
+    // Y***
+    year = num * 1000 + 1;
+    precision = MILLENNIUM;
+  }
+}
 
-    // Parse year, which can have trailing *s to indicate precision.
-    p = parse_number(p, end, &year_);
-    int stars = 0;
-    while (p < end && *p == '*') {
-      p++;
-      stars++;
-    }
-    switch (stars) {
-      case 0: precision_ = YEAR; break;
-      case 1: precision_ = DECADE; year_ = year_ * 10; break;
-      case 2: precision_ = CENTURY; year_ = year_ * 100 + 1; break;
-      case 3: precision_ = MILLENNIUM; year_ = year_ * 1000 + 1; break;
-    }
-    if (bc) year_ = -year_;
+void Date::ParseFromString(Text str) {
+  const char *p = str.data();
+  const char *end = p + str.size();
 
-    // Parse day and month.
+  // Parse + and - for AD and BC.
+  bool bc = false;
+  if (p < end && *p == '+') {
+    p++;
+  } else if (p < end && *p == '-') {
+    bc = true;
+    p++;
+  }
+
+  // Parse year, which can have trailing *s to indicate precision.
+  p = parse_number(p, end, &year);
+  int stars = 0;
+  while (p < end && *p == '*') {
+    p++;
+    stars++;
+  }
+  switch (stars) {
+    case 0: precision = YEAR; break;
+    case 1: precision = DECADE; year = year * 10; break;
+    case 2: precision = CENTURY; year = year * 100 + 1; break;
+    case 3: precision = MILLENNIUM; year = year * 1000 + 1; break;
+  }
+  if (bc) year = -year;
+
+  // Parse day and month.
+  if (p < end && *p == '-') {
+    p++;
+    p = parse_number(p, end, &month);
+    if (month != 0) precision = MONTH;
     if (p < end && *p == '-') {
       p++;
-      p = parse_number(p, end, &month_);
-      if (month_ != 0) precision_ = MONTH;
-      if (p < end && *p == '-') {
-        p++;
-        p = parse_number(p, end, &day_);
-        if (day_ != 0) precision_ = DAY;
-      }
+      p = parse_number(p, end, &day);
+      if (day != 0) precision = DAY;
     }
+  }
+}
+
+void Date::ParseFromFrame(const Frame &frame) {
+  // Try to get the 'point in time' property from frame and parse it.
+  Object time = frame.Get("P585");
+  if (time.invalid()) return;
+  if (time.IsInt()) {
+    int num = time.AsInt();
+    CHECK(num > 0);
+    ParseFromNumber(num);
+  } else if (time.IsString()) {
+    Text datestr = time.AsString().text();
+    ParseFromString(datestr);
   }
 }
 
@@ -159,36 +183,36 @@ void Calendar::Init(Store *store) {
 
 string Calendar::DateAsString(const Date &date) const {
   // Parse date.
-  Text year = YearName(date.year());
+  Text year = YearName(date.year);
 
-  switch (date.precision()) {
+  switch (date.precision) {
     case Date::NONE:
       return "";
 
     case Date::MILLENNIUM: {
-      Text millennium = MillenniumName(date.year());
+      Text millennium = MillenniumName(date.year);
       if (!millennium.empty()) {
         return millennium.str();
-      } else if (date.year() > 0) {
-        return StrCat((date.year() - 1) / 1000 + 1, ". millennium AD");
+      } else if (date.year > 0) {
+        return StrCat((date.year - 1) / 1000 + 1, ". millennium AD");
       } else {
-        return StrCat(-((date.year() + 1) / 1000 - 1), ". millennium BC");
+        return StrCat(-((date.year + 1) / 1000 - 1), ". millennium BC");
       }
     }
 
     case Date::CENTURY: {
-      Text century = CenturyName(date.year());
+      Text century = CenturyName(date.year);
       if (!century.empty()) {
         return century.str();
-      } else if (date.year() > 0) {
-        return StrCat((date.year() - 1) / 100 + 1, ". century AD");
+      } else if (date.year > 0) {
+        return StrCat((date.year - 1) / 100 + 1, ". century AD");
       } else {
-        return StrCat(-((date.year() + 1) / 100 - 1), ". century BC");
+        return StrCat(-((date.year + 1) / 100 - 1), ". century BC");
       }
     }
 
     case Date::DECADE: {
-      Text decade = DecadeName(date.year());
+      Text decade = DecadeName(date.year);
       if (!decade.empty()) {
         return decade.str();
       } else {
@@ -199,36 +223,36 @@ string Calendar::DateAsString(const Date &date) const {
     case Date::YEAR: {
       if (!year.empty()) {
         return year.str();
-      } else if (date.year() > 0) {
-        return StrCat(date.year());
+      } else if (date.year > 0) {
+        return StrCat(date.year);
       } else {
-        return StrCat(-date.year(), " BC");
+        return StrCat(-date.year, " BC");
       }
     }
 
     case Date::MONTH: {
-      Text month = MonthName(date.month());
+      Text month = MonthName(date.month);
       if (!month.empty()) {
         if (!year.empty()) {
           return StrCat(month, " ", year);
         } else {
-          return StrCat(month, " ", date.year());
+          return StrCat(month, " ", date.year);
         }
       } else {
-        return StrCat(date.year(), "-", date.month());
+        return StrCat(date.year, "-", date.month);
       }
     }
 
     case Date::DAY: {
-      Text day = DayName(date.month(), date.day());
+      Text day = DayName(date.month, date.day);
       if (!day.empty()) {
         if (!year.empty()) {
           return StrCat(day, ", ", year);
         } else {
-          return StrCat(day, ", ", date.year());
+          return StrCat(day, ", ", date.year);
         }
       } else {
-        return StrCat(date.year(), "-", date.month(), "-", date.day());
+        return StrCat(date.year, "-", date.month, "-", date.day);
       }
     }
   }
@@ -237,8 +261,8 @@ string Calendar::DateAsString(const Date &date) const {
 }
 
 Handle Calendar::Day(const Date &date) const {
-  if (date.precision() < Date::DAY) return Handle::nil();
-  return Day(date.month(), date.day());
+  if (date.precision < Date::DAY) return Handle::nil();
+  return Day(date.month, date.day);
 }
 
 Handle Calendar::Day(int month, int day) const {
@@ -247,8 +271,8 @@ Handle Calendar::Day(int month, int day) const {
 }
 
 Handle Calendar::Month(const Date &date) const {
-  if (date.precision() < Date::MONTH) return Handle::nil();
-  return Month(date.month());
+  if (date.precision < Date::MONTH) return Handle::nil();
+  return Month(date.month);
 }
 
 Handle Calendar::Month(int month) const {
@@ -257,8 +281,8 @@ Handle Calendar::Month(int month) const {
 }
 
 Handle Calendar::Year(const Date &date) const {
-  if (date.precision() < Date::YEAR) return Handle::nil();
-  return Year(date.year());
+  if (date.precision < Date::YEAR) return Handle::nil();
+  return Year(date.year);
 }
 
 Handle Calendar::Year(int year) const {
@@ -267,8 +291,8 @@ Handle Calendar::Year(int year) const {
 }
 
 Handle Calendar::Decade(const Date &date) const {
-  if (date.precision() < Date::DECADE) return Handle::nil();
-  return Decade(date.year());
+  if (date.precision < Date::DECADE) return Handle::nil();
+  return Decade(date.year);
 }
 
 Handle Calendar::Decade(int year) const {
@@ -279,8 +303,8 @@ Handle Calendar::Decade(int year) const {
 }
 
 Handle Calendar::Century(const Date &date) const {
-  if (date.precision() < Date::CENTURY) return Handle::nil();
-  return Century(date.year());
+  if (date.precision < Date::CENTURY) return Handle::nil();
+  return Century(date.year);
 }
 
 Handle Calendar::Century(int year) const {
@@ -290,8 +314,8 @@ Handle Calendar::Century(int year) const {
 }
 
 Handle Calendar::Millennium(const Date &date) const {
-  if (date.precision() < Date::MILLENNIUM) return Handle::nil();
-  return Millennium(date.year());
+  if (date.precision < Date::MILLENNIUM) return Handle::nil();
+  return Millennium(date.year);
 }
 
 Handle Calendar::Millennium(int year) const {
@@ -310,9 +334,9 @@ Text Calendar::ItemName(Handle item) const {
 }
 
 int Calendar::DateNumber(const Date &date) {
-  int year = date.year();
+  int year = date.year;
   if (year < 1000 || year > 9999) return -1;
-  switch (date.precision()) {
+  switch (date.precision) {
     case Date::NONE:
       return -1;
     case Date::MILLENNIUM: {
@@ -330,9 +354,9 @@ int Calendar::DateNumber(const Date &date) {
     case Date::YEAR:
       return year;
     case Date::MONTH:
-      return date.year() * 100 + date.month();
+      return date.year * 100 + date.month;
     case Date::DAY:
-      return date.year() * 10000 + date.month() * 100 + date.day();
+      return date.year * 10000 + date.month * 100 + date.day;
   }
 
   return -1;
@@ -341,9 +365,9 @@ int Calendar::DateNumber(const Date &date) {
 string Calendar::DateString(const Date &date) {
   char str[16];
   *str = 0;
-  int year = date.year();
+  int year = date.year;
   if (year >= -9999 && year <= 9999 && year != 0) {
-    switch (date.precision()) {
+    switch (date.precision) {
       case Date::NONE: break;
       case Date::MILLENNIUM:
         if (year > 0) {
@@ -378,10 +402,10 @@ string Calendar::DateString(const Date &date) {
         sprintf(str, "%+04d", year);
         break;
       case Date::MONTH:
-        sprintf(str, "%+04d-%02d", date.year(), date.month());
+        sprintf(str, "%+04d-%02d", date.year, date.month);
         break;
       case Date::DAY:
-        sprintf(str, "%+04d-%02d-%02d", date.year(), date.month(), date.day());
+        sprintf(str, "%+04d-%02d-%02d", date.year, date.month, date.day);
         break;
     }
   }

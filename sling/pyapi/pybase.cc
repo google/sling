@@ -39,5 +39,11 @@ void PyBase::RegisterType(PyTypeObject *type,
   PyModule_AddObject(module, name, reinterpret_cast<PyObject *>(type));
 }
 
+void PyBase::RegisterEnum(PyObject *module,
+                          const char *name,
+                          int value) {
+  PyModule_AddIntConstant(module, name, value);
+}
+
 }  // namespace sling
 

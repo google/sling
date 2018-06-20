@@ -41,15 +41,17 @@ class LexicalFeatures {
 
   // Lexical feature specification. Feature is disabled if dimension is zero.
   struct Spec {
-    LexiconSpec lexicon;            // lexicon specification
-    int word_dim = 32;              // word emmedding dimensions
-    int prefix_dim = 16;            // prefix embedding dimensions
-    int suffix_dim = 16;            // prefix embedding dimensions
-    int hyphen_dim = 2;             // hyphenation embedding dimensions
-    int caps_dim = 4;               // capitalization embedding dimensions
-    int punct_dim = 4;              // punctuation embedding dimensions
-    int quote_dim = 2;              // quote feature embedding dimensions
-    int digit_dim = 4;              // digit feature embedding dimensions
+    LexiconSpec lexicon;                // lexicon specification
+    int word_dim = 32;                  // word emmedding dimensions
+    int prefix_dim = 16;                // prefix embedding dimensions
+    int suffix_dim = 16;                // prefix embedding dimensions
+    int hyphen_dim = 2;                 // hyphenation embedding dimensions
+    int caps_dim = 4;                   // capitalization embedding dimensions
+    int punct_dim = 4;                  // punctuation embedding dimensions
+    int quote_dim = 2;                  // quote feature embedding dimensions
+    int digit_dim = 4;                  // digit feature embedding dimensions
+    string word_embeddings;             // file with pre-trained word embeddings
+    bool train_word_embeddings = true;  // train word embeddings jointly
   };
 
   // Feature output and gradient input for module.
@@ -79,10 +81,6 @@ class LexicalFeatures {
   // Initialize feature extractor from existing model.
   void Initialize(const myelin::Network &net);
 
-  // Load pre-trained word embeddings. Returns the number of words which were
-  // initialized from the pre-trained embeddings.
-  int LoadWordEmbeddings(const string &filename);
-
   // Lexicon.
   const Lexicon &lexicon() const { return lexicon_; }
 
@@ -90,8 +88,16 @@ class LexicalFeatures {
   myelin::Tensor *feature_vector() const { return feature_vector_; }
 
  private:
+  // Load pre-trained word embeddings into word embedding matrix.
+  int LoadWordEmbeddings(myelin::Flow::Variable *matrix,
+                         const string &filename);
+
+  // Initialize word embedding matrix with pre-trained word embeddings.
+  int InitWordEmbeddings(const string &filename);
+
   string name_;                                // cell name
   Lexicon lexicon_;                            // lexicon for word vocabulary
+  string pretrained_embeddings_;               // pre-trained word embeddings
 
   myelin::Cell *features_ = nullptr;           // feature extractor cell
   myelin::Tensor *word_feature_ = nullptr;     // word feature
@@ -189,12 +195,6 @@ class LexicalEncoder {
 
   // Lexical features module.
   const LexicalFeatures &lex() const { return lex_; }
-
-  // Load pre-trained word embeddings. Returns the number of words which were
-  // initialized from the pre-trained embeddings.
-  int LoadWordEmbeddings(const string &filename) {
-    return lex_.LoadWordEmbeddings(filename);
-  }
 
   // Save lexicon.
   void SaveLexicon(myelin::Flow *flow) const { lex_.SaveLexicon(flow); }

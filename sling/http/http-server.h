@@ -199,6 +199,12 @@ class HTTPServer {
   // Shut down idle connections.
   void ShutdownIdleConnections();
 
+  // Handler for /helpz.
+  void HelpHandler(HTTPRequest *req, HTTPResponse *rsp);
+
+  // Handler for /connz.
+  void ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp);
+
   // Server configuration.
   HTTPServerOptions options_;
 

@@ -122,7 +122,11 @@ Flow::Variable *FlowBuilder::Const(const void *data, Type type,
   var->size = TypeTraits::of(type).size() * shape.elements();
   char *buffer = flow_->AllocateMemory(var->size);
   var->data = buffer;
-  memcpy(buffer, data, var->size);
+  if (data != nullptr) {
+    memcpy(buffer, data, var->size);
+  } else {
+    memset(buffer, 0, var->size);
+  }
   return var;
 }
 

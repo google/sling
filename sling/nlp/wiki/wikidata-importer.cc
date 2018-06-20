@@ -383,7 +383,7 @@ class WikidataImporter : public task::Processor {
     Store *store = value.store();
     Object timestamp = value.Get(s_time_);
     Date date(timestamp);
-    date.set_precision(date_precision[value.GetInt(s_precision_, 11)]);
+    date.precision = date_precision[value.GetInt(s_precision_, 11)];
 
     // Convert timestamp to simplified integer or string format.
     int number = Calendar::DateNumber(date);

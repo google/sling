@@ -403,6 +403,12 @@ class Flow {
 
   // Flow operation.
   struct Operation : public Artifact<Operation>, public Attributes {
+    // Variable flags.
+    enum Flag {
+      NONE = 0,         // no flags
+      NOGRADIENT = 1,   // do not compute gradient for op
+    };
+
     // Add input to operation.
     void AddInput(Variable *var);
 

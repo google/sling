@@ -416,5 +416,9 @@ uint64 CityHash64WithSeeds(const char *s, size_t len,
   return HashLen16(CityHash64(s, len) - seed0, seed1);
 }
 
+uint64 CityHash64Mix(uint64 fp1, uint64 fp2) {
+  return HashLen16(fp1, fp2);
+}
+
 }  // namespace sling
 

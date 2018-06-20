@@ -14,7 +14,9 @@
 
 #include "sling/http/http-server.h"
 
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -222,6 +224,10 @@ HTTPServer::HTTPServer(const HTTPServerOptions &options, int port)
   pollfd_ = -1;
   stop_ = false;
   connections_ = nullptr;
+
+  // Register standard handlers.
+  Register("/helpz", this, &HTTPServer::HelpHandler);
+  Register("/connz", this, &HTTPServer::ConnectionHandler);
 }
 
 HTTPServer::~HTTPServer() {
@@ -352,7 +358,7 @@ void HTTPServer::Worker() {
           // Detach socket from poll descriptor.
           rc = epoll_ctl(pollfd_, EPOLL_CTL_DEL, conn->sock_, ev);
           if (rc < 0) {
-            LOG(ERROR) << Error("epoll_ctl");
+            VLOG(2) << Error("epoll_ctl");
           } else {
             // Delete client connection.
             VLOG(3) << "Close HTTP connection";
@@ -459,6 +465,110 @@ void HTTPServer::ShutdownIdleConnections() {
     }
     conn = conn->next_;
   }
+}
+
+void HTTPServer::HelpHandler(HTTPRequest *req, HTTPResponse *rsp) {
+  MutexLock lock(&mu_);
+  rsp->SetContentType("text/html");
+  rsp->set_status(404);
+  rsp->Append("<html><head><title>helpz</title></head><body>\n");
+  rsp->Append("Contexts:<ul>\n");
+  for (const Context &c : contexts_) {
+    if (c.uri.empty()) {
+    rsp->Append("<li><a href=\"/\">/</a></li>\n");
+    } else {
+      rsp->Append("<li><a href=\"");
+      rsp->Append(c.uri);
+      rsp->Append("\">");
+      rsp->Append(c.uri);
+      rsp->Append("</a></li>\n");
+    }
+  }
+  rsp->Append("</ul>\n");
+  rsp->Append("</body></html>\n");
+}
+
+void HTTPServer::ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp) {
+  static const char *state_name[] = {
+    "IDLE", "READ_HEADER", "READ_BODY", "PROCESSING",
+    "WRITE_HEADER", "WRITE_BODY", "WRITE_FILE",
+    "TERMINATE",
+  };
+  static const char *header_state_name[] = {
+    "FIRSTWORD", "FIRSTWS", "SECONDWORD", "SECONDWS", "THIRDWORD",
+    "LINE", "LF", "CR", "CRLF", "CRLFCR", "DONE", "BOGUS",
+  };
+
+  MutexLock lock(&mu_);
+  rsp->SetContentType("text/html");
+  rsp->set_status(404);
+  rsp->Append("<html><head><title>connz</title></head><body>\n");
+  rsp->Append("<table border=\"1\"><tr>\n");
+  rsp->Append("<td>Socket</td>");
+  rsp->Append("<td>Client address</td>");
+  rsp->Append("<td>Socket status</td>");
+  rsp->Append("<td>State</td>");
+  rsp->Append("<td>Header state</td>");
+  rsp->Append("<td>Keep</td>");
+  rsp->Append("<td>Idle</td>");
+  rsp->Append("</tr>\n");
+  HTTPConnection *conn = connections_;
+  time_t now = time(0);
+  while (conn != nullptr) {
+    rsp->Append("<tr>");
+
+    // Socket.
+    rsp->Append("<td>" + SimpleItoa(conn->sock_) + "</td>");
+
+    // Client address.
+    struct sockaddr_in peer;
+    socklen_t plen = sizeof(peer);
+    struct sockaddr *saddr = reinterpret_cast<sockaddr *>(&peer);
+    if (getpeername(conn->sock_, saddr, &plen) == -1) {
+      rsp->Append("<td>?</td>");
+    } else {
+      rsp->Append("<td>");
+      rsp->Append(inet_ntoa(peer.sin_addr));
+      rsp->Append(":");
+      rsp->Append(SimpleItoa(ntohs(peer.sin_port)));
+      rsp->Append("</td>");
+    }
+
+    // Socket state.
+    int err = 0;
+    socklen_t errlen = sizeof(err);
+    int rc  = getsockopt(conn->sock_, SOL_SOCKET, SO_ERROR, &err, &errlen);
+    const char *error = "OK";
+    if (rc != 0) {
+      error = strerror(rc);
+    } else if (err != 0) {
+      error = strerror(err);
+    }
+    rsp->Append("<td>");
+    rsp->Append(error);
+    rsp->Append("</td>");
+
+    // Connection state.
+    rsp->Append("<td>");
+    rsp->Append(state_name[conn->state_]);
+    rsp->Append("</td>");
+
+    // Header parsing state.
+    rsp->Append("<td>");
+    rsp->Append(header_state_name[conn->header_state_]);
+    rsp->Append("</td>");
+
+    // Keep alive.
+    rsp->Append(conn->keep_ ? "<td>Y</td>" : "<td>N</td>");
+
+    // Idle time.
+    rsp->Append("<td>" + SimpleItoa(now - conn->last_) + "</td>");
+
+    rsp->Append("</tr>\n");
+    conn = conn->next_;
+  }
+  rsp->Append("</table>\n");
+  rsp->Append("</body></html>\n");
 }
 
 HTTPConnection::HTTPConnection(HTTPServer *server, int sock)

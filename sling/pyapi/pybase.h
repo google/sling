@@ -16,6 +16,7 @@
 #define SLING_PYAPI_PYBASE_H_
 
 #include <python2.7/Python.h>
+#include <python2.7/structmember.h>
 
 namespace sling {
 
@@ -53,6 +54,11 @@ struct PyBase : public PyVarObject {
   static void RegisterType(PyTypeObject *type,
                            PyObject *module,
                            const char *name);
+
+  // Register constant value in namespace of the module.
+  static void RegisterEnum(PyObject *module,
+                           const char *name,
+                           int value);
 };
 
 }  // namespace sling

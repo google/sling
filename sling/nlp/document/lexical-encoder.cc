@@ -125,9 +125,23 @@ LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
   // Build function for feature extraction and mapping.
   FlowBuilder tf(flow, name_);
   std::vector<Flow::Variable *> features;
+  Flow::Variable *word_embeddings = nullptr;
   if (spec.word_dim > 0) {
-    auto *f = tf.Feature("word", lexicon_.size(), 1, spec.word_dim);
-    features.push_back(f);
+    int num_words = lexicon_.size();
+    if (spec.train_word_embeddings) {
+      word_embeddings = tf.Parameter("word_embeddings", DT_FLOAT,
+                                     {num_words, spec.word_dim});
+    } else {
+      word_embeddings =
+          tf.Name(tf.Const(nullptr, DT_FLOAT, {num_words, spec.word_dim}),
+                  "word_embeddings");
+    }
+    auto *f = tf.Placeholder("word", DT_INT32, {1, 1});
+    auto *gather = tf.Gather(word_embeddings, f);
+    features.push_back(gather);
+    if (!spec.train_word_embeddings) {
+      gather->producer->set(Flow::Operation::NOGRADIENT);
+    }
   }
   if (spec.prefix_dim > 0) {
     auto *f = tf.Feature("prefix", lexicon_.prefixes().size(), prefix_size_,
@@ -178,6 +192,17 @@ LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
     vars.dfv = nullptr;
   }
 
+  // Initialize word embeddings.
+  if (learn && word_embeddings != nullptr) {
+    if (spec.train_word_embeddings) {
+      // Word embeddings will be loaded after network has been built.
+      pretrained_embeddings_ = spec.word_embeddings;
+    } else if (!spec.word_embeddings.empty()) {
+      // Load static pre-trained word embeddings.
+      LoadWordEmbeddings(word_embeddings, spec.word_embeddings);
+    }
+  }
+
   return vars;
 }
 
@@ -206,9 +231,44 @@ void LexicalFeatures::Initialize(const Network &net) {
   // Get feature sizes.
   if (prefix_feature_ != nullptr) prefix_size_ = prefix_feature_->elements();
   if (suffix_feature_ != nullptr) suffix_size_ = suffix_feature_->elements();
+
+  // Load pre-trained word embeddings.
+  if (!pretrained_embeddings_.empty()) {
+    InitWordEmbeddings(pretrained_embeddings_);
+  }
 }
 
-int LexicalFeatures::LoadWordEmbeddings(const string &filename) {
+int LexicalFeatures::LoadWordEmbeddings(Flow::Variable *matrix,
+                                        const string &filename) {
+  // Read word embeddings.
+  EmbeddingReader reader(filename);
+  reader.set_normalize(true);
+
+  // Check that embedding matrix matches embeddings and vocabulary.
+  CHECK_EQ(matrix->rank(), 2);
+  CHECK_EQ(matrix->type, DT_FLOAT);
+  CHECK_EQ(matrix->dim(0), lexicon_.size());
+  CHECK_EQ(matrix->dim(1), reader.dim());
+  CHECK(matrix->data != nullptr);
+
+  // Initialize matrix with pre-trained word embeddings.
+  int rowsize = reader.dim() * sizeof(float);
+  int found = 0;
+  while (reader.Next()) {
+    // Check if word is in vocabulary
+    int row = lexicon_.LookupWord(reader.word(), nullptr);
+    if (row == lexicon_.oov()) continue;
+
+    // Copy embedding to matrix.
+    void *f = matrix->data + row * rowsize;
+    memcpy(f, reader.embedding().data(), rowsize);
+    found++;
+  }
+
+  return found;
+};
+
+int LexicalFeatures::InitWordEmbeddings(const string &filename) {
   // Read word embeddings.
   EmbeddingReader reader(filename);
   reader.set_normalize(true);

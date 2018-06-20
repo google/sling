@@ -80,6 +80,10 @@ app.controller('ItemCtrl', function($scope, $http, $routeParams, $location) {
     return $scope.hasItem() && $scope.item.xrefs.length > 0;
   }
 
+  $scope.hasCategories = function() {
+    return $scope.hasItem() && $scope.item.categories.length > 0;
+  }
+
   $scope.itemUrl = function(ref, url) {
     if (url) return url;
     if (!ref) return "";

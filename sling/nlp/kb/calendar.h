@@ -34,32 +34,32 @@ class Date {
 
   // Initialize date from parts.
   Date(int year, int month, int day, Precision precision)
-      : year_(year), month_(month), day_(day), precision_(precision) {}
+      : year(year), month(month), day(day), precision(precision) {}
 
   // Initialize date from object.
-  Date(const Object &object);
+  Date(const Object &object) { Init(object); }
+  void Init(const Object &object);
 
-  // Return year. Return 0 if date is invalid.
-  int year() const { return year_; }
-  void set_year(int year) { year_ = year; }
+  // Parse date from number.
+  void ParseFromNumber(int num);
 
-  // Return month (1=January). Returns 0 if no month in date.
-  int month() const { return month_; }
-  void set_month(int month) { month_ = month; }
+  // Parse string date format: [+-]YYYY-MM-DDT00:00:00Z.
+  void ParseFromString(Text str);
 
-  // Return day of month (first day of month is 1). Return 0 if no day in date.
-  int day() const { return day_; }
-  void set_day(int day) { day_ = day; }
+  // Parse date from frame.
+  void ParseFromFrame(const Frame &frame);
 
-  // Return precision of date.
-  Precision precision() const { return precision_; }
-  void set_precision(Precision precision) { precision_ = precision; }
+  // Year or 0 if date is invalid.
+  int year = 0;
 
- private:
-  int year_;
-  int month_;
-  int day_;
-  Precision precision_;
+  /// Month (1=January) or 0 if no month in date.
+  int month = 0;
+
+  // Day of month (first day of month is 1) or 0 if no day in date.
+  int day = 0;
+
+  // Date precision.
+  Precision precision = NONE;
 };
 
 // Calendar with items about (Gregorian) calendar concepts.

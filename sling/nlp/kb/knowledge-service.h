@@ -35,11 +35,13 @@ class KnowledgeService {
     Item(Store *store)
         : properties(store),
           xrefs(store),
+          categories(store),
           image(Handle::nil()),
           alternate_image(Handle::nil()) {}
 
     Handles properties;
     Handles xrefs;
+    Handles categories;
     Handle image = Handle::nil();
     Handle alternate_image;
   };
@@ -108,6 +110,7 @@ class KnowledgeService {
   Name n_xrefs_{names_, "xrefs"};
   Name n_property_{names_, "property"};
   Name n_values_{names_, "values"};
+  Name n_categories_{names_, "categories"};
   Name n_type_{names_, "type"};
   Name n_text_{names_, "text"};
   Name n_ref_{names_, "ref"};
@@ -129,6 +132,7 @@ class KnowledgeService {
   Name n_lng_{names_, "/w/lng"};
   Name n_amount_{names_, "/w/amount"};
   Name n_unit_{names_, "/w/unit"};
+  Name n_category_{names_, "/w/item/category"};
 
   Name n_instance_of_{names_, "P31"};
   Name n_formatter_url_{names_, "P1630"};

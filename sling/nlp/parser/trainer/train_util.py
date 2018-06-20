@@ -69,22 +69,22 @@ def setup_training_flags(flags):
                metavar='DIR')
   flags.define('--commons',
                help='Path to the commons store file',
-               default="",
+               default="local/data/corpora/sempar/commons.sling",
                type=str,
                metavar='COMMONS_FILE')
   flags.define('--train_corpus', '--train',
                help='Path to the train corpus recordio',
-               default="",
+               default="local/data/corpora/sempar/train.rec",
                type=str,
                metavar='TRAIN_RECORDIO')
   flags.define('--dev_corpus', '--dev',
                help='Path to the dev corpus recordio',
-               default="",
+               default="local/data/corpora/sempar/dev.rec",
                type=str,
                metavar='DEV_RECORDIO')
   flags.define('--word_embeddings',
                help='(Optional) Path to the word embeddings file',
-               default="",
+               default="local/data/corpora/sempar/word2vec-32-embeddings.bin",
                type=str,
                metavar='WORD_EMBEDDINGS_FILE')
 

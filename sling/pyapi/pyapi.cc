@@ -16,6 +16,7 @@
 
 #include "sling/base/init.h"
 #include "sling/pyapi/pyarray.h"
+#include "sling/pyapi/pydate.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/pyapi/pymisc.h"
 #include "sling/pyapi/pyparser.h"
@@ -33,6 +34,7 @@ static PyMethodDef py_funcs[] = {
   {"start_task_monitor", (PyCFunction) StartTaskMonitor, METH_VARARGS, ""},
   {"get_job_statistics", (PyCFunction) GetJobStatistics, METH_NOARGS, ""},
   {"finalize_dashboard", (PyCFunction) FinalizeDashboard, METH_NOARGS, ""},
+  {"tolex", (PyCFunction) PyToLex, METH_VARARGS, ""},
   {nullptr, nullptr, 0, nullptr}
 };
 
@@ -50,6 +52,8 @@ static void RegisterPythonModule() {
   PyRecordReader::Define(module);
   PyRecordWriter::Define(module);
   PyJob::Define(module);
+  PyCalendar::Define(module);
+  PyDate::Define(module);
 }
 
 }  // namespace sling

@@ -34,6 +34,21 @@ def tokenize(text, store=None, schema=None):
   return sling.Document(frame, store, schema)
 
 
+def lex(text, store=None, schema=None):
+  # Initialize tokenizer if needed.
+  global tokenizer
+  if tokenizer == None: tokenizer = sling.api.Tokenizer()
+
+  # Create store for document if needed.
+  if store == None: store = sling.Store()
+
+  # Parse LEX-encoded text.
+  frame = tokenizer.lex(store, text)
+
+  # Return document with annotations.
+  return sling.Document(frame, store, schema)
+
+
 class Parser:
   def __init__(self, filename, store=None):
     # Create new commons store for parser if needed.
@@ -41,7 +56,7 @@ class Parser:
       self.commons = sling.Store()
     else:
       self.commons = store
-      
+
     # Load parser.
     self.parser = sling.api.Parser(self.commons, filename)
 
@@ -68,7 +83,7 @@ class Parser:
 
       # Tokenize text.
       doc = tokenize(str(obj), store=store, schema=self.schema)
-      
+
       # Parse document.
       self.parser.parse(doc.frame)
       doc.refresh_annotations()

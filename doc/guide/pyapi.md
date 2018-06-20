@@ -19,6 +19,7 @@ sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
 * [Documents](#documents)
 * [Parsing](#parsing)
 * [Phrase tables](#phrase-tables)
+* [Dates](#dates)
 * [Miscellaneous](#miscellaneous)
 
 # Frame stores
@@ -41,7 +42,8 @@ Loading binary encoded frames in legacy encoding:
 ```
 actions = commons.load("local/sempar/out/table", binary=True)
 ```
-Freezing a store to makes it read-only and allows local stores to be created based on the store:
+Freezing a store makes it read-only and allows local stores to be created based
+on the store:
 ```
 commons.freeze()
 ```
@@ -74,6 +76,11 @@ You can test if a frame has a role:
 if 'name' in doc: print "doc has 'name'"
 if name in doc: print "doc has name"
 ```
+You can iterate over all the named frames (i.e. frames with an `id:` slot)
+in a store:
+```
+for f in store: print f.id
+```
 The `parse()` method can be used for adding new frames to the store:
 ```
 f = store.parse('{a:10 b:10.5 c:"hello" d:{:/s/thing} e:[1,2,3]}')
@@ -99,7 +106,7 @@ New slots can be added using the `append()` method:
 ```
 f.d.append(name, "A thing")
 ```
-Multiple slot can be added using the `extend()` method:
+Multiple slots can be added using the `extend()` method:
 ```
 f.extend({'foo': 10, 'bar': 20})
 ```
@@ -160,7 +167,7 @@ store.save("/tmp/bin.sling", binary=True)
 
 [Record files](../../sling/file/recordio.h) are files with variable-size records
 each having a key and a value. Individual records are (optionally) compressed
-and records are stores in chunks which can be read independently.
+and records are stored in chunks which can be read independently.
 The default chunk size is 64 MB.
 
 A `RecordReader` is used for reading records from a record file and supports
@@ -403,6 +410,47 @@ The `Mention` class has the following methods and properties:
 * `evoke(frame)`<br>
   Adds frame evoked by this mention.
 
+### LEX format
+
+While annotated documents can be created using the methods on the `Document`
+class, it is sometime more convenient to use _LEX_ formatted text, which is a
+light-weight frame annotation format for text. This is like normal plain text,
+but you can add mentions with annotations to the text using special markup.
+Mentions in the text are enclosed in square brackets, e.g.
+`[John] [loves] [Mary]`. One or more frames evoked from a mention can be added
+to the mention using a vertical bar in the mention,
+e.g. `[John|{:/saft/person}]`. The frames can be assigned ids to reference the
+frames from other frames, e.g. `[John|{=#1 :/saft/person}]`. The full
+"John loves Mary" can be encoded in LEX format like this:
+```
+[John|{=#1 :/saft/person}] [loves|{:/pb/love-01 /pb/arg0: #1 /pb/arg1: #2}] [Mary|{=#2 :/saft/person}]
+```
+Stand-alone frames can also be added outside the mentions and then referenced in
+the mentions:
+```
+[John|#1] [loves|#3] [Mary|#2]
+{=#1 :/saft/person}
+{=#2 :/saft/person}
+{=#3 :/pb/love-01 /pb/arg0: #1 /pb/arg1: #2}
+
+```
+If a stand-alone frame is not evoked by any mention, it is added to the document
+as a theme.
+
+Mentions can also be nested:
+```
+[[New York|#1] [University|#2]|#3] {=#3 +Q49210 P276:{=#1 +Q60} P31:{=#2 +Q3918}}
+```
+
+A document can be created from LEX-encoded text using the `lex()` method:
+* `doc = sling.lex(text)`<br>
+  Creates a new store and returns a document with the annotated text.
+* `doc = sling.lex(text, store=store)`<br>
+  Returns a new document in the store with the annotated text.
+* `doc = sling.lex(text, store=store, schema=docschema)`<br>
+  Returns a new document with the annotated text using a pre-initialized
+  document schema.
+
 ## Parsing
 
 A document needs to be tokenized before parsing:
@@ -456,6 +504,92 @@ for entity, count in names.query("Funen"):
 The `lookup()` and `query()` methods return the entities in decreasing
 frequency order.
 
+## Dates
+
+Dates in the knowledge base can be encoded as integers, strings, or frames:
+* Numbers with eight digits represent dates, e.g. `20180605` is June 05, 2018.
+  Only dates after 1000 AD can be represented as integers. Numbers with six
+  digits are used to represent months, e.g. `197001` means January 1970.
+  Likewise, numbers with four digits are used for years, three digits represents
+  decades, two digits for centuries, and one digit for millennia.
+* String-based date values are in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)
+  format, e.g. `"+2013-05-01T00:00:00Z"` is May 1, 2013. Dates with lower
+  precision can be made by padding the year with `*`, e.g `"196*"` is the
+  [1960s decade](https://www.wikidata.org/wiki/Q35724).
+* Knowledge base items can also be used as dates, e.g. `Q6927` is the
+  [20th century](https://www.wikidata.org/wiki/Q6927). These frames are
+  interpreted as dates by parsing the `point in time`
+  ([P585](https://www.wikidata.org/wiki/Property:P585)) property of the item.
+
+The Date class can be used for parsing date values from the knowledge base, e.g.
+getting the date of birth ([P569](https://www.wikidata.org/wiki/Property:P569))
+for Annette Stroyberg ([Q2534120](https://www.wikidata.org/wiki/Q2534120)):
+```
+entity = kb["Q2534120"]
+dob = sling.Date(entity["P569"])
+print dob.year, dob.month, dob.day
+```
+
+The `Date` class has the following properties:
+* `year` (r/w int property)<br>
+  Gets/sets year. Year is  0 if date is invalid. Dates BCE is represented with
+  negative year numbers.
+* `month` (r/w int property)<br>
+  Gets/sets month (1=January). Month is 0 if there is no month in date.
+* `day` (r/w int property)<br>
+  Gets/sets day of month (first day of month is 1). Day is 0 if there is no
+  day in date.
+* `precision` (r/w int property)<br>
+  Dates can have different granularities:
+    * `MILLENNIUM` if date represents a millennium.
+    * `CENTURY` if date represents a century.
+    * `DECADE` if date represents a decade.
+    * `YEAR` if date represents a year.
+    * `MONTH` if date represents a month.
+    * `DAY` if date represents a day.
+
+A `Calendar` object can be used for converting `Date` objects to text and
+backing off to more coarse-grained date representations. A `Calendar` object
+is initialized from a knowledge base by using the
+[calendar definitions](../../data/wiki/calendar.sling):
+```
+cal = sling.Calendar(kb)
+dob = sling.Date(19361207)
+```
+The `Calendar` class has the following methods:
+* `str(date)`<br>
+  Returns a human-readable representation of the date, e.g. `cal.str(dob)`
+  returns "December 7, 1936". The primary language of the knowledge base is
+  used for the conversion.
+* `value(date)`<br>
+  Converts date to numeric or string representation, e.g. 'cal.value(dob)`
+  returns 19361207. This can be used for updating date properties in the
+  knowledge base.
+* `day(date)`<br>
+  Returns an item frame representing the day and month of the date, e.g.
+  `cal.day(dob)` returns December 7
+  ([Q2299](https://www.wikidata.org/wiki/Q2299)).
+* `month(date)`<br>
+  Returns an item frame representing the month of the date, e.g.
+  `cal.month(dob)` returns December
+  ([Q126](https://www.wikidata.org/wiki/Q126)).
+* `year(date)`<br>
+  Returns an item frame representing the year of the date, e.g.
+  `cal.year(dob)` returns 1936
+  ([Q18649](https://www.wikidata.org/wiki/Q18649)).
+* `decade(date)`<br>
+  Returns an item frame representing the decade of the date, e.g.
+  `cal.decade(dob)` returns 1930s
+  ([Q35702](https://www.wikidata.org/wiki/Q35702)).
+* `century(date)`<br>
+  Returns an item frame representing the century of the date, e.g.
+  `cal.century(dob)` returns 20th century
+  ([Q6927](https://www.wikidata.org/wiki/Q6927)).
+* `millennium(date)`<br>
+  Returns an item frame representing the millennium of the date, e.g.
+  `cal.millennium(dob)` returns 2nd millennium
+  ([Q25860](https://www.wikidata.org/wiki/Q25860)).
+
 ## Miscellaneous
 
 You can log messages to the SLING logging module:
@@ -471,7 +605,7 @@ log.fatal("Fatal error")
 The SLING [command line flag module](../../sling/base/flags.h) is integrated
 with the Python flags module, so the SLING flags can be set though a standard
 Python [argparse.ArgumentParser](https://docs.python.org/2/library/argparse.html).
-Flags are defined using the `flags.define()` method, e.g.:
+Flags are defined using the `flags.define()` method, e.g.
 ```
 import sling.flags as flags
 

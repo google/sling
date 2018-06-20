@@ -84,6 +84,22 @@ cc_library(
 )
 
 cc_library(
+  name = "lex",
+  srcs = ["lex.cc"],
+  hdrs = ["lex.h"],
+  deps = [
+    ":document",
+    ":document-tokenizer",
+    "//sling/base",
+    "//sling/frame:object",
+    "//sling/frame:serialization",
+    "//sling/frame:store",
+    "//sling/string:text",
+    "//sling/string:ctype",
+  ],
+)
+
+cc_library(
   name = "document-source",
   srcs = ["document-source.cc"],
   hdrs = ["document-source.h"],
