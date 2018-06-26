@@ -35,6 +35,10 @@ class PhraseTableBuilder : public task::FrameProcessor {
     string lang = task->Get("language", "en");
     language_ = commons_->Lookup("/lang/" + lang);
 
+    // Set phrase normalization.
+    tokenizer_.set_normalization(
+        ParseNormalization(task->Get("normalization", "lcp")));
+
     // Statistics.
     num_aliases_ = task->GetCounter("aliases");
     num_phrases_ = task->GetCounter("phrases");
@@ -88,6 +92,10 @@ class PhraseTableBuilder : public task::FrameProcessor {
   void Flush(task::Task *task) override {
     // Build phrase repository.
     Repository repository;
+
+    // Add normalization flags to repository.
+    string norm = NormalizationString(tokenizer_.normalization());
+    repository.AddBlock("normalization", norm.data(), norm.size());
 
     // Write entity map.
     LOG(INFO) << "Build entity map";

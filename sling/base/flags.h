@@ -48,7 +48,7 @@ struct Flag {
   static void SetUsageMessage(const string &usage);
 
   // Parse command line flags.
-  static int ParseCommandLineFlags(int *argc, char **argv, bool remove_flags);
+  static int ParseCommandLineFlags(int *argc, char **argv);
 
   // Parse help message.
   static void PrintHelp();

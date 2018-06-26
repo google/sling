@@ -21,6 +21,7 @@
 #include "sling/base/types.h"
 #include "sling/file/repository.h"
 #include "sling/string/text.h"
+#include "sling/util/unicode.h"
 
 namespace sling {
 namespace nlp {
@@ -110,6 +111,9 @@ class NameTable {
 
   // Entity table.
   const char *entity_table_ = nullptr;
+
+  // Text normalization flags.
+  Normalization normalization_ = NORMALIZE_DEFAULT;
 };
 
 }  // namespace nlp

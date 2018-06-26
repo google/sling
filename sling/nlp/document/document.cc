@@ -28,6 +28,12 @@
 namespace sling {
 namespace nlp {
 
+uint64 Token::Fingerprint() const {
+  // Compute token fingerprint if not already done.
+  if (fingerprint_ == 0) fingerprint_ = Fingerprinter::Fingerprint(text_);
+  return fingerprint_;
+}
+
 void Span::Evoke(const Frame &frame) {
   mention_.Add(document_->names_->n_evokes, frame);
   document_->AddMention(frame.handle(), this);
@@ -107,7 +113,7 @@ string Span::GetText() const {
   return document_->PhraseText(begin_, end_);
 }
 
-uint64 Span::Fingerprint() {
+uint64 Span::Fingerprint() const {
   // Check for cached fingerprint.
   if (fingerprint_ != 0) return fingerprint_;
 
@@ -178,7 +184,7 @@ Document::Document(const Frame &top, const DocumentNames *names)
       } else {
         t.brk_ = SPACE_BREAK;
       }
-      t.fingerprint_ = Fingerprinter::Fingerprint(t.text_);
+      t.fingerprint_ = 0;
       t.span_ = nullptr;
     }
   }

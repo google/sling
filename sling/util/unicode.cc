@@ -16,6 +16,7 @@
 
 #include <string>
 
+#include "sling/base/logging.h"
 #include "sling/base/types.h"
 
 namespace sling {
@@ -36,12 +37,44 @@ const uint8 utf8_skip_tab[256] = {
   1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
   1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
   2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
-  3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,6,6,1,1,
+  3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
 };
+
+Normalization ParseNormalization(const string &spec) {
+  int flags = NORMALIZE_NONE;
+  for (char c : spec) {
+    switch (c) {
+      case 'c': flags |= NORMALIZE_CASE; break;
+      case 'l': flags |= NORMALIZE_LETTERS; break;
+      case 'd': flags |= NORMALIZE_DIGITS; break;
+      case 'p': flags |= NORMALIZE_PUNCTUATION; break;
+      case 'w': flags |= NORMALIZE_WHITESPACE; break;
+      default:
+        LOG(FATAL) << "Unknown normalization specifier: " << spec;
+    }
+  }
+  return static_cast<Normalization>(flags);
+}
+
+string NormalizationString(Normalization normalization) {
+  string str;
+  if (normalization & NORMALIZE_CASE) str.push_back('c');
+  if (normalization & NORMALIZE_LETTERS) str.push_back('l');
+  if (normalization & NORMALIZE_DIGITS) str.push_back('d');
+  if (normalization & NORMALIZE_PUNCTUATION) str.push_back('p');
+  if (normalization & NORMALIZE_WHITESPACE) str.push_back('w');
+  return str;
+}
 
 int Unicode::Category(int c) {
   if (c & unicode_tab_mask) return CHARCAT_UNASSIGNED;
   return (unicode_cat_tab[c] & CHARCAT_MASK);
+}
+
+bool Unicode::Is(int c, int mask) {
+  if (c & unicode_tab_mask) return false;
+  int category = unicode_cat_tab[c] & CHARCAT_MASK;
+  return ((1 << category) & mask) != 0;
 }
 
 bool Unicode::IsLower(int c) {
@@ -70,41 +103,19 @@ bool Unicode::IsDefined(int c) {
 }
 
 bool Unicode::IsLetter(int c) {
-  static const int letter_mask =
-    (1 << CHARCAT_UPPERCASE_LETTER) |
-    (1 << CHARCAT_LOWERCASE_LETTER) |
-    (1 << CHARCAT_TITLECASE_LETTER) |
-    (1 << CHARCAT_MODIFIER_LETTER) |
-    (1 << CHARCAT_OTHER_LETTER);
-
   if (c & unicode_tab_mask) return false;
   int category = unicode_cat_tab[c] & CHARCAT_MASK;
-  return ((1 << category) & letter_mask) != 0;
+  return ((1 << category) & CATMASK_LETTER) != 0;
 }
 
 bool Unicode::IsLetterOrDigit(int c) {
-  static const int letter_digit_mask =
-    (1 << CHARCAT_UPPERCASE_LETTER) |
-    (1 << CHARCAT_LOWERCASE_LETTER) |
-    (1 << CHARCAT_TITLECASE_LETTER) |
-    (1 << CHARCAT_MODIFIER_LETTER) |
-    (1 << CHARCAT_OTHER_LETTER) |
-    (1 << CHARCAT_DECIMAL_DIGIT_NUMBER);
-
   if (c & unicode_tab_mask) return false;
   int category = unicode_cat_tab[c] & CHARCAT_MASK;
-  return ((1 << category) & letter_digit_mask) != 0;
+  return ((1 << category) & CATMASK_LETTER_DIGIT) != 0;
 }
 
 bool Unicode::IsSpace(int c)  {
-  static const int space_mask =
-    (1 << CHARCAT_SPACE_SEPARATOR) |
-    (1 << CHARCAT_LINE_SEPARATOR) |
-    (1 << CHARCAT_PARAGRAPH_SEPARATOR);
-
-  if (c & unicode_tab_mask) return false;
-  int category = unicode_cat_tab[c] & CHARCAT_MASK;
-  return ((1 << category) & space_mask) != 0;
+  return Is(c, CATMASK_SPACE);
 }
 
 bool Unicode::IsWhitespace(int c) {
@@ -113,20 +124,7 @@ bool Unicode::IsWhitespace(int c) {
 }
 
 bool Unicode::IsPunctuation(int c) {
-  static const int punctuation_mask =
-    (1 << CHARCAT_DASH_PUNCTUATION) |
-    (1 << CHARCAT_START_PUNCTUATION) |
-    (1 << CHARCAT_END_PUNCTUATION) |
-    (1 << CHARCAT_CONNECTOR_PUNCTUATION) |
-    (1 << CHARCAT_OTHER_PUNCTUATION) |
-    (1 << CHARCAT_INITIAL_QUOTE_PUNCTUATION) |
-    (1 << CHARCAT_FINAL_QUOTE_PUNCTUATION) |
-    (1 << CHARCAT_MODIFIER_SYMBOL) |
-    (1 << CHARCAT_OTHER_SYMBOL);
-
-  if (c & unicode_tab_mask) return false;
-  int category = unicode_cat_tab[c] & CHARCAT_MASK;
-  return ((1 << category) & punctuation_mask) != 0;
+  return Is(c, CATMASK_PUNCTUATION);
 }
 
 int Unicode::ToLower(int c) {
@@ -139,13 +137,11 @@ int Unicode::ToUpper(int c) {
   return unicode_upper_tab[c];
 }
 
-int Unicode::Normalize(int c) {
+int Unicode::Normalize(int c, int flags) {
   if (c & unicode_tab_mask) return c;
-  return unicode_normalize_tab[c];
-}
-
-int Unicode::Normalize(int c, NormalizationFlags flags) {
-  if (c & unicode_tab_mask) return c;
+  if (flags & NORMALIZE_CASE) {
+    c = unicode_lower_tab[c];
+  }
   if (flags & NORMALIZE_LETTERS) {
     c = unicode_normalize_tab[c];
   }
@@ -154,6 +150,9 @@ int Unicode::Normalize(int c, NormalizationFlags flags) {
   }
   if (flags & NORMALIZE_PUNCTUATION) {
     if (IsPunctuation(c)) c = 0;
+  }
+  if (flags & NORMALIZE_WHITESPACE) {
+    if (IsWhitespace(c)) c = 0;
   }
   return c;
 }
@@ -400,8 +399,7 @@ void UTF8::Lowercase(const char *s, int len, string *result) {
   }
 }
 
-void UTF8::Normalize(const char *s, int len, NormalizationFlags flags,
-                     string *normalized) {
+void UTF8::Normalize(const char *s, int len, int flags, string *normalized) {
   // Clear output string.
   normalized->clear();
 
@@ -442,25 +440,46 @@ void UTF8::ToTitleCase(const string &str, string *titlecased) {
   }
 }
 
-bool UTF8::IsPunctuation(const char *s, int len) {
+bool UTF8::All(const char *s, int len, int mask) {
   // Try fast check where all characters are below 128.
   const char *end = s + len;
   while (s < end) {
     uint8 c = *reinterpret_cast<const uint8 *>(s);
     if (c & 0x80) break;
-    if (!Unicode::IsPunctuation(c)) return false;
+    if (!Unicode::Is(c, mask)) return false;
     s++;
   }
 
   // Handle any remaining part of the string which can contain multi-byte
   // characters.
   while (s < end) {
-    int code = Unicode::Normalize(Decode(s));
-    if (!Unicode::IsPunctuation(code)) return false;
+    int code = Decode(s);
+    if (!Unicode::Is(code, mask)) return false;
     s = Next(s);
   }
 
   return true;
+}
+
+bool UTF8::Any(const char *s, int len, int mask) {
+  // Try fast check where all characters are below 128.
+  const char *end = s + len;
+  while (s < end) {
+    uint8 c = *reinterpret_cast<const uint8 *>(s);
+    if (c & 0x80) break;
+    if (Unicode::Is(c, mask)) return true;
+    s++;
+  }
+
+  // Handle any remaining part of the string which can contain multi-byte
+  // characters.
+  while (s < end) {
+    int code = Decode(s);
+    if (Unicode::Is(code, mask)) return true;
+    s = Next(s);
+  }
+
+  return false;
 }
 
 }  // namespace sling

@@ -49,7 +49,7 @@ void InitProgram(int *argc, char ***argv) {
     usage.append((*argv)[0]);
     usage.append(" [OPTIONS]\n");
     Flag::SetUsageMessage(usage);
-    if (Flag::ParseCommandLineFlags(argc, *argv, true) != 0) exit(1);
+    if (Flag::ParseCommandLineFlags(argc, *argv) != 0) exit(1);
   }
 
   // Run module initializers.

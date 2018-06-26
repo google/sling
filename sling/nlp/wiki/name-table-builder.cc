@@ -35,6 +35,9 @@ class NameTableBuilder : public task::FrameProcessor {
     string lang = task->Get("language", "en");
     language_ = commons_->Lookup("/lang/" + lang);
 
+    // Set name normalization.
+    normalization_ = ParseNormalization(task->Get("normalization", "lcp"));
+
     // Statistics.
     num_aliases_ = task->GetCounter("aliases");
     num_names_ = task->GetCounter("names");
@@ -69,7 +72,7 @@ class NameTableBuilder : public task::FrameProcessor {
         Text name = alias.GetText(n_name_);
         int count = alias.GetInt(n_alias_count_, 1);
         string normalized;
-        UTF8::Normalize(name.data(), name.size(), &normalized);
+        UTF8::Normalize(name.data(), name.size(), normalization_, &normalized);
         if (normalized.empty()) continue;
         if (normalized.size() > 127) continue;
 
@@ -87,6 +90,12 @@ class NameTableBuilder : public task::FrameProcessor {
   void Flush(task::Task *task) override {
     // Build name repository.
     Repository repository;
+
+    // Add normalization flags to repository.
+    string norm = NormalizationString(normalization_);
+    repository.AddBlock("normalization", norm.data(), norm.size());
+
+    // Get name repository blocks.
     File *index_block = repository.AddBlock("Index");
     File *name_block = repository.AddBlock("Names");
     File *entity_block = repository.AddBlock("Entities");
@@ -176,6 +185,9 @@ class NameTableBuilder : public task::FrameProcessor {
 
   // Language for aliases.
   Handle language_;
+
+  // Text normalization flags.
+  Normalization normalization_;
 
   // Sorted name table mapping normalized strings to entities with that name.
   std::map<string, std::vector<EntityName>> name_table_;

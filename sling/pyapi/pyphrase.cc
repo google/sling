@@ -50,6 +50,8 @@ int PyPhraseTable::Init(PyObject *args, PyObject *kwds) {
 
   // Initialize tokenizer.
   tokenizer = new nlp::PhraseTokenizer();
+  Normalization norm = ParseNormalization(phrase_table->normalization());
+  tokenizer->set_normalization(norm);
 
   return 0;
 }

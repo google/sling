@@ -182,8 +182,8 @@ Store::Store(const Store *globals) : globals_(globals) {
   pools_[Handle::kGlobal] = globals_->pools_[Handle::kGlobal];
   pools_[Handle::kLocal] = reinterpret_cast<Address>(handles_.base());
 
-  // Allocate symbol map.
-  num_buckets_ = options_->map_buckets;
+  // Allocate symbol map. The symbol table of a local store is initially empty.
+  num_buckets_ = 0;
   symbols_ = AllocateArray(num_buckets_);
   roots_.handle_ = symbols_;
 }
@@ -623,8 +623,13 @@ void Store::InsertSymbol(SymbolDatum *symbol) {
   // Resize symbol table if fill factor is more than 1:1, unless this would
   // make the symbol table exceed the maximum object size.
   if (num_symbols_ > num_buckets_ && num_buckets_ < kMapSizeLimit / 2) {
-    // Double the number of buckets.
-    num_buckets_ *= 2;
+    if (num_buckets_ == 0) {
+      // Symbol table empty; get the initial size from the options.
+      num_buckets_ = options_->map_buckets;
+    } else {
+      // Double the number of buckets.
+      num_buckets_ *= 2;
+    }
 
     // Allocate new bucket array.
     int size = num_buckets_ * sizeof(Handle);
@@ -649,17 +654,18 @@ void Store::InsertSymbol(SymbolDatum *symbol) {
 }
 
 Handle Store::FindSymbol(Text name, Handle hash) const {
-  const MapDatum *symbols = GetMap(symbols_);
-  Handle h = *symbols->bucket(hash);
-  while (!h.IsNil()) {
-    const SymbolDatum *symbol = GetSymbol(h);
-    if (symbol->hash == hash) {
-      const Datum *symname = GetObject(symbol->name);
-      if (symname->IsString() && symname->AsString()->equals(name)) return h;
+  if (num_symbols_ > 0) {
+    const MapDatum *symbols = GetMap(symbols_);
+    Handle h = *symbols->bucket(hash);
+    while (!h.IsNil()) {
+      const SymbolDatum *symbol = GetSymbol(h);
+      if (symbol->hash == hash) {
+        const Datum *symname = GetObject(symbol->name);
+        if (symname->IsString() && symname->AsString()->equals(name)) return h;
+      }
+      h = symbol->next;
     }
-    h = symbol->next;
   }
-
   return Handle::nil();
 }
 

@@ -20,15 +20,71 @@
 
 #include "sling/base/types.h"
 #include "sling/nlp/document/affix.h"
+#include "sling/util/unicode.h"
 #include "sling/util/vocabulary.h"
 
 namespace sling {
 namespace nlp {
 
+// Word shape features for lexical backoff.
+struct WordShape {
+  // Hyphen feature.
+  enum Hyphen {
+    NO_HYPHEN = 0,
+    HAS_HYPHEN = 1,
+    HYPHEN_CARDINALITY = 2,
+  };
+
+  // Capitalization feature.
+  enum Capitalization {
+    LOWERCASE = 0,
+    UPPERCASE = 1,
+    CAPITALIZED = 2,
+    INITIAL = 3,
+    NON_ALPHABETIC = 4,
+    CAPITALIZATION_CARDINALITY = 5,
+  };
+
+  // Punctuation feature.
+  enum Punctuation {
+    NO_PUNCTUATION = 0,
+    SOME_PUNCTUATION = 1,
+    ALL_PUNCTUATION = 2,
+    PUNCTUATION_CARDINALITY = 3,
+  };
+
+  // Quote feature.
+  enum Quote {
+    NO_QUOTE = 0,
+    OPEN_QUOTE = 1,
+    CLOSE_QUOTE = 2,
+    UNKNOWN_QUOTE = 3,
+    QUOTE_CARDINALITY = 4,
+  };
+
+  // Digit feature.
+  enum Digit {
+    NO_DIGIT = 0,
+    SOME_DIGIT = 1,
+    ALL_DIGIT = 2,
+    DIGIT_CARDINALITY = 3,
+  };
+
+  // Extract shape features from word.
+  void Extract(const string &word);
+
+  Hyphen hyphen = NO_HYPHEN;                  // hyphenation
+  Capitalization capitalization = LOWERCASE;  // capitalization
+  Punctuation punctuation = NO_PUNCTUATION;   // punctuation
+  Quote quote = NO_QUOTE;                     // quotes
+  Digit digit = NO_DIGIT;                     // digits
+};
+
 // Lexicon for extracting lexical features from documents.
 class Lexicon {
  public:
-  // Initialize lexicon from word vocabulary.
+  // Initialize lexicon from word vocabulary. The vocabulary words must already
+  // be normalized.
   void InitWords(Vocabulary::Iterator *words);
 
   // Initialize affix tables from serialized format.
@@ -46,22 +102,23 @@ class Lexicon {
   void BuildPrefixes(int max_prefix);
   void BuildSuffixes(int max_suffix);
 
-  // Look up word in vocabulary. Return OOV if word is not found.
-  // Sets 'changed' to true if the returned id corresponds to a
-  // normalized version of 'word' and not its original form.
-  int LookupWord(const string &word, bool *changed) const;
+  // Pre-compute word shape features for all words in the lexicon. The shape
+  // features are computed on the normalized forms of the words.
+  void PrecomputeShapes();
+
+  // Look up word in vocabulary. If (normalized) word is found in the lexicon
+  // the pre-computed affix and shape information from the lexicon is returned.
+  // Otherwise, OOV is returned, and the affix and shape information is computed
+  // on-the-fly.
+  int Lookup(const string &word,
+             Affix **prefix, Affix **suffix,
+             WordShape *shape) const;
+
+  // Look up word in lexicon. No normalization is performed.
+  int Lookup(const string &word) const;
 
   // Return number of words in vocabulary.
   size_t size() const { return words_.size(); }
-
-  // Return word in vocabulary.
-  const string &word(int index) const { return words_[index].word; }
-
-  // Get longest prefix for known word.
-  Affix *prefix(int index) const { return words_[index].prefix; }
-
-  // Get longest suffix for known word.
-  Affix *suffix(int index) const { return words_[index].suffix; }
 
   // Get affix tables.
   const AffixTable &prefixes() const { return prefixes_; }
@@ -71,21 +128,24 @@ class Lexicon {
   int oov() const { return oov_; }
   void set_oov(int oov) { oov_ = oov; }
 
-  // Digit normalization of words.
-  bool normalize_digits() const { return normalize_digits_; }
-  void set_normalize_digits(bool normalize) { normalize_digits_ = normalize; }
+  // Token normalization flags.
+  Normalization normalization() const { return normalization_; }
+  void set_normalization(Normalization normalization) {
+    normalization_ = normalization;
+  }
 
  private:
   // Lexicon entry.
   struct Entry {
-    string word;                // lexical word form
+    string word;                // normalized word form
     Affix *prefix = nullptr;    // longest known prefix for word
     Affix *suffix = nullptr;    // longest known suffix for word
+    WordShape shape;            // word shape features for normalized word
   };
 
   // Mapping from words to ids.
   Vocabulary vocabulary_;
-  bool normalize_digits_ = false;
+  Normalization normalization_ = NORMALIZE_NONE;
   int oov_ = -1;
 
   // Lexicon entries.

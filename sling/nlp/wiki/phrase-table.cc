@@ -27,6 +27,12 @@ void PhraseTable::Load(Store *store, const string &filename) {
   // Initialize entity table.
   entity_index_.Initialize(repository_);
 
+  // Get text normalization flags.
+  const char *norm = repository_.GetBlock("normalization");
+  if (norm) {
+    normalization_.assign(norm, repository_.GetBlockSize("normalization"));
+  }
+
   // Resolve all the entity ids in the store.
   entity_table_ = new Handles(store);
   entity_table_->resize(entity_index_.size());

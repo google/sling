@@ -84,21 +84,21 @@ class Token {
   Span *span() const { return span_; }
 
   // Token fingerprint.
-  uint64 fingerprint() const { return fingerprint_; }
+  uint64 Fingerprint() const;
 
  private:
-  Document *document_;      // document the token belongs to
-  Handle handle_;           // handle for token in the store
-  int index_;               // index of token in document
+  Document *document_;          // document the token belongs to
+  Handle handle_;               // handle for token in the store
+  int index_;                   // index of token in document
 
-  int begin_;               // first byte position of token
-  int end_;                 // first byte position after token
+  int begin_;                   // first byte position of token
+  int end_;                     // first byte position after token
 
-  string text_;             // token text
-  BreakType brk_;           // break level before token
+  string text_;                 // token text
+  BreakType brk_;               // break level before token
 
-  uint64 fingerprint_;      // fingerprint for token text
-  Span *span_;              // lowest span covering the token
+  mutable uint64 fingerprint_;  // fingerprint for token text
+  Span *span_;                  // lowest span covering the token
 
   friend class Document;
 };
@@ -178,7 +178,7 @@ class Span {
   bool Evokes(const Name &type) const;
 
   // Returns fingerprint for span phrase.
-  uint64 Fingerprint();
+  uint64 Fingerprint() const;
 
  private:
   // Document that span belongs to.
@@ -201,7 +201,7 @@ class Span {
   Span *children_ = nullptr;  // left-most enclosed sub-span
 
   // Span fingerprint. This is lazily initialized and cached.
-  uint64 fingerprint_ = 0;
+  mutable uint64 fingerprint_ = 0;
 
   friend class Document;
 };
@@ -275,7 +275,7 @@ class Document {
 
   // Return fingerprint for token in document.
   uint64 TokenFingerprint(int token) const {
-    return tokens_[token].fingerprint();
+    return tokens_[token].Fingerprint();
   }
 
   // Returns the fingerprint for [begin, end).

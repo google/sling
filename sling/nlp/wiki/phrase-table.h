@@ -45,6 +45,9 @@ class PhraseTable {
   // frames and counts.
   void Lookup(uint64 fp, MatchList *matches);
 
+  // Text normalization flags.
+  const string &normalization() const { return normalization_; }
+
  private:
   // Entity phrase with entity index and frequency.
   struct EntityPhrase {
@@ -136,6 +139,9 @@ class PhraseTable {
 
   // Entities resolved to frame handles.
   Handles *entity_table_ = nullptr;
+
+  // Text normalization flags.
+  string normalization_ = "lcp";
 };
 
 }  // namespace nlp

@@ -63,17 +63,87 @@ enum UnicodeCategory {
   CHARBIT_WHITESPACE                = 0x80,
 };
 
-// String normalization flags.
-enum NormalizationFlags {
-  NORMALIZE_LETTERS     = 0x01,  // lowercase and remove diacritics
-  NORMALIZE_DIGITS      = 0x02,  // replace all digits with 9
-  NORMALIZE_PUNCTUATION = 0x04,  // remove punctuation
+// Unicode category masks.
+enum UnicodeCategoryMask {
+  // Lowercase letters.
+  CATMASK_LOWERCASE_LETTER =
+      (1 << CHARCAT_LOWERCASE_LETTER),
+
+  // Uppercase letters.
+  CATMASK_UPPERCASE_LETTER =
+      (1 << CHARCAT_UPPERCASE_LETTER),
+
+  // Titlecase letters.
+  CATMASK_TITLECASE_LETTER =
+      (1 << CHARCAT_TITLECASE_LETTER),
+
+  // Decimal digits.
+  CATMASK_DECIMAL_DIGIT_NUMBER =
+      (1 << CHARCAT_DECIMAL_DIGIT_NUMBER),
+
+  // Letters.
+  CATMASK_LETTER =
+      (1 << CHARCAT_UPPERCASE_LETTER) |
+      (1 << CHARCAT_LOWERCASE_LETTER) |
+      (1 << CHARCAT_TITLECASE_LETTER) |
+      (1 << CHARCAT_MODIFIER_LETTER) |
+      (1 << CHARCAT_OTHER_LETTER),
+
+  // Space separators.
+  CATMASK_SPACE =
+      (1 << CHARCAT_SPACE_SEPARATOR) |
+      (1 << CHARCAT_LINE_SEPARATOR) |
+      (1 << CHARCAT_PARAGRAPH_SEPARATOR),
+
+  // Punctuation.
+  CATMASK_PUNCTUATION =
+    (1 << CHARCAT_DASH_PUNCTUATION) |
+    (1 << CHARCAT_START_PUNCTUATION) |
+    (1 << CHARCAT_END_PUNCTUATION) |
+    (1 << CHARCAT_CONNECTOR_PUNCTUATION) |
+    (1 << CHARCAT_OTHER_PUNCTUATION) |
+    (1 << CHARCAT_INITIAL_QUOTE_PUNCTUATION) |
+    (1 << CHARCAT_FINAL_QUOTE_PUNCTUATION) |
+    (1 << CHARCAT_MODIFIER_SYMBOL) |
+    (1 << CHARCAT_OTHER_SYMBOL),
+
+  // Letters and digits.
+  CATMASK_LETTER_DIGIT = CATMASK_LETTER | CATMASK_DECIMAL_DIGIT_NUMBER,
 };
 
+// String normalization flags.
+enum Normalization {
+  NORMALIZE_NONE        = 0x00,  // no normalization
+  NORMALIZE_CASE        = 0x01,  // lowercase
+  NORMALIZE_LETTERS     = 0x02,  // remove diacritics
+  NORMALIZE_DIGITS      = 0x04,  // replace all digits with 9
+  NORMALIZE_PUNCTUATION = 0x08,  // remove punctuation
+  NORMALIZE_WHITESPACE  = 0x10,  // remove whitespace
+
+  // Default normalization.
+  NORMALIZE_DEFAULT = NORMALIZE_CASE | NORMALIZE_LETTERS | NORMALIZE_PUNCTUATION
+};
+
+// Parse a list of normalization specifiers to a normalization bit mask.
+// The following specifiers are supported:
+//   c: NORMALIZE_CASE
+//   l: NORMALIZE_LETTERS
+//   d: NORMALIZE_DIGITS
+//   p: NORMALIZE_PUNCTUATION
+//   w: NORMALIZE_WHITESPACE
+Normalization ParseNormalization(const string &spec);
+
+// Return string with normalization specifiers for flags.
+string NormalizationString(Normalization normalization);
+
+// Unicode code point categorization and conversion.
 class Unicode {
  public:
    // Return Unicode category for code point.
    static int Category(int c);
+
+   // Check if code point belongs to character mask.
+   static bool Is(int c, int mask);
 
    // Check if code point is lower case.
    static bool IsLower(int c);
@@ -111,12 +181,13 @@ class Unicode {
    // Convert code point to upper case.
    static int ToUpper(int c);
 
-   // Normalize code point to by lowercasing and removing punctuation and
-   // diacritics. Return zero for code points that should be removed.
-   static int Normalize(int c);
-   static int Normalize(int c, NormalizationFlags flags);
+   // Normalize code point based on normalization flags. Return zero for code
+   // points that should be removed.
+   static int Normalize(int c, int flags);
+   static int Normalize(int c) { return Normalize(c, NORMALIZE_DEFAULT); }
 };
 
+// UTF-8 string categorization and conversion.
 class UTF8 {
  public:
   // Maximum length of UTF8 encoded code point.
@@ -138,7 +209,7 @@ class UTF8 {
 
   // Return pointer to previous UTF8 character in string.
   static const char *Previous(const char *s, const char *limit = nullptr);
-  static char *Previous(char *s, char *limit = nullptr);;
+  static char *Previous(char *s, char *limit = nullptr);
 
   // Check if string is structurally valid.
   static bool Valid(const char *s, int len);
@@ -170,14 +241,12 @@ class UTF8 {
   }
 
   // Normalize UTF8 encoded string for matching.
-  static void Normalize(const char *s, int len, NormalizationFlags flags,
-                        string *normalized);
-  static void Normalize(const string &str, NormalizationFlags flags,
-                        string *normalized) {
+  static void Normalize(const char *s, int len, int flags, string *normalized);
+  static void Normalize(const string &str, int flags, string *normalized) {
     Normalize(str.data(), str.size(), flags, normalized);
   }
   static void Normalize(const char *s, int len, string *normalized) {
-    Normalize(s, len, NORMALIZE_LETTERS, normalized);
+    Normalize(s, len, NORMALIZE_DEFAULT, normalized);
   }
   static void Normalize(const string &str, string *normalized) {
     Normalize(str.data(), str.size(), normalized);
@@ -186,10 +255,32 @@ class UTF8 {
   // Convert string to title case, i.e. make the first letter uppercase.
   static void ToTitleCase(const string &str, string *titlecased);
 
+  // Check if all characters belong to character mask.
+  static bool All(const char *s, int len, int mask);
+  static bool All(const string &str, int mask) {
+    return All(str.data(), str.size(), mask);
+  }
+
+  // Check if any characters belong to character mask.
+  static bool Any(const char *s, int len, int mask);
+  static bool Any(const string &str, int mask) {
+    return Any(str.data(), str.size(), mask);
+  }
+
   // Check if all characters are punctuation characters.
-  static bool IsPunctuation(const char *s, int len);
+  static bool IsPunctuation(const char *s, int len) {
+    return All(s, len, CATMASK_PUNCTUATION);
+  }
   static bool IsPunctuation(const string &str) {
     return IsPunctuation(str.data(), str.size());
+  }
+
+  // Check if all characters are space characters.
+  static bool IsSpace(const char *s, int len) {
+    return All(s, len, CATMASK_SPACE);
+  }
+  static bool IsSpace(const string &str) {
+    return IsSpace(str.data(), str.size());
   }
 };
 

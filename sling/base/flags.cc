@@ -64,67 +64,63 @@ void Flag::SetUsageMessage(const string &usage) {
 // Split argument it into a flag name and flag value (or nullptr if they are
 // missing). The neg parameter is set if the arg started with "-no" or
 // "--no".
-static void SplitArgument(const char *arg,
-                          char *buffer,
-                          int buffer_size,
-                          const char **name,
-                          const char **value,
-                          bool *neg) {
+static bool SplitArgument(char *arg, const char **name, const char **value) {
   *name = nullptr;
   *value = nullptr;
-  *neg = false;
 
-  if (arg != nullptr && *arg == '-') {
-    // Find the begin of the flag name.
-    arg++;  // remove 1st '-'
-    if (*arg == '-') {
-      arg++;  // remove 2nd '-'
-      if (arg[0] == '\0') return;
-    }
-    if (arg[0] == 'n' && arg[1] == 'o') {
-      arg += 2;  // remove "no"
-      if (arg[0] == '-') arg++;  // remove dash after "no"
-      *neg = true;
-    }
-    *name = arg;
+  // Return false if argument is not a flag.
+  if (arg == nullptr || arg[0] != '-') return false;
 
-    // Find the end of the flag name
-    while (*arg != '\0' && *arg != '=') arg++;
-
-    // Get the value if any.
-    if (*arg == '=') {
-      // Make a copy so we can NUL-terminate flag name.
-      size_t n = arg - *name;
-      CHECK(n < static_cast<size_t>(buffer_size));  // buffer is too small
-      memcpy(buffer, *name, n);
-      buffer[n] = '\0';
-      *name = buffer;
-
-      // Get the value.
-      *value = arg + 1;
-    }
+  // Find the begin of the flag name.
+  arg++;  // remove 1st '-'
+  if (*arg == '-') {
+    arg++;  // remove 2nd '-'
+    if (arg[0] == '\0') return true;
   }
+  *name = arg;
+
+  // Find the end of the flag name.
+  while (*arg != '\0' && *arg != '=') arg++;
+
+  // Get the value if any.
+  if (*arg == '=') {
+    // NUL-terminate flag name.
+    *arg = 0;
+
+    // Get the value.
+    *value = arg + 1;
+  }
+
+  return true;
 }
 
-int Flag::ParseCommandLineFlags(int *argc, char **argv, bool remove_flags) {
+int Flag::ParseCommandLineFlags(int *argc, char **argv) {
   // Parse all arguments.
   int rc = 0;
   for (int i = 1; i < *argc;) {
-    int j = i;  // j > 0
-    const char *arg = argv[i++];
+    int j = i;
+    char *arg = argv[i++];
 
     // Split arg into flag components.
-    char buffer[1024];
     const char *name;
     const char *value;
-    bool neg;
-    SplitArgument(arg, buffer, sizeof(buffer), &name, &value, &neg);
+    bool neg = false;
+    if (!SplitArgument(arg, &name, &value)) continue;
 
     // Stop parsing argument if -- is seen.
     if (name == nullptr) break;
 
     // Look up the flag.
     Flag *flag = Find(name);
+
+    // Try to remove -no prefix.
+    if (flag == nullptr && name[0] == 'n' && name[1] == 'o') {
+      name += 2;
+      neg = true;
+      flag = Find(name);
+    }
+
+    // Output error for unkown flag.
     if (flag == nullptr) {
       std::cerr << "Error: unrecognized flag " << arg << "\n"
                 << "Try --help for options\n";
@@ -194,7 +190,7 @@ int Flag::ParseCommandLineFlags(int *argc, char **argv, bool remove_flags) {
         break;
     }
 
-    // Handle errors.
+    // Handle flag value errors.
     if (endptr != nullptr && *endptr != '\0') {
       std::cerr << "Error: illegal value for flag " << arg << " of type "
                 << flagtype[flag->type] << "\nTry --help for options\n";
@@ -203,19 +199,15 @@ int Flag::ParseCommandLineFlags(int *argc, char **argv, bool remove_flags) {
     }
 
     // Remove the flag and value from the command.
-    if (remove_flags) {
-      while (j < i) argv[j++] = nullptr;
-    }
+    while (j < i) argv[j++] = nullptr;
   }
 
   // Shrink the argument list
-  if (remove_flags) {
-    int j = 1;
-    for (int i = 1; i < *argc; i++) {
-      if (argv[i] != nullptr) argv[j++] = argv[i];
-    }
-    *argc = j;
+  int j = 1;
+  for (int i = 1; i < *argc; i++) {
+    if (argv[i] != nullptr) argv[j++] = argv[i];
   }
+  *argc = j;
 
   if (FLAGS_help) {
     PrintHelp();

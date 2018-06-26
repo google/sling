@@ -140,6 +140,7 @@ cc_library(
     "//sling/base",
     "//sling/stream:memory",
     "//sling/util:vocabulary",
+    "//sling/util:unicode",
   ],
 )
 
@@ -168,6 +169,7 @@ cc_library(
     "//sling/myelin:gradient",
     "//sling/myelin:rnn",
     "//sling/util:embeddings",
+    "//sling/util:unicode",
   ],
 )
 

@@ -17,6 +17,7 @@
 
 #include "sling/base/types.h"
 #include "sling/nlp/document/text-tokenizer.h"
+#include "sling/nlp/document/fingerprinter.h"
 #include "sling/string/text.h"
 
 namespace sling {
@@ -35,7 +36,16 @@ class PhraseTokenizer {
   // Compute fingerprint for phrase.
   uint64 Fingerprint(Text text) const;
 
+  // Set/get phrase normalization flags.
+  Normalization normalization() const { return normalization_; }
+  void set_normalization(Normalization normalization) {
+    normalization_ = normalization;
+  }
+
  private:
+  // Phrase text normalization.
+  Normalization normalization_ = NORMALIZE_DEFAULT;
+
   // Text tokenizer.
   Tokenizer tokenizer_;
 };

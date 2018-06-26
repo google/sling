@@ -33,6 +33,13 @@ void NameTable::Load(const string &filename) {
 
   // Initialize entity table.
   repository_.FetchBlock("Entities", &entity_table_);
+
+  // Get text normalization flags.
+  const char *norm = repository_.GetBlock("normalization");
+  if (norm) {
+    string normalization(norm, repository_.GetBlockSize("normalization"));
+    normalization_ = ParseNormalization(normalization);
+  }
 }
 
 void NameTable::LookupPrefix(Text prefix,
@@ -40,7 +47,7 @@ void NameTable::LookupPrefix(Text prefix,
                              std::vector<Text> *matches) const {
   // Normalize prefix.
   string normalized;
-  UTF8::Normalize(prefix.data(), prefix.size(), &normalized);
+  UTF8::Normalize(prefix.data(), prefix.size(), normalization_, &normalized);
   Text normalized_prefix(normalized);
 
   // Find first name that is greater than or equal to the prefix.

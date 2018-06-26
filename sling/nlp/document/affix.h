@@ -136,6 +136,9 @@ class AffixTable {
   // Maximum length of affix.
   int max_length_;
 
+  // Empty affix.
+  Affix *empty_ = nullptr;
+
   // Index from affix ids to affix items.
   std::vector<Affix *> affixes_;
 

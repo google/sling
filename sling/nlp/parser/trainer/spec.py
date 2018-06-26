@@ -298,7 +298,7 @@ class Spec:
     # For compatibility with DRAGNN, suffixes don't have an OOV item.
     self.commons = commons
     self.words = Lexicon(self.words_normalize_digits)
-    self.suffix = Lexicon(normalize_digits=False, oov_item=None)
+    self.suffix = Lexicon(self.words_normalize_digits, oov_item=None)
 
     corpora.rewind()
     corpora.set_gold(False)   # No need to compute gold transitions yet

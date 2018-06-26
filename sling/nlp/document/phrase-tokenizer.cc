@@ -42,9 +42,10 @@ uint64 PhraseTokenizer::TokenFingerprints(Text text,
                                           std::vector<uint64> *tokens) const {
   tokens->clear();
   uint64 fp = 1;
+  Normalization normalization = normalization_;
   tokenizer_.Tokenize(text,
-    [tokens, &fp](const Tokenizer::Token &t) {
-      uint64 word_fp = Fingerprinter::Fingerprint(t.text);
+    [tokens, &fp, normalization](const Tokenizer::Token &t) {
+      uint64 word_fp = Fingerprinter::Fingerprint(t.text, normalization);
       tokens->push_back(word_fp);
       if (word_fp != 1) fp = Fingerprinter::Mix(word_fp, fp);
     }
@@ -54,9 +55,10 @@ uint64 PhraseTokenizer::TokenFingerprints(Text text,
 
 uint64 PhraseTokenizer::Fingerprint(Text text) const {
   uint64 fp = 1;
+  Normalization normalization = normalization_;
   tokenizer_.Tokenize(text,
-    [&fp](const Tokenizer::Token &t) {
-      fp = Fingerprinter::Fingerprint(t.text, fp);
+    [&fp, normalization](const Tokenizer::Token &t) {
+      fp = Fingerprinter::Fingerprint(t.text, fp, normalization);
     }
   );
   return fp;

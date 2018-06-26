@@ -52,6 +52,9 @@ void AffixTable::Reset(int max_length) {
   affixes_.clear();
   buckets_.clear();
   Resize(0);
+
+  // Add empty affix.
+  empty_ = AddNewAffix("", 0);
 }
 
 void AffixTable::Read(InputStream *stream) {
@@ -90,18 +93,20 @@ void AffixTable::Read(InputStream *stream) {
     DCHECK_LE(length, max_length_);
     DCHECK(FindAffix(form) == nullptr);
     Affix *affix = AddNewAffix(form, length);
+    if (bytes == 0) empty_ = affix;
     DCHECK_EQ(affix->id(), affix_id);
   }
   DCHECK_EQ(size, affixes_.size());
 
   // Link affixes.
   for (int affix_id = 0; affix_id < size; ++affix_id) {
+    Affix *affix = affixes_[affix_id];
     if (link[affix_id] == -1) {
-      DCHECK_EQ(affixes_[affix_id]->length(), 1);
+      DCHECK_EQ(affix->length(), 1);
+      affix->set_shorter(empty_);
       continue;
     }
 
-    Affix *affix = affixes_[affix_id];
     DCHECK_GT(affix->length(), 1);
     DCHECK_GE(link[affix_id], 0);
     DCHECK_LT(link[affix_id], size);
@@ -181,6 +186,7 @@ Affix *AffixTable::AddAffixesForWord(Text word) {
     affix_len--;
   }
 
+  if (top == nullptr) top = empty_;
   return top;
 }
 
@@ -219,6 +225,7 @@ Affix *AffixTable::AddNewAffix(Text form, int length) {
   // Create new affix object.
   Affix *affix = new Affix(id, form, length);
   affixes_.push_back(affix);
+  if (length == 1) affix->set_shorter(empty_);
 
   // Insert affix in bucket chain.
   affix->next_ = buckets_[b];
@@ -260,7 +267,7 @@ Affix *AffixTable::GetLongestAffix(Text word) const {
       p = UTF8::Next(p);
     }
   }
-  return nullptr;
+  return empty_;
 }
 
 void AffixTable::Resize(int size_hint) {

@@ -21,6 +21,7 @@
 #include "sling/base/types.h"
 #include "sling/string/text.h"
 #include "sling/util/fingerprint.h"
+#include "sling/util/unicode.h"
 
 namespace sling {
 namespace nlp {
@@ -71,16 +72,19 @@ class Fingerprinter {
 
   // Return the fingerprint for a normalized version of the given string.
   // Never returns zero. Returns one if the string should be ignored.
-  static uint64 Fingerprint(Text word);
+  static uint64 Fingerprint(Text word,
+                            Normalization normalization = NORMALIZE_DEFAULT);
 
   // Return the fingerprint for a normalized version of the given string,
   // using a given seed. Never returns zero. Returns the seed if the string
   // should be ignored.
-  static uint64 Fingerprint(Text word, uint64 seed);
+  static uint64 Fingerprint(Text word, uint64 seed,
+                            Normalization normalization = NORMALIZE_DEFAULT);
 
   // Return the fingerprint for the given vector of strings by combining
   // the fingerprints of each string's normalized version.
-  static uint64 Fingerprint(const std::vector<Text> &words);
+  static uint64 Fingerprint(const std::vector<Text> &words,
+                            Normalization normalization = NORMALIZE_DEFAULT);
 };
 
 }  // namespace nlp

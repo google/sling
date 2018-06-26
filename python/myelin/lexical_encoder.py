@@ -25,7 +25,9 @@ class LexicalEncoder:
     lexicon.type = "dict"
     lexicon.add_attr("delimiter", 10)
     lexicon.add_attr("oov", spec.words.oov_index)
-    lexicon.add_attr("normalize_digits", spec.words.normalize_digits)
+    normalization = ""
+    if (spec.words.normalize_digits) normalization = "d"
+    lexicon.add_attr("normalization", normalization)
     lexicon.data = str(spec.words) + "\n"
     self.lexicon_blob = lexicon
 
