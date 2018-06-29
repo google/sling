@@ -182,8 +182,9 @@ Store::Store(const Store *globals) : globals_(globals) {
   pools_[Handle::kGlobal] = globals_->pools_[Handle::kGlobal];
   pools_[Handle::kLocal] = reinterpret_cast<Address>(handles_.base());
 
-  // Allocate symbol map. The symbol table of a local store is initially empty.
-  num_buckets_ = 0;
+  // Allocate symbol map. The symbol table of a local store is initially only
+  // a single bucket.
+  num_buckets_ = 1;
   symbols_ = AllocateArray(num_buckets_);
   roots_.handle_ = symbols_;
 }
@@ -623,8 +624,8 @@ void Store::InsertSymbol(SymbolDatum *symbol) {
   // Resize symbol table if fill factor is more than 1:1, unless this would
   // make the symbol table exceed the maximum object size.
   if (num_symbols_ > num_buckets_ && num_buckets_ < kMapSizeLimit / 2) {
-    if (num_buckets_ == 0) {
-      // Symbol table empty; get the initial size from the options.
+    if (num_buckets_ == 1) {
+      // Get the initial size from the options.
       num_buckets_ = options_->map_buckets;
     } else {
       // Double the number of buckets.
