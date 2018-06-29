@@ -51,8 +51,8 @@ class ScalarIntGenerator : public ExpressionGenerator {
     } else if (instructions_.Has(Express::MUL) && type_ == DT_INT8) {
       // Reserve al for int8 multiplication.
       index_->ReserveFixedRegister(rax);
-    } else if (instructions_.Has(Express::MIN) ||
-               instructions_.Has(Express::MAX)) {
+    } else if (instructions_.Has(Express::MINIMUM) ||
+               instructions_.Has(Express::MAXIMUM)) {
       // Reserve rax for as aux register.
       index_->ReserveFixedRegister(rax);
     }
@@ -112,8 +112,8 @@ class ScalarIntGenerator : public ExpressionGenerator {
       case Express::DIV:
         GenerateDiv(instr, masm);
         break;
-      case Express::MIN:
-      case Express::MAX:
+      case Express::MINIMUM:
+      case Express::MAXIMUM:
         GenerateMinMax(instr, masm);
         break;
       default: UNSUPPORTED;
@@ -321,7 +321,7 @@ class ScalarIntGenerator : public ExpressionGenerator {
       case DT_INT64: __ cmpq(rax, reg(instr->dst)); break;
       default: UNSUPPORTED;
     }
-    if (instr->type == Express::MIN) {
+    if (instr->type == Express::MINIMUM) {
       __ cmovq(less, reg(instr->dst), rax);
     } else {
       __ cmovq(greater, reg(instr->dst), rax);

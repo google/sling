@@ -176,7 +176,7 @@ void GradientDescentOptimizer::BuildOptimizer(const GradientMap &gradmap,
       auto *norm = tf.Norm(dv);
 
       // Compute clipping factor.
-      auto *clip = tf.Div(threshold, tf.Max(norm, threshold));
+      auto *clip = tf.Div(threshold, tf.Maximum(norm, threshold));
       weight = tf.Mul(multiplier, clip);
     }
 
@@ -252,7 +252,7 @@ void AdamOptimizer::BuildOptimizer(const GradientMap &gradmap,
       auto *norm = tf.Norm(dv);
 
       // Compute clipping factor.
-      clip = tf.Div(threshold, tf.Max(norm, threshold));
+      clip = tf.Div(threshold, tf.Maximum(norm, threshold));
     }
 
     // Aggregate mean and variance.

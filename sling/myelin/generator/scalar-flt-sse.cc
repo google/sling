@@ -101,13 +101,13 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
             &Assembler::divss, &Assembler::divsd,
             masm);
         break;
-      case Express::MIN:
+      case Express::MINIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::minss, &Assembler::minsd,
             &Assembler::minss, &Assembler::minsd,
             masm);
         break;
-      case Express::MAX:
+      case Express::MAXIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::maxss, &Assembler::maxsd,
             &Assembler::maxss, &Assembler::maxsd,
@@ -168,6 +168,30 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
         break;
       case Express::SUBINT:
         GenerateRegisterOp(instr, masm);
+        break;
+      case Express::SUM:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::addss, &Assembler::addsd,
+            &Assembler::addss, &Assembler::addsd,
+            masm);
+        break;
+      case Express::PRODUCT:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::mulss, &Assembler::mulsd,
+            &Assembler::mulss, &Assembler::mulsd,
+            masm);
+        break;
+      case Express::MIN:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::minss, &Assembler::minsd,
+            &Assembler::minss, &Assembler::minsd,
+            masm);
+        break;
+      case Express::MAX:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::maxss, &Assembler::maxsd,
+            &Assembler::maxss, &Assembler::maxsd,
+            masm);
         break;
       default: UNSUPPORTED;
     }
@@ -266,6 +290,27 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
           case Express::CVTINTFLT: __ cvtdq2pd(dst, src); break;
           case Express::SUBINT: __ psubq(dst, src); break;
           default: UNSUPPORTED;
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+
+  // Generate code for reduction operation.
+  void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
+    switch (type_) {
+      case DT_FLOAT:
+        if (instr->dst != -1) {
+          __ movss(xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ movss(addr(instr->result), xmm(instr->acc));
+        }
+        break;
+      case DT_DOUBLE:
+        if (instr->dst != -1) {
+          __ movsd(xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ movsd(addr(instr->result), xmm(instr->acc));
         }
         break;
       default: UNSUPPORTED;

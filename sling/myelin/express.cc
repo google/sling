@@ -32,8 +32,8 @@ static std::map<string, Express::OpType> optypes = {
   {"Sub", Express::SUB},
   {"Mul", Express::MUL},
   {"Div", Express::DIV},
-  {"Min", Express::MIN},
-  {"Max", Express::MAX},
+  {"Minimum", Express::MINIMUM},
+  {"Maximum", Express::MAXIMUM},
   {"Neg", Express::NEG},
   {"Abs", Express::ABS},
   {"Relu", Express::RELU},
@@ -69,12 +69,16 @@ static std::map<string, Express::OpType> optypes = {
   {"CvtFltInt", Express::CVTFLTINT},
   {"CvtIntFlt", Express::CVTINTFLT},
   {"SubInt", Express::SUBINT},
+  {"Sum", Express::SUM},
+  {"Product", Express::PRODUCT},
+  {"Min", Express::MIN},
+  {"Max", Express::MAX},
 };
 
 static const string opname[] = {
   "Id",
   "Add", "Sub", "Mul", "Div",
-  "Min", "Max",
+  "Minimum", "Maximum",
   "Neg", "Abs", "Relu", "ReluGrad", "Softsign", "Softplus", "LogSigmoid",
   "Reciprocal", "Square", "Sqrt",
   "Log", "Exp", "Sigmoid", "Tanh", "Log2", "Exp2",
@@ -84,6 +88,7 @@ static const string opname[] = {
   "Shr23", "Shl23",
   "And", "Or", "AndNot",
   "Floor", "CvtFltInt", "CvtIntFlt", "SubInt",
+  "Sum", "Product", "Min", "Max",
   "???",
 };
 
@@ -134,6 +139,13 @@ class RegisterAllocator {
     }
 
     var->reg = regno;
+    return regno;
+  }
+
+  // Allocate spare register not assigned to variable.
+  int AllocateExtra() {
+    int regno = reg_.size();
+    reg_.push_back(nullptr);
     return regno;
   }
 
@@ -364,9 +376,12 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(-0.6931471805599453),   // NLN2
   FLTCONST(1.442695021629333),     // LOG2E
 
-  INTCONST(0x00800000, 0x0010000000000000LL),   // MIN_NORM_POS
-  INTCONST(~0x7f800000, ~0x7FF0000000000000LL),  // INV_MANT_MASK
-  INTCONST(0x7f, 0x7ffLL),         // MAX_MANT
+  INTCONST(0x7F800000, 0x7FF0000000000000LL),      // PINF
+  INTCONST(0xFF800000, 0xFFF0000000000000LL),      // NINF
+
+  INTCONST(0x00800000, 0x0010000000000000LL),      // MIN_NORM_POS
+  INTCONST(~0x7f800000, ~0x7FF0000000000000LL),    // INV_MANT_MASK
+  INTCONST(0x7f, 0x7ffLL),                         // MAX_MANT
 
   // Polynomial coefficients for natural logarithm.
   FLTCONST(0.707106781186547524),  // CEPHES_SQRTHF
@@ -410,6 +425,16 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(2.26843463243900e-03),  // BETA_4
   FLTCONST(4.89352518554385e-03),  // BETA_6
 };
+
+int Express::IdentityValue(OpType type) {
+  switch (type) {
+    case SUM: return ZERO;
+    case PRODUCT: return ONE;
+    case MIN: return PINF;
+    case MAX: return NINF;
+    default: return ZERO;
+  }
+}
 
 Express::OpType Express::Lookup(const string &opname) {
   auto f = optypes.find(opname);
@@ -751,6 +776,9 @@ void Express::Hoist(int limit) {
           break;
         }
       }
+
+      // Never hoist reduction ops.
+      if (op->reduction()) continue;
 
       // Move instruction out of the body if it is loop-invariant.
       if (invariant) {
@@ -1102,9 +1130,10 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
             success = false;
         }
       } else {
-        // Unary operator.
-        switch (result->type) {
+        // Unary operator. Reductions are output to accumulator.
+        switch (op->reduction() ? REGISTER : result->type) {
           case TEMP:
+          case REGISTER:
             switch (args[0]->type) {
               case INPUT:
               case OUTPUT:
@@ -1170,7 +1199,6 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
             break;
 
           case INPUT:
-          case REGISTER:
           case CONST:
           case NUMBER:
             // Assignment to inputs and constants not allowed.
@@ -1493,6 +1521,12 @@ int Express::AllocateRegisters() {
         CHECK(op->src2 != -1);
       }
 
+      // Get register for accumulation.
+      if (op->reduction()) {
+        op->acc = regs.AllocateExtra();
+        CHECK(op->acc != -1);
+      }
+
       // Free unused registers.
       if (op->arity() > first && op->args[first]->type == TEMP) {
         if (op->args[first]->last == op) regs.Free(op->args[first]);
@@ -1528,6 +1562,7 @@ int Express::NumRegs() const {
     if (op->dst != -1 && op->dst + 1 > num_regs) num_regs = op->dst + 1;
     if (op->src != -1 && op->src + 1 > num_regs) num_regs = op->src + 1;
     if (op->src2 != -1 && op->src2 + 1 > num_regs) num_regs = op->src2 + 1;
+    if (op->acc != -1 && op->acc + 1 > num_regs) num_regs = op->acc + 1;
   }
   return num_regs;
 }
@@ -1543,7 +1578,7 @@ Express::Var *Express::Log(Var *x) {
     Var *invalid_mask = Do(CMPNGEUQ, x, Number(ZERO));
 
     // Truncate input values to the minimum positive normal.
-    x = Max(x, Number(MIN_NORM_POS));
+    x = Maximum(x, Number(MIN_NORM_POS));
 
     // Part 1: x = frexpf(x, e).
     Var *emm0 = Do(SHR23, x);
@@ -1609,7 +1644,7 @@ Express::Var *Express::Exp(Var *x) {
   } else {
     // Clamp x.
     Var *original_x = x;
-    x = Max(Min(x, Number(EXP_HI)), Number(EXP_LO));
+    x = Maximum(Minimum(x, Number(EXP_HI)), Number(EXP_LO));
 
     // Express exp(x) as exp(m*ln(2) + r), start by extracting
     // m = floor(x/ln(2) + 0.5).
@@ -1635,7 +1670,7 @@ Express::Var *Express::Exp(Var *x) {
     Var *emm0 = Do(SHL23, Do(CVTFLTINT, Add(m, Number(P127))));
 
     // Return 2^m * exp(r).
-    return Max(Mul(y, emm0), original_x);
+    return Maximum(Mul(y, emm0), original_x);
   }
 }
 
@@ -1650,7 +1685,7 @@ Express::Var *Express::Tanh(Var *x) {
   } else {
     // Clamp the inputs to the range [-9, 9] since anything outside this range
     // is +/-1.0.
-    x = Max(Min(x, Number(P9)), Number(N9));
+    x = Maximum(Minimum(x, Number(P9)), Number(N9));
 
     // Since the polynomials are odd/even, we need x^2.
     Var *x2 = Mul(x, x);
@@ -1767,6 +1802,13 @@ string Express::Op::AsInstruction() const {
   } else if (arity() > second) {
     str.push_back(',');
     args[second]->GetRecipe(&str);
+  }
+
+  // Accumulator.
+  if (acc != -1) {
+    str.append(" {r");
+    str.append(std::to_string(acc));
+    str.append("}");
   }
 
   return str;

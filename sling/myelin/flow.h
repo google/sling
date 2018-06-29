@@ -445,6 +445,11 @@ class Flow {
     // Replace output variable with another variable.
     void ReplaceOutput(Variable *var, Variable *replacement);
 
+    // Get prototype variable for operation. This is the biggest output from the
+    // operation, unless this is a scalar or the operation does not have any
+    // outputs. In that case, the biggest input is returned.
+    Variable *GetPrototype() const;
+
     // Return in and out degree.
     int indegree() const { return inputs.size(); }
     int outdegree() const { return outputs.size(); }

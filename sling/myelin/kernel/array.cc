@@ -963,8 +963,8 @@ class PoolingGather : public Kernel {
           __ vmovaps(Operand(output, ofs, times_1, disp), elem[i]);
         }
 
-        if (16 * unrolls > main) {
-          __ addq(ofs, Immediate(8 * unrolls * sizeof(float)));
+        if (main > 16 * unrolls) {
+          __ addq(ofs, Immediate(16 * unrolls * sizeof(float)));
           __ cmpq(ofs, Immediate(main * sizeof(float)));
           __ j(less, &next);
         }
@@ -1009,7 +1009,7 @@ class PoolingGather : public Kernel {
           __ vmovaps(Operand(output, ofs, times_1, disp), elem[i]);
         }
 
-        if (8 * unrolls > main) {
+        if (main > 8 * unrolls) {
           __ addq(ofs, Immediate(8 * unrolls * sizeof(float)));
           __ cmpq(ofs, Immediate(main * sizeof(float)));
           __ j(less, &next);
@@ -1317,8 +1317,8 @@ class ScatterAdd : public Kernel {
           int disp = i * 16 * sizeof(float);
           __ vmovaps(Operand(acc, ofs, times_1, disp), elem[i]);
         }
-        if (16 * unrolls > main) {
-          __ addq(ofs, Immediate(8 * unrolls * sizeof(float)));
+        if (main > 16 * unrolls) {
+          __ addq(ofs, Immediate(16 * unrolls * sizeof(float)));
           __ cmpq(ofs, Immediate(main * sizeof(float)));
           __ j(less, &next);
         }
@@ -1363,7 +1363,7 @@ class ScatterAdd : public Kernel {
           int disp = i * 8 * sizeof(float);
           __ vmovaps(Operand(acc, ofs, times_1, disp), elem[i]);
         }
-        if (8 * unrolls > main) {
+        if (main > 8 * unrolls) {
           __ addq(ofs, Immediate(8 * unrolls * sizeof(float)));
           __ cmpq(ofs, Immediate(main * sizeof(float)));
           __ j(less, &next);

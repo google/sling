@@ -44,6 +44,16 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
   void Reserve() override {
     // Reserve XMM registers.
     index_->ReserveXMMRegisters(instructions_.NumRegs());
+
+    // Allocate auxiliary registers.
+    int num_mm_aux = 0;
+    if (instructions_.Has(Express::SUM) ||
+        instructions_.Has(Express::PRODUCT) ||
+        instructions_.Has(Express::MIN) ||
+        instructions_.Has(Express::MAX)) {
+      num_mm_aux = std::max(num_mm_aux, 1);
+    }
+    index_->ReserveAuxXMMRegisters(num_mm_aux);
   }
 
   void Generate(Express::Op *instr, MacroAssembler *masm) override {
@@ -90,13 +100,13 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
             &Assembler::divps, &Assembler::divpd,
             masm);
         break;
-      case Express::MIN:
+      case Express::MINIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::minps, &Assembler::minpd,
             &Assembler::minps, &Assembler::minpd,
             masm);
         break;
-      case Express::MAX:
+      case Express::MAXIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::maxps, &Assembler::maxpd,
             &Assembler::maxps, &Assembler::maxpd,
@@ -161,6 +171,30 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         GenerateXMMFltOp(instr,
             &Assembler::psubd, &Assembler::psubq,
             &Assembler::psubd, &Assembler::psubq,
+            masm);
+        break;
+      case Express::SUM:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::addps, &Assembler::addpd,
+            &Assembler::addps, &Assembler::addpd,
+            masm);
+        break;
+      case Express::PRODUCT:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::mulps, &Assembler::mulpd,
+            &Assembler::mulps, &Assembler::mulpd,
+            masm);
+        break;
+      case Express::MIN:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::minps, &Assembler::minpd,
+            &Assembler::minps, &Assembler::minpd,
+            masm);
+        break;
+      case Express::MAX:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::maxps, &Assembler::maxpd,
+            &Assembler::maxps, &Assembler::maxpd,
             masm);
         break;
       default:
@@ -258,6 +292,73 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         &Assembler::cmpps, &Assembler::cmppd,
         &Assembler::cmpps, &Assembler::cmppd,
         code, masm);
+  }
+
+  // Generate code for reduction operation.
+  void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
+    auto acc = xmm(instr->acc);
+    auto aux = xmmaux(0);
+    switch (type_) {
+      case DT_FLOAT:
+        switch (instr->type) {
+          case Express::SUM:
+            __ haddps(acc, acc);
+            __ haddps(acc, acc);
+            break;
+          case Express::PRODUCT:
+            __ shufps(aux, acc, 0x0E);
+            __ mulps(acc, aux);
+            __ shufps(aux, acc, 0x01);
+            __ mulps(acc, aux);
+            break;
+          case Express::MIN:
+            __ shufps(aux, acc, 0x0E);
+            __ minps(acc, aux);
+            __ shufps(aux, acc, 0x01);
+            __ minps(acc, aux);
+            break;
+          case Express::MAX:
+            __ shufps(aux, acc, 0x0E);
+            __ maxps(acc, aux);
+            __ shufps(aux, acc, 0x01);
+            __ maxps(acc, aux);
+            break;
+          default: UNSUPPORTED;
+        }
+        if (instr->dst != -1) {
+          __ movss(xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ movss(addr(instr->result), xmm(instr->acc));
+        }
+        break;
+      case DT_DOUBLE:
+        switch (instr->type) {
+          case Express::SUM:
+            __ shufpd(aux, acc, 1);
+            __ addpd(acc, aux);
+            break;
+          case Express::PRODUCT:
+            __ shufpd(aux, acc, 1);
+            __ mulpd(acc, aux);
+            break;
+          case Express::MIN:
+            __ shufpd(aux, acc, 1);
+            __ minpd(acc, aux);
+            break;
+          case Express::MAX:
+            __ shufpd(aux, acc, 1);
+            __ maxpd(acc, aux);
+            break;
+          default: UNSUPPORTED;
+        }
+        if (instr->dst != -1) {
+          __ movsd(xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ movsd(addr(instr->result), xmm(instr->acc));
+        }
+        break;
+      default: UNSUPPORTED;
+    }
   }
 };
 

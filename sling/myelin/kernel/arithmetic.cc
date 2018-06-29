@@ -49,8 +49,8 @@ static Express::OpType OpType(const string &op) {
     {"Mul", Express::MUL},
     {"Div", Express::DIV},
     {"RealDiv", Express::DIV},
-    {"Minimum", Express::MIN},
-    {"Maximum", Express::MAX},
+    {"Minimum", Express::MINIMUM},
+    {"Maximum", Express::MAXIMUM},
 
     {"Log", Express::LOG},
     {"Exp", Express::EXP},
@@ -67,6 +67,11 @@ static Express::OpType OpType(const string &op) {
     {"Reciprocal", Express::RECIPROCAL},
     {"Square", Express::SQUARE},
     {"Sqrt", Express::SQRT},
+
+    {"Sum", Express::SUM},
+    {"Product", Express::PRODUCT},
+    {"Min", Express::MIN},
+    {"Max", Express::MAX},
   };
 
   auto f = ops.find(op);
@@ -177,10 +182,8 @@ struct Expression {
   // Initialize expression.
   Expression(const Step *step, MacroAssembler *masm, int spare_regs = 0)
       : index(step, masm) {
-    // Determine output type and shape from the first output (or first input
-    // for assignment op).
-    assign = step->type() == "Assign";
-    prototype = assign ? step->input(0) : step->output(0);
+    // Determine output type and shape from the prototype.
+    prototype = step->GetPrototype();
     Type type = prototype->type();
 
     // Compute the maximum common size between inputs and outputs. Scalars are
@@ -224,6 +227,7 @@ struct Expression {
     index.GenerateLoopBegin();
     generator->GenerateBody(masm);
     index.GenerateLoopEnd();
+    generator->GenerateEnd(masm);
   }
 
   // Compute complexity.
@@ -237,8 +241,7 @@ struct Expression {
   // used for the loop indexing.
   static int SpareRegs(const Step *step, const Options &options) {
     int spare_regs = 0;
-    bool assign = step->type() == "Assign";
-    Type type = assign ? step->input(0)->type() : step->output(0)->type();
+    Type type = step->GetPrototype()->type();
     if (type == DT_FLOAT || type == DT_DOUBLE) {
       // Perform dry-run to estimate the number of SIMD registers needed.
       MacroAssembler masm(nullptr, 0, options);
@@ -252,7 +255,7 @@ struct Expression {
     return spare_regs;
   }
 
-  // Representative output from expression.
+  // Representative output (or input) from expression.
   Tensor *prototype;
 
   // Expression to be compiled.
@@ -263,9 +266,6 @@ struct Expression {
 
   // Code generator for expression.
   ExpressionGenerator *generator;
-
-  // Assignment expression.
-  bool assign;
 };
 
 // Convert division with constant c to multiplication with constant 1/c to
@@ -398,6 +398,39 @@ class ExpressionTransformer : public Transformer {
       }
     }
 
+    // Merge calculate ops sharing a non-trivial input.
+    again = true;
+    while (again) {
+      again = false;
+      // Try to find variable that is used in two different calculate ops.
+      for (Flow::Variable *var : flow->vars()) {
+        // Find a pair of ops that share a non-trivial input.
+        if (var->usages() < 2) continue;
+        if (var->elements() < 2) continue;
+        Flow::Operation *first = nullptr;
+        Flow::Operation *second = nullptr;
+        for (Flow::Operation *op : var->consumers) {
+          if (!IsCalculateOp(op)) continue;
+          if (op->GetAttr("strict", false)) continue;
+          if (first == nullptr) {
+            first = op;
+          } else {
+            second = op;
+            break;
+          }
+        }
+
+        if (first != nullptr && second != nullptr) {
+          // Try to combine ops.
+          if (Combine(flow, first, second)) {
+            num_combines++;
+            again = true;
+            break;
+          }
+        }
+      }
+    }
+
     return num_combines > 0;
   }
 
@@ -408,7 +441,7 @@ class ExpressionTransformer : public Transformer {
     if (first->outdegree() < 1) return false;
     if (second->indegree() < 1) return false;
     if (!assign && second->outdegree() < 1) return false;
-    Flow::Variable *prototype = assign ? first->inputs[0] : first->outputs[0];
+    Flow::Variable *prototype = first->GetPrototype();
     Type type = prototype->type;
     const Shape &shape = prototype->shape;
     for (auto *input : first->inputs) {
@@ -424,23 +457,27 @@ class ExpressionTransformer : public Transformer {
     for (auto *output : first->outputs) {
       if (output->type != type) return false;
       if (!output->shape.defined()) return false;
-      if (output->shape != shape) return false;
+      if (output->shape != shape && output->rank() != 0) return false;
     }
     for (auto *output : second->outputs) {
       if (output->type != type) return false;
       if (!output->shape.defined()) return false;
-      if (output->shape != shape) return false;
+      if (output->shape != shape && output->rank() != 0) return false;
     }
 
     // Check for indirect dependencies between ops.
+    for (auto *v : first->inputs) {
+      if (v->producer != second && v->DependsOn(second)) return false;
+    }
     for (auto *v : second->inputs) {
       if (v->producer != first && v->DependsOn(first)) return false;
     }
 
     // Compute fused expression.
     string fused_recipe = FuseExpressions(first, second);
+    if (fused_recipe.empty()) return false;
 
-    // Fuse the two ops and set expression recipe for the fused Calculate op.
+    // Fuse the two ops and set expression recipe for the fused op.
     Flow::Variable *target = assign ? second->inputs[0] : nullptr;
     Flow::Operation *fused = flow->Fuse(first, second,
                                         assign ? "Assign" : "Calculate",
@@ -533,6 +570,12 @@ class ExpressionTransformer : public Transformer {
     // Merge second expression into the first one.
     expr1.Merge(&expr2, mapping);
 
+    // Make sure that no reductions are used as inputs to ops in the merged
+    // expression.
+    for (Express::Op *op : expr1.ops()) {
+      if (op->reduction() && op->result->usages() > 0) return "";
+    }
+
     // Return merged recipe.
     return expr1.AsRecipe();
   }
@@ -608,7 +651,7 @@ class Calculate : public Kernel {
     bool assign = step->type() == "Assign";
     if (step->indegree() < 1) return false;
     if (!assign && step->outdegree() < 1) return false;
-    Tensor *prototype = assign ? step->input(0) : step->output(0);
+    Tensor *prototype = step->GetPrototype();
     Type type = prototype->type();
     const Shape &shape = prototype->shape();
     for (auto *input : step->inputs()) {
@@ -617,7 +660,7 @@ class Calculate : public Kernel {
     }
     for (auto *output : step->outputs()) {
       if (output->type() != type) return false;
-      if (output->shape() != shape) return false;
+      if (output->shape() != shape && output->rank() != 0) return false;
     }
 
     // Strict math not supported.
@@ -637,12 +680,12 @@ class Calculate : public Kernel {
     // Set alignment.
     int alignment = expression.generator->VectorSize();
     for (auto *input : step->inputs()) {
-      input->SetMiniumAlignment(alignment);
+      if (input->rank() > 0) input->SetMiniumAlignment(alignment);
       input->RequireDense();
       input->RequireStandardOrder();
     }
     for (auto *output : step->outputs()) {
-      output->SetMiniumAlignment(alignment);
+      if (output->rank() > 0) output->SetMiniumAlignment(alignment);
       output->RequireDense();
       output->RequireStandardOrder();
     }
@@ -1163,6 +1206,11 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("ReciprocalExpr", "Reciprocal", 1));
   library->Register(new Calculate("SquareExpr", "Square", 1));
   library->Register(new Calculate("SqrtExpr", "Sqrt", 1));
+
+  library->Register(new Calculate("SumExpr", "Sum", 1));
+  library->Register(new Calculate("ProductExpr", "Product", 1));
+  library->Register(new Calculate("MaxExpr", "Max", 1));
+  library->Register(new Calculate("MinExpr", "Min", 1));
 
   library->Register(new Softmax(false));
   library->Register(new Softmax(true));

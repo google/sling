@@ -103,7 +103,7 @@ class VectorIntAVX256Generator : public ExpressionGenerator {
       case Express::DIV:
         UNSUPPORTED;
         break;
-      case Express::MIN:
+      case Express::MINIMUM:
         if (type_ == DT_INT64) {
           UNSUPPORTED;
         } else {
@@ -115,7 +115,7 @@ class VectorIntAVX256Generator : public ExpressionGenerator {
               masm);
         }
         break;
-      case Express::MAX:
+      case Express::MAXIMUM:
         if (type_ == DT_INT64) {
           UNSUPPORTED;
         } else {

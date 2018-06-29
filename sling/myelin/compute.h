@@ -732,6 +732,11 @@ class Step : public Attributes {
   // to be synchronized before execution.
   bool NeedsSynchronization();
 
+  // Get prototype variable for step. This is the biggest output from the step,
+  // unless this is a scalar or the step does not have any outputs. In that
+  // case, the biggest input is returned.
+  Tensor *GetPrototype() const;
+
  private:
   // Step name from flow operation.
   string name_;
@@ -1072,9 +1077,15 @@ class Cell {
 
   // Look up parameter and return null if it is not found.
   Tensor *LookupParameter(const string &name) const;
+  Tensor *LookupParameter(const Flow::Variable *var) const {
+    return LookupParameter(var->name);
+  }
 
   // Get parameter.
   Tensor *GetParameter(const string &name) const;
+  Tensor *GetParameter(const Flow::Variable *var) const {
+    return GetParameter(var->name);
+  }
 
   // Write code to file.
   void WriteCodeToFile(const string &filename) const;
@@ -1201,26 +1212,41 @@ class Network {
 
   // Look up cell returning null if it is not found.
   Cell *LookupCell(const string &name) const;
+  Cell *LookupCell(const Flow::Function *func) const {
+    return LookupCell(func->name);
+  }
 
   // Get cell.
   Cell *GetCell(const string &name) const;
+  Cell *GetCell(const Flow::Function *func) const {
+    return GetCell(func->name);
+  }
 
   // Look up up parameter tensor returning null if it is not found.
   Tensor *LookupParameter(const string &name) const;
+  Tensor *LookupParameter(const Flow::Variable *var) const {
+    return LookupParameter(var->name);
+  }
 
   // Get parameter tensor.
   Tensor *GetParameter(const string &name) const;
+  Tensor *GetParameter(const Flow::Variable *var) const {
+    return GetParameter(var->name);
+  }
 
   // Return tensor data object for global tensor.
   TensorData operator[](Tensor *global) {
     CHECK(global->IsGlobal());
     return TensorData(global->data(), global);
   }
-  inline TensorData operator[](const string &name) {
+  TensorData operator[](const string &name) {
     Tensor *global = GetParameter(name);
     DCHECK(global != nullptr) << "Unknown parameter: " << name;
     CHECK(global->IsGlobal());
     return TensorData(global->data(), global);
+  }
+  TensorData operator[](const Flow::Variable *var) {
+    return (*this)[var->name];
   }
 
   // Allocate memory in memory pool.

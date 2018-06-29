@@ -27,7 +27,7 @@ ElementwiseIndexGenerator::ElementwiseIndexGenerator(
     const Step *step, MacroAssembler *masm) : IndexGenerator(masm) {
   // Get size from first output.
   assign_ = step->type() == "Assign";
-  Tensor *prototype = assign_ ? step->input(0) : step->output(0);
+  Tensor *prototype = step->GetPrototype();
   type_ = prototype->type();
   shape_ = prototype->shape();
 
@@ -50,7 +50,7 @@ ElementwiseIndexGenerator::ElementwiseIndexGenerator(
     output_.resize(step->outdegree());
     for (int i = 0; i < step->outdegree(); ++i) {
       CHECK(step->output(i)->type() == type_);
-      CHECK(step->output(i)->shape() == shape_);
+      CHECK(step->output(i)->shape() == shape_ || step->output(i)->rank() == 0);
       output_[i] = GetLocator(step->output(i));
     }
   }

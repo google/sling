@@ -81,6 +81,15 @@ static void Fill1(const TensorData &dims,
   for (int i = 0; i < n; i++) *r++ = v;
 }
 
+// Transpose matrix.
+static void Transpose(const TensorData &m, TensorData *result) {
+  for (int r = 0; r < m.dim(0); ++r) {
+    for (int c = 0; c < m.dim(1); ++c) {
+      result->at<float>(c, r) = m.at<float>(r, c);
+    }
+  }
+}
+
 // Replace ops with constant input variables with new computed constant
 // variables.
 class ConstantFolding : public Transformer {
@@ -113,6 +122,9 @@ class ConstantFolding : public Transformer {
        .Input(0, DT_INT32, 1)
        .Input(1, DT_FLOAT, 0)
        .Output(0, DT_FLOAT);
+    library_.Register("Transpose", "Transpose", Transpose)
+       .Input(0, DT_FLOAT, 2)
+       .Output(0, DT_FLOAT, 2);
   }
 
   bool Transform(Flow *flow) override {

@@ -99,7 +99,7 @@ class IndexGenerator {
   bool extended_regs_ = false;        // use extended register set
   std::vector<jit::Register> fixed_;  // reserved fixed registers
   std::vector<jit::Register> regs_;   // reserved temporary registers
-  std::vector<int> mmregs_;           // reserved SIMD registers (xmm/ymm)
+  std::vector<int> mmregs_;           // reserved SIMD registers (xmm/ymm/zmm)
   std::vector<jit::Register> aux_;    // reserved auxiliary registers
   std::vector<int> mmaux_;            // reserved auxiliary SIMD registers
 };

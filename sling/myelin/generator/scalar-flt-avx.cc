@@ -106,13 +106,13 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
             &Assembler::vdivss, &Assembler::vdivsd,
             masm);
         break;
-      case Express::MIN:
+      case Express::MINIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::vminss, &Assembler::vminsd,
             &Assembler::vminss, &Assembler::vminsd,
             masm);
         break;
-      case Express::MAX:
+      case Express::MAXIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::vmaxss, &Assembler::vmaxsd,
             &Assembler::vmaxss, &Assembler::vmaxsd,
@@ -189,6 +189,30 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
         break;
       case Express::SUBINT:
         GenerateRegisterOp(instr, masm);
+        break;
+      case Express::SUM:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vaddss, &Assembler::vaddsd,
+            &Assembler::vaddss, &Assembler::vaddsd,
+            masm);
+        break;
+      case Express::PRODUCT:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vmulss, &Assembler::vmulsd,
+            &Assembler::vmulss, &Assembler::vmulsd,
+            masm);
+        break;
+      case Express::MIN:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vminss, &Assembler::vminsd,
+            &Assembler::vminss, &Assembler::vminsd,
+            masm);
+        break;
+      case Express::MAX:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vmaxss, &Assembler::vmaxsd,
+            &Assembler::vmaxss, &Assembler::vmaxsd,
+            masm);
         break;
       default: UNSUPPORTED;
     }
@@ -353,6 +377,27 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           case Express::CVTINTFLT: __ vcvtdq2pd(dst, src); break;
           case Express::SUBINT: __ vpsubq(dst, src, src2); break;
           default: UNSUPPORTED;
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+
+  // Generate code for reduction operation.
+  void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
+    switch (type_) {
+      case DT_FLOAT:
+        if (instr->dst != -1) {
+          __ vmovss(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ vmovss(addr(instr->result), xmm(instr->acc));
+        }
+        break;
+      case DT_DOUBLE:
+        if (instr->dst != -1) {
+          __ vmovsd(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ vmovsd(addr(instr->result), xmm(instr->acc));
         }
         break;
       default: UNSUPPORTED;

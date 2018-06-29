@@ -59,8 +59,29 @@ void ExpressionGenerator::Initialize(const Express &expression,
   Reserve();
 }
 
+void ExpressionGenerator::GenerateReduce(Express::Op *instr,
+                                         MacroAssembler *masm) {
+  LOG(FATAL) << Name() << " does not support reduction";
+}
+
 void ExpressionGenerator::GenerateInit(MacroAssembler *masm) {
+  // Initialize reduction accumulators.
   auto &ops = instructions_.ops();
+  for (auto *op : ops) {
+    if (op->acc == -1) continue;
+    CHECK(op->reduction());
+
+    // Generate code for a "MOV acc,#identity" instruction.
+    Express::Var value(Express::NUMBER, Express::IdentityValue(op->type));
+    Express::Var acc(Express::REGISTER, -1);
+    Express::Op mov(Express::MOV);
+    mov.Assign(&acc);
+    mov.AddArgument(&value);
+    mov.dst = op->acc;
+    Generate(&mov, masm);
+  }
+
+  // Generate loop invariant instructions.
   int body = instructions_.body();
   for (int i = 0; i < body; ++i) {
     if (!ops[i]->nop()) Generate(ops[i], masm);
@@ -72,6 +93,15 @@ void ExpressionGenerator::GenerateBody(MacroAssembler *masm) {
   int body = instructions_.body();
   for (int i = body; i < ops.size(); ++i) {
     if (!ops[i]->nop()) Generate(ops[i], masm);
+  }
+}
+
+void ExpressionGenerator::GenerateEnd(MacroAssembler *masm) {
+  // Reduce and assign reductions.
+  for (auto *op : instructions_.ops()) {
+    if (op->acc == -1) continue;
+    CHECK(op->reduction());
+    GenerateReduce(op, masm);
   }
 }
 
@@ -665,6 +695,36 @@ void ExpressionGenerator::GenerateXMMFltOp(
   }
 }
 
+void ExpressionGenerator::GenerateXMMFltAccOp(
+    Express::Op *instr,
+    OpXMMRegReg fltopreg, OpXMMRegReg dblopreg,
+    OpXMMRegMem fltopmem, OpXMMRegMem dblopmem,
+    MacroAssembler *masm) {
+  if (instr->src != -1) {
+    // OP acc,reg
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopreg)(xmm(instr->acc), xmm(instr->src));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopreg)(xmm(instr->acc), xmm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    // OP acc,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(xmm(instr->acc), addr(instr->args[0]));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(xmm(instr->acc), addr(instr->args[0]));
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+}
+
 void ExpressionGenerator::GenerateXMMUnaryFltOp(
     Express::Op *instr,
     OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
@@ -767,6 +827,38 @@ void ExpressionGenerator::GenerateXMMFltOp(
     }
   } else {
     UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateXMMFltAccOp(
+    Express::Op *instr,
+    OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
+    OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
+    MacroAssembler *masm) {
+  if (instr->src != -1) {
+    // OP acc,acc,reg
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopreg)(xmm(instr->acc), xmm(instr->acc), xmm(instr->src));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopreg)(xmm(instr->acc), xmm(instr->acc), xmm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    // OP acc,acc,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(xmm(instr->acc), xmm(instr->acc),
+                          addr(instr->args[0]));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(xmm(instr->acc), xmm(instr->acc),
+                          addr(instr->args[0]));
+        break;
+      default: UNSUPPORTED;
+    }
   }
 }
 
@@ -940,6 +1032,39 @@ void ExpressionGenerator::GenerateYMMFltOp(
   }
 }
 
+void ExpressionGenerator::GenerateYMMFltAccOp(
+    Express::Op *instr,
+    OpYMMRegRegReg fltopreg, OpYMMRegRegReg dblopreg,
+    OpYMMRegRegMem fltopmem, OpYMMRegRegMem dblopmem,
+    MacroAssembler *masm) {
+  CHECK(instr->acc != -1);
+  if (instr->src != -1) {
+    // ACC acc,acc,reg
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopreg)(ymm(instr->acc), ymm(instr->acc), ymm(instr->src));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopreg)(ymm(instr->acc), ymm(instr->acc), ymm(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    // ACC acc,acc,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(ymm(instr->acc), ymm(instr->acc),
+                          addr(instr->args[0]));
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(ymm(instr->acc), ymm(instr->acc),
+                          addr(instr->args[0]));
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+}
+
 void ExpressionGenerator::GenerateZMMFltOp(
     Express::Op *instr,
     OpZMMRegReg fltopreg, OpZMMRegReg dblopreg,
@@ -1060,6 +1185,51 @@ void ExpressionGenerator::GenerateZMMFltOp(
     }
   } else {
     UNSUPPORTED;
+  }
+}
+
+void ExpressionGenerator::GenerateZMMFltAccOp(
+    Express::Op *instr,
+    OpZMMRegRegReg fltopreg, OpZMMRegRegReg dblopreg,
+    OpZMMRegRegRegR fltopregr, OpZMMRegRegRegR dblopregr,
+    OpZMMRegRegMem fltopmem, OpZMMRegRegMem dblopmem,
+    MacroAssembler *masm) {
+  if (instr->src != -1) {
+    // OP acc,acc,reg
+    switch (type_) {
+      case DT_FLOAT:
+        if (fltopreg != nullptr) {
+          (masm->*fltopreg)(zmm(instr->acc), zmm(instr->acc), zmm(instr->src),
+                            nomask);
+        } else {
+          (masm->*fltopregr)(zmm(instr->acc), zmm(instr->acc), zmm(instr->src),
+                             nomask, noround);
+        }
+        break;
+      case DT_DOUBLE:
+        if (dblopreg != nullptr) {
+          (masm->*dblopreg)(zmm(instr->acc), zmm(instr->acc), zmm(instr->src),
+                            nomask);
+        } else {
+          (masm->*dblopregr)(zmm(instr->acc), zmm(instr->acc), zmm(instr->src),
+                            nomask, noround);
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  } else {
+    // OP acc,acc,[mem]
+    switch (type_) {
+      case DT_FLOAT:
+        (masm->*fltopmem)(zmm(instr->acc), zmm(instr->acc),
+                          addr(instr->args[0]), nomask);
+        break;
+      case DT_DOUBLE:
+        (masm->*dblopmem)(zmm(instr->acc), zmm(instr->acc),
+                          addr(instr->args[0]), nomask);
+        break;
+      default: UNSUPPORTED;
+    }
   }
 }
 

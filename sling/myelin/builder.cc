@@ -110,8 +110,8 @@ Flow::Variable *FlowBuilder::Op(const string &op,
   return Op(op, args, type, shape);
 }
 
-Flow::Operation *FlowBuilder::Op0(const string &op,
-                                  const std::vector<Flow::Variable *> &args) {
+Flow::Operation *FlowBuilder::RawOp(const string &op,
+                                    const std::vector<Flow::Variable *> &args) {
   string name = OpName(op);
   return flow_->AddOperation(func_, name, op, args, {});
 }

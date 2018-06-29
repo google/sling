@@ -72,8 +72,8 @@ class Express {
     SUB,         // subtraction, r=a-b
     MUL,         // multiplication, r=a*b
     DIV,         // division, r=a/b
-    MIN,         // minimum, r=max(a,b)
-    MAX,         // maximum, r=min(a,b)
+    MINIMUM,     // minimum, r=max(a,b)
+    MAXIMUM,     // maximum, r=min(a,b)
 
     NEG,         // negative, r=-x
     ABS,         // absolute value, r=|x|=max(x,neg(x))
@@ -115,13 +115,18 @@ class Express {
     CVTINTFLT,   // integer to float conversion
     SUBINT,      // integer subtraction
 
+    SUM,         // sum reduction
+    PRODUCT,     // product reduction
+    MIN,         // min reduction
+    MAX,         // max reduction
+
     INVALID,     // invalid operation
   };
 
   // System-defined numeric constants.
   enum ConstantNumber {
     ZERO, ONE, HALF, TWO, N1, P9, N9, P127, LN2, NLN2, LOG2E,
-    MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
+    PINF, NINF, MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
     CEPHES_LOG_P5, CEPHES_LOG_P6, CEPHES_LOG_P7, CEPHES_LOG_P8,
@@ -199,8 +204,13 @@ class Express {
     // Check if operation is commutative.
     bool commutative() const {
       return type == ADD || type == MUL ||
-             type == MIN || type == MAX ||
+             type == MINIMUM || type == MAXIMUM ||
              type == AND || type == OR;
+    }
+
+    // Check if operation is a reduction.
+    bool reduction() const {
+      return type == SUM || type == PRODUCT || type == MIN || type == MAX;
     }
 
     // Check if operation is a no-op.
@@ -215,6 +225,7 @@ class Express {
     int dst = -1;                 // register for first operand
     int src = -1;                 // register for second operand
     int src2 = -1;                // register for third operand
+    int acc = -1;                 // register for accumulation
     bool first_is_dest = false;   // first argument is also destination
     int index = -1;               // operation index
   };
@@ -409,8 +420,8 @@ class Express {
   Var *Sub(Var *x, Var *y) { return Do(SUB, x, y); }
   Var *Mul(Var *x, Var *y) { return Do(MUL, x, y); }
   Var *Div(Var *x, Var *y) { return Do(DIV, x, y); }
-  Var *Min(Var *x, Var *y) { return Do(MIN, x, y); }
-  Var *Max(Var *x, Var *y) { return Do(MAX, x, y); }
+  Var *Minimum(Var *x, Var *y) { return Do(MINIMUM, x, y); }
+  Var *Maximum(Var *x, Var *y) { return Do(MAXIMUM, x, y); }
   Var *CmpGt(Var *x, Var *y) { return Do(CMPGTOQ, x, y); }
   Var *And(Var *x, Var *y) { return Do(AND, x, y); }
   Var *Zero() { return Number(ZERO); }
@@ -424,8 +435,10 @@ class Express {
   // Build expressions for composite functions.
   Var *MulAdd(Var *x, Var *y, Var *z) { return Add(Mul(x, y), z); }
   Var *Neg(Var *x) { return target_ == NVIDIA ? Do(NEG, x) : Sub(Zero(), x); }
-  Var *Abs(Var *x) { return target_ == NVIDIA ? Do(ABS, x) : Max(x, Neg(x)); }
-  Var *Relu(Var *x) { return Max(x, Zero()); }
+  Var *Abs(Var *x) {
+    return target_ == NVIDIA ? Do(ABS, x) : Maximum(x, Neg(x));
+  }
+  Var *Relu(Var *x) { return Maximum(x, Zero()); }
   Var *ReluGrad(Var *x, Var *y) { return Mul(And(CmpGt(x, Zero()), One()), y); }
   Var *Softsign(Var *x) { return Div(x, Add(Abs(x), One())); }
   Var *Softplus(Var *x) { return Log(Add(Exp(x), One())); }
@@ -446,6 +459,9 @@ class Express {
   // Return value for system-defined numeric constant.
   static float NumericFlt32(int number) { return constants[number].flt; }
   static double NumericFlt64(int number) { return constants[number].dbl; }
+
+  // Return system constant number for identity value for op.
+  static int IdentityValue(OpType type);
 
  private:
   // Try to eliminate identical operations from expression. Return true if any

@@ -549,6 +549,23 @@ void Flow::Operation::ReplaceOutput(Variable *var, Variable *replacement) {
   }
 }
 
+Flow::Variable *Flow::Operation::GetPrototype() const {
+  Variable *prototype = nullptr;
+  for (Variable *output : outputs) {
+    if (prototype == nullptr || output->elements() > prototype->elements()) {
+      prototype = output;
+    }
+  }
+  if (prototype == nullptr || prototype->rank() == 0) {
+    for (Variable *input : inputs) {
+      if (prototype == nullptr || input->elements() > prototype->elements()) {
+        prototype = input;
+      }
+    }
+  }
+  return prototype;
+}
+
 void Flow::Function::AddOperation(Operation *op) {
   CHECK(op->func == nullptr);
   op->func = this;

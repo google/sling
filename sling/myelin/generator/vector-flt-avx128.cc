@@ -49,6 +49,16 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
   void Reserve() override {
     // Reserve XMM registers.
     index_->ReserveXMMRegisters(instructions_.NumRegs());
+
+    // Allocate auxiliary registers.
+    int num_mm_aux = 0;
+    if (instructions_.Has(Express::SUM) ||
+        instructions_.Has(Express::PRODUCT) ||
+        instructions_.Has(Express::MIN) ||
+        instructions_.Has(Express::MAX)) {
+      num_mm_aux = std::max(num_mm_aux, 1);
+    }
+    index_->ReserveAuxXMMRegisters(num_mm_aux);
   }
 
   void Generate(Express::Op *instr, MacroAssembler *masm) override {
@@ -95,13 +105,13 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             &Assembler::vdivps, &Assembler::vdivpd,
             masm);
         break;
-      case Express::MIN:
+      case Express::MINIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::vminps, &Assembler::vminpd,
             &Assembler::vminps, &Assembler::vminpd,
             masm);
         break;
-      case Express::MAX:
+      case Express::MAXIMUM:
         GenerateXMMFltOp(instr,
             &Assembler::vmaxps, &Assembler::vmaxpd,
             &Assembler::vmaxps, &Assembler::vmaxpd,
@@ -209,6 +219,30 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             &Assembler::vpsubd, &Assembler::vpsubq,
             masm);
         break;
+      case Express::SUM:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vaddps, &Assembler::vaddpd,
+            &Assembler::vaddps, &Assembler::vaddpd,
+            masm);
+        break;
+      case Express::PRODUCT:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vmulps, &Assembler::vmulpd,
+            &Assembler::vmulps, &Assembler::vmulpd,
+            masm);
+        break;
+      case Express::MIN:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vminps, &Assembler::vminpd,
+            &Assembler::vminps, &Assembler::vminpd,
+            masm);
+        break;
+      case Express::MAX:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vmaxps, &Assembler::vmaxpd,
+            &Assembler::vmaxps, &Assembler::vmaxpd,
+            masm);
+        break;
       default: UNSUPPORTED;
     }
   }
@@ -258,6 +292,72 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
         &Assembler::vcmpps, &Assembler::vcmppd,
         &Assembler::vcmpps, &Assembler::vcmppd,
         code, masm);
+  }
+
+  // Generate code for reduction operation.
+  void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
+    auto acc = xmm(instr->acc);
+    auto aux = xmmaux(0);
+    switch (type_) {
+      case DT_FLOAT:
+        switch (instr->type) {
+          case Express::SUM:
+            __ vhaddps(acc, acc, acc);
+            __ vhaddps(acc, acc, acc);
+            break;
+          case Express::PRODUCT:
+            __ vpermilps(aux, acc, 0x0E);
+            __ vmulps(acc, acc, aux);
+            __ vpermilps(aux, acc, 0x01);
+            __ vmulps(acc, acc, aux);
+            break;
+          case Express::MIN:
+            __ vpermilps(aux, acc, 0x0E);
+            __ vminps(acc, acc, aux);
+            __ vpermilps(aux, acc, 0x01);
+            __ vminps(acc, acc, aux);
+            break;
+          case Express::MAX:
+            __ vpermilps(aux, acc, 0x0E);
+            __ vmaxps(acc, acc, aux);
+            __ vpermilps(aux, acc, 0x01);
+            __ vmaxps(acc, acc, aux);
+            break;
+          default: UNSUPPORTED;
+        }
+        if (instr->dst != -1) {
+          __ vmovss(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ vmovss(addr(instr->result), xmm(instr->acc));
+        }
+        break;
+      case DT_DOUBLE:
+        switch (instr->type) {
+          case Express::SUM:
+            __ vhaddpd(acc, acc, acc);
+            break;
+          case Express::PRODUCT:
+            __ vpermilpd(aux, acc, 1);
+            __ vmulpd(acc, acc, aux);
+            break;
+          case Express::MIN:
+            __ vpermilpd(aux, acc, 1);
+            __ vminpd(acc, acc, aux);
+            break;
+          case Express::MAX:
+            __ vpermilpd(aux, acc, 1);
+            __ vmaxpd(acc, acc, aux);
+            break;
+          default: UNSUPPORTED;
+        }
+        if (instr->dst != -1) {
+          __ vmovsd(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
+        } else {
+          __ vmovsd(addr(instr->result), xmm(instr->acc));
+        }
+        break;
+      default: UNSUPPORTED;
+    }
   }
 };
 

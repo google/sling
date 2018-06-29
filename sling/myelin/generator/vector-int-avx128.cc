@@ -57,8 +57,8 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
         num_mm_aux = std::max(num_mm_aux, 1);
       }
     }
-    if (instructions_.Has(Express::MIN) ||
-        instructions_.Has(Express::MAX)) {
+    if (instructions_.Has(Express::MINIMUM) ||
+        instructions_.Has(Express::MAXIMUM)) {
       if (type_ == DT_INT64) {
         num_rr_aux = std::max(num_rr_aux, 2);
       }
@@ -117,7 +117,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
       case Express::DIV:
         UNSUPPORTED;
         break;
-      case Express::MIN:
+      case Express::MINIMUM:
         if (type_ == DT_INT64) {
           GenerateMinInt64(instr, masm);
         } else {
@@ -129,7 +129,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
               masm);
         }
         break;
-      case Express::MAX:
+      case Express::MAXIMUM:
         if (type_ == DT_INT64) {
           GenerateMaxInt64(instr, masm);
         } else {

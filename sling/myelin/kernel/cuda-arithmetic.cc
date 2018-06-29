@@ -195,10 +195,10 @@ class CUDACalculate : public CUDAKernel {
             GenerateBinaryOp("div", instr, &comp);
           }
           break;
-        case Express::MIN:
+        case Express::MINIMUM:
           GenerateBinaryOp("min", instr, &comp);
           break;
-        case Express::MAX:
+        case Express::MAXIMUM:
           GenerateBinaryOp("max", instr, &comp);
           break;
         case Express::NEG:

@@ -62,17 +62,23 @@ class ExpressionGenerator {
   // Generate code for instruction.
   virtual void Generate(Express::Op *instr, MacroAssembler *masm) = 0;
 
+  // Generate code for reduction operation.
+  virtual void GenerateReduce(Express::Op *instr, MacroAssembler *masm);
+
   // Initialize expression generator.
   void Initialize(const Express &expression,
                   Type type,
                   int spare_regs,
                   IndexGenerator *index);
 
-  // Generate code for loop-invariant part of expression.
+  // Generate code for loop-invariant prologue for expression.
   void GenerateInit(MacroAssembler *masm);
 
   // Generate code for loop body.
   void GenerateBody(MacroAssembler *masm);
+
+  // Generate code for loop-invariant epilogue for expression.
+  void GenerateEnd(MacroAssembler *masm);
 
   // Return register number for variable.
   int RegisterNumber(Express::VarType type, int id) const;
@@ -297,12 +303,26 @@ class ExpressionGenerator {
     int8 imm,
     MacroAssembler *masm);
 
+  // Generate two-operand XMM float accumulate op.
+  void GenerateXMMFltAccOp(
+    Express::Op *instr,
+    OpXMMRegReg fltopreg, OpXMMRegReg dblopreg,
+    OpXMMRegMem fltopmem, OpXMMRegMem dblopmem,
+    MacroAssembler *masm);
+
   // Generate three-operand XMM float op.
   void GenerateXMMFltOp(
       Express::Op *instr,
       OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
       OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
       MacroAssembler *masm, int argnum = 1);
+
+  // Generate three-operand XMM float accumulate op.
+  void GenerateXMMFltAccOp(
+      Express::Op *instr,
+      OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
+      OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
+      MacroAssembler *masm);
 
   // Generate unary XMM float op.
   void GenerateXMMUnaryFltOp(
@@ -356,6 +376,13 @@ class ExpressionGenerator {
       int8 imm,
       MacroAssembler *masm, int argnum = 1);
 
+  // Generate three-operand YMM float accumulate op.
+  void GenerateYMMFltAccOp(
+      Express::Op *instr,
+      OpYMMRegRegReg fltopreg, OpYMMRegRegReg dblopreg,
+      OpYMMRegRegMem fltopmem, OpYMMRegRegMem dblopmem,
+      MacroAssembler *masm);
+
   // Generate two-operand ZMM float op.
   void GenerateZMMFltOp(
       Express::Op *instr,
@@ -379,6 +406,14 @@ class ExpressionGenerator {
       OpZMMRegRegRegR fltopregr, OpZMMRegRegRegR dblopregr,
       OpZMMRegRegMem fltopmem, OpZMMRegRegMem dblopmem,
       MacroAssembler *masm, int argnum = 1);
+
+  // Generate three-operand ZMM float accumulate op.
+  void GenerateZMMFltAccOp(
+      Express::Op *instr,
+      OpZMMRegRegReg fltopreg, OpZMMRegRegReg dblopreg,
+      OpZMMRegRegRegR fltopregr, OpZMMRegRegRegR dblopregr,
+      OpZMMRegRegMem fltopmem, OpZMMRegRegMem dblopmem,
+      MacroAssembler *masm);
 
   // Generate one-operand x64 int op.
   void GenerateIntUnaryOp(
