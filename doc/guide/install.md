@@ -9,15 +9,15 @@ with Python 2.7 you can install a pre-built wheel:
 ```
 sudo pip install http://www.jbox.dk/sling/sling-2.0.0-cp27-none-linux_x86_64.whl
 ```
-and download the pre-trained model:
+and download the pre-trained model (NB: not yet available):
 ```
-wget http://www.jbox.dk/sling/sempar.flow
+wget http://www.jbox.dk/sling/caspar.flow
 ```
 You can then use the parser in Python:
 ```
 import sling
 
-parser = sling.Parser("sempar.flow")
+parser = sling.Parser("caspar.flow")
 
 text = raw_input("text: ")
 doc = parser.parse(text)
