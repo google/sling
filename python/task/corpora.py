@@ -15,9 +15,7 @@
 """Corpus locations"""
 
 import os
-import urllib2
 import sling.flags as flags
-import sling.log as log
 
 # Command-line flags.
 flags.define("--language",
@@ -82,31 +80,4 @@ def wikidir(language=None):
 def repository(path):
   """Location of file in Git repository."""
   return flags.arg.repository + "/" + path
-
-def ensure_dir(path):
-  """Ensure directory for file exists."""
-  directory = os.path.dirname(path)
-  if not os.path.exists(directory): os.makedirs(directory)
-
-def download(url, filename):
-  """Download file from web."""
-  ensure_dir(filename)
-  if os.path.exists(filename):
-    raise Exception("file already exists: " + filename)
-  chunksize = 64 * 1024
-  log.info("Download " + filename + " from " + url)
-  conn = urllib2.urlopen(url)
-  with open(filename, 'wb') as f:
-    while True:
-      chunk = conn.read(chunksize)
-      if not chunk: break
-      f.write(chunk)
-
-def download_wikidata():
-  """Download Wikidata dump."""
-  download(wikidata_url(), wikidata_dump())
-
-def download_wikipedia(language=None):
-  """Download Wikipedia dump."""
-  download(wikipedia_url(language), wikipedia_dump(language))
 

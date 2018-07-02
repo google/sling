@@ -16,6 +16,7 @@
 #define SLING_TASK_TASK_H_
 
 #include <atomic>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -263,6 +264,11 @@ class Processor : public Component<Processor> {
   // can still be sent on the output channels, but any remaining active output
   // channels are closed after Done() has completed.
   virtual void Done(Task *task);
+
+  // Dynamically register task processor component.
+  static void Register(const char *name, const char *clsname,
+                       const char *filename, int line,
+                       Factory *factory);
 };
 
 #define REGISTER_TASK_PROCESSOR(type, component) \

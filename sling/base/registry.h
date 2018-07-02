@@ -54,6 +54,7 @@
 #define SLING_BASE_REGISTRY_H_
 
 #include <string.h>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -218,14 +219,14 @@ template <class T> struct ComponentRegistry {
 template <class T> class Component {
  public:
   // Factory function type.
-  typedef T *(Factory)();
+  typedef std::function<T *()> Factory;
 
   // Registry type.
   typedef ComponentRegistry<Factory> Registry;
 
   // Creates a new component instance.
   static T *Create(const string &type) {
-    return registry()->Lookup(type)();
+    return (*registry()->Lookup(type))();
   }
 
   // Returns registry for class.
@@ -251,11 +252,11 @@ template <class T> class Singleton {
 };
 
 #define REGISTER_COMPONENT_TYPE(base, type, component) \
-  static base *__##component##__factory() { return new component; } \
+  static base::Factory __##component##_factory = [] { return new component; }; \
   __attribute__((init_priority(800))) \
   static base::Registry::Registrar __##component##__##registrar( \
       base::registry(), type, #component, __FILE__, __LINE__, \
-      __##component##__factory)
+      &__##component##_factory)
 
 #define REGISTER_COMPONENT_REGISTRY(type, classname) \
   template <> __attribute__((init_priority(900))) \

@@ -31,9 +31,10 @@ static PyMethodDef py_funcs[] = {
   {"get_flags", (PyCFunction) PyGetFlags, METH_NOARGS, ""},
   {"set_flag", (PyCFunction) PySetFlag, METH_VARARGS, ""},
   {"log_message", (PyCFunction) PyLogMessage, METH_VARARGS, ""},
-  {"start_task_monitor", (PyCFunction) StartTaskMonitor, METH_VARARGS, ""},
-  {"get_job_statistics", (PyCFunction) GetJobStatistics, METH_NOARGS, ""},
-  {"finalize_dashboard", (PyCFunction) FinalizeDashboard, METH_NOARGS, ""},
+  {"register_task", (PyCFunction) PyRegisterTask, METH_VARARGS, ""},
+  {"start_task_monitor", (PyCFunction) PyStartTaskMonitor, METH_VARARGS, ""},
+  {"get_job_statistics", (PyCFunction) PyGetJobStatistics, METH_NOARGS, ""},
+  {"finalize_dashboard", (PyCFunction) PyFinalizeDashboard, METH_NOARGS, ""},
   {"tolex", (PyCFunction) PyToLex, METH_VARARGS, ""},
   {nullptr, nullptr, 0, nullptr}
 };
@@ -52,6 +53,8 @@ static void RegisterPythonModule() {
   PyRecordReader::Define(module);
   PyRecordWriter::Define(module);
   PyJob::Define(module);
+  PyResource::Define(module);
+  PyTask::Define(module);
   PyCalendar::Define(module);
   PyDate::Define(module);
 }

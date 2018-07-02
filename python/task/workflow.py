@@ -673,6 +673,10 @@ class Workflow(object):
         if not os.path.exists(directory): os.makedirs(directory)
         checked.add(directory)
 
+def register_task(name, cls):
+  """Register task processor in task system."""
+  api.register_task(name, cls)
+
 def start_monitor(port):
   """Start task monitor."""
   api.start_task_monitor(port)

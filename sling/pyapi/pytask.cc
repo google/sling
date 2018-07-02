@@ -14,6 +14,8 @@
 
 #include "sling/pyapi/pytask.h"
 
+#include <string.h>
+
 #include "sling/http/http-server.h"
 #include "sling/task/dashboard.h"
 
@@ -27,6 +29,8 @@ static task::Dashboard *dashboard = nullptr;
 
 // Python type declarations.
 PyTypeObject PyJob::type;
+PyTypeObject PyResource::type;
+PyTypeObject PyTask::type;
 
 PyMethodDef PyJob::methods[] = {
   {"start", PYFUNC(PyJob::Start), METH_NOARGS, ""},
@@ -49,14 +53,14 @@ void PyJob::Define(PyObject *module) {
 
 int PyJob::Init(PyObject *args, PyObject *kwds) {
   // Create new job.
-  job_ = new Job();
-  running_ = false;
+  job = new Job();
+  running = false;
 
   // Get python job argument.
   PyObject *pyjob = nullptr;
   const char *name = nullptr;
   if (!PyArg_ParseTuple(args, "Os", &pyjob, &name)) return -1;
-  job_->set_name(name);
+  job->set_name(name);
 
   // Get resources.
   ResourceMapping resource_mapping;
@@ -70,7 +74,7 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
     Format format = PyGetFormat(pyformat);
     Shard shard = PyGetShard(pyshard);
 
-    Resource *resource = job_->CreateResource(name, format, shard);
+    Resource *resource = job->CreateResource(name, format, shard);
     resource_mapping[pyresource] = resource;
 
     Py_DECREF(pyformat);
@@ -90,7 +94,7 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
     Shard shard = PyGetShard(pyshard);
     Py_DECREF(pyshard);
 
-    Task *task = job_->CreateTask(type, name, shard);
+    Task *task = job->CreateTask(type, name, shard);
     task_mapping[pytask] = task;
 
     // Get task parameters.
@@ -113,7 +117,7 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
       PyObject *pyresource = PyAttr(pybinding, "resource");
       Resource *resource = resource_mapping[pyresource];
       CHECK(resource != nullptr);
-      job_->BindInput(task, resource, name);
+      job->BindInput(task, resource, name);
       Py_DECREF(pyresource);
     }
     Py_DECREF(inputs);
@@ -126,7 +130,7 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
       PyObject *pyresource = PyAttr(pybinding, "resource");
       Resource *resource = resource_mapping[pyresource];
       CHECK(resource != nullptr);
-      job_->BindOutput(task, resource, name);
+      job->BindOutput(task, resource, name);
       Py_DECREF(pyresource);
     }
     Py_DECREF(outputs);
@@ -150,7 +154,7 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
     Port consumer = PyGetPort(pyconsumer, task_mapping);
     Py_DECREF(pyconsumer);
 
-    job_->Connect(producer, consumer, format);
+    job->Connect(producer, consumer, format);
   }
   Py_DECREF(channels);
 
@@ -158,42 +162,46 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
 }
 
 void PyJob::Dealloc() {
-  CHECK(!running_) << "Job is still running";
-  delete job_;
+  CHECK(!running) << "Job is still running";
+  delete job;
   Free();
 }
 
 PyObject *PyJob::Start() {
-  if (!running_) {
+  if (!running) {
     // Add self-reference count to job to keep it alive while the job is
     // running. This reference is not released until the job has completed.
     Py_INCREF(this);
-    running_ = true;
+    running = true;
 
     // Register job in dashboard.
     if (dashboard != nullptr) {
-      job_->RegisterMonitor(dashboard);
+      job->RegisterMonitor(dashboard);
     }
 
     // Start job.
-    job_->Start();
+    Py_BEGIN_ALLOW_THREADS;
+    job->Start();
+    Py_END_ALLOW_THREADS;
   }
   Py_RETURN_NONE;
 }
 
 PyObject *PyJob::Done() {
-  bool done = job_->Done();
-  if (done && running_) {
-    running_ = false;
+  bool done = job->Done();
+  if (done && running) {
+    running = false;
     Py_DECREF(this);
   }
   return PyBool_FromLong(done);
 }
 
 PyObject *PyJob::Wait() {
-  job_->Wait();
-  if (running_) {
-    running_ = false;
+  Py_BEGIN_ALLOW_THREADS;
+  job->Wait();
+  Py_END_ALLOW_THREADS;
+  if (running) {
+    running = false;
     Py_DECREF(this);
   }
   Py_RETURN_NONE;
@@ -201,9 +209,12 @@ PyObject *PyJob::Wait() {
 
 PyObject *PyJob::WaitFor(PyObject *timeout) {
   int ms = PyNumber_AsSsize_t(timeout, nullptr);
-  bool done = job_->Wait(ms);
-  if (done && running_) {
-    running_ = false;
+  bool done;
+  Py_BEGIN_ALLOW_THREADS;
+  done = job->Wait(ms);
+  Py_END_ALLOW_THREADS;
+  if (done && running) {
+    running = false;
     Py_DECREF(this);
   }
   return PyBool_FromLong(done);
@@ -215,7 +226,7 @@ PyObject *PyJob::Counters() {
   if (counters == nullptr) return nullptr;
 
   // Gather current counter values.
-  job_->IterateCounters([counters](const string &name, Counter *counter) {
+  job->IterateCounters([counters](const string &name, Counter *counter) {
     PyObject *key = PyString_FromStringAndSize(name.data(), name.size());
     PyObject *val = PyLong_FromLong(counter->value());
     PyDict_SetItem(counters, key, val);
@@ -275,7 +286,230 @@ PyObject *PyJob::PyAttr(PyObject *obj, const char *name) {
   return attr;
 }
 
-PyObject *StartTaskMonitor(PyObject *self, PyObject *args) {
+PyMemberDef PyResource::members[] = {
+  {"name", T_OBJECT, offsetof(struct PyResource, name), READONLY, ""},
+  {"format", T_OBJECT, offsetof(struct PyResource, format), READONLY, ""},
+  {"part", T_INT, offsetof(struct PyResource, part), READONLY, ""},
+  {"of", T_INT, offsetof(struct PyResource, of), READONLY, ""},
+  {nullptr}
+};
+
+void PyResource::Define(PyObject *module) {
+  InitType(&type, "sling.Resource", sizeof(PyResource), false);
+  type.tp_init = method_cast<initproc>(&PyResource::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyResource::Dealloc);
+  type.tp_members = members;
+
+  RegisterType(&type, module, "Resource");
+}
+
+int PyResource::Init(task::Resource *resource) {
+  name = AllocateString(resource->name());
+  format = AllocateString(resource->format().ToString());
+  part = resource->shard().part();
+  of = resource->shard().total();
+  return 0;
+}
+
+void PyResource::Dealloc() {
+  if (name) Py_DECREF(name);
+  if (format) Py_DECREF(format);
+  Free();
+}
+
+PyMethodDef PyTask::methods[] = {
+  {"name", PYFUNC(PyTask::GetName), METH_NOARGS, ""},
+  {"input", PYFUNC(PyTask::GetInput), METH_VARARGS, ""},
+  {"inputs", PYFUNC(PyTask::GetInputs), METH_VARARGS, ""},
+  {"output", PYFUNC(PyTask::GetOutput), METH_VARARGS, ""},
+  {"outputs", PYFUNC(PyTask::GetOutputs), METH_VARARGS, ""},
+  {"param", PYFUNC(PyTask::GetParameter), METH_VARARGS, ""},
+  {"increment", PYFUNC(PyTask::Increment), METH_VARARGS, ""},
+  {nullptr}
+};
+
+void PyTask::Define(PyObject *module) {
+  InitType(&type, "sling.api.Task", sizeof(PyTask), false);
+
+  type.tp_init = method_cast<initproc>(&PyTask::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyTask::Dealloc);
+  type.tp_methods = methods;
+
+  RegisterType(&type, module, "Task");
+}
+
+int PyTask::Init(Task *task) {
+  task->AddRef();
+  this->task = task;
+  return 0;
+}
+
+void PyTask::Dealloc() {
+  task->Release();
+  Free();
+}
+
+PyObject *PyTask::Resource(Binding *binding) {
+  if (binding == nullptr) Py_RETURN_NONE;
+  PyResource *pyres = PyObject_New(PyResource, &PyResource::type);
+  pyres->Init(binding->resource());
+  return pyres->AsObject();
+}
+
+PyObject *PyTask::Resources(std::vector<Binding *> &bindings) {
+  PyObject *list = PyList_New(bindings.size());
+  if (list == nullptr) return nullptr;
+  for (int i = 0; i < bindings.size(); ++i) {
+    Binding *binding = bindings[i];
+    PyResource *pyres = PyObject_New(PyResource, &PyResource::type);
+    pyres->Init(binding->resource());
+    PyList_SetItem(list, i, pyres->AsObject());
+    Py_DECREF(pyres);
+  }
+  return list;
+}
+
+PyObject *PyTask::GetName() {
+  return AllocateString(task->name());
+}
+
+PyObject *PyTask::GetInput(PyObject *args) {
+  // Get arguments.
+  const char *name;
+  if (!PyArg_ParseTuple(args, "s", &name)) return nullptr;
+
+  // Get input.
+  return Resource(task->GetInput(name));
+}
+
+PyObject *PyTask::GetInputs(PyObject *args) {
+  // Get arguments.
+  const char *name;
+  if (!PyArg_ParseTuple(args, "s", &name)) return nullptr;
+
+  // Get inputs.
+  std::vector<task::Binding *> inputs = task->GetInputs(name);
+  return Resources(inputs);
+}
+
+PyObject *PyTask::GetOutput(PyObject *args) {
+  // Get arguments.
+  const char *name;
+  if (!PyArg_ParseTuple(args, "s", &name)) return nullptr;
+
+  // Get output.
+  return Resource(task->GetOutput(name));
+}
+
+PyObject *PyTask::GetOutputs(PyObject *args) {
+  // Get arguments.
+  const char *name;
+  if (!PyArg_ParseTuple(args, "s", &name)) return nullptr;
+
+  // Get outputs.
+  std::vector<task::Binding *> outputs = task->GetOutputs(name);
+  return Resources(outputs);
+}
+
+PyObject *PyTask::GetParameter(PyObject *args) {
+  // Get arguments.
+  const char *name;
+  PyObject *pydefval = nullptr;
+  if (!PyArg_ParseTuple(args, "s|O", &name, &pydefval)) return nullptr;
+
+  if (pydefval == nullptr) {
+    return AllocateString(task->Get(name, ""));
+  } else if (PyString_Check(pydefval)) {
+    const char *defval = PyString_AsString(pydefval);
+    return AllocateString(task->Get(name, defval));
+  } else if (PyInt_Check(pydefval)) {
+    int64 defval = PyInt_AsLong(pydefval);
+    return PyInt_FromLong(task->Get(name, defval));
+  } else if (PyFloat_Check(pydefval)) {
+    double defval = PyFloat_AsDouble(pydefval);
+    return PyFloat_FromDouble(task->Get(name, defval));
+  } else if (PyBool_Check(pydefval)) {
+    bool defval = pydefval == Py_True;
+    return PyBool_FromLong(task->Get(name, defval));
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown default value type");
+    return nullptr;
+  }
+}
+
+PyObject *PyTask::Increment(PyObject *args) {
+  // Get arguments.
+  const char *name;
+  uint64 delta = 1;
+  if (!PyArg_ParseTuple(args, "s|l", &name, &delta)) return nullptr;
+
+  // Update counter.
+  task->GetCounter(name)->Increment(delta);
+
+  Py_RETURN_NONE;
+}
+
+void PyProcessor::Run(Task *task) {
+  // Acquire Python global interpreter lock.
+  PyGILState_STATE gstate = PyGILState_Ensure();
+
+  // Create Python task object.
+  PyObject *args = PyTuple_New(0);
+  CHECK(args != nullptr);
+  PyObject *pyproc = PyInstance_New(pycls_, args, nullptr);
+  CHECK(pyproc != nullptr);
+  Py_DECREF(args);
+
+  // Create task wrapper.
+  PyTask *pytask = PyObject_New(PyTask, &PyTask::type);
+  pytask->Init(task);
+
+  // Call run() method to execute task.
+  PyObject *ret = PyObject_CallMethod(pyproc, "run", "O", pytask->AsObject());
+  if (ret == nullptr) {
+    if (PyErr_Occurred()) PyErr_Print();
+    LOG(FATAL) << "Error occured in task " << task->name();
+  }
+  Py_DECREF(ret);
+  Py_DECREF(pyproc);
+  Py_DECREF(pytask);
+
+  // Release global interpreter lock.
+  PyGILState_Release(gstate);
+}
+
+PyObject *PyRegisterTask(PyObject *self, PyObject *args) {
+  // Get task name and class.
+  const char *name;
+  PyObject *cls;
+  if (!PyArg_ParseTuple(args, "sO", &name, &cls)) return nullptr;
+
+  // Check for class object.
+  if (!PyClass_Check(cls)) {
+    PyErr_SetString(PyExc_ValueError, "Class object expected");
+    return nullptr;
+  }
+
+  // Keep reference to class object to allow instance to be created in the task
+  // factory.
+  Py_INCREF(cls);
+
+  // Initialize and acquire the global interpreter lock so the registered
+  // Python tasks can be run in separate threads.
+  PyEval_InitThreads();
+
+  // Factory for creating new task instances.
+  auto *factory = new Processor::Factory([cls]() {
+    return new PyProcessor(cls);
+  });
+
+  // Dynamically register task processor in registry.
+  Processor::Register(strdup(name), strdup(PyEval_GetFuncName(cls)),
+                      "python", 0, factory);
+  Py_RETURN_NONE;
+}
+
+PyObject *PyStartTaskMonitor(PyObject *self, PyObject *args) {
   // Get port number.
   int port;
   if (!PyArg_ParseTuple(args, "i", &port)) return nullptr;
@@ -300,13 +534,13 @@ PyObject *StartTaskMonitor(PyObject *self, PyObject *args) {
   Py_RETURN_NONE;
 }
 
-PyObject *GetJobStatistics() {
+PyObject *PyGetJobStatistics() {
   if (dashboard == nullptr) Py_RETURN_NONE;
   string stats = dashboard->GetStatus();
   return PyString_FromStringAndSize(stats.data(), stats.size());
 }
 
-PyObject *FinalizeDashboard() {
+PyObject *PyFinalizeDashboard() {
   if (dashboard != nullptr) dashboard->Finalize(60);
   Py_RETURN_NONE;
 }

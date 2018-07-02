@@ -19,6 +19,7 @@ import sling
 import sling.flags as flags
 import sling.log as log
 import sling.task.corpora as corpora
+import sling.task.download as download
 import sling.task.wiki as wiki
 import sling.task.workflow as workflow
 
@@ -115,23 +116,19 @@ def run_workflow(wf):
   while not done: done = wf.wf.wait(1000)
 
 def download_corpora():
-  # Download wikidata dump.
-  if flags.arg.download_wikidata:
-    if flags.arg.dryrun:
-      log.info("wikidata dump: " + corpora.wikidata_url())
-    else:
-      log.info("Download wikidata dump")
-      corpora.download_wikidata()
+  if flags.arg.download_wikidata or flags.arg.download_wikipedia:
+    wf = download.DownloadWorkflow("wiki-download")
 
-  # Download wikipedia dumps.
-  if flags.arg.download_wikipedia:
-    for language in flags.arg.languages:
-      if flags.arg.dryrun:
-        log.info(language + " wikipedia dump: " +
-                 corpora.wikipedia_url(language))
-      else:
-        log.info("Download " + language + " wikipedia dump")
-        corpora.download_wikipedia(language)
+    # Download wikidata dump.
+    if flags.arg.download_wikidata:
+      wf.download_wikidata()
+
+    # Download wikipedia dumps.
+    if flags.arg.download_wikipedia:
+      for language in flags.arg.languages:
+        wf.download_wikipedia(language=language)
+
+    run_workflow(wf)
 
 def import_wiki():
   if flags.arg.import_wikidata or flags.arg.import_wikipedia:
@@ -225,10 +222,8 @@ if __name__ == '__main__':
   # Start task monitor.
   if flags.arg.monitor > 0: workflow.start_monitor(flags.arg.monitor)
 
-  # Download corpora.
-  download_corpora()
-
   # Run workflows.
+  download_corpora()
   import_wiki()
   parse_wikipedia()
   fuse_items()

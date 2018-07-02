@@ -18,6 +18,8 @@
 #include <python2.7/Python.h>
 #include <python2.7/structmember.h>
 
+#include "sling/string/text.h"
+
 namespace sling {
 
 template <class Dest, class Source>
@@ -59,6 +61,11 @@ struct PyBase : public PyVarObject {
   static void RegisterEnum(PyObject *module,
                            const char *name,
                            int value);
+
+  // Allocate string.
+  static PyObject *AllocateString(Text text) {
+    return PyString_FromStringAndSize(text.data(), text.size());
+  }
 };
 
 }  // namespace sling

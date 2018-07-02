@@ -43,8 +43,10 @@ cc_library(
     "//sling/nlp/parser",
     "//sling/task:dashboard",
     "//sling/task:job",
+    "//sling/task:process",
     "//sling/stream:file",
     "//sling/stream:unix-file",
+    "//sling/string:text",
   ],
   copts = [
     "-Wno-pmf-conversions",

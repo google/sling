@@ -479,6 +479,12 @@ void Task::Release() {
   }
 }
 
+void Processor::Register(const char *name, const char *clsname,
+                         const char *filename, int line,
+                         Factory *factory) {
+  new Registry::Registrar(registry(), name, clsname, filename, line, factory);
+}
+
 }  // namespace task
 }  // namespace sling
 
