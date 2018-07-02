@@ -68,6 +68,12 @@ class WikidataImporter : public task::Processor {
     property_channel_ = task->GetSink("properties");
     CHECK(property_channel_ != nullptr);
 
+    // Initialize counters.
+    num_items_ = task->GetCounter("items");
+    num_lexemes_ = task->GetCounter("lexemes");
+    num_properties_ = task->GetCounter("properties");
+    num_statements_ = task->GetCounter("statements");
+
     // Create commons store.
     commons_ = new Store();
 
@@ -78,6 +84,9 @@ class WikidataImporter : public task::Processor {
     AddTypeMapping(s_quantity_.name(), "/w/quantity");
     AddTypeMapping(s_monolingualtext_.name(), "/w/text");
     AddTypeMapping(s_wikibase_item_.name(), "/w/item");
+    AddTypeMapping(s_wikibase_lexeme_.name(), "/w/lexeme");
+    AddTypeMapping(s_wikibase_form_.name(), "/w/form");
+    AddTypeMapping(s_wikibase_sense_.name(), "/w/sense");
     AddTypeMapping(s_commons_media_.name(), "/w/media");
     AddTypeMapping(s_external_id_.name(), "/w/xref");
     AddTypeMapping(s_wikibase_property_.name(), "/w/property");
@@ -143,7 +152,14 @@ class WikidataImporter : public task::Processor {
     Builder builder(&store);
     if (!id.empty()) builder.AddId(id);
     bool is_property = (type == "property");
-    builder.AddIsA(is_property ? n_property_ : n_item_);
+    bool is_lexeme = (type == "lexeme");
+    if (is_property) {
+      builder.AddIsA(n_property_);
+    } else if (is_lexeme) {
+      builder.AddIsA(n_lexeme_);
+    } else {
+      builder.AddIsA(n_item_);
+    }
 
     // Get label and description based on language.
     Handle label = PickName(labels);
@@ -234,6 +250,7 @@ class WikidataImporter : public task::Processor {
 
           // Add property with value.
           builder.Add(Property(&store, property), value);
+          num_statements_->Increment();
         }
       }
     }
@@ -256,14 +273,22 @@ class WikidataImporter : public task::Processor {
       builder.Add(n_wikipedia_, sites.Create());
     }
 
+    // Discard lexemes for now since lexicographic data is still in beta.
+    if (is_lexeme) {
+      num_lexemes_->Increment();
+      return;
+    }
+
     // Create SLING frame for item.
     Frame profile = builder.Create();
 
     // Output property or item.
     if (is_property) {
       property_channel_->Send(task::CreateMessage(profile));
+      num_properties_->Increment();
     } else {
       item_channel_->Send(task::CreateMessage(profile));
+      num_items_->Increment();
     }
   }
 
@@ -277,6 +302,11 @@ class WikidataImporter : public task::Processor {
   // Return symbol for Wikidata item.
   static Handle Item(Store *store, int id) {
     return store->Lookup(StrCat("Q", id));
+  }
+
+  // Return symbol for Wikidata lexeme.
+  static Handle Lexeme(Store *store, int id) {
+    return store->Lookup(StrCat("L", id));
   }
 
   // Return symbol for Wikidata property.
@@ -397,10 +427,12 @@ class WikidataImporter : public task::Processor {
   Handle ConvertEntity(const Frame &value) {
     String type = value.Get(s_entity_type_).AsString();
     Handle id = value.GetHandle(s_numeric_id_);
-    if (type.equals("property")) {
-      return Property(value.store(), id.AsInt());
-    } else if (type.equals("item")) {
+    if (type.equals("item")) {
       return Item(value.store(), id.AsInt());
+    } else if (type.equals("lexeme")) {
+      return Lexeme(value.store(), id.AsInt());
+    } else if (type.equals("property")) {
+      return Property(value.store(), id.AsInt());
     } else {
       LOG(FATAL) << "Unknown entity type: " << ToText(value);
       return Handle::nil();
@@ -512,6 +544,12 @@ class WikidataImporter : public task::Processor {
   };
   HandleMap<LanguageInfo> languages_;
 
+  // Statistics.
+  task::Counter *num_items_ = nullptr;
+  task::Counter *num_lexemes_ = nullptr;
+  task::Counter *num_properties_ = nullptr;
+  task::Counter *num_statements_ = nullptr;
+
   // Symbols.
   Names names_;
 
@@ -523,6 +561,9 @@ class WikidataImporter : public task::Processor {
 
   Name n_entity_{names_, "/w/entity"};
   Name n_item_{names_, "/w/item"};
+  Name n_lexeme_{names_, "/w/lexeme"};
+  Name n_form_{names_, "/w/form"};
+  Name n_sense_{names_, "/w/sense"};
   Name n_property_{names_, "/w/property"};
   Name n_wikipedia_{names_, "/w/item/wikipedia"};
   Name n_low_{names_, "/w/low"};
@@ -575,6 +616,9 @@ class WikidataImporter : public task::Processor {
 
   // Wikidata property data types.
   Name s_wikibase_item_{names_, "wikibase-item"};
+  Name s_wikibase_lexeme_{names_, "wikibase-lexeme"};
+  Name s_wikibase_form_{names_, "wikibase-form"};
+  Name s_wikibase_sense_{names_, "wikibase-sense"};
   Name s_commons_media_{names_, "commonsMedia"};
   Name s_external_id_{names_, "external-id"};
   Name s_wikibase_property_{names_, "wikibase-property"};

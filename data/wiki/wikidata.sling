@@ -32,6 +32,35 @@
   family: /schema/wikidata
 }
 
+{=/w/lexeme +/w/entity :schema
+  name: "Wikidata lexeme"
+  family: /schema/wikidata
+
+  role: {=/w/lexeme/form :slot
+    name: "lexeme form"
+    description: "form for lexeme"
+    source: /w/lexeme
+    target: /w/form
+  }
+
+  role: {=/w/lexeme/sense :slot
+    name: "lexeme sense"
+    description: "sense for lexeme"
+    source: /w/lexeme
+    target: /w/sense
+  }
+}
+
+{=/w/form +/w/entity :schema
+  name: "Wikidata form"
+  family: /schema/wikidata
+}
+
+{=/w/sense +/w/entity :schema
+  name: "Wikidata sense"
+  family: /schema/wikidata
+}
+
 {=/w/type :schema
   name: "Data type"
   family: /schema/wikidata
@@ -42,6 +71,9 @@
   value: /w/quantity
   value: /w/text
   value: /w/item
+  value: /w/lexeme
+  value: /w/form
+  value: /w/sense
   value: /w/media
   value: /w/xref
   value: /w/property
@@ -177,6 +209,9 @@
 
   member_schema: /w/entity
   member_schema: /w/item
+  member_schema: /w/lexeme
+  member_schema: /w/form
+  member_schema: /w/sense
   member_schema: /w/property
   member_schema: /w/type
 
