@@ -20,7 +20,7 @@ The Wiki processing pipeline performs the following tasks:
   * Wikipedia parsing (`wikipedia-parsing`)
   * Extract and select aliases for entities from Wikidata and Wikipedia (`name-extraction`)
   * Build name table for searching for entities (`name-table`)
-  * Build phrase table for matching phrases in text to entities (`name-table`)
+  * Build phrase table for matching phrases in text to entities (`phrase-table`)
   * Merging of Wikipedia categories across languages (`category-merging`)
   * Fusing information about items to produce final item frame (`item-fusing`)
   * Build frame store with knowledge base (`knowledge-base`)
