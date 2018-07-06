@@ -22,12 +22,16 @@ import corpora
 import sling.flags as flags
 import sling.log as log
 
+# Number of concurrent downloads.
+download_concurrency = 0
+
 # Task for downloading wiki dumps.
 class UrlDownload:
   def run(self, task):
     # Get task parameters.
     name = task.param("shortname")
     url = task.param("url")
+    ratelimit = task.param("ratelimit", 0)
     chunksize = task.param("chunksize", 64 * 1024)
     output = task.output("output")
     log.info("Download " + name + " from " + url)
@@ -40,7 +44,14 @@ class UrlDownload:
     if os.path.exists(output.name):
       raise Exception("file already exists: " + output.name)
 
+    # Wait until we are below the rate limit.
+    global download_concurrency
+    if ratelimit > 0:
+      while download_concurrency >= ratelimit: time.sleep(10)
+      download_concurrency += 1
+
     # Download from url to file.
+    if ratelimit > 0: log.info("Start download of " + url)
     conn = urllib2.urlopen(url)
     total_bytes = "bytes_downloaded"
     bytes = name + "_bytes_downloaded"
@@ -51,6 +62,7 @@ class UrlDownload:
         f.write(chunk)
         task.increment(total_bytes, len(chunk))
         task.increment(bytes, len(chunk))
+    if ratelimit > 0: download_concurrency -= 1
     log.info(name + " downloaded")
 
 register_task("url-download", UrlDownload)
@@ -83,6 +95,7 @@ class DownloadWorkflow:
         "language": language,
         "url": url,
         "shortname": language + "wiki",
+        "ratelimit": 2,
       })
       download.attach_output("output", dump)
       return dump
