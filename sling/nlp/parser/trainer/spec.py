@@ -208,8 +208,11 @@ class Spec:
     writeint(self.suffix.size(), buf)
     for i in xrange(self.suffix.size()):
       v = self.suffix.value(i)
-      assert type(v) is unicode
-      v_str = v.encode("utf-8")
+      if type(v) is unicode:
+        v_str = v.encode("utf-8")
+      else:
+        assert type(v) is str, type(v)
+        v_str = v
 
       writeint(len(v_str), buf)       # number of bytes
       for x in v_str: buf.append(x)   # the bytes themselves
