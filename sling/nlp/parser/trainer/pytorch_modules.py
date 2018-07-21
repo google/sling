@@ -13,16 +13,20 @@
 # limitations under the License.
 
 
-# PyTorch module implementations for Sempar.
+# PyTorch module implementations for Caspar.
 
 import math
-import sys
+#import sys
 import torch
 import torch.nn as nn
 
+#sys.path.insert(0, "sling/nlp/parser/trainer")
+from cascade import Delegate
+from cascade import SoftmaxDelegate
 from parser_state import ParserState
 
 from sling.myelin.lexical_encoder import LexicalEncoder
+import sling
 import sling.myelin.nn as flownn
 import sling.myelin.flow as flow
 import sling.myelin.builder as builder
@@ -181,10 +185,83 @@ class DragnnLSTM(nn.Module):
         ", hidden=" + str(self.hidden_dim) + ")"
 
 
-# Top-level module for SEMPAR.
-class Sempar(nn.Module):
+# Head of the FF unit for Softmax delegates.
+class SoftmaxHead:
+  def __init__(self, input_size, output_size):
+    self.softmax = Projection(input_size, output_size)
+
+  def __call__(self, ff_activation, train=False):
+    logits = self.softmax(ff_activation)
+    if not train:
+      best_score, best_index = torch.max(logits, 1)
+      return best_index.data[0]
+    return logits
+
+
+# Default loss function for Softmax delegates.
+class SoftmaxLoss:
+  def __init__(self):
+    self.fn = nn.CrossEntropyLoss()
+
+  def __call__(self, logits, gold_index):
+    gold_var = Var(torch.LongTensor([gold_index]))
+    return self.fn(logits, gold_var)
+
+
+# Keeps track of per-delegate per-transition losses.
+class Losses:
+  def __init__(self):
+    self.losses = {}  # delegate -> (loss, num transitions)
+
+  # Adds specified delegate loss.
+  def add(self, delegate_index, step_loss, count=1):
+    if delegate_index not in self.losses:
+      self.losses[delegate_index] = [Var(torch.Tensor([0.0])), 0]
+    self.losses[delegate_index][0] += step_loss
+    self.losses[delegate_index][1] += count
+    
+  # Adds losses in 'other' to itself.
+  def aggregate(self, other):
+    for delegate, value in other.losses.iteritems():
+      self.add(delegate, value[0], value[1])
+
+  # Returns (total loss, total number of transitions).
+  def total(self):
+    loss = 0
+    count = 0
+    for _,v in self.losses.iteritems():
+      loss += v[0]
+      count += v[1]
+    return (loss, count)
+
+  # Returns average per-transition loss across all delegates.
+  def average(self):
+    (loss, count) = self.total()
+    return loss / count
+
+  # Prints all losses.
+  def tostring(self, after=None):
+    s = ""
+    for k in sorted(self.losses.keys()):
+      if s != "": s += "\n"
+      s += "AvgDelegateLoss for " + str(k)
+      if after is not None:
+        s += " after " + str(after) + " examples "
+      l = self.losses[k]
+      s += "= " + str(l[0].data[0]) + "/" + str(l[1]) + " = "
+      s += str(l[0].data[0] / l[1])
+    return s
+
+
+# Asserts 'delegate' to be a softmax delegate.
+def assert_softmax_delegate(delegate):
+  assert isinstance(delegate, SoftmaxDelegate), delegate.__class__.__name__
+
+
+# Top-level module for CASPAR.
+class Caspar(nn.Module):
   def __init__(self, spec):
-    super(Sempar, self).__init__()
+    super(Caspar, self).__init__()
     self.spec = spec
 
     # LSTM Embeddings.
@@ -210,16 +287,25 @@ class Sempar(nn.Module):
       self.add_module('ff_link_transform_' + f.name, transform)
       f.transform = transform
 
-    # Feedforward unit.
+    # Feedforward unit trunk.
     h = spec.ff_hidden_dim
     self.ff_layer = Projection(spec.ff_input_dim, h)   # hidden layer
     self.ff_relu = nn.ReLU()                           # non-linearity
-    self.ff_softmax = Projection(h, spec.num_actions)  # output layer
-    self.loss_fn = nn.CrossEntropyLoss()               # loss function
+
+    # Feedforward unit heads.
+    cascade = self.spec.cascade
+    self.ff_heads = []
+    for index, delegate in enumerate(cascade.delegates):
+      assert_softmax_delegate(delegate)
+      head = SoftmaxHead(h, delegate.size())
+      self.ff_heads.append(head)
+      self.add_module("ff_softmax_" + str(index), head.softmax)
+      delegate.set_model(head)
+      delegate.set_loss(SoftmaxLoss())
 
     # Only regularize the FF hidden layer weights.
     self.regularized_params = [self.ff_layer.weight]
-    print "Sempar:", self
+    print "Caspar:", self
 
 
   # Initializes various module parameters.
@@ -228,9 +314,9 @@ class Sempar(nn.Module):
     # where 'dim' is the dimensionality of the embedding.
     for f in self.spec.lstm_features:
       coeff = 1.0 / math.sqrt(f.dim)
-      data = f.embedding.weight.data
-      data.normal_()
-      data.mul_(coeff)
+      matrix = f.embedding.weight.data
+      matrix.normal_()
+      matrix.mul_(coeff)
 
       # Override with pre-trained word embeddings, if provided.
       if f.name == "word" and self.spec.word_embeddings is not None:
@@ -241,8 +327,7 @@ class Sempar(nn.Module):
         data = torch.nn.functional.normalize(data)
 
         # Copy the normalized embeddings at appropriate indices.
-        lr.index_copy_(0, indices, data)
-        rl.index_copy_(0, indices, data)
+        matrix.index_copy_(0, indices, data)
         print "Overwrote", len(self.spec.word_embeddings), f.name, \
             "embedding vectors with normalized pre-trained vectors."
 
@@ -254,17 +339,19 @@ class Sempar(nn.Module):
     for f in self.spec.ff_link_features:
       f.transform.init(1.0 / math.sqrt(f.dim))
 
-    # Initialize the LSTM and FF parameters with gaussan(mean=0, stddev=1e-4).
-    params = [self.ff_layer.weight, self.ff_softmax.weight]
+    # Initialize the LSTM and FF parameters with gaussian(mean=0, stddev=1e-4).
+    params = [self.ff_layer.weight]
+    params += [head.softmax.weight for head in self.ff_heads]
     params += [p for p in self.lr_lstm.parameters()]
     params += [p for p in self.rl_lstm.parameters()]
     for p in params:
       p.data.normal_()
       p.data.mul_(1e-4)
 
-    # Positive bias for the hidden layer, and zero bias for the output layer.
+    # Positive bias for the hidden layer, and zero bias for the output layers.
     self.ff_layer.bias.data.fill_(0.2)
-    self.ff_softmax.bias.data.fill_(0.0)
+    for head in self.ff_heads:
+      head.softmax.bias.data.fill_(0.0)
 
 
   # Looks up the embedding bags for respective features indices, and returns
@@ -317,8 +404,8 @@ class Sempar(nn.Module):
     return (lr_out, rl_out, raw_features)
 
 
-  # Returns the FF output, given the LSTM outputs and previous FF activations.
-  def _ff_output(
+  # Returns the FF activation, given the LSTM outputs and previous activations.
+  def _ff_activation(
       self, lr_lstm_output, rl_lstm_output, ff_activations, state, debug=False):
     assert len(ff_activations) == state.steps
     ff_input_parts = []
@@ -367,14 +454,13 @@ class Sempar(nn.Module):
         ff_input_parts_debug.append(link_debug)
 
     ff_input = torch.cat(ff_input_parts, 1).view(-1, 1)
-    ff_hidden = self.ff_layer(ff_input)
-    ff_hidden = self.ff_relu(ff_hidden)
-    softmax_output = self.ff_softmax(ff_hidden)
+    ff_activation = self.ff_layer(ff_input)
+    ff_activation = self.ff_relu(ff_activation)
 
     # Store the FF activation for future steps.
-    ff_activations.append(ff_hidden)
+    ff_activations.append(ff_activation)
 
-    return softmax_output.view(self.spec.num_actions), ff_input_parts_debug
+    return ff_activation, ff_input_parts_debug
 
 
   # Makes a forward pass over 'document'.
@@ -385,105 +471,77 @@ class Sempar(nn.Module):
     # Run FF unit.
     state = ParserState(document, self.spec)
     actions = self.spec.actions
+    cascade = self.spec.cascade
     ff_activations = []
 
     if train:
-      loss = Var(torch.FloatTensor([1]).zero_())
-      for index, gold in enumerate(document.gold):
-        gold_index = actions.indices.get(gold, None)
-        assert gold_index is not None, "Unknown gold action %r" % gold
+      losses = Losses()
 
-        ff_output, _ = self._ff_output(lr_out, rl_out, ff_activations, state)
-        gold_var = Var(torch.LongTensor([gold_index]))
-        step_loss = self.loss_fn(ff_output.view(1, -1), gold_var)
-        loss += step_loss
+      # Translate the gold actions into their cascade equivalents.
+      cascade_gold = cascade.translate(document.gold)
+      gold_index = 0
+      while not state.done:
+        # Compute the hidden layer once for all cascade delegates.
+        ff_activation, _ = self._ff_activation(
+            lr_out, rl_out, ff_activations, state)
+        cascading = True
+        delegate_index = 0   # assume we start the cascade at delegate 0
+        while cascading:
+          # Get the gold action for the delegate and compute loss w.r.t. it.
+          gold = cascade_gold[gold_index]
+          step_loss = cascade.loss(delegate_index, state, ff_activation, gold)
+          losses.add(delegate_index, step_loss)
 
-        assert state.is_allowed(gold_index), "Disallowed gold action: %r" % gold
-        state.advance(gold)
-      return loss, len(document.gold)
+          # If the gold action was a CASCADE, move to the next delegate.
+          if gold.is_cascade():
+            delegate_index = gold.delegate
+          else:
+            # Not a CASCADE action. Apply it to the state and move on.
+            state.advance(gold)
+            cascading = False
+          gold_index += 1
+
+      return losses
     else:
       if document.size() == 0: return state
 
-      # Number of top-k actions to consider. If all top-k actions are
-      # infeasible, then we default to SHIFT or STOP.
-      topk = self.spec.num_actions
+      shift = actions.action(actions.shift())
+      stop = actions.action(actions.stop())
+      disallowed_counts = [0] * cascade.size()
+      total_counts = [0] * cascade.size()
+      while not state.done:
+        # Compute the FF activation once for all cascade delegates.
+        ff_activation, _ = self._ff_activation(
+            lr_out, rl_out, ff_activations, state)
+        cascading = True
+        delegate_index = 0
 
-      shift = actions.shift()
-      stop = actions.stop()
-      predicted = shift
-      while predicted != stop:
-        ff_output, _ = self._ff_output(lr_out, rl_out, ff_activations, state)
+        # Store the last CASCADE action in a cascade.
+        last = None
+        while cascading:
+          # Get the highest scoring action from the cascade delegate.
+          # Note: We don't have to do any filtering or checking here, we
+          # can just return the top-scoring action.
+          best = cascade.predict(delegate_index, state, last, ff_activation)
 
-        # Find the highest scoring allowed action among the top-k.
-        # If all top-k actions are disallowed, then use a fallback action.
-        _, topk_indices = torch.topk(ff_output, topk)
-        found = False
-        rank = "(fallback)"
-        for candidate in topk_indices.view(-1).data:
-          if not actions.disallowed[candidate] and state.is_allowed(candidate):
-            rank = str(candidate)
-            found = True
-            predicted = candidate
-            break
-        if not found:
-          # Fallback.
-          predicted = shift if state.current < state.end else stop
+          if best.is_cascade():
+            delegate_index = best.delegate
+            last = best
+          else:
+            # If the action isn't allowed or can't be applied to the state,
+            # then default to SHIFT or STOP.
+            index = actions.index(best)
+            total_counts[delegate_index] += 1
+            if actions.disallowed[index] or not state.is_allowed(index):
+              disallowed_counts[delegate_index] += 1
+              best = shift
+              if state.current == state.end: best = stop
 
-        action = actions.table[predicted]
-        state.advance(action)
+            # Apply the action and stop the cascade.
+            state.advance(best)
+            cascading = False
 
-      return state
-
-
-  # Traces the model as it runs through 'document'.
-  def model_trace(self, document):
-    length = document.size()
-    lr_out, rl_out, lstm_features = self._lstm_outputs(document)
-
-    assert len(self.spec.lstm_features) == len(lstm_features)
-    for f in lstm_features:
-      assert len(f.offsets) == length
-
-    print length, "tokens in document"
-    for index, t in enumerate(document.tokens()):
-      print "Token", index, "=", t.text
-    print
-
-    state = ParserState(document, self.spec)
-    actions = self.spec.actions
-    ff_activations = []
-    steps = 0
-    for gold in document.gold:
-      print "State:", state
-      gold_index = actions.indices.get(gold, None)
-      assert gold_index is not None, "Unknown gold action %r" % gold
-
-      if state.current < state.end:
-        print "Token", state.current, "=", document.tokens()[state.current].text
-        for feature_spec, values in zip(self.spec.lstm_features, lstm_features):
-          # Recall that 'values' has indices at all sequence positions.
-          # We need to get the slice of feature indices at the current token.
-          start = values.offsets[state.current - state.begin]
-          end = None
-          if state.current < state.end - 1:
-            end = values.offsets[state.current - state.begin + 1]
-
-          current = values.indices[start:end]
-          print "  LSTM feature:", feature_spec.name, ", indices=", current,\
-              "=", self.spec.lstm_feature_strings(current)
-
-      ff_output, ff_debug = self._ff_output(
-          lr_out, rl_out, ff_activations, state, debug=True)
-      for f, indices in ff_debug:
-        debug = self.spec.ff_fixed_features_debug(f, indices)
-        print "  FF Feature", f.name, "=", str(indices), debug
-      assert ff_output.view(1, -1).size(1) == self.spec.num_actions
-
-      assert state.is_allowed(gold_index), "Disallowed gold action: %r" % gold
-      state.advance(gold)
-      print "Step", steps, ": advancing using gold action", gold
-      print
-      steps += 1
+      return state, disallowed_counts, total_counts
 
 
   # Writes model as a Myelin flow to 'flow_file'.
@@ -520,18 +578,16 @@ class Sempar(nn.Module):
       axis = bldr.const(1, "int32")
       op.add_input(axis)
 
-    # Specify the FF unit.
-    ff = builder.Builder(fl, "ff")
+    # Specify the FF trunk = FF feature vector + hidden layer computation.
+    ff = builder.Builder(fl, "ff_trunk")
     ff_input = ff.var(name="input", shape=[1, spec.ff_input_dim])
     flow_ff = flownn.FF(
         ff, \
         input=ff_input, \
-        layers=[spec.ff_hidden_dim, spec.num_actions], \
+        layers=[spec.ff_hidden_dim],
         hidden=0)
     flow_ff.set_layer_data(0, self.ff_layer.weight.data.numpy(), \
                            self.ff_layer.bias.data.numpy())
-    flow_ff.set_layer_data(1, self.ff_softmax.weight.data.numpy(), \
-                           self.ff_softmax.bias.data.numpy())
 
     ff_concat_op = ff.rawop(optype="ConcatV2", name="concat")
     ff_concat_op.add_output(ff_input)
@@ -592,5 +648,41 @@ class Sempar(nn.Module):
       ff_concat_op.add_input(output)
 
     finish_concat_op(ff, ff_concat_op)
+
+    delegate_cell_prefix = "delegate"
+    cascade = spec.cascade
+    cascade_blob = fl.blob("cascade")
+    store = sling.Store(spec.commons)
+    cascade_blob.data = cascade.as_frame(
+        store, delegate_cell_prefix).data(binary=True)
+
+    # Specify one cell per FF head (= delegate).
+    ff_trunk_width = flow_ff.hidden_out.shape[1]
+    for i, head in enumerate(self.ff_heads):
+      delegate = spec.cascade.delegates[i]
+      assert_softmax_delegate(delegate)
+      d = builder.Builder(fl, delegate_cell_prefix + str(i))
+      head_input = link(d, "input", ff_trunk_width, ff_cnx, False)
+
+      W = d.var("W", shape=[ff_trunk_width, delegate.size()])
+      W.data = head.softmax.weight.data.numpy()
+      output = d.matmul(head_input, W)
+      output.type = W.type
+      output.shape = [1, delegate.size()]
+
+      b = d.var("b", shape=[1, delegate.size()])
+      b.data = head.softmax.bias.data.numpy()
+      logits = d.add(output, b)
+      logits.type = b.type
+      logits.shape = [1, delegate.size()]
+
+      best_op = d.rawop(optype="ArgMax")
+      best_op.add_input(logits)
+      best = d.var("output")
+      best.type = builder.DT_INT
+      best.shape = [1]
+      best_op.add_output(best)
+      best.producer.add_attr("output", 1)
+
     fl.save(flow_file)
 

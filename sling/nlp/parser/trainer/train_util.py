@@ -57,7 +57,8 @@ def now():
 
 def mem():
   p = psutil.Process(os.getpid())
-  return str(p.memory_info())
+  info = p.memory_info()
+  return "(rss=%r vms=%r)" % (info.rss, info.vms)
 
 
 # Sets up commonly used command-line training flags.
@@ -184,7 +185,7 @@ class Resources:
     self.spec.build(self.commons, self.train)
     print "After building spec", mem()
 
-    if word_embeddings_path != "":
+    if word_embeddings_path != "" and word_embeddings_path is not None:
       self.spec.load_word_embeddings(word_embeddings_path)
       print "After loading pre-trained word embeddings", mem()
 

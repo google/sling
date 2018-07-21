@@ -23,7 +23,8 @@ class Action:
   ASSIGN = 5
   EMBED = 6
   ELABORATE = 7
-  NUM_ACTIONS = 8
+  CASCADE = 8
+  NUM_ACTIONS = 9
 
   def __init__(self, t=None):
     self.type = None
@@ -32,6 +33,7 @@ class Action:
     self.target = None
     self.role = None
     self.label = None
+    self.delegate = None
 
     if t is not None:
       assert t < Action.NUM_ACTIONS
@@ -42,7 +44,7 @@ class Action:
   # Converts the action to a tuple.
   def _totuple(self):
     return (self.type, self.length, self.source, self.target,
-            self.role, self.label)
+            self.role, self.label, self.delegate)
 
 
   # Methods to enable hashing of actions.
@@ -64,7 +66,8 @@ class Action:
       Action.CONNECT: "CONNECT",
       Action.ASSIGN: "ASSIGN",
       Action.EMBED: "EMBED",
-      Action.ELABORATE: "ELABORATE"
+      Action.ELABORATE: "ELABORATE",
+      Action.CASCADE: "CASCADE"
     }
 
     s = names[self.type]
@@ -75,4 +78,21 @@ class Action:
         s = s + k + ": " + str(v)
     return s
 
+  # Returns frame representation of the action.
+  def as_frame(self, store, slot_prefix="/table/action/"):
+    frame = store.frame({})
+    for s in self.__dict__.keys():
+      val = getattr(self, s)
+      if val is not None:
+        frame[slot_prefix + s] = val
+    return frame
 
+  # Returns whether the action is a cascade.
+  def is_cascade(self):
+    return self.type == Action.CASCADE
+
+  def is_shift(self):
+    return self.type == Action.SHIFT
+
+  def is_stop(self):
+    return self.type == Action.STOP

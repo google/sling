@@ -30,7 +30,8 @@ import train_util as utils
 from train_util import mem
 from train_util import now
 from train_util import Resources
-from pytorch_modules import Sempar
+from pytorch_modules import Losses
+from pytorch_modules import Caspar
 from pytorch_modules import fstr
 
 from corpora import Corpora
@@ -41,25 +42,35 @@ Var = torch.autograd.Variable
 torch.manual_seed(1)
 
 
-# Computes accuracy on the given dev set, using the given PyTorch Sempar module.
-def dev_accuracy(commons_path, commons, dev_path, schema, tmp_folder, sempar):
+# Computes accuracy on the given dev set, using the given PyTorch Caspar module.
+def dev_accuracy(commons_path, commons, dev_path, schema, tmp_folder, caspar):
   dev = Corpora(dev_path, commons, schema, gold=False, loop=False)
   print "Annotating dev documents", now(), mem()
   test_path = os.path.join(tmp_folder, "dev.annotated.rec")
   writer = sling.RecordWriter(test_path)
   count = 0
   start_time = time.time()
+
+  cascade = caspar.spec.cascade
+  dev_total = [0] * cascade.size()
+  dev_disallowed = [0] * cascade.size()
   for document in dev:
-    state = sempar.forward(document, train=False)
+    state, disallowed, total = caspar.forward(document, train=False)
     state.write()
     writer.write(str(count), state.encoded())
     count += 1
     if count % 100 == 0:
       print "  Annotated", count, "documents", now(), mem()
+    for i, c in enumerate(disallowed):
+      dev_total[i] += total[i]
+      dev_disallowed[i] += c
   writer.close()
   end_time = time.time()
   print "Annotated", count, "documents in", "%.1f" % (end_time - start_time), \
       "seconds", now(), mem()
+  print "Disallowed/Total leaf actions for", cascade.__class__.__name__
+  for i, c in enumerate(dev_disallowed):
+    print "Delegate", i, "disallowed", c, "out of", dev_total[i]
 
   return utils.frame_evaluation(gold_corpus_path=dev_path, \
                                 test_corpus_path=test_path, \
@@ -98,15 +109,15 @@ class Trainer:
 
   # Instantiates the trainer with the given model, optional evaluator,
   # and hyperparameters.
-  def __init__(self, sempar, hyperparams, evaluator=None, \
+  def __init__(self, caspar, hyperparams, evaluator=None, \
                output_file_prefix=None):
-    self.model = sempar
+    self.model = caspar
     self.evaluator = evaluator
     self.hyperparams = hyperparams
 
     if hyperparams.optimizer == "sgd":
       self.optimizer = torch.optim.SGD(
-        sempar.parameters(),
+        caspar.parameters(),
         lr=self.hyperparams.alpha,
         momentum=0,
         dampening=0,
@@ -114,14 +125,14 @@ class Trainer:
         nesterov=False)
     elif hyperparams.optimizer == "adam":
       self.optimizer = torch.optim.Adam(
-          sempar.parameters(), lr=hyperparams.alpha, weight_decay=0, \
+          caspar.parameters(), lr=hyperparams.alpha, weight_decay=0, \
               betas=(hyperparams.adam_beta1, hyperparams.adam_beta2), \
               eps=hyperparams.adam_eps)
     else:
       raise ValueError('Unknown learning method: %r' % hyperparams.optimizer)
 
     num_params = 0
-    for name, p in sempar.named_parameters():
+    for name, p in caspar.named_parameters():
       if p.requires_grad:
         print name, ":", p.size()
         num_params += torch.numel(p)
@@ -129,10 +140,8 @@ class Trainer:
 
     self.count = 0
     self.last_eval_count = 0
-
-    self.current_batch_num_transitions = 0
-    self.current_batch_size = 0
-    self.batch_loss = Var(torch.FloatTensor([0.0]))
+    self.last_update_count = 0
+    self.batch_losses = None
     self._reset()
 
     self.checkpoint_metrics = []
@@ -142,32 +151,24 @@ class Trainer:
     # Exponential moving average clones.
     self.averages = {}
     if hyperparams.moving_avg:
-      for name, p in sempar.named_parameters():
+      for name, p in caspar.named_parameters():
         if p.requires_grad:
           self.averages[name] = p.data.clone()
 
 
   # Resets the state for a new batch.
   def _reset(self):
-    self.current_batch_size = 0
-    self.current_batch_num_transitions = 0
-    
-    # Note: self.batch_loss is the apex of the computation graph.
-    # Just resetting it often doesn't guarantee (immediate) garbage collection.
-    # Explicitly deleting it here seems to work better empirically.
-    del self.batch_loss
-    self.batch_loss = Var(torch.FloatTensor([0.0]))
     self.optimizer.zero_grad()
+    del self.batch_losses
+    self.batch_losses = Losses()
 
 
   # Processes a single given example.
   def process(self, example):
-    loss, num_transitions = self.model.forward(example, train=True)
-    self.current_batch_num_transitions += num_transitions
-    self.batch_loss += loss
-    self.current_batch_size += 1
+    example_losses = self.model.forward(example, train=True)
+    self.batch_losses.aggregate(example_losses)
     self.count += 1
-    if self.current_batch_size == self.hyperparams.batch_size:
+    if self.count % self.hyperparams.batch_size == 0:
       self.update()
     if self.count % self.hyperparams.report_every == 0:
       self.evaluate()
@@ -182,22 +183,25 @@ class Trainer:
 
   # Performs a gradient update.
   def update(self):
-    if self.current_batch_size > 0:
+    if self.count > self.last_update_count:
+      self.last_update_count = self.count
+      print self.batch_losses.tostring(self.count)
       start = time.time()
-      self.batch_loss /= self.current_batch_num_transitions
 
-      # Add the regularization penalty to the batch loss.
+      objective = self.batch_losses.average()
+
+      # Add the regularization penalty to the objective.
       l2 = Var(torch.Tensor([0.0]))
       if self.hyperparams.l2_coeff > 0.0:
         for p in self.model.regularized_params:
           l2 += 0.5 * self.hyperparams.l2_coeff * torch.sum(p * p)
-        self.batch_loss += l2
+        objective += l2
 
-      self.batch_loss /= 3.0  # for parity with TF
-      value = self.batch_loss.data[0]
+      objective /= 3.0  # for parity with TF
+      value = objective.data[0]
 
       # Compute gradients.
-      self.batch_loss.backward()
+      objective.backward()
 
       # Clip them.
       self.clip_gradients()
@@ -252,11 +256,18 @@ class Trainer:
         print "Eval metric after", self.count, " examples:", eval_metric
 
         if self.output_file_prefix is not None:
+          # Record the evaluation metric to a separate file.
+          if self.last_eval_count == 0:
+            f = open(self.output_file_prefix + ".evals", "w")
+            f.close()
+
+          f = open(self.output_file_prefix + ".evals", "a")
+          f.write("Slot_F1 after " + str(self.count) + " examples " +
+                  str(eval_metric) + "\n")
+          f.close()
+
           if self.best_metric is None or self.best_metric < eval_metric:
             self.best_metric = eval_metric
-            best_model_file = self.output_file_prefix + ".best.model"
-            torch.save(self.model.state_dict(), best_model_file)
-            print "Updating best model at", best_model_file
 
             best_flow_file = self.output_file_prefix + ".best.flow"
             self.model.write_flow(best_flow_file)
@@ -299,8 +310,8 @@ def train(args):
                  word_embeddings_path=args.word_embeddings,
                  small_spec=args.small)
 
-  sempar = Sempar(resources.spec)
-  sempar.initialize()
+  caspar = Caspar(resources.spec)
+  caspar.initialize()
 
   tmp_folder = os.path.join(args.output_folder, "tmp")
   if not os.path.exists(tmp_folder):
@@ -313,57 +324,19 @@ def train(args):
                       resources.schema,
                       tmp_folder)
 
-  output_file_prefix = os.path.join(args.output_folder, "pytorch")
+  output_file_prefix = os.path.join(args.output_folder, "caspar")
   hyperparams = Trainer.Hyperparams(args)
   print "Using hyperparameters:", hyperparams
 
-  trainer = Trainer(sempar, hyperparams, evaluator, output_file_prefix)
+  trainer = Trainer(caspar, hyperparams, evaluator, output_file_prefix)
   trainer.train(resources.train)
-
-
-def evaluate(args):
-  check_present(args, ["commons", "train_corpus", "dev_corpus", "model_file"])
-  resources = utils.Resources()
-  resources.load(commons_path=args.commons,
-                 train_path=args.train_corpus,
-                 word_embeddings_path=args.word_embeddings)
-
-  sempar = Sempar(resources.spec)
-  sempar.load_state_dict(torch.load(args.model_file))
-
-  tmp_folder = os.path.join(args.output_folder, "tmp")
-  if not os.path.exists(tmp_folder):
-    os.makedirs(tmp_folder)
-
-  evaluator = partial(dev_accuracy,
-                      resources.commons_path,
-                      resources.commons,
-                      args.dev_corpus,
-                      resources.schema,
-                      tmp_folder)
-  metrics = evaluator(sempar)
-  print "Eval metric", metrics["eval_metric"]
 
 
 if __name__ == '__main__':
   utils.setup_training_flags(flags)
-  flags.define('--mode',
-               help='Mode: train or evaluate',
-               default='train',
-               type=str)
-  flags.define('--model_file',
-               help='PyTorch model file',
-               default='',
-               type=str)
   flags.define('--small',
                help='Small dimensions (for testing)',
                default=False,
                type=bool)
   flags.parse()
-
-  if flags.arg.mode == "train":
-    train(flags.arg)
-  elif flags.arg.mode == "evaluate":
-    evaluate(flags.arg)
-  else:
-    raise ValueError('Unknowm mode %r' % flags.arg)
+  train(flags.arg)

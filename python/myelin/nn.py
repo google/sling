@@ -42,7 +42,7 @@ class FF:
         v.type = type
         v.shape = [1, width]
 
-      if l != len(layers) - 1:
+      if l == hidden or l != len(layers) - 1:
         v = tf.op(activation, [v])
         v.type = type
         v.shape = [1, width]

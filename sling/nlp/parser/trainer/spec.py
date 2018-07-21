@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import cascade
 import sling
 import struct
 import unicodedata
@@ -155,6 +156,7 @@ class Spec:
     self.lstm_features = []
     self.ff_fixed_features = []
     self.ff_link_features = []
+    self.cascade = None
 
 
   # Builds an action table from 'corpora'.
@@ -320,6 +322,10 @@ class Spec:
 
     # Add feature specs.
     self._specify_features()
+
+    # Build cascade.
+    self.cascade = cascade.ShiftPropbankEvokeCascade(self.actions)
+    print self.cascade
 
 
   # Loads embeddings for words in the lexicon.

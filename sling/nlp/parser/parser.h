@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "sling/base/logging.h"
+#include "sling/base/registry.h"
 #include "sling/base/types.h"
 #include "sling/file/file.h"
 #include "sling/frame/store.h"
@@ -29,6 +30,7 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/lexical-encoder.h"
 #include "sling/nlp/parser/action-table.h"
+#include "sling/nlp/parser/cascade.h"
 #include "sling/nlp/parser/parser-state.h"
 #include "sling/nlp/parser/roles.h"
 
@@ -52,9 +54,6 @@ class Parser {
     network_.options().global_profiler = true;
   }
 
-  // Enable fast fallback. Must be called before Load().
-  void EnableFastFallback() { fast_fallback_ = true; }
-
   // Run parser on GPU if available. Must be called before Load().
   void EnableGPU();
 
@@ -65,7 +64,7 @@ class Parser {
   const LexicalEncoder &encoder() const { return encoder_; }
 
  private:
-  // Feed-forward cell.
+  // Feed-forward trunk cell.
   struct FF {
     myelin::Cell *cell;                       // feed-forward cell
 
@@ -99,10 +98,9 @@ class Parser {
     myelin::Tensor *steps;                    // link to FF step hidden layer
     myelin::Tensor *hidden;                   // link to FF hidden layer output
     myelin::Tensor *output;                   // link to FF logit layer output
-    myelin::Tensor *prediction;               // link to FF argmax
   };
 
-  // Initialize FF cell.
+  // Initialize FF trunk cell.
   void InitFF(const string &name, FF *ff);
 
   // Lookup cells and parameters.
@@ -119,8 +117,8 @@ class Parser {
   // Feed-forward cell.
   FF ff_;
 
-  // Number of output actions.
-  int num_actions_;
+  // Cascade.
+  Cascade cascade_;
 
   // Global store for parser.
   Store *store_ = nullptr;
@@ -133,9 +131,6 @@ class Parser {
 
   // Set of roles considered.
   RoleSet roles_;
-
-  // Fast fallback using argmax.
-  bool fast_fallback_ = false;
 
   // Run parser on GPU.
   bool use_gpu_ = false;
@@ -175,11 +170,14 @@ class ParserInstance {
   // Parser transition state.
   ParserState state_;
 
-  // Instance for network computations.
+  // Instance for feed-forward trunk computations.
   myelin::Instance ff_;
 
   // Channels.
   myelin::Channel ff_step_;
+
+  // Instance for cascade computations.
+  CascadeInstance cascade_ = nullptr;
 
   // Frame creation and focus steps.
   std::vector<int> create_step_;

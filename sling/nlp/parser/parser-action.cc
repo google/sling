@@ -28,6 +28,7 @@ string ParserAction::TypeName(Type type) {
     case ParserAction::ASSIGN: return "ASSIGN";
     case ParserAction::EMBED: return "EMBED";
     case ParserAction::ELABORATE: return "ELABORATE";
+    case ParserAction::CASCADE: return "CASCADE";
     case ParserAction::SHIFT: return "SHIFT";
     case ParserAction::STOP: return "STOP";
   }
@@ -64,6 +65,9 @@ string ParserAction::ToString(Store *store) const {
       StrAppend(&s, "TYPE(", store->DebugString(label), ")",
                 " <- ", store->DebugString(role), " <- ",
                 source);
+      break;
+    case ParserAction::CASCADE:
+      StrAppend(&s, "(delegate=", delegate, ")");
       break;
     case ParserAction::SHIFT:
     case ParserAction::STOP:

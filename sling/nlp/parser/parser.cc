@@ -39,7 +39,6 @@ void Parser::EnableGPU() {
 
     // Always use fast fallback when running on GPU.
     use_gpu_ = true;
-    fast_fallback_ = true;
   }
 }
 
@@ -53,14 +52,6 @@ void Parser::Load(Store *store, const string &model) {
   myelin::Flow flow;
   CHECK(flow.Load(model));
 
-  // Add argmax for fast fallback.
-  if (fast_fallback_) {
-    auto *ff = flow.Func("ff");
-    auto *output = flow.Var("ff/output");
-    auto *prediction = flow.AddVariable("ff/prediction", myelin::DT_INT32, {1});
-    flow.AddOperation(ff, "ff/ArgMax", "ArgMax", {output}, {prediction});
-  }
-
   // Analyze parser flow file.
   flow.Analyze(library_);
 
@@ -72,8 +63,8 @@ void Parser::Load(Store *store, const string &model) {
   encoder_.Initialize(network_);
   encoder_.LoadLexicon(&flow);
 
-  // Initialize feed-forward cell.
-  InitFF("ff", &ff_);
+  // Initialize feed-forward trunk.
+  InitFF("ff_trunk", &ff_);
 
   // Load commons and action stores.
   myelin::Flow::Blob *commons = flow.DataBlock("commons");
@@ -87,11 +78,21 @@ void Parser::Load(Store *store, const string &model) {
     decoder.DecodeAll();
   }
 
+  // Read the cascade specification and implementation from the flow.
+  myelin::Flow::Blob *cascade = flow.DataBlock("cascade");
+  CHECK(cascade != nullptr);
+  {
+    StringDecoder decoder(store, cascade->data, cascade->size);
+    decoder.DecodeAll();
+    Frame spec(store, "cascade");
+    CHECK(spec.valid());
+    cascade_.Initialize(network_, spec);
+  }
+
   // Initialize action table.
   store_ = store;
   actions_.Init(store);
-  num_actions_ = actions_.NumActions();
-  CHECK_GT(num_actions_, 0);
+  cascade_.set_actions(&actions_);
   frame_limit_ = actions_.frame_limit();
   roles_.Init(actions_);
 }
@@ -152,8 +153,6 @@ void Parser::InitFF(const string &name, FF *ff) {
   ff->steps = GetParam(name + "/steps");
 
   ff->hidden = GetParam(name + "/hidden");
-  ff->output = GetParam(name + "/output");
-  ff->prediction = GetParam(name + "/prediction", true);
 }
 
 void Parser::Parse(Document *document) const {
@@ -182,38 +181,12 @@ void Parser::Parse(Document *document) const {
       // Extract features.
       data.ExtractFeaturesFF(step);
 
-      // Predict next action.
+      // Compute FF hidden layer.
       data.ff_.Compute();
-      int prediction = 0;
-      if (fast_fallback_) {
-        // Get highest scoring action.
-        prediction = *data.ff_.Get<int>(ff_.prediction);
-        const ParserAction &action = actions_.Action(prediction);
-        if (!state.CanApply(action) || actions_.Beyond(prediction)) {
-          // Fall back to SHIFT or STOP action.
-          if (state.current() == state.end()) {
-            prediction = actions_.StopIndex();
-          } else {
-            prediction = actions_.ShiftIndex();
-          }
-        }
-      } else {
-        // Get highest scoring allowed action.
-        float *output = data.ff_.Get<float>(ff_.output);
-        float max_score = -INFINITY;
-        for (int a = 0; a < num_actions_; ++a) {
-          if (output[a] > max_score) {
-            const ParserAction &action = actions_.Action(a);
-            if (state.CanApply(action) && !actions_.Beyond(a)) {
-              prediction = a;
-              max_score = output[a];
-            }
-          }
-        }
-      }
 
-      // Apply action to parser state.
-      const ParserAction &action = actions_.Action(prediction);
+      // Apply the cascade.
+      ParserAction action;
+      data.cascade_.Compute(&data.ff_step_, step, &state, &action);
       state.Apply(action);
 
       // Update state.
@@ -224,6 +197,10 @@ void Parser::Parse(Document *document) const {
 
         case ParserAction::STOP:
           done = true;
+          break;
+
+        case ParserAction::CASCADE:
+          LOG(FATAL) << "CASCADE action should not reach ParserState.";
           break;
 
         case ParserAction::EVOKE:
@@ -277,7 +254,8 @@ ParserInstance::ParserInstance(const Parser *parser, Document *document,
       encoder_(parser->encoder()),
       state_(document->store(), begin, end),
       ff_(parser->ff_.cell),
-      ff_step_(parser->ff_.hidden) {
+      ff_step_(parser->ff_.hidden),
+      cascade_(&parser->cascade_) {
   // Reserve two transitions per token.
   int length = end - begin;
   ff_step_.reserve(length * 2);

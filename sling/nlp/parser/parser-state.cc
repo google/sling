@@ -105,6 +105,10 @@ void ParserState::Apply(const ParserAction &action) {
     case ParserAction::ELABORATE:
       Elaborate(action.source, action.role, action.label);
       break;
+
+    case ParserAction::CASCADE:
+      LOG(FATAL) << "CASCADE action shouldn't reach ParserState";
+      break;
   }
 }
 
@@ -124,6 +128,9 @@ static bool SlotPresent(const Frame &frame, Handle role, int value) {
 
 bool ParserState::CanApply(const ParserAction &action) const {
   switch (action.type) {
+    case ParserAction::CASCADE:
+      return false;
+
     case ParserAction::SHIFT:
       // Do not allow shifting past the end of the input buffer.
       return current_ < end_;

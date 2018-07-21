@@ -118,7 +118,7 @@ class ParserState:
 
   # Returns whether 'action_index' is allowed in the current state.
   def is_allowed(self, action_index):
-    if self.done: return Falseo
+    if self.done: return False
 
     actions = self.spec.actions
     if self.current == self.end: return action_index == actions.stop()

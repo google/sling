@@ -58,11 +58,27 @@ cc_library(
 )
 
 cc_library(
+  name = "cascade",
+  srcs = ["cascade.cc"],
+  hdrs = ["cascade.h"],
+  deps = [
+    ":action-table",
+    ":parser-state",
+    "//sling/base",
+    "//sling/frame:serialization",
+    "//sling/frame:store",
+    "//sling/myelin:compute",
+    "//sling/myelin:flow",
+  ],
+)
+
+cc_library(
   name = "parser",
   srcs = ["parser.cc"],
   hdrs = ["parser.h"],
   deps = [
     ":action-table",
+    ":cascade",
     ":parser-state",
     ":roles",
     "//sling/base",
@@ -75,5 +91,6 @@ cc_library(
     "//sling/myelin/kernel:tensorflow",
     "//sling/nlp/document",
     "//sling/nlp/document:lexical-encoder",
+    "//sling/string:strcat",
   ],
 )

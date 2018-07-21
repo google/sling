@@ -62,8 +62,16 @@ class Actions:
     return len(self.table)
 
 
+  def action(self, index):
+    return self.table[index]
+
+
+  def index(self, action):
+    return self.indices.get(action, None)
+
+
   # Adds 'action' to the table.
-  def add(self, action):
+  def add(self, action, count=1):
     index = self.indices.get(action, len(self.table))
     if index == len(self.table):
       self.indices[action] = index
@@ -73,7 +81,7 @@ class Actions:
         role_index = len(self.roles)
         self.role_indices[action.role] = role_index
         self.roles.append(action.role)
-    self.counts[index] = self.counts[index] + 1
+    self.counts[index] = self.counts[index] + count
 
     if action.type == Action.SHIFT:
       self.shift_index = index
@@ -142,20 +150,9 @@ class Actions:
     table["/table/max_elaborate_source"] = self.max_elaborate_source
     table["/table/frame_limit"] = self.frame_limit
 
-    def fill(f, name, val):
-      if val is not None:
-        f["/table/action/" + name] = val
-
     actions_array = store.array(self.size())
     for index, action in enumerate(self.table):
-      frame = store.frame({})
-      fill(frame, "type", action.type)
-      fill(frame, "length", action.length)
-      fill(frame, "source", action.source)
-      fill(frame, "target", action.target)
-      fill(frame, "label", action.label)
-      fill(frame, "role", action.role)
-      actions_array[index] = frame
+      actions_array[index] = action.as_frame(store)
     table["/table/actions"] = actions_array
 
     symbols = map(

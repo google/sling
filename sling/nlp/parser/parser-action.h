@@ -63,10 +63,13 @@ struct ParserAction {
     // 'source' in the attention buffer with 'role' set to the new frame.
     // The new frame become the new center of attention.
     ELABORATE,
+
+    // Delegate to another member (specified by 'delegate') of the cascade.
+    CASCADE,
   };
 
   // Number of action types.
-  static const int kNumActionTypes = ELABORATE + 1;
+  static const int kNumActionTypes = CASCADE + 1;
 
   // Type of the action.
   Type type;
@@ -86,6 +89,9 @@ struct ParserAction {
 
   // Frame type for EVOKE, EMBED, ELABORATE, and value for ASSIGN.
   Handle label;
+
+  // Index of the delegate for CASCADE actions.
+  uint8 delegate;
 
   // Default constructor.
   ParserAction() { memset(this, 0, sizeof(struct ParserAction)); }
