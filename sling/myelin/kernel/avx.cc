@@ -28,9 +28,13 @@ void RegisterAVXMatMul(Library *library);
 // avx-operators.cc
 void RegisterAVXOperators(Library *library);
 
+// simd-matmul.cc
+void RegisterSIMDMatMulLibrary(Library *library);
+
 // Register AVX library.
 void RegisterAVXLibrary(Library *library) {
   RegisterAVXMath(library);
+  RegisterSIMDMatMulLibrary(library);
   RegisterAVXMatMul(library);
   RegisterAVXOperators(library);
 }

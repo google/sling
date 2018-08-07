@@ -67,6 +67,7 @@ class CUDAMatMulBase : public CUDAKernel {
     // Transpose not supported.
     if (step->GetAttr("transpose_a", false)) return false;
     if (step->GetAttr("transpose_b", false)) return false;
+    if (step->GetAttr("transpose_c", false)) return false;
 
     return true;
   }

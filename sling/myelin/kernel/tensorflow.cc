@@ -33,6 +33,7 @@ void RegisterTensorflowLibrary(Library *library) {
   RegisterAVXLibrary(library);
   RegisterArithmeticLibrary(library);
   RegisterPrecomputeLibrary(library);
+  RegisterGenericTransforms(library);
   RegisterStandardGradients(library);
 }
 

@@ -31,6 +31,16 @@ cc_library(
 )
 
 cc_library(
+  name = "simd-assembler",
+  srcs = ["simd-assembler.cc"],
+  hdrs = ["simd-assembler.h"],
+  deps = [
+    ":compute",
+    "//sling/base",
+  ],
+)
+
+cc_library(
   name = "profile",
   srcs = ["profile.cc"],
   hdrs = ["profile.h"],

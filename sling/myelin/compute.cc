@@ -397,7 +397,7 @@ Library::~Library() {
 }
 
 void Library::Register(Kernel *kernel) {
-  VLOG(7) << "Register " << kernel->Name() << " for " << kernel->Operation();
+  VLOG(12) << "Register " << kernel->Name() << " for " << kernel->Operation();
   kernels_[kernel->Operation()].push_back(kernel);
 }
 
@@ -1909,6 +1909,7 @@ string Cell::ToString() const {
                     t->TypeString().c_str(),
                     t->offset(),
                     t->space(), t->byte_alignment());
+      StringAppendF(&str, " %s", ordername[t->order()]);
       if (t->linked()) {
         StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
       }
@@ -1992,6 +1993,11 @@ string Cell::ToString() const {
       }
 
       str.append(step->kernel()->Name());
+      if (!step->variant().empty()) {
+        str.append("[");
+        str.append(step->variant());
+        str.append("]");
+      }
 
       str.append("(");
       bool first = true;

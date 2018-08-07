@@ -51,11 +51,15 @@ cc_library(
     "avx-math.cc",
     "avx-matmul.cc",
     "avx-operators.cc",
+    "simd-matmul.cc",
   ],
-  hdrs = ["avx.h"],
+  hdrs = [
+    "avx.h",
+  ],
   deps = [
     "//sling/base",
     "//sling/myelin:compute",
+    "//sling/myelin:simd-assembler",
   ],
 )
 

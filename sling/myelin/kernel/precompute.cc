@@ -127,6 +127,8 @@ class ConstantFolding : public Transformer {
        .Output(0, DT_FLOAT, 2);
   }
 
+  string Name() override { return "ConstantFolding"; }
+
   bool Transform(Flow *flow) override {
     // Find constant ops and replace them with constant variables.
     std::vector<Flow::Operation *> remove;
@@ -276,6 +278,8 @@ class ConstantFolding : public Transformer {
 // Remove unused variables.
 class RemoveUnusedVariables : public Transformer {
  public:
+  string Name() override { return "RemoveUnusedVariables"; }
+
   bool Transform(Flow *flow) override {
     // Find intermediate variables with no producers or consumers.
     std::vector<Flow::Variable *> remove;

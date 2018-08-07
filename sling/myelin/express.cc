@@ -142,22 +142,20 @@ class RegisterAllocator {
     return regno;
   }
 
-  // Allocate spare register not assigned to variable.
-  int AllocateExtra() {
-    int regno = reg_.size();
-    reg_.push_back(nullptr);
+  // Allocate specific register for variable.
+  int Allocate(Express::Var *var, int regno) {
+    CHECK(regno < reg_.size() && reg_[regno] == nullptr);
+    reg_[regno] = var;
+    var->reg = regno;
     return regno;
   }
 
-  // Transfer register from one variable to another. Return the transferred
-  // register.
-  int Transfer(Express::Var *src, Express::Var *dst) {
-    int r = src->reg;
-    if (r == -1)  return -1;
-    dst->reg = r;
-    src->reg = -1;
-    reg_[r] = dst;
-    return r;
+  // Allocate spare register not assigned to variable.
+  int AllocateExtra() {
+    static Express::Var extra(Express::REGISTER, -1);
+    int regno = reg_.size();
+    reg_.push_back(&extra);
+    return regno;
   }
 
   // Get register allocated for variable. Return -1 if no register is allocated.
@@ -850,7 +848,7 @@ void Express::ComputeLiveRanges() {
     ops_[i]->result->last = end;
   }
 
-  // Inputs must be keept alive from the beginning and outputs must be kept
+  // Inputs must be kept alive from the beginning and outputs must be kept
   // alive until the end.
   for (Var *var : vars_) {
     if (var->type == INPUT) var->first = begin;
@@ -1042,7 +1040,7 @@ void Express::Optimize(bool fma, int spare_regs) {
   // Optionally fuse multiply and add/sub.
   if (fma) {
     FuseMulAdd();
-    FuseMulSub();
+    if (target_ != NVIDIA) FuseMulSub();
   }
 
   // Cache inputs and results used in multiple ops in temporary variables.
@@ -1460,80 +1458,79 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
 
 int Express::AllocateRegisters() {
   RegisterAllocator regs;
+
+  // Allocate registers for register-based variables.
   for (Var *var : vars_) {
     if (var->type == REGISTER) regs.Allocate(var);
   }
+
+  // Allocate/get/free destination and source registers for ops.
+  std::vector<Var *> free_vars;
+  std::vector<int> free_regs;
   for (Op *op : ops_) {
-    if (op->type == MOV) {
-      // Allocate destination register for move op.
-      if (op->result->type == TEMP) {
-        if (op->result->first == op) {
-          if (op->args[0]->type == TEMP && op->args[0]->last == op) {
-            // Steal register from source.
-            op->dst = op->src = regs.Transfer(op->args[0], op->result);
-          } else {
-            // Allocate register for destination.
-            CHECK(op->result->last != nullptr);
-            op->dst = regs.Allocate(op->result);
-          }
-        } else {
-          op->dst = regs.Get(op->result);
+    // Get registers for source operands.
+    free_vars.clear();
+    for (int i = 0; i < op->arity(); ++i) {
+      // Register should already be allocated for source arguments.
+      Var *arg = op->args[i];
+      if (!arg->IsRegister()) continue;
+      int reg = regs.Get(arg);
+      CHECK(reg != -1) << i;
+
+      // Assign register.
+      if (op->first_is_dest) {
+        switch (i) {
+          case 0: op->dst = reg; break;
+          case 1: op->src = reg; break;
+          case 2: op->src2 = reg; break;
+          default: LOG(FATAL) << "Too many arguments";
         }
-        CHECK(op->dst != -1);
-      } else if (op->result->type == REGISTER) {
-        op->dst = op->result->reg;
+      } else {
+        switch (i) {
+          case 0: op->src = reg; break;
+          case 1: op->src2 = reg; break;
+          default: LOG(FATAL) << "Too many arguments";
+        }
       }
 
-      // Get source register for move op.
-      if (op->args[0]->IsRegister() && op->src == -1) {
-        op->src = regs.Get(op->args[0]);
-        CHECK(op->src != -1);
-      }
+      // Free register if this op is the last usage.
+      if (arg->type == TEMP && arg->last == op) free_vars.push_back(arg);
+    }
 
-      // Free source register if it is no longer needed.
-      if (op->args[0]->type == TEMP && op->args[0]->last == op) {
-        regs.Free(op->args[0]);
+    // Free source registers after last usage.
+    free_regs.clear();
+    for (Var *v : free_vars) {
+      if (v->reg != -1) {
+        free_regs.push_back(v->reg);
+        regs.Free(v);
       }
-    } else {
-      // Get register for result.
-      if (op->result->type == TEMP) {
-        if (op->result->first == op) {
-          // Allocate register for result.
-          CHECK(op->result->last != nullptr);
+    }
+
+    // Get register for result.
+    if (op->result->type == TEMP) {
+      if (op->result->first == op) {
+        // Allocate register for result. Steal source register if available.
+        for (int r : free_regs) {
+          if (op->dst != -1) break;
+          op->dst = regs.Allocate(op->result, r);
+        }
+        if (op->dst == -1) {
+          // Allocate new register.
           op->dst = regs.Allocate(op->result);
-        } else {
-          op->dst = regs.Get(op->result);
         }
-        CHECK(op->dst != -1);
-      } else if (op->result->type == REGISTER) {
-        op->dst = op->result->reg;
+      } else {
+        op->dst = regs.Get(op->result);
       }
+      CHECK(op->dst != -1);
+    } else if (op->result->type == REGISTER) {
+      op->dst = op->result->reg;
+      CHECK(op->dst != -1);
+    }
 
-      // Get registers for source operands.
-      int first = op->first_is_dest ? 1 : 0;
-      int second = first + 1;
-      if (op->arity() > first && op->args[first]->IsRegister()) {
-        op->src = regs.Get(op->args[first]);
-        CHECK(op->src != -1);
-      }
-      if (op->arity() > second && op->args[second]->IsRegister()) {
-        op->src2 = regs.Get(op->args[second]);
-        CHECK(op->src2 != -1);
-      }
-
-      // Get register for accumulation.
-      if (op->reduction()) {
-        op->acc = regs.AllocateExtra();
-        CHECK(op->acc != -1);
-      }
-
-      // Free unused registers.
-      if (op->arity() > first && op->args[first]->type == TEMP) {
-        if (op->args[first]->last == op) regs.Free(op->args[first]);
-      }
-      if (op->arity() > second && op->args[second]->type == TEMP) {
-        if (op->args[second]->last == op) regs.Free(op->args[second]);
-      }
+    // Get register for accumulation.
+    if (op->reduction()) {
+      op->acc = regs.AllocateExtra();
+      CHECK(op->acc != -1);
     }
   }
 

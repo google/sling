@@ -206,6 +206,9 @@ class FlowBuilder : public Scope {
   Variable *Reshape(Variable *x, const Shape &shape) {
     return Op("Reshape", {x, Const(shape.dims())}, x->type, shape);
   }
+  Variable *Broadcast(Variable *x, const Shape &shape) {
+    return Op("Identity", {x}, x->type, shape);
+  }
 
   // Gather for embedding lookups.
   Variable *Gather(Variable *M, Variable *f) {

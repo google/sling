@@ -14,6 +14,7 @@
 
 #include "sling/myelin/gradient.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "sling/base/logging.h"
@@ -76,8 +77,7 @@ Flow::Variable *Gradients::GetReference(Flow::Variable *x) {
       r = x;
     } else {
       // Local variables need to be accessed through a reference op.
-      r = Name(Ref(instance_, x), basename(x->name));
-      x->set_out();
+      r = Name(Ref(instance_, x), "ref_" + basename(x->name));
     }
     refs_[x] = r;
   }
@@ -110,6 +110,23 @@ Flow::Function *Gradients::Finalize() {
   return func();
 }
 
+void Gradients::MarkReferences() {
+  auto &vars = flow()->vars();
+  for (auto &it : refs_) {
+    Flow::Variable *var = it.first;
+    Flow::Variable *ref = it.second;
+    if (var->global()) continue;
+
+    // Check if reference has been pruned from flow.
+    auto f = std::find(vars.begin(), vars.end(), ref);
+    if (f == vars.end()) continue;
+
+    // Mark the variable as an output to ensure that the variable is
+    // materialized in the final network.
+    var->set_out();
+  }
+}
+
 Flow::Function *Gradient(Flow *flow,
                          Flow::Function *func,
                          const Transformations &library) {
@@ -132,8 +149,36 @@ Flow::Function *Gradient(Flow *flow,
     gradfunc(op, &g);
   }
 
-  // Return gradient function.
-  return g.Finalize();
+  // Finalize gradient function.
+  Flow::Function *gradient = g.Finalize();
+
+  // Prune unused gradient variables and their producers.
+  std::vector<Flow::Variable *> gvars;
+  std::vector<Flow::Operation *> gops;
+  flow->Order(gradient, &gops, &gvars);
+  for (int i = gvars.size() - 1; i >= 0; --i) {
+    // Check if variable is either an output or has consumers. If variable is
+    // produced by an op with multiple outputs we have to keep it in case some
+    // of the other outputs are being used.
+    Flow::Variable *var = gvars[i];
+    if (var->out() || var->usages() > 0) continue;
+    Flow::Operation *producer = var->producer;
+    if (producer != nullptr && producer->outputs.size() > 1) continue;
+
+    // Remove producer.
+    if (producer != nullptr) {
+      flow->RemoveOperation(producer);
+    }
+
+    // Remove variable.
+    flow->DeleteVariable(var);
+  }
+
+  // Set the output flag for all referenced variables to ensure that these are
+  // materialized in the final network.
+  g.MarkReferences();
+
+  return gradient;
 }
 
 }  // namespace myelin

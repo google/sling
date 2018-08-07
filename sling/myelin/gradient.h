@@ -52,6 +52,10 @@ class Gradients : public FlowBuilder {
   // Finalize gradient function.
   Flow::Function *Finalize();
 
+  // Mark referenced variables as outputs to ensure that these are materialized
+  // in the final network.
+  void MarkReferences();
+
  private:
   // Get reference to primal variable.
   Flow::Variable *GetReference(Flow::Variable *x);

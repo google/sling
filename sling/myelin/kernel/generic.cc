@@ -112,6 +112,8 @@ class Reference : public Kernel {
 // Rename operations with aliases.
 class RenameTransformer : public Transformer {
  public:
+  string Name() override { return "RenameTransformer"; }
+
   bool Transform(Flow *flow) override {
     // Rename BiasAdd to Add.
     int renames = 0;
@@ -129,17 +131,30 @@ class RenameTransformer : public Transformer {
 // Remove identity ops.
 class IdentityTransformer : public Transformer {
  public:
+  string Name() override { return "IdentityTransformer"; }
+
   bool Transform(Flow *flow) override {
     // Eliminate no-ops.
     std::vector<Flow::Operation *> noops;
     for (Flow::Operation *op : flow->ops()) {
-      if (op->type == "Identity" ||
-          op->type == "Const" ||
+      if (op->type == "Const" ||
           op->type == "Variable" ||
           op->type == "VariableV2" ||
           op->type == "Placeholder" ||
           op->type == "Enter") {
         noops.push_back(op);
+      } else if (op->type == "Identity") {
+        // Eliminate identity if there is no implicit broadcasting involved.
+        if (op->indegree() == 1 && op->outdegree() == 1) {
+          Flow::Variable *in = op->inputs[0];
+          Flow::Variable *out = op->outputs[0];
+          if (in->shape.defined() &&
+              out->shape.defined() &&
+              in->shape == out->shape &&
+              in->type == out->type) {
+            noops.push_back(op);
+          }
+        }
       } else if (op->type == "Reshape") {
         // Eliminate reshaping if input and output shapes are equal.
         if (op->indegree() == 2 && op->outdegree() == 1) {
@@ -174,51 +189,12 @@ class IdentityTransformer : public Transformer {
   }
 };
 
-// Combine matrix multiplication with add and relu.
-class MatMulTransformer : public Transformer {
- public:
-  bool Transform(Flow *flow) override {
-    int combines = 0;
-    while (Combine(flow, "MatMul", "Add", "MatMulAdd") ||
-           Combine(flow, "MatMul", "Relu", "MatMulRelu") ||
-           Combine(flow, "MatMulAdd", "Relu", "MatMulAddRelu")) {
-      combines++;
-    }
-    return combines > 0;
-  }
-
-  // Try to find combinations and replace them with a combined op.
-  bool Combine(Flow *flow, const string &first, const string &second,
-               const string &combined) {
-    // Find operations that can be combined.
-    for (Flow::Operation *op : flow->ops()) {
-      if (op->type != first) continue;
-      if (op->outputs.size() != 1) continue;
-      Flow::Variable *var = op->outputs[0];
-      if (var->usages() != 1) continue;
-      if (var->consumers[0]->type != second) continue;
-      if (var->consumers[0]->task != op->task) continue;
-      if (var->out()) continue;
-      if (!var->shape.defined()) continue;
-      if (op->indegree() >= 1) {
-        // Only combine for vector inputs.
-        Flow::Variable *input = op->inputs[0];
-        if (input->rank() == 2 && input->dim(0) > 1) continue;
-      }
-      if (op->GetAttr("transpose_a", false)) continue;
-      if (op->GetAttr("transpose_b", false)) continue;
-
-      flow->Fuse(op, var->consumers[0], combined);
-      return true;
-    }
-    return false;
-  }
-};
-
 // Flattens nested concatenations, if possible.  E.g.,
 // tf.concat([a, tf.concat([b, c], 1), d], 1) = tf.concat([a, b, c, d], 1)
 class FlattenConcatTransformer : public Transformer {
  public:
+  string Name() override { return "FlattenConcatTransformer"; }
+
   bool Transform(Flow *flow) override {
     bool transformed = false;
     while (TryFlattenOnce(flow)) transformed = true;
@@ -316,6 +292,8 @@ class FlattenConcatTransformer : public Transformer {
 // 2. Removes the "axis" input when it is zero.
 class GatherTransformer : public Transformer {
  public:
+  string Name() override { return "GatherTransformer"; }
+
   bool Transform(Flow *flow) override {
     bool transformed = false;
 
@@ -355,6 +333,8 @@ class GatherTransformer : public Transformer {
 // Type inference for standard ops.
 class StandardTyper : public Typer {
  public:
+  string Name() override { return "StandardTyper"; }
+
   bool InferTypes(Flow *flow, Flow::Operation *op) override {
     // Infer shape for matrix multiplication.
     if (op->type == "MatMul" ||
@@ -372,12 +352,17 @@ class StandardTyper : public Typer {
         if (a->rank() == 2 && b->rank() == 2) {
           bool ta = op->GetAttr("transpose_a", false);
           bool tb = op->GetAttr("transpose_b", false);
+          bool tc = op->GetAttr("transpose_c", false);
           int a_rows =  ta ? a->dim(1) : a->dim(0);
           int a_cols =  ta ? a->dim(0) : a->dim(1);
           int b_rows =  tb ? b->dim(1) : b->dim(0);
           int b_cols =  tb ? b->dim(0) : b->dim(1);
           if (a_cols == b_rows) {
-            c->shape.assign(a_rows, b_cols);
+            if (tc) {
+              c->shape.assign(b_cols, a_rows);
+            } else {
+              c->shape.assign(a_rows, b_cols);
+            }
             return true;
           }
         }
@@ -548,19 +533,19 @@ class StandardTyper : public Typer {
   }
 };
 
-// Register generic library.
-void RegisterGenericLibrary(Library *library) {
-  // Register transformations.
+// Register generic transforms.
+void RegisterGenericTransforms(Library *library) {
   library->RegisterTransformer(new RenameTransformer());
   library->RegisterTransformer(new IdentityTransformer());
-  library->RegisterTransformer(new MatMulTransformer());
   library->RegisterTransformer(new FlattenConcatTransformer());
   library->RegisterTransformer(new GatherTransformer());
 
   // Register type inference.
   library->RegisterTyper(new StandardTyper());
+}
 
-  // Register kernels.
+// Register generic library.
+void RegisterGenericLibrary(Library *library) {
   library->Register(new Reference());
   RegisterArrayKernels(library);
   RegisterGenericMath(library);

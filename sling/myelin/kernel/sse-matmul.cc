@@ -55,6 +55,7 @@ class SSEFltVecMatMulBase : public Kernel {
     // Transpose not supported.
     if (step->GetAttr("transpose_a", false)) return false;
     if (step->GetAttr("transpose_b", false)) return false;
+    if (step->GetAttr("transpose_c", false)) return false;
 
     // Check shape. First input must be a row vector.
     if (x->dim(0) != 1 || x->dim(1) != W->dim(0)) return false;

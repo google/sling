@@ -137,7 +137,7 @@ class Shape {
   void add(int size) { dims_.push_back(size); }
 
   // Return transposed shape.
-  Shape transpose() {
+  Shape transpose() const {
     if (rank() < 2) return *this;
     Shape t = *this;
     std::swap(t.dims_[0], t.dims_[1]);
@@ -245,6 +245,9 @@ class Attributes : public std::vector<Attribute> {
   void SetAttr(const string &name, int value);
   void SetAttr(const string &name, bool value);
   void SetAttr(const string &name, float value);
+
+  // Remove attribute.
+  void RemoveAttr(const string &name);
 
   // Copy attributes from another attribute list.
   void CopyAttrsFrom(const Attributes &other);
@@ -704,6 +707,9 @@ class Typer {
  public:
   virtual ~Typer() = default;
 
+  // Return descriptive name for typer.
+  virtual string Name() = 0;
+
   // Return true if the type of the outputs of the operations has been
   // inferred.
   virtual bool InferTypes(Flow *flow, Flow::Operation *op) = 0;
@@ -713,6 +719,9 @@ class Typer {
 class Transformer {
  public:
   virtual ~Transformer() = default;
+
+  // Return descriptive name for transformer.
+  virtual string Name() = 0;
 
   // Apply transformations to flow and return true is any transformations were
   // applied.

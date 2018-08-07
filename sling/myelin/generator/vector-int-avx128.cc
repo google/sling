@@ -50,7 +50,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
     int num_mm_aux = 0;
     if (instructions_.Has(Express::MUL)) {
       if (type_ == DT_INT8) {
-        num_mm_aux = std::max(num_mm_aux, 2);
+        num_mm_aux = std::max(num_mm_aux, 3);
       }
       if (type_ == DT_INT64) {
         num_rr_aux = std::max(num_rr_aux, 2);
@@ -152,6 +152,11 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
     // First load operands.
     CHECK(instr->dst != -1);
     CHECK(instr->src != -1);
+    XMMRegister src = xmm(instr->src);
+    if (instr->dst == instr->src) {
+      src = xmmaux(2);
+      __ vmovdqa(src, xmm(instr->src));
+    }
     if (instr->src2 != -1) {
       __ vmovdqa(xmmaux(1), xmm(instr->src2));
     } else {
@@ -159,10 +164,10 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
     }
 
     // Multiply even bytes.
-    __ vpmullw(xmm(instr->dst), xmm(instr->src), xmmaux(1));
+    __ vpmullw(xmm(instr->dst), src, xmmaux(1));
 
     // Multiply odd bytes.
-    __ vpsraw(xmmaux(0), xmm(instr->src), 8);
+    __ vpsraw(xmmaux(0), src, 8);
     __ vpsraw(xmmaux(1), xmmaux(1), 8);
     __ vpmullw(xmmaux(0), xmmaux(0), xmmaux(1));
     __ vpsllw(xmmaux(0), xmmaux(0), 8);

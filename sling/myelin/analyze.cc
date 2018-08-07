@@ -30,6 +30,8 @@
 #include "sling/myelin/kernel/dragnn.h"
 #include "sling/myelin/kernel/tensorflow.h"
 
+using namespace sling::jit;
+
 DEFINE_string(flow, "", "Myelin flow file");
 DEFINE_bool(raw, false, "Do not analyze or compile flow");
 DEFINE_bool(dump_flow, false, "Dump analyzed flow to stdout");
@@ -53,6 +55,15 @@ DEFINE_bool(gpu, false, "Run kernels on GPU");
 DEFINE_bool(argmax, false, "Use argmax for predictions");
 DEFINE_bool(compile, true, "Compile flow");
 
+DEFINE_bool(sse, CPU::Enabled(SSE), "SSE support");
+DEFINE_bool(sse2, CPU::Enabled(SSE2), "SSE2 support");
+DEFINE_bool(sse3, CPU::Enabled(SSE3), "SSE3 support");
+DEFINE_bool(sse41, CPU::Enabled(SSE4_1), "SSE 4.1 support");
+DEFINE_bool(avx, CPU::Enabled(AVX), "AVX support");
+DEFINE_bool(avx2, CPU::Enabled(AVX2), "AVX2 support");
+DEFINE_bool(avx512, CPU::Enabled(AVX512F), "AVX-512 support");
+DEFINE_bool(fma3, CPU::Enabled(FMA3), "FMA3 support");
+
 using namespace sling;
 using namespace sling::myelin;
 
@@ -73,6 +84,8 @@ class FixedDragnnInitializer : public Kernel {
 // Type inference for Dragnn ops.
 class FixedDragnnTyper : public Typer {
  public:
+  string Name() override { return "FixedDragnnTyper"; }
+
   bool InferTypes(Flow *flow, Flow::Operation *op) override {
     if (op->type == "WordEmbeddingInitializer") {
       if (op->outdegree() == 1) {
@@ -86,8 +99,26 @@ class FixedDragnnTyper : public Typer {
   }
 };
 
+static void SetCPUFeature(CpuFeature feature, bool enable) {
+  if (enable) {
+    CPU::Enable(feature);
+  } else {
+    CPU::Disable(feature);
+  }
+}
+
 int main(int argc, char *argv[]) {
   InitProgram(&argc, &argv);
+
+  // Set up CPU features.
+  SetCPUFeature(SSE, FLAGS_sse);
+  SetCPUFeature(SSE2, FLAGS_sse2);
+  SetCPUFeature(SSE3, FLAGS_sse3);
+  SetCPUFeature(SSE4_1, FLAGS_sse41);
+  SetCPUFeature(AVX, FLAGS_avx);
+  SetCPUFeature(AVX2, FLAGS_avx2);
+  SetCPUFeature(AVX512F, FLAGS_avx512);
+  SetCPUFeature(FMA3, FLAGS_fma3);
 
   // Set up kernel library.
   Library library;

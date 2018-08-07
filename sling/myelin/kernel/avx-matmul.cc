@@ -56,6 +56,7 @@ class AVXVecMatMulBase : public Kernel {
     // Transpose not supported.
     if (step->GetAttr("transpose_a", false)) return false;
     if (step->GetAttr("transpose_b", false)) return false;
+    if (step->GetAttr("transpose_c", false)) return false;
 
     // Check bias vector.
     if (bias_) {
@@ -171,7 +172,7 @@ class AVXFltVecMatMulVBase : public AVXVecMatMulBase {
     // Allocate SIMD registers.
     std::vector<ZMMRegister> sum;
     for (int i = 0; i < std::max(unrolls, 4); ++i) {
-      sum.push_back(mm.allocz());
+      sum.push_back(mm.allocz(avx512));
     }
     std::vector<ZMMRegister> acc;
     for (int i = 0; i < 4; ++i) {
@@ -672,7 +673,7 @@ class AVXFltVecMatMulHBase : public AVXVecMatMulBase {
           if (left >= 4) {
             __ vmovaps(s, Operand(input, disp));
             __ vmulps(s, s, Operand(matrix, disp));
-            __ vaddps(sum[0], sum[0], acc);
+            __ vaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
             left -= 4;
             disp += 4 * sizeof(float);
           }
@@ -782,264 +783,6 @@ class AVXFltVecMatMulAddReluH : public AVXFltVecMatMulHBase {
 
   string Name() override { return "AVXFltVecMatMulAddReluH"; }
   string Operation() override { return "MatMulAddRelu"; }
-};
-
-// AVX float matrix-matrix multiplication, C = A * B.
-class AVXFltMatMatMul : public Kernel {
- public:
-  // Maximum number of loop unrolls.
-  static const int kMaxUnrolls = 4;
-
-  // Maximum number of adder registers.
-  static const int kMaxAdders = 4;
-
-  string Name() override { return "AVXFltMatMatMul"; }
-  string Operation() override { return "MatMul"; }
-
-  bool Supports(Step *step) override {
-    // Requires CPU with AVX support.
-    if (!CPU::Enabled(AVX)) return false;
-
-    // Two float 2D tensor inputs and one 2D tensor output.
-    if (step->indegree() != 2) return false;
-    if (step->outdegree() != 1) return false;
-    Tensor *A = step->input(0);
-    Tensor *B = step->input(1);
-    Tensor *C = step->output(0);
-    if (A->rank() != 2 || A->type() != DT_FLOAT) return false;
-    if (B->rank() != 2 || B->type() != DT_FLOAT) return false;
-    if (C->rank() != 2 || C->type() != DT_FLOAT) return false;
-
-    // Check shape.
-    bool transpose_a = step->GetAttr("transpose_a", false);
-    bool transpose_b = step->GetAttr("transpose_b", false);
-    Shape a = A->shape();
-    Shape b = B->shape();
-    Shape c = C->shape();
-    if (transpose_a) a = a.transpose();
-    if (transpose_b) b = b.transpose();
-
-    if (a.dim(0) != c.dim(0)) return false;
-    if (a.dim(1) != b.dim(0)) return false;
-    if (b.dim(1) != c.dim(1)) return false;
-
-    // Check alignment.
-    bool avx512 = CPU::Enabled(AVX512F);
-    int align = avx512 ? 16 : 8;
-    if (transpose_a) {
-      if (!A->SupportsAlignment({align, 1})) return false;
-    } else {
-      if (!A->SupportsAlignment({1, align})) return false;
-    }
-    if (transpose_b) {
-      if (!B->SupportsAlignment({1, align})) return false;
-    } else {
-      if (!B->SupportsAlignment({align, 1})) return false;
-    }
-
-    // Check order.
-    if (!A->SupportsOrder(transpose_a ? COLUMN_MAJOR : ROW_MAJOR)) return false;
-    if (!B->SupportsOrder(transpose_b ? ROW_MAJOR : COLUMN_MAJOR)) return false;
-    if (!C->SupportsOrder(ROW_MAJOR)) return false;
-
-    return true;
-  }
-
-  void Adjust(Step *step) override {
-    // Get input and output tensors.
-    Tensor *A = step->input(0);
-    Tensor *B = step->input(1);
-    Tensor *C = step->output(0);
-    bool avx512 = CPU::Enabled(AVX512F);
-
-    // Set alignment requirements.
-    int align = avx512 ? 16 : 8;
-    bool transpose_a = step->GetAttr("transpose_a", false);
-    bool transpose_b = step->GetAttr("transpose_b", false);
-    if (transpose_a) {
-      A->MinAlign({align, 1});
-    } else {
-      A->MinAlign({1, align});
-    }
-    if (transpose_b) {
-      B->MinAlign({1, align});
-    } else {
-      B->MinAlign({align, 1});
-    }
-
-    A->SetMiniumAlignment(align * sizeof(float));
-    B->SetMiniumAlignment(align * sizeof(float));
-
-    // Set order requirements.
-    A->SetRequiredOrder(transpose_a ? COLUMN_MAJOR : ROW_MAJOR);
-    B->SetRequiredOrder(transpose_b ? ROW_MAJOR : COLUMN_MAJOR);
-    C->SetRequiredOrder(ROW_MAJOR);
-  }
-
-  void Generate(Step *step, MacroAssembler *masm) override {
-    Registers &rr = masm->rr();
-    SIMDRegisters &mm = masm->mm();
-    Label l1, l2, l3;
-
-    // Get input and output tensors.
-    Tensor *A = step->input(0);
-    Tensor *B = step->input(1);
-    Tensor *C = step->output(0);
-
-    // Get dimensions for matrices.
-    bool transpose_a = step->GetAttr("transpose_a", false);
-    bool transpose_b = step->GetAttr("transpose_b", false);
-    int a_row_dim = transpose_a ? 1 : 0;
-    int a_col_dim = transpose_a ? 0 : 1;
-    int b_row_dim = transpose_b ? 1 : 0;
-    int b_col_dim = transpose_b ? 0 : 1;
-    int c_col_dim = 1;
-
-    // Compute the number of unrolls and adders.
-    bool avx512 = masm->Enabled(AVX512F);
-    int vecsize = avx512 ? 16 : 8;
-    int unrolls = 1;
-    for (int i = 2; i <= kMaxUnrolls; ++i) {
-      if (B->aligned(b_row_dim) % (i * vecsize) == 0) unrolls = i;
-    }
-    int adders = unrolls;
-    if (adders > kMaxAdders) adders = kMaxAdders;
-
-    // Allocate general registers.
-    Register a = rr.alloc();
-    Register b = rr.alloc();
-    Register b_row = rr.alloc();
-    Register b_end = rr.alloc();
-    Register c = rr.alloc();
-    Register c_end = rr.alloc();
-    Register k = rr.alloc();
-
-    // Allocate SIMD registers.
-    std::vector<ZMMRegister> elem;
-    for (int n = 0; n < unrolls; ++n) {
-      elem.push_back(mm.allocz(avx512));
-    }
-    std::vector<ZMMRegister> sum;
-    for (int n = 0; n < adders; ++n) {
-      sum.push_back(mm.allocz(avx512));
-    }
-    ZMMRegister acc = mm.allocz(avx512);
-
-    // Load tensor locations.
-    __ LoadTensorAddress(a, A);
-    __ LoadTensorAddress(b, B);
-    __ LoadTensorAddress(c, C);
-
-    // Compute end of B and C.
-    __ movq(b_end, b);
-    __ addq(b_end, Immediate(B->size()));
-    __ movq(c_end, c);
-    __ addq(c_end, Immediate(C->size()));
-
-    // Loop over all rows in C.
-    __ LoopStart(&l1);
-    __ movq(b_row, b);
-
-    // Loop over all columns in C.
-    __ LoopStart(&l2);
-    __ xorq(k, k);
-    for (int n = 0; n < adders; ++n) {
-      if (avx512) {
-        __ vxorps(sum[n], sum[n], sum[n]);
-      } else {
-        __ vxorps(sum[n].ymm(), sum[n].ymm(), sum[n].ymm());
-      }
-    }
-
-    // Compute dot product of row in A and column in B.
-    // C[i,j] = sum_k A[i,k] * B[k,j].
-    __ LoopStart(&l3);
-    for (int n = 0; n < unrolls; ++n) {
-      // Load A[i,k:k+v].
-      int disp = vecsize * n * sizeof(float);
-      if (avx512) {
-        __ vmovaps(elem[n], Operand(a, k, times_4, disp));
-      } else {
-        __ vmovaps(elem[n].ymm(), Operand(a, k, times_4, disp));
-      }
-    }
-
-    for (int n = 0; n < unrolls; ++n) {
-      // Multiply A[i,k:k+v] with B[k:k+v,j] and add to sum.
-      int disp = vecsize * n * sizeof(float);
-      int a = n % adders;
-      if (avx512) {
-        __ vfmadd231ps(sum[a], elem[n], Operand(b_row, k, times_4, disp));
-      } else if (masm->Enabled(FMA3)) {
-        __ vfmadd231ps(sum[a].ymm(), elem[n].ymm(),
-                       Operand(b_row, k, times_4, disp));
-      } else {
-        __ vmulps(elem[n].ymm(), elem[n].ymm(),
-                  Operand(b_row, k, times_4, disp));
-        __ vaddps(sum[a].ymm(), sum[a].ymm(), elem[n].ymm());
-      }
-    }
-
-    __ addq(k, Immediate(vecsize * unrolls));
-    __ cmpq(k, Immediate(A->dim(a_col_dim)));
-    __ j(less, &l3);
-
-    // Sum adders in sum[0].
-    if (avx512) {
-      if (adders == 4) {
-        __ vaddps(sum[0], sum[0], sum[2]);
-        __ vaddps(sum[1], sum[1], sum[3]);
-        __ vaddps(sum[0], sum[0], sum[1]);
-      } else {
-        for (int n = 1; n < adders; ++n) {
-          __ vaddps(sum[0], sum[0], sum[n]);
-        }
-      }
-    } else {
-      if (adders == 4) {
-        __ vaddps(sum[0].ymm(), sum[0].ymm(), sum[2].ymm());
-        __ vaddps(sum[1].ymm(), sum[1].ymm(), sum[3].ymm());
-        __ vaddps(sum[0].ymm(), sum[0].ymm(), sum[1].ymm());
-      } else {
-        for (int n = 1; n < adders; ++n) {
-          __ vaddps(sum[0].ymm(), sum[0].ymm(), sum[n].ymm());
-        }
-      }
-    }
-
-    // Add elements in sum[0] horizontally.
-    if (avx512) {
-      __ vshuff32x4(acc, sum[0], sum[0], 0x0E);
-      __ vaddps(sum[0], sum[0], acc);
-    }
-    __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
-    __ vhaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
-    __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
-    __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
-
-    // Save to C[i,j].
-    __ vmovss(Operand(c), sum[0].ymm());
-    __ addq(c, Immediate(C->stride(c_col_dim)));
-
-    // Move to next column in B.
-    __ addq(b_row, Immediate(B->stride(b_col_dim)));
-    __ cmpq(b_row, b_end);
-    __ j(less, &l2);
-
-    // Move to next row in A.
-    __ addq(a, Immediate(A->stride(a_row_dim)));
-
-    // Move to next row in C.
-    if (C->padding(1) != 0) {
-      __ addq(c, Immediate(C->padding(c_col_dim)));
-    }
-    __ cmpq(c, c_end);
-    __ j(less, &l1);
-  }
-
-  int64 Complexity(const Step *step) override {
-    return step->input(0)->dim(0) * step->input(1)->elements() * 2;
-  }
 };
 
 // Float dot product for CPUs with AVX.
@@ -1252,6 +995,7 @@ class AVXFltAssignAddOuter : public Kernel {
     if (b->dim(0) != 1 || b->dim(1) != c->dim(1)) return false;
     if (!step->GetAttr("transpose_a", false)) return false;
     if (step->GetAttr("transpose_b", false)) return false;
+    if (step->GetAttr("transpose_c", false)) return false;
 
     return true;
   }
@@ -1269,8 +1013,7 @@ class AVXFltAssignAddOuter : public Kernel {
     b->SetMiniumAlignment(byte_alignment);
     c->SetMiniumAlignment(byte_alignment);
 
-    // Ensure aligned loads on rows.
-    c->MinAlign({avx512 ? 16 : 8, 1});
+    // Output must be row-major.
     c->SetRequiredOrder(ROW_MAJOR);
   }
 
@@ -1368,9 +1111,9 @@ class AVXFltAssignAddOuter : public Kernel {
         for (int c = 0; c < kColRegs; ++c) {
           int disp = c * vecsize * sizeof(float);
           if (avx512) {
-            __ vmovaps(breg[c], Operand(bptr, col, times_4, disp));
+            __ vmovups(breg[c], Operand(bptr, col, times_4, disp));
           } else {
-            __ vmovaps(breg[c].ymm(), Operand(bptr, col, times_4, disp));
+            __ vmovups(breg[c].ymm(), Operand(bptr, col, times_4, disp));
           }
         }
 
@@ -1379,18 +1122,18 @@ class AVXFltAssignAddOuter : public Kernel {
           for (int c = 0; c < kColRegs; ++c) {
             int disp = r * rowsize + c * vecsize * sizeof(float);
             if (avx512) {
-              __ vmovaps(creg[c], Operand(cptr, col, times_4, disp));
+              __ vmovups(creg[c], Operand(cptr, col, times_4, disp));
               __ vfmadd231ps(creg[c], areg[r], breg[c]);
-              __ vmovaps(Operand(cptr, col, times_4, disp), creg[c]);
+              __ vmovups(Operand(cptr, col, times_4, disp), creg[c]);
             } else {
-              __ vmovaps(creg[c].ymm(), Operand(cptr, col, times_4, disp));
+              __ vmovups(creg[c].ymm(), Operand(cptr, col, times_4, disp));
               if (fma) {
                 __ vfmadd231ps(creg[c].ymm(), areg[r].ymm(), breg[c].ymm());
               } else {
                 __ vmulps(acc[c].ymm(), areg[r].ymm(), breg[c].ymm());
                 __ vaddps(creg[c].ymm(), creg[c].ymm(), acc[c].ymm());
               }
-              __ vmovaps(Operand(cptr, col, times_4, disp), creg[c].ymm());
+              __ vmovups(Operand(cptr, col, times_4, disp), creg[c].ymm());
             }
           }
         }
@@ -1409,14 +1152,14 @@ class AVXFltAssignAddOuter : public Kernel {
         // First 16 floats at a time using AVX512 without masking.
         while (left >= 16) {
           // Load b[col].
-          __ vmovaps(breg[0], Operand(bptr, coldisp));
+          __ vmovups(breg[0], Operand(bptr, coldisp));
 
           // Multiply a[row] block with b[col] and add to c[row,col] block.
           for (int r = 0; r < rowblk; ++r) {
             int disp = r * rowsize + coldisp;
-            __ vmovaps(creg[0], Operand(cptr, disp));
+            __ vmovups(creg[0], Operand(cptr, disp));
             __ vfmadd231ps(creg[0], areg[r], breg[0]);
-            __ vmovaps(Operand(cptr, disp), creg[0]);
+            __ vmovups(Operand(cptr, disp), creg[0]);
           }
 
           left -= 16;
@@ -1426,33 +1169,33 @@ class AVXFltAssignAddOuter : public Kernel {
         // Compute remaining columns using AVX512 with masking.
         if (left > 0) {
           // Load b[col].
-          __ vmovaps(breg[0], Operand(bptr, coldisp), Mask(mask, zeroing));
+          __ vmovups(breg[0], Operand(bptr, coldisp), Mask(mask, zeroing));
 
           // Multiply a[row] block with b[col] and add to c[row,col] block.
           for (int r = 0; r < rowblk; ++r) {
             int disp = r * rowsize + coldisp;
-            __ vmovaps(creg[0], Operand(cptr, disp), Mask(mask, zeroing));
+            __ vmovups(creg[0], Operand(cptr, disp), Mask(mask, zeroing));
             __ vfmadd231ps(creg[0], areg[r], breg[0]);
-            __ vmovaps(Operand(cptr, disp), creg[0], Mask(mask, merging));
+            __ vmovups(Operand(cptr, disp), creg[0], Mask(mask, merging));
           }
         }
       } else {
         // First 8 floats at a time using AVX.
         while (left >= 8) {
           // Load b[col].
-          __ vmovaps(breg[0].ymm(), Operand(bptr, coldisp));
+          __ vmovups(breg[0].ymm(), Operand(bptr, coldisp));
 
           // Multiply a[row] block with b[col] and add to c[row,col] block.
           for (int r = 0; r < rowblk; ++r) {
             int disp = r * rowsize + coldisp;
-            __ vmovaps(creg[0].ymm(), Operand(cptr, disp));
+            __ vmovups(creg[0].ymm(), Operand(cptr, disp));
             if (fma) {
               __ vfmadd231ps(creg[0].ymm(), areg[r].ymm(), breg[0].ymm());
             } else {
               __ vmulps(acc[0].ymm(), areg[r].ymm(), breg[0].ymm());
               __ vaddps(creg[0].ymm(), creg[0].ymm(), acc[0].ymm());
             }
-            __ vmovaps(Operand(cptr, disp), creg[0].ymm());
+            __ vmovups(Operand(cptr, disp), creg[0].ymm());
           }
 
           left -= 8;
@@ -1462,19 +1205,19 @@ class AVXFltAssignAddOuter : public Kernel {
         // Compute next four columns using SSE.
         if (left >= 4) {
           // Load b[col].
-          __ vmovaps(breg[0].xmm(), Operand(bptr, coldisp));
+          __ vmovups(breg[0].xmm(), Operand(bptr, coldisp));
 
           // Multiply a[row] block with b[col] and add to c[row,col] block.
           for (int r = 0; r < rowblk; ++r) {
             int disp = r * rowsize + coldisp;
-            __ vmovaps(creg[0].xmm(), Operand(cptr, disp));
+            __ vmovups(creg[0].xmm(), Operand(cptr, disp));
             if (fma) {
               __ vfmadd231ps(creg[0].xmm(), areg[r].xmm(), breg[0].xmm());
             } else {
               __ vmulps(acc[0].xmm(), areg[r].xmm(), breg[0].xmm());
               __ vaddps(creg[0].xmm(), creg[0].xmm(), acc[0].xmm());
             }
-            __ vmovaps(Operand(cptr, disp), creg[0].xmm());
+            __ vmovups(Operand(cptr, disp), creg[0].xmm());
           }
 
           left -= 4;
@@ -1724,14 +1467,6 @@ class AVXIntVecMatMulAddReluH : public AVXIntVecMatMulHBase {
 };
 
 void RegisterAVXMatMul(Library *library) {
-  // Computes  : C = A * B
-  // Input     : A: float32[k,n] row-major
-  //             B: float32[n,m] column-major
-  // Output    : C: float32[k,m] row-major
-  // Requires  : AVX
-  // Supports  : FMA3, AVX512
-  library->Register(new AVXFltMatMatMul());
-
   // Computes  : y = x * W
   // Input     : x: float32[1,n]
   //             W: float32[n,m] column-major

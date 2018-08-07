@@ -48,6 +48,7 @@ class GenericFltVecMatMulBase : public Kernel {
     // Transpose not supported.
     if (step->GetAttr("transpose_a", false)) return false;
     if (step->GetAttr("transpose_b", false)) return false;
+    if (step->GetAttr("transpose_c", false)) return false;
 
     // Check shape. First input must be a row vector.
     if (x->dim(0) != 1 || x->dim(1) != W->dim(0)) return false;
@@ -210,6 +211,7 @@ class GenericFltMatMatMul : public Kernel {
     if (C->rank() != 2 || C->type() != DT_FLOAT) return false;
 
     // Check shape.
+    if (step->GetAttr("transpose_c", false)) return false;
     bool transpose_a = step->GetAttr("transpose_a", false);
     bool transpose_b = step->GetAttr("transpose_b", false);
     Shape a = A->shape();
@@ -518,9 +520,55 @@ class GenericIntVecMatMulAddRelu : public GenericIntVecMatMulBase {
   string Operation() override { return "MatMulAddRelu"; }
 };
 
+// Combine matrix multiplication with add and relu.
+class MatMulTransformer : public Transformer {
+ public:
+  string Name() override { return "MatMulTransformer"; }
+
+  bool Transform(Flow *flow) override {
+    int combines = 0;
+    while (Combine(flow, "MatMul", "Add", "MatMulAdd") ||
+           Combine(flow, "MatMul", "Relu", "MatMulRelu") ||
+           Combine(flow, "MatMulAdd", "Relu", "MatMulAddRelu")) {
+      combines++;
+    }
+    return combines > 0;
+  }
+
+  // Try to find combinations and replace them with a combined op.
+  bool Combine(Flow *flow, const string &first, const string &second,
+               const string &combined) {
+    // Find operations that can be combined.
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type != first) continue;
+      if (op->outputs.size() != 1) continue;
+      Flow::Variable *var = op->outputs[0];
+      if (var->usages() != 1) continue;
+      if (var->consumers[0]->type != second) continue;
+      if (var->consumers[0]->task != op->task) continue;
+      if (var->out()) continue;
+      if (!var->shape.defined()) continue;
+      if (op->indegree() >= 1) {
+        // Only combine for vector inputs.
+        Flow::Variable *input = op->inputs[0];
+        if (input->rank() == 2 && input->dim(0) > 1) continue;
+      }
+      if (op->GetAttr("transpose_a", false)) continue;
+      if (op->GetAttr("transpose_b", false)) continue;
+      if (op->GetAttr("transpose_c", false)) continue;
+
+      flow->Fuse(op, var->consumers[0], combined);
+      return true;
+    }
+    return false;
+  }
+};
+
 // Merge transpose into matmul attributes.
 class TransposeTransformer : public Transformer {
  public:
+  string Name() override { return "TransposeTransformer"; }
+
   bool Transform(Flow *flow) override {
     int updates = 0;
 
@@ -528,46 +576,109 @@ class TransposeTransformer : public Transformer {
     for (Flow::Operation *op : flow->Find("Transpose|Transpose")) {
       Flow::Operation *t1 = op;
       Flow::Operation *t2 = t1->inputs[0]->producer;
-      if (t1->outputs[0]->usages() == 1) {
-        t2->outputs[0]->shape = t2->inputs[0]->shape;
-        t1->outputs[0]->shape = t1->inputs[0]->shape;
-        flow->Eliminate(t1);
-        flow->Eliminate(t2);
-        updates++;
+      if (t1->outputs[0]->out()) continue;
+      if (t1->outputs[0]->usages() != 1) continue;
+
+      t2->outputs[0]->shape = t2->inputs[0]->shape;
+      t1->outputs[0]->shape = t1->inputs[0]->shape;
+      flow->Eliminate(t1);
+      flow->Eliminate(t2);
+      updates++;
+    }
+
+    // Eliminate double transpose through reference.
+    for (Flow::Operation *op : flow->Find("Reference|Transpose")) {
+      Flow::Operation *transpose = op;
+      Flow::Operation *reference = transpose->inputs[0]->producer;
+      if (transpose->outputs[0]->usages() != 1) continue;
+      if (transpose->outputs[0]->out()) continue;
+      if (reference->outputs[0]->usages() != 1) continue;
+      if (reference->outputs[0]->out()) continue;
+
+      Flow::Variable *var = flow->Var(reference->GetAttr("var"));
+      if (var == nullptr || var->producer == nullptr) continue;
+      if (var->producer->type != "Transpose") continue;
+
+      // Move reference to the input of the referenced transpose and eliminate
+      // transpose.
+      Flow::Variable *tin = var->producer->inputs[0];
+      reference->SetAttr("var", tin->name);
+      tin->set_out();
+      transpose->inputs[0]->shape = transpose->outputs[0]->shape;
+      flow->Eliminate(transpose);
+
+      // Check if the referenced transpose is still an output.
+      if (var->out() && !var->consumers.empty()) {
+        int var_refs = 0;
+        for (auto *op : flow->ops()) {
+          if (op->type == "Reference" && op->GetAttr("var") == var->name) {
+            var_refs++;
+          }
+        }
+        if (var_refs == 0) var->clear_out();
       }
+
+      updates++;
     }
 
     // Fold transpose of first argument into matmul.
     for (Flow::Operation *op : flow->Find("Transpose|MatMul")) {
       Flow::Operation *matmul = op;
       Flow::Operation *transpose = matmul->inputs[0]->producer;
-      if (transpose->outputs[0]->usages() == 1) {
-        transpose->outputs[0]->shape = transpose->inputs[0]->shape;
-        flow->Eliminate(transpose);
-        matmul->SetAttr("transpose_a", !matmul->GetAttr("transpose_a", false));
-        updates++;
-      }
+      if (transpose->outputs[0]->usages() != 1) continue;
+      if (transpose->outputs[0]->out()) continue;
+
+      transpose->outputs[0]->shape = transpose->inputs[0]->shape;
+      flow->Eliminate(transpose);
+      matmul->SetAttr("transpose_a", !matmul->GetAttr("transpose_a", false));
+      updates++;
     }
 
     // Fold transpose of second argument into matmul.
     for (Flow::Operation *op : flow->Find("Transpose|1:MatMul")) {
       Flow::Operation *matmul = op;
       Flow::Operation *transpose = matmul->inputs[1]->producer;
-      if (transpose->outputs[0]->usages() == 1) {
-        transpose->outputs[0]->shape = transpose->inputs[0]->shape;
-        flow->Eliminate(transpose);
-        matmul->SetAttr("transpose_b", !matmul->GetAttr("transpose_b", false));
-        updates++;
-      }
+      if (transpose->outputs[0]->usages() != 1) continue;
+      if (transpose->outputs[0]->out()) continue;
+
+      transpose->outputs[0]->shape = transpose->inputs[0]->shape;
+      flow->Eliminate(transpose);
+      matmul->SetAttr("transpose_b", !matmul->GetAttr("transpose_b", false));
+      updates++;
+    }
+
+    // Fold transpose of output into matmul.
+    for (Flow::Operation *op : flow->Find("MatMul|Transpose")) {
+      Flow::Operation *transpose = op;
+      Flow::Operation *matmul = transpose->inputs[0]->producer;
+      if (transpose->outputs[0]->usages() != 1) continue;
+      if (transpose->outputs[0]->out()) continue;
+
+      matmul->outputs[0]->shape = transpose->outputs[0]->shape;
+      flow->Eliminate(transpose);
+      matmul->SetAttr("transpose_c", !matmul->GetAttr("transpose_c", false));
+      updates++;
+    }
+
+    // Factor transpose out of MatMul result by applying C^T=A*B => C=B^T*A^T.
+    for (Flow::Operation *op : flow->Find("MatMul")) {
+      if (!op->GetAttr("transpose_c", false)) continue;
+      if (op->indegree() != 2 || op->outdegree() != 1) continue;
+      std::swap(op->inputs[0], op->inputs[1]);
+      bool ta = op->GetAttr("transpose_a", false);
+      bool tb = op->GetAttr("transpose_b", false);
+      op->SetAttr("transpose_a", !tb);
+      op->SetAttr("transpose_b", !ta);
+      op->RemoveAttr("transpose_c");
     }
 
     return updates > 0;
   }
 };
 
-
 void RegisterGenericMatMul(Library *library) {
   // Transformations.
+  library->RegisterTransformer(new MatMulTransformer());
   library->RegisterTransformer(new TransposeTransformer());
 
   // Computes  : C = A * B

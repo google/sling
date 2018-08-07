@@ -459,6 +459,8 @@ class DragnnLookupUnrolled : public Kernel {
 // Type inference for Dragnn ops.
 class DragnnTyper : public Typer {
  public:
+  string Name() override { return "DragnnTyper"; }
+
   bool InferTypes(Flow *flow, Flow::Operation *op) override {
     // Infer shape for lookup operation.
     if (op->type == "Lookup") {
@@ -502,12 +504,12 @@ class DragnnTyper : public Typer {
 // Flow transformations for Dragnn ops.
 class DragnnTransformer : public Transformer {
  public:
+  string Name() override { return "DragnnTransformer"; }
+
   bool Transform(Flow *flow) override {
     std::vector<Flow::Operation *> noops;
     for (Flow::Operation *op : flow->ops()) {
-      if (op->type == "FeatureVector" ||
-          op->type == "Identity" ||
-          op->type == "Enter") {
+      if (op->type == "FeatureVector" || op->type == "Enter") {
         noops.push_back(op);
       }
     }
@@ -521,6 +523,8 @@ class DragnnTransformer : public Transformer {
 // Precompute embeddings with a linear transform.
 class PrecomputedEmbeddings : public Transformer {
  public:
+  string Name() override { return "PrecomputedEmbeddings"; }
+
   bool Transform(Flow *flow) override {
     int num_precompute = 0;
     for (auto *op : flow->Find({"Lookup", "Reshape", "MatMul"})) {

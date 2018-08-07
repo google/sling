@@ -316,6 +316,17 @@ void Attributes::SetAttr(const string &name, float value) {
   SetAttr(name, std::to_string(value));
 }
 
+void Attributes::RemoveAttr(const string &name) {
+  auto it = begin();
+  while (it != end()) {
+    if (it->name == name) {
+      it = erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
 void Attributes::CopyAttrsFrom(const Attributes &other) {
   for (auto &attr : other) emplace_back(attr);
 }
@@ -720,7 +731,7 @@ void Flow::Read(const char *data, size_t size) {
       Variable *var = Var(output);
       CHECK(var != nullptr) << "Unknown " << op->name << " output: " << output;
       op->AddOutput(var);
-      var->AddAlias(op->name);
+      if (j == 0) var->AddAlias(op->name);
     }
 
     // Get attributes.
@@ -999,16 +1010,23 @@ bool Flow::Transform(const Transformations &transformations) {
   // Keep transforming flow until no more transformations can be applied.
   bool again = true;
   bool transformed = false;
+  int round = 1;
   while (again) {
     // Run flow transformers.
     auto &transformers = transformations.transformers();
     again = false;
     for (int t = transformers.size() -1; t >= 0; --t) {
       if (transformers[t]->Transform(this)) {
+        VLOG(4) << "Transformations applied by " << transformers[t]->Name()
+                << " in round " << round;
         transformed = true;
         again = true;
+      } else {
+        VLOG(10) << "No transformations applied by " << transformers[t]->Name()
+                << " in round " << round;
       }
     }
+    round++;
   }
   return transformed;
 }
@@ -1017,6 +1035,8 @@ Flow::Operation *Flow::Fuse(Operation *first,
                             Operation *second,
                             const string &combined,
                             bool merge_inputs) {
+  VLOG(10) << "Fuse " << first->name << " and " << second->name;
+
   // Move inputs from the second op to the first/combined op.
   while (!second->inputs.empty()) {
     Variable *v = second->inputs.front();
@@ -1245,6 +1265,8 @@ Flow::Function *Flow::Extract(const string &name,
 }
 
 void Flow::Eliminate(Operation *op) {
+  VLOG(10) << "Eliminate " << op->name;
+
   if (op->inputs.size() > 0) {
     // Update all usages of output to use the input variable instead.
     CHECK_EQ(op->inputs.size(), 1);
@@ -1485,7 +1507,13 @@ bool Flow::InferTypes(const Transformations &transformations) {
     for (int t = typers.size() -1; t >= 0; --t) {
       Typer *typer = typers[t];
       bool done = typer->InferTypes(this, op);
-      if (done) break;
+      if (done) {
+        VLOG(4) << "Types for " << op->name << " inferred by " << typer->Name();
+        break;
+      } else {
+        VLOG(9) << "Types for " << op->name << " could not be inferred by "
+                << typer->Name();
+      }
     }
 
     // Check that all outputs are now resolved.
@@ -1681,7 +1709,15 @@ void Flow::RemoveOperation(Operation *op) {
 
 bool Flow::IsConsistent() const {
   // Check operations.
+  std::unordered_set<string> opnames;
   for (const Operation *op : ops_) {
+    // Check that op name is unique.
+    if (opnames.count(op->name) != 0) {
+      LOG(WARNING) << "Operation name is not unique: " << op->name;
+      return false;
+    }
+    opnames.insert(op->name);
+
     for (const Variable *input : op->inputs) {
       // Check that input variable is in flow.
       if (std::find(vars_.begin(), vars_.end(), input) == vars_.end()) {
@@ -1715,7 +1751,23 @@ bool Flow::IsConsistent() const {
   }
 
   // Check variables.
+  std::unordered_set<string> varnames;
   for (const Variable *var : vars_) {
+    // Check that variable name and aliases are unique.
+    if (varnames.count(var->name) != 0) {
+      LOG(WARNING) << "Variable name is not unique: " << var->name;
+      return false;
+    }
+    varnames.insert(var->name);
+    for (const string &alias : var->aliases) {
+      if (varnames.count(alias) != 0) {
+        LOG(WARNING) << "Variable alias is not unique: " << alias << " for "
+                     << "variable " << var->name;
+        return false;
+      }
+      varnames.insert(alias);
+    }
+
     // Check that producer is in flow.
     const Operation *producer = var->producer;
     if (producer != nullptr) {
@@ -1751,7 +1803,15 @@ bool Flow::IsConsistent() const {
   }
 
   // Check functions.
+  std::unordered_set<string> funcnames;
   for (const Function *func : funcs_) {
+    // Check that function name is unique.
+    if (funcnames.count(func->name) != 0) {
+      LOG(WARNING) << "Function name is not unique: " << func->name;
+      return false;
+    }
+    funcnames.insert(func->name);
+
     for (const Operation *op : func->ops) {
       // Check that function operation is in flow.
       if (std::find(ops_.begin(), ops_.end(), op) == ops_.end()) {

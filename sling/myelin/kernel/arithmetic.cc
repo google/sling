@@ -72,6 +72,8 @@ static Express::OpType OpType(const string &op) {
     {"Product", Express::PRODUCT},
     {"Min", Express::MIN},
     {"Max", Express::MAX},
+
+    {"Identity", Express::MOV},
   };
 
   auto f = ops.find(op);
@@ -272,6 +274,8 @@ struct Expression {
 // take advantage of mul being much faster than div.
 class DivToMulTransformer : public Transformer {
  public:
+  string Name() override { return "DivToMulTransformer"; }
+
   bool Transform(Flow *flow) override {
     int updates = 0;
     for (Flow::Operation *op : flow->ops()) {
@@ -298,6 +302,8 @@ class DivToMulTransformer : public Transformer {
 // Convert addition where last term is negated to subtraction.
 class AddNegToSubTransformer : public Transformer {
  public:
+  string Name() override { return "AddNegToSubTransformer"; }
+
   bool Transform(Flow *flow) override {
     int updates = 0;
     for (Flow::Operation *op : flow->Find("Neg|1:Add")) {
@@ -317,6 +323,8 @@ class AddNegToSubTransformer : public Transformer {
 // Calculate kernel.
 class ExpressionTransformer : public Transformer {
  public:
+  string Name() override { return "ExpressionTransformer"; }
+
   bool Transform(Flow *flow) override {
     // Make list of ops that can potentially be included in Calculate or
     // Assign op merging.
@@ -607,6 +615,8 @@ class ExpressionTransformer : public Transformer {
 // have been replaced with system constants.
 class RemoveUnusedInputs : public Transformer {
  public:
+  string Name() override { return "RemoveUnusedInputs"; }
+
   bool Transform(Flow *flow) override {
     int num_eliminates = 0;
     for (Flow::Operation *op : flow->ops()) {
@@ -1211,6 +1221,8 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("ProductExpr", "Product", 1));
   library->Register(new Calculate("MaxExpr", "Max", 1));
   library->Register(new Calculate("MinExpr", "Min", 1));
+
+  library->Register(new Calculate("IdExpr", "Identity", 1));
 
   library->Register(new Softmax(false));
   library->Register(new Softmax(true));

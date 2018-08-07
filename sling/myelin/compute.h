@@ -893,6 +893,15 @@ class TensorData {
     return *reinterpret_cast<const T *>(data_ + format_->offset(r, c, k, l));
   }
 
+  template<typename T> T &nth(int index) {
+    DCHECK_EQ(Traits<T>().type(), type());
+    return *reinterpret_cast<T *>(data_ + format_->LinearOffset(index));
+  }
+  template<typename T> const T &nth(int index) const {
+    DCHECK_EQ(Traits<T>().type(), type());
+    return *reinterpret_cast<const T *>(data_ + format_->LinearOffset(index));
+  }
+
   // Return tensor type.
   Type type() const { return format_->type(); }
 

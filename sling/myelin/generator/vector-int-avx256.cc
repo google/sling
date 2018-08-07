@@ -48,7 +48,7 @@ class VectorIntAVX256Generator : public ExpressionGenerator {
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
     if (instructions_.Has(Express::MUL) && type_ == DT_INT8) {
-      num_mm_aux = std::max(num_mm_aux, 2);
+      num_mm_aux = std::max(num_mm_aux, 3);
     }
     index_->ReserveAuxYMMRegisters(num_mm_aux);
   }
@@ -138,6 +138,11 @@ class VectorIntAVX256Generator : public ExpressionGenerator {
     // First load operands.
     CHECK(instr->dst != -1);
     CHECK(instr->src != -1);
+    YMMRegister src = ymm(instr->src);
+    if (instr->dst == instr->src) {
+      src = ymmaux(2);
+      __ vmovdqa(src, ymm(instr->src));
+    }
     if (instr->src2 != -1) {
       __ vmovdqa(ymmaux(1), ymm(instr->src2));
     } else {
@@ -145,10 +150,10 @@ class VectorIntAVX256Generator : public ExpressionGenerator {
     }
 
     // Multiply even bytes.
-    __ vpmullw(ymm(instr->dst), ymm(instr->src), ymmaux(1));
+    __ vpmullw(ymm(instr->dst), src, ymmaux(1));
 
     // Multiply odd bytes.
-    __ vpsraw(ymmaux(0), ymm(instr->src), 8);
+    __ vpsraw(ymmaux(0), src, 8);
     __ vpsraw(ymmaux(1), ymmaux(1), 8);
     __ vpmullw(ymmaux(0), ymmaux(0), ymmaux(1));
     __ vpsllw(ymmaux(0), ymmaux(0), 8);

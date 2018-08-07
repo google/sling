@@ -20,6 +20,9 @@
 namespace sling {
 namespace myelin {
 
+// Register generic transforms.
+void RegisterGenericTransforms(Library *library);
+
 // Register generic library.
 void RegisterGenericLibrary(Library *library);
 
