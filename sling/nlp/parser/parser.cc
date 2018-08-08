@@ -17,8 +17,7 @@
 #include "sling/nlp/parser/parser.h"
 
 #include "sling/frame/serialization.h"
-#include "sling/myelin/cuda/cuda-runtime.h"
-#include "sling/myelin/kernel/cuda.h"
+#include "sling/myelin/compiler.h"
 #include "sling/myelin/kernel/dragnn.h"
 #include "sling/myelin/kernel/tensorflow.h"
 #include "sling/nlp/document/document.h"
@@ -28,36 +27,17 @@
 namespace sling {
 namespace nlp {
 
-static myelin::CUDARuntime cudart;
-
-void Parser::EnableGPU() {
-  if (myelin::CUDA::Supported()) {
-    // Initialize CUDA runtime for Myelin.
-    if (!cudart.connected()) {
-      cudart.Connect();
-    }
-
-    // Always use fast fallback when running on GPU.
-    use_gpu_ = true;
-  }
-}
-
 void Parser::Load(Store *store, const string &model) {
   // Register kernels for implementing parser ops.
-  RegisterTensorflowLibrary(&library_);
-  RegisterDragnnLibrary(&library_);
-  if (use_gpu_) RegisterCUDALibrary(&library_);
+  myelin::Compiler compiler;
+  RegisterDragnnLibrary(compiler.library());
 
   // Load and analyze parser flow file.
   myelin::Flow flow;
   CHECK(flow.Load(model));
 
-  // Analyze parser flow file.
-  flow.Analyze(library_);
-
   // Compile parser flow.
-  if (use_gpu_) network_.set_runtime(&cudart);
-  CHECK(network_.Compile(flow, library_));
+  compiler.Compile(&flow, &network_);
 
   // Initialize lexical encoder.
   encoder_.Initialize(network_);

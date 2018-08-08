@@ -40,6 +40,8 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
     }
+    model_.predicate_regs = true;
+    model_.logic_in_regs = true;
   }
 
   string Name() override { return "VFltAVX512"; }
@@ -49,12 +51,13 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
   bool ExtendedRegs() override { return true; }
 
   void Reserve() override {
-    // Reserve ZMM registers.
-    index_->ReserveZMMRegisters(instructions_.NumRegs());
+    // Reserve ZMM and opmask registers.
+    index_->ReserveExpressionRegisters(instructions_);
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
-    if (instructions_.Has(Express::SUM) ||
+    if (instructions_.Has(Express::MOV) ||
+        instructions_.Has(Express::SUM) ||
         instructions_.Has(Express::PRODUCT) ||
         instructions_.Has(Express::MIN) ||
         instructions_.Has(Express::MAX)) {
@@ -66,7 +69,9 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
   void Generate(Express::Op *instr, MacroAssembler *masm) override {
     switch (instr->type) {
       case Express::MOV:
-        if (IsLoadZero(instr) && masm->Enabled(ZEROIDIOM)) {
+        if (instr->result->predicate || instr->args[0]->predicate) {
+          GeneratePredicateMove(instr, masm);
+        } else if (IsLoadZero(instr) && masm->Enabled(ZEROIDIOM)) {
           // Use XOR to zero register instead of loading constant from memory.
           // This uses the floating point version of xor to avoid bypass delays
           // between integer and floating point units.
@@ -177,41 +182,47 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;
+      case Express::CMPNEUQ:
+        GenerateCompare(instr, masm, CMP_NEQ_UQ);
+        break;
       case Express::CMPLTOQ:
         GenerateCompare(instr, masm, CMP_LT_OQ);
+        break;
+      case Express::CMPLEOQ:
+        GenerateCompare(instr, masm, CMP_LE_OQ);
         break;
       case Express::CMPGTOQ:
         GenerateCompare(instr, masm, CMP_GT_OQ);
         break;
-      case Express::CMPNGEUQ:
-        GenerateCompare(instr, masm, CMP_NGE_UQ);
+      case Express::CMPGEOQ:
+        GenerateCompare(instr, masm, CMP_GE_OQ);
+        break;
+      case Express::COND:
+        GenerateConditional(instr, masm);
+        break;
+      case Express::SELECT:
+        GenerateSelect(instr, masm);
         break;
       case Express::AND:
-        GenerateZMMFltOp(instr,
-            &Assembler::vandps, &Assembler::vandpd,
-            nullptr, nullptr,
-            &Assembler::vandps, &Assembler::vandpd,
-            masm);
-        break;
       case Express::OR:
-        GenerateZMMFltOp(instr,
-            &Assembler::vorps, &Assembler::vorpd,
-            nullptr, nullptr,
-            &Assembler::vorps, &Assembler::vorpd,
-            masm);
-        break;
+      case Express::XOR:
       case Express::ANDNOT:
+      case Express::NOT:
+        GenerateMaskOp(instr, masm);
+        break;
+      case Express::BITAND:
         GenerateZMMFltOp(instr,
-            &Assembler::vandnps, &Assembler::vandnpd,
+            &Assembler::vandps, &Assembler::vandpd,
             nullptr, nullptr,
-            &Assembler::vandnps, &Assembler::vandnpd,
+            &Assembler::vandps, &Assembler::vandpd,
             masm);
         break;
-      case Express::SHR23:
-        GenerateShift(instr, masm, false, 23);
-        break;
-      case Express::SHL23:
-        GenerateShift(instr, masm, true, 23);
+      case Express::BITOR:
+        GenerateZMMFltOp(instr,
+            &Assembler::vorps, &Assembler::vorpd,
+            nullptr, nullptr,
+            &Assembler::vorps, &Assembler::vorpd,
+            masm);
         break;
       case Express::FLOOR:
         GenerateZMMFltOp(instr,
@@ -232,6 +243,12 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
             &Assembler::vcvtdq2ps, nullptr,
             &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
             masm);
+        break;
+      case Express::CVTEXPINT:
+        GenerateShift(instr, masm, false, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::CVTINTEXP:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
         break;
       case Express::SUBINT:
         GenerateZMMFltOp(instr,
@@ -270,6 +287,41 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
         break;
       default:
         UNSUPPORTED;
+    }
+  }
+
+  // Generate loading and storing of opmask registers.
+  void GeneratePredicateMove(Express::Op *instr, MacroAssembler *masm) {
+    if (instr->dst != -1) {
+      if (instr->src != -1) {
+        __ kmovw(kk(instr->dst), kk(instr->src));
+      } else {
+        switch (type_) {
+          case DT_FLOAT:
+            __ vmovaps(zmmaux(0), addr(instr->args[0]));
+            __ vpmovd2m(kk(instr->dst), zmmaux(0));
+            break;
+          case DT_DOUBLE:
+            __ vmovapd(zmmaux(0), addr(instr->args[0]));
+            __ vpmovq2m(kk(instr->dst), zmmaux(0));
+            break;
+          default: UNSUPPORTED;
+        }
+      }
+    } else if (instr->src != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vpmovm2d(zmmaux(0), kk(instr->src));
+          __ vmovaps(addr(instr->result), zmmaux(0));
+          break;
+        case DT_DOUBLE:
+          __ vpmovm2q(zmmaux(0), kk(instr->src));
+          __ vmovapd(addr(instr->result), zmmaux(0));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      UNSUPPORTED;
     }
   }
 
@@ -317,46 +369,118 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
     }
   }
 
+  // Generate logical op with mask registers.
+  void GenerateMaskOp(Express::Op *instr, MacroAssembler *masm) {
+    bool unary = instr->arity() == 1;
+    CHECK(instr->dst != -1);
+    CHECK(instr->src != -1);
+    CHECK(unary || instr->src2 != -1);
+    switch (instr->type) {
+      case Express::AND:
+        __ kandw(kk(instr->dst), kk(instr->src), kk(instr->src2));
+        break;
+      case Express::OR:
+        __ korw(kk(instr->dst), kk(instr->src), kk(instr->src2));
+        break;
+      case Express::XOR:
+        __ kxorw(kk(instr->dst), kk(instr->src), kk(instr->src2));
+        break;
+      case Express::ANDNOT:
+        __ kandnw(kk(instr->dst), kk(instr->src), kk(instr->src2));
+        break;
+      case Express::NOT:
+        __ knotw(kk(instr->dst), kk(instr->src));
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+
   // Generate compare.
   void GenerateCompare(Express::Op *instr, MacroAssembler *masm, int8 code) {
-    // Allocate mask register.
-    OpmaskRegister mask = masm->kk().alloc();
-
-    // Allocate mask.
-    auto *ones = masm->GetConstant<int32>(-1, 16);
-
-    // Compare operands.
     if (instr->src != -1 && instr->src2 != -1) {
       switch (type_) {
         case DT_FLOAT:
-          __ vcmpps(mask, zmm(instr->src), zmm(instr->src2), code);
+          __ vcmpps(kk(instr->dst), zmm(instr->src), zmm(instr->src2), code);
           break;
         case DT_DOUBLE:
-          __ vcmppd(mask, zmm(instr->src), zmm(instr->src2), code);
+          __ vcmppd(kk(instr->dst), zmm(instr->src), zmm(instr->src2), code);
           break;
         default: UNSUPPORTED;
       }
     } else if (instr->src != -1 && instr->src2 == -1) {
       switch (type_) {
         case DT_FLOAT:
-          __ vcmpps(mask, zmm(instr->src), addr(instr->args[1]), code);
+          __ vcmpps(kk(instr->dst), zmm(instr->src), addr(instr->args[1]),
+                    code);
           break;
         case DT_DOUBLE:
-          __ vcmppd(mask, zmm(instr->src), addr(instr->args[1]), code);
+          __ vcmppd(kk(instr->dst), zmm(instr->src), addr(instr->args[1]),
+                    code);
           break;
         default: UNSUPPORTED;
       }
     } else {
       UNSUPPORTED;
     }
+  }
 
-    if (instr->dst != -1) {
-      // Put mask into destination register.
-      __ vmovaps(zmm(instr->dst), ones->address(), Mask(mask, zeroing));
+  // Generate conditional.
+  void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    if (instr->src != -1 && instr->src2 != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vblendmps(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+                       Mask(kk(instr->mask), merging));
+          break;
+        case DT_DOUBLE:
+          __ vblendmpd(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+                       Mask(kk(instr->mask), merging));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->src != -1 && instr->src2 == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vblendmps(zmm(instr->dst), zmm(instr->src), addr(instr->args[2]),
+                       Mask(kk(instr->mask), merging));
+          break;
+        case DT_DOUBLE:
+          __ vblendmpd(zmm(instr->dst), zmm(instr->src), addr(instr->args[2]),
+                       Mask(kk(instr->mask), merging));
+          break;
+        default: UNSUPPORTED;
+      }
     } else {
       UNSUPPORTED;
     }
-    masm->kk().release(mask);
+  }
+
+  // Generate masked select.
+  void GenerateSelect(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    Mask mask(kk(instr->mask), zeroing);
+    if (instr->src != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vmovaps(zmm(instr->dst), zmm(instr->src), mask);
+          break;
+        case DT_DOUBLE:
+          __ vmovapd(zmm(instr->dst), zmm(instr->src), mask);
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vmovaps(zmm(instr->dst), addr(instr->args[1]), mask);
+          break;
+        case DT_DOUBLE:
+          __ vmovapd(zmm(instr->dst), addr(instr->args[1]), mask);
+          break;
+        default: UNSUPPORTED;
+      }
+    }
   }
 
   // Generate code for reduction operation.

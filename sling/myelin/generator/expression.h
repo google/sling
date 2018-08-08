@@ -36,6 +36,7 @@ class ExpressionGenerator {
   typedef jit::XMMRegister XMMRegister;
   typedef jit::YMMRegister YMMRegister;
   typedef jit::ZMMRegister ZMMRegister;
+  typedef jit::OpmaskRegister OpmaskRegister;
 
   // Register sizes in bytes.
   const static int XMMRegSize = 16;
@@ -244,6 +245,7 @@ class ExpressionGenerator {
   XMMRegister xmm(int idx) { return index_->xmm(idx); }
   YMMRegister ymm(int idx) { return index_->ymm(idx); }
   ZMMRegister zmm(int idx) { return index_->zmm(idx); }
+  OpmaskRegister kk(int idx) { return index_->kk(idx); }
 
   // Return register for auxiliary variable.
   Register aux(int idx) { return index_->aux(idx); }

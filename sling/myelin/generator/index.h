@@ -54,25 +54,32 @@ class IndexGenerator {
   // Return register for accessing temporary variable.
   jit::Register reg(int idx) { return regs_[idx]; }
   jit::XMMRegister xmm(int idx) {
-    return jit::XMMRegister::from_code(mmregs_[idx]);
+    CHECK(!mmregs_[idx].predicate);
+    return jit::XMMRegister::from_code(mmregs_[idx].code);
   }
   jit::YMMRegister ymm(int idx) {
-    return jit::YMMRegister::from_code(mmregs_[idx]);
+    CHECK(!mmregs_[idx].predicate);
+    return jit::YMMRegister::from_code(mmregs_[idx].code);
   }
   jit::ZMMRegister zmm(int idx) {
-    return jit::ZMMRegister::from_code(mmregs_[idx]);
+    CHECK(!mmregs_[idx].predicate);
+    return jit::ZMMRegister::from_code(mmregs_[idx].code);
+  }
+  jit::OpmaskRegister kk(int idx) {
+    CHECK(mmregs_[idx].predicate);
+    return jit::OpmaskRegister::from_code(mmregs_[idx].code);
   }
 
   // Return auxiliary register.
   jit::Register aux(int idx) { return aux_[idx]; }
   jit::XMMRegister xmmaux(int idx) {
-    return jit::XMMRegister::from_code(mmaux_[idx]);
+    return jit::XMMRegister::from_code(mmaux_[idx].code);
   }
   jit::YMMRegister ymmaux(int idx) {
-    return jit::YMMRegister::from_code(mmaux_[idx]);
+    return jit::YMMRegister::from_code(mmaux_[idx].code);
   }
   jit::ZMMRegister zmmaux(int idx) {
-    return jit::ZMMRegister::from_code(mmaux_[idx]);
+    return jit::ZMMRegister::from_code(mmaux_[idx].code);
   }
 
   // Reserve fixed register for generating instructions that operate on
@@ -85,6 +92,9 @@ class IndexGenerator {
   void ReserveYMMRegisters(int count);
   void ReserveZMMRegisters(int count);
 
+  // Reserve SIMD and maskop registers for expression.
+  void ReserveExpressionRegisters(const Express &instr);
+
   // Reserve auxiliary registers for expression generators that need extra
   // registers for compiling expression operations.
   void ReserveAuxRegisters(int count);
@@ -93,15 +103,24 @@ class IndexGenerator {
   void ReserveAuxZMMRegisters(int count);
 
  protected:
-  MacroAssembler *masm_;              // macro assembler for code generation
+  // Macro assembler for code generation.
+  MacroAssembler *masm_;
 
  private:
+  // A SIMD register can either be an opmask register (k0-k7) or a vector
+  // register (xmm0-xmm15, ymm0-ymm15, zmm0-zmm31).
+  struct SIMDRegister {
+    SIMDRegister(int code, bool predicate) : code(code), predicate(predicate) {}
+    int code;         // register code (-1 if unallocated)
+    bool predicate;   // predicate register flag
+  };
+
   bool extended_regs_ = false;        // use extended register set
-  std::vector<jit::Register> fixed_;  // reserved fixed registers
-  std::vector<jit::Register> regs_;   // reserved temporary registers
-  std::vector<int> mmregs_;           // reserved SIMD registers (xmm/ymm/zmm)
-  std::vector<jit::Register> aux_;    // reserved auxiliary registers
-  std::vector<int> mmaux_;            // reserved auxiliary SIMD registers
+  std::vector<jit::Register> fixed_;  // fixed registers
+  std::vector<jit::Register> regs_;   // temporary registers
+  std::vector<SIMDRegister> mmregs_;  // temporary SIMD registers
+  std::vector<jit::Register> aux_;    // auxiliary registers
+  std::vector<SIMDRegister> mmaux_;   // auxiliary SIMD registers
 };
 
 }  // namespace myelin

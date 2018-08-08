@@ -138,10 +138,10 @@ class Builder:
   def div(self, x, y, name=None):
     return self.op("Div", [x, y], name)
 
-  def min(self, x, y, name=None):
+  def minimum(self, x, y, name=None):
     return self.op("Minimum", [x, y], name)
 
-  def max(self, x, y, name=None):
+  def maximum(self, x, y, name=None):
     return self.op("Maximum", [x, y], name)
 
   def matmul(self, x, y, name=None):
@@ -197,8 +197,56 @@ class Builder:
   def rcp(self, x, name=None):
     return self.op("Reciprocal", [x], name)
 
+  def equal(self, x, y, name=None):
+    return self.op("Equal", [x, y], name)
+
+  def not_equal(self, x, y, name=None):
+    return self.op("NotEqual", [x, y], name)
+
+  def less(self, x, y, name=None):
+    return self.op("Less", [x, y], name)
+
+  def less_equal(self, x, y, name=None):
+    return self.op("LessEqual", [x, y], name)
+
+  def greater(self, x, y, name=None):
+    return self.op("Greater", [x, y], name)
+
+  def greater_equal(self, x, y, name=None):
+    return self.op("GreaterEqual", [x, y], name)
+
+  def logical_and(self, x, y, name=None):
+    return self.op("And", [x, y], name)
+
+  def logical_or(self, x, y, name=None):
+    return self.op("Or", [x, y], name)
+
+  def logical_xor(self, x, y, name=None):
+    return self.op("Xor", [x, y], name)
+
+  def logical_not(self, x, name=None):
+    return self.op("Not", [x], name)
+
+  def cond(self, c, x, y, name=None):
+    return self.op("Cond", [c, x, y], name)
+
+  def select(self, c, x, name=None):
+    return self.op("Select", [c, x], name)
+
   def identity(self, x, name=None):
     return self.op("Identity", [x], name)
+
+  def sum(self, x, name=None):
+    return self.op("Sum", [x], name)
+
+  def product(self, x, name=None):
+    return self.op("Product", [x], name)
+
+  def min(self, x, name=None):
+    return self.op("Min", [x], name)
+
+  def max(self, x, name=None):
+    return self.op("Max", [x], name)
 
   def ref(self, instance, var, name=None):
     r = self.op("Reference", [instance], name)

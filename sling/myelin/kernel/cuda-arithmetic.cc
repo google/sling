@@ -37,6 +37,7 @@ class CUDACalculate : public CUDAKernel {
     const char *type;         // PTX type of elements
     int size;                 // element size
     std::vector<PTXReg> reg;  // temporary registers
+    std::vector<bool> pred;   // predicate flags for temporary registers
     PTXReg offset;            // element offset register
     PTXReg addr;              // address register
   };
@@ -132,9 +133,7 @@ class CUDACalculate : public CUDAKernel {
 
     // Rewrite expression.
     Express instrs;
-    CHECK(expr.Rewrite(ptx_model, &instrs));
-    instrs.ComputeLiveRanges();
-    int regs = instrs.AllocateRegisters();
+    CHECK(expr.Generate(ptx_model, &instrs));
 
     // Get grid location.
     ptx_decl(b32, idx);
@@ -155,9 +154,14 @@ class CUDACalculate : public CUDAKernel {
     comp.addr = addr;
 
     // Allocate registers.
-    comp.reg.resize(regs);
-    for (int i = 0; i < regs; ++i) {
-      comp.reg[i] = ptx->reg(comp.type, "r", i);
+    instrs.GetRegisterTypes(&comp.pred);
+    comp.reg.resize(comp.pred.size());
+    for (int i = 0; i < comp.reg.size(); ++i) {
+      if (comp.pred[i]) {
+        comp.reg[i] = ptx->reg("pred", "p", i);
+      } else {
+        comp.reg[i] = ptx->reg(comp.type, "r", i);
+      }
     }
 
     // Generate code for each instruction in expression.
@@ -218,6 +222,44 @@ class CUDACalculate : public CUDAKernel {
           break;
         case Express::EXP2:
           GenerateUnaryOp("ex2.approx", instr, &comp);
+          break;
+        case Express::CMPEQOQ:
+          GenerateBinaryOp("setp.eq", instr, &comp);
+          break;
+        case Express::CMPNEUQ:
+          GenerateBinaryOp("setp.ne", instr, &comp);
+          break;
+        case Express::CMPLTOQ:
+          GenerateBinaryOp("setp.lt", instr, &comp);
+          break;
+        case Express::CMPLEOQ:
+          GenerateBinaryOp("setp.le", instr, &comp);
+          break;
+        case Express::CMPGTOQ:
+          GenerateBinaryOp("setp.gt", instr, &comp);
+          break;
+        case Express::CMPGEOQ:
+          GenerateBinaryOp("setp.ge", instr, &comp);
+          break;
+        case Express::BITAND:
+        case Express::AND:
+          GenerateBinaryOp("and", instr, &comp);
+          break;
+        case Express::BITOR:
+        case Express::OR:
+          GenerateBinaryOp("or", instr, &comp);
+          break;
+        case Express::XOR:
+          GenerateBinaryOp("xor", instr, &comp);
+          break;
+        case Express::NOT:
+          GenerateUnaryOp("not", instr, &comp);
+          break;
+        case Express::COND:
+          GenerateConditional(instr, &comp);
+          break;
+        case Express::SELECT:
+          GenerateSelect(instr, &comp);
           break;
         default:
           LOG(FATAL) << "Instruction not supported in CUDA: "
@@ -323,10 +365,11 @@ class CUDACalculate : public CUDAKernel {
     CHECK_EQ(instr->arity(), 2);
     CHECK_EQ(instr->result->type, Express::TEMP);
     CHECK_EQ(instr->args[0]->type, Express::TEMP);
+    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
     switch (instr->args[1]->type) {
       case Express::TEMP:
         // op reg,reg,reg.
-        comp->ptx->emit(PTXInstr(op, comp->type),
+        comp->ptx->emit(PTXInstr(op, type),
                         comp->reg[instr->dst],
                         comp->reg[instr->src],
                         comp->reg[instr->src2]);
@@ -335,12 +378,12 @@ class CUDACalculate : public CUDAKernel {
       case Express::NUMBER:
         // op reg,reg,imm.
         if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr(op, comp->type),
+          comp->ptx->emit(PTXInstr(op, type),
                           comp->reg[instr->dst],
                           comp->reg[instr->src],
                           PTXFloat(Express::NumericFlt32(instr->args[1]->id)));
         } else {
-          comp->ptx->emit(PTXInstr(op, comp->type),
+          comp->ptx->emit(PTXInstr(op, type),
                           comp->reg[instr->dst],
                           comp->reg[instr->src],
                           PTXImm(Express::NumericFlt32(instr->args[1]->id)));
@@ -356,10 +399,11 @@ class CUDACalculate : public CUDAKernel {
     CHECK_EQ(instr->arity(), 1);
     CHECK_EQ(instr->result->type, Express::TEMP);
     CHECK_NE(instr->dst, -1);
+    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
     switch (instr->args[0]->type) {
       case Express::TEMP:
         // op reg, reg.
-        comp->ptx->emit(PTXInstr(op, comp->type),
+        comp->ptx->emit(PTXInstr(op, type),
                         comp->reg[instr->dst],
                         comp->reg[instr->src]);
         break;
@@ -367,13 +411,90 @@ class CUDACalculate : public CUDAKernel {
       case Express::NUMBER:
         // op reg, imm.
         if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr(op, comp->type),
+          comp->ptx->emit(PTXInstr(op, type),
                           comp->reg[instr->dst],
                           PTXFloat(Express::NumericFlt32(instr->args[0]->id)));
         } else {
-          comp->ptx->emit(PTXInstr(op, comp->type),
+          comp->ptx->emit(PTXInstr(op, type),
                           comp->reg[instr->dst],
                           PTXImm(Express::NumericFlt32(instr->args[0]->id)));
+        }
+        break;
+
+      default:
+        LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
+    }
+  }
+
+  void GenerateConditional(Express::Op *instr, Compilation *comp) {
+    CHECK_EQ(instr->arity(), 3);
+    CHECK_EQ(instr->result->type, Express::TEMP);
+    CHECK_EQ(instr->args[1]->type, Express::TEMP);
+    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
+    switch (instr->args[2]->type) {
+      case Express::TEMP:
+        comp->ptx->emit(PTXInstr("selp", type),
+                        comp->reg[instr->dst],
+                        comp->reg[instr->src],
+                        comp->reg[instr->src2],
+                        comp->reg[instr->mask]);
+        break;
+
+      case Express::NUMBER:
+        if (IsFloat(comp->dtype)) {
+          comp->ptx->emit(PTXInstr("selp", type),
+                          comp->reg[instr->dst],
+                          comp->reg[instr->src],
+                          PTXFloat(Express::NumericFlt32(instr->args[2]->id)),
+                          comp->reg[instr->mask]);
+        } else {
+          comp->ptx->emit(PTXInstr("selp", type),
+                          comp->reg[instr->dst],
+                          comp->reg[instr->src],
+                          PTXImm(Express::NumericFlt32(instr->args[2]->id)),
+                          comp->reg[instr->mask]);
+        }
+        break;
+
+      default:
+        LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
+    }
+  }
+
+  void GenerateSelect(Express::Op *instr, Compilation *comp) {
+    CHECK_EQ(instr->arity(), 2);
+    CHECK_EQ(instr->result->type, Express::TEMP);
+    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
+    switch (instr->args[1]->type) {
+      case Express::TEMP:
+        if (IsFloat(comp->dtype)) {
+          comp->ptx->emit(PTXInstr("selp", type),
+                          comp->reg[instr->dst],
+                          comp->reg[instr->src],
+                          PTXFloat(0),
+                          comp->reg[instr->mask]);
+        } else {
+          comp->ptx->emit(PTXInstr("selp", type),
+                          comp->reg[instr->dst],
+                          comp->reg[instr->src],
+                          PTXImm(0),
+                          comp->reg[instr->mask]);
+        }
+        break;
+
+      case Express::NUMBER:
+        if (IsFloat(comp->dtype)) {
+          comp->ptx->emit(PTXInstr("selp", type),
+                          comp->reg[instr->dst],
+                          PTXFloat(Express::NumericFlt32(instr->args[1]->id)),
+                          PTXFloat(0),
+                          comp->reg[instr->mask]);
+        } else {
+          comp->ptx->emit(PTXInstr("selp", type),
+                          comp->reg[instr->dst],
+                          PTXImm(Express::NumericFlt32(instr->args[1]->id)),
+                          PTXImm(0),
+                          comp->reg[instr->mask]);
         }
         break;
 
@@ -591,13 +712,14 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
   ptx_model.func_reg_imm = true;
   ptx_model.fm_reg_reg_reg = true;
   ptx_model.fm_reg_reg_imm = true;
+  ptx_model.predicate_regs = true;
 
   library->Register(new CUDACalculate("CUDAAdd", "Add", 2));
   library->Register(new CUDACalculate("CUDASub", "Sub", 2));
   library->Register(new CUDACalculate("CUDAMul", "Mul", 2));
   library->Register(new CUDACalculate("CUDADiv", "Div", 2));
-  library->Register(new CUDACalculate("CUDAMax", "Maximum", 2));
-  library->Register(new CUDACalculate("CUDAMin", "Minimum", 2));
+  library->Register(new CUDACalculate("CUDAMaximum", "Maximum", 2));
+  library->Register(new CUDACalculate("CUDAMinimum", "Minimum", 2));
 
   library->Register(new CUDACalculate("CUDALog", "Log", 1));
   library->Register(new CUDACalculate("CUDAExp", "Exp", 1));
@@ -613,6 +735,9 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
   library->Register(new CUDACalculate("CUDALogSigmoid", "LogSigmoid", 1));
   library->Register(new CUDACalculate("CUDAReciprocal", "Reciprocal", 1));
   library->Register(new CUDACalculate("CUDASquare", "Square", 1));
+  library->Register(new CUDACalculate("CUDASqrt", "Sqrt", 1));
+  library->Register(new CUDACalculate("CUDACond", "Cond", 3));
+  library->Register(new CUDACalculate("CUDASelect", "Select", 2));
 
   library->Register(new CUDAArgMax());
 }

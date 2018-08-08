@@ -158,3 +158,21 @@ cc_binary(
   ],
 )
 
+cc_library(
+  name = "compiler",
+  srcs = ["compiler.cc"],
+  hdrs = ["compiler.h"],
+  deps = [
+    ":compute",
+    ":elf-linker",
+    ":flow",
+    ":graph",
+    ":profile",
+    "//sling/base",
+    "//sling/base:perf",
+    "//sling/myelin/cuda:cuda-runtime",
+    "//sling/myelin/kernel:cuda",
+    "//sling/myelin/kernel:tensorflow",
+  ],
+)
+

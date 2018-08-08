@@ -152,6 +152,40 @@ class FlowBuilder : public Scope {
   Variable *Cos(Variable *x) { return Op("Cos", {x}); }
   Variable *Sin(Variable *x) { return Op("Sin", {x}); }
 
+  // Comparison.
+  Variable *Equal(Variable *x, Variable *y) {
+    return Op("Equal", {x, y});
+  }
+  Variable *NotEqual(Variable *x, Variable *y) {
+    return Op("NotEqual", {x, y});
+  }
+  Variable *Less(Variable *x, Variable *y) {
+    return Op("Less", {x, y});
+  }
+  Variable *LessEqual(Variable *x, Variable *y) {
+    return Op("LessEqual", {x, y});
+  }
+  Variable *Greater(Variable *x, Variable *y) {
+    return Op("Greater", {x, y});
+  }
+  Variable *GreaterEqual(Variable *x, Variable *y) {
+    return Op("GreaterEqual", {x, y});
+  }
+
+  // Logic operators.
+  Variable *And(Variable *x, Variable *y) { return Op("And", {x, y}); }
+  Variable *Or(Variable *x, Variable *y) { return Op("Or", {x, y}); }
+  Variable *Xor(Variable *x, Variable *y) { return Op("Xor", {x, y}); }
+  Variable *AndNot(Variable *x, Variable *y) { return Op("AndNot", {x, y}); }
+  Variable *Not(Variable *x) { return Op("Not", {x}); }
+
+  Variable *Cond(Variable *cond, Variable *x, Variable *y) {
+    return Op("Cond", {cond, x, y});
+  }
+  Variable *Select(Variable *cond, Variable *x) {
+    return Op("Select", {cond, x});
+  }
+
   // Matrix multiplication.
   Variable *MatMul(Variable *x, Variable *y);
 

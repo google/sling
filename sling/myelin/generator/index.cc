@@ -37,8 +37,12 @@ bool IndexGenerator::AllocateRegisters() {
     if (!r.is_valid()) ok = false;
   }
   for (auto &m : mmregs_) {
-    m = masm_->mm().try_alloc(extended_regs_);
-    if (m == -1) ok = false;
+    if (m.predicate) {
+      m.code = masm_->kk().try_alloc().code();
+    } else {
+      m.code = masm_->mm().try_alloc(extended_regs_);
+    }
+    if (m.code == -1) ok = false;
   }
 
   // Allocate auxiliary registers.
@@ -47,8 +51,8 @@ bool IndexGenerator::AllocateRegisters() {
     if (!r.is_valid()) ok = false;
   }
   for (auto &m : mmaux_) {
-    m = masm_->mm().try_alloc(extended_regs_);
-    if (m == -1) ok = false;
+    m.code = masm_->mm().try_alloc(extended_regs_);
+    if (m.code == -1) ok = false;
   }
 
   return ok;
@@ -72,7 +76,7 @@ void IndexGenerator::ReserveAuxRegisters(int count) {
 
 void IndexGenerator::ReserveXMMRegisters(int count) {
   for (int n = 0; n < count; ++n) {
-    mmregs_.push_back(-1);
+    mmregs_.emplace_back(-1, false);
   }
 }
 
@@ -86,7 +90,7 @@ void IndexGenerator::ReserveZMMRegisters(int count) {
 
 void IndexGenerator::ReserveAuxXMMRegisters(int count) {
   for (int n = 0; n < count; ++n) {
-    mmaux_.push_back(-1);
+    mmaux_.emplace_back(-1, false);
   }
 }
 
@@ -96,6 +100,12 @@ void IndexGenerator::ReserveAuxYMMRegisters(int count) {
 
 void IndexGenerator::ReserveAuxZMMRegisters(int count) {
   ReserveAuxXMMRegisters(count);
+}
+
+void IndexGenerator::ReserveExpressionRegisters(const Express &instr) {
+  std::vector<bool> regs;
+  instr.GetRegisterTypes(&regs);
+  for (bool p : regs) mmregs_.emplace_back(-1, p);
 }
 
 }  // namespace myelin

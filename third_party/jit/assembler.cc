@@ -5190,6 +5190,26 @@ void Assembler::zinstr(byte op, OpmaskRegister k, ZMMRegister src1,
   if (flags & EVEX_IMM) emit(imm8);
 }
 
+void Assembler::zinstr(byte op, OpmaskRegister k, ZMMRegister src,
+                       int8_t imm8, Mask mask, int flags) {
+  EnsureSpace ensure_space(this);
+  ZMMRegister ik = ZMMRegister::from_code(k.code());
+  emit_evex_prefix(ik, zmm0, src, mask, flags);
+  emit(op);
+  emit_sse_operand(ik, src);
+  if (flags & EVEX_IMM) emit(imm8);
+}
+
+void Assembler::zinstr(byte op, ZMMRegister dst, OpmaskRegister k,
+                       int8_t imm8, Mask mask, int flags) {
+  EnsureSpace ensure_space(this);
+  ZMMRegister ik = ZMMRegister::from_code(k.code());
+  emit_evex_prefix(dst, zmm0, ik, mask, flags);
+  emit(op);
+  emit_sse_operand(dst, ik);
+  if (flags & EVEX_IMM) emit(imm8);
+}
+
 void Assembler::db(uint8_t data) {
   EnsureSpace ensure_space(this);
   emit(data);

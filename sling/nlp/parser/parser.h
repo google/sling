@@ -48,15 +48,6 @@ class Parser {
   // Parse document.
   void Parse(Document *document) const;
 
-  // Enable profiling. Must be called before Load().
-  void EnableProfiling() {
-    network_.options().profiling = true;
-    network_.options().global_profiler = true;
-  }
-
-  // Run parser on GPU if available. Must be called before Load().
-  void EnableGPU();
-
   // Neural network for parser.
   const myelin::Network &network() const { return network_; }
 
@@ -108,7 +99,6 @@ class Parser {
   myelin::Tensor *GetParam(const string &name, bool optional = false);
 
   // Parser network.
-  myelin::Library library_;
   myelin::Network network_;
 
   // Lexical encoder.
@@ -131,9 +121,6 @@ class Parser {
 
   // Set of roles considered.
   RoleSet roles_;
-
-  // Run parser on GPU.
-  bool use_gpu_ = false;
 
   // Symbols.
   Names names_;

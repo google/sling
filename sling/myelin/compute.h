@@ -1276,6 +1276,7 @@ class Network {
 
   // Compiler options.
   Options &options() { return options_; }
+  const Options &options() const { return options_; }
 
   // Set element order for parameters.
   void set_parameter_element_order(Order order) {

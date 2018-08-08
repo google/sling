@@ -58,6 +58,9 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
         instructions_.Has(Express::MAX)) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
+    if (instructions_.Has(Express::NOT)) {
+      num_mm_aux = std::max(num_mm_aux, 1);
+    }
     index_->ReserveAuxXMMRegisters(num_mm_aux);
   }
 
@@ -162,15 +165,28 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;
+      case Express::CMPNEUQ:
+        GenerateCompare(instr, masm, CMP_NEQ_UQ);
+        break;
       case Express::CMPLTOQ:
         GenerateCompare(instr, masm, CMP_LT_OQ);
+        break;
+      case Express::CMPLEOQ:
+        GenerateCompare(instr, masm, CMP_LE_OQ);
         break;
       case Express::CMPGTOQ:
         GenerateCompare(instr, masm, CMP_GT_OQ);
         break;
-      case Express::CMPNGEUQ:
-        GenerateCompare(instr, masm, CMP_NGE_UQ);
+      case Express::CMPGEOQ:
+        GenerateCompare(instr, masm, CMP_GE_OQ);
         break;
+      case Express::COND:
+        GenerateConditional(instr, masm);
+        break;
+      case Express::SELECT:
+        GenerateSelect(instr, masm);
+        break;
+      case Express::BITAND:
       case Express::AND:
         GenerateXMMFltOp(instr,
             &Assembler::vandps, &Assembler::vandpd,
@@ -178,9 +194,16 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             masm);
         break;
       case Express::OR:
+      case Express::BITOR:
         GenerateXMMFltOp(instr,
             &Assembler::vorps, &Assembler::vorpd,
             &Assembler::vorps, &Assembler::vorpd,
+            masm);
+        break;
+      case Express::XOR:
+        GenerateXMMFltOp(instr,
+            &Assembler::vxorps, &Assembler::vxorpd,
+            &Assembler::vxorps, &Assembler::vxorpd,
             masm);
         break;
       case Express::ANDNOT:
@@ -189,11 +212,8 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             &Assembler::vandnps, &Assembler::vandnpd,
             masm);
         break;
-      case Express::SHR23:
-        GenerateShift(instr, masm, false, 23);
-        break;
-      case Express::SHL23:
-        GenerateShift(instr, masm, true, 23);
+      case Express::NOT:
+        GenerateNot(instr, masm);
         break;
       case Express::FLOOR:
         GenerateXMMFltOp(instr,
@@ -212,6 +232,12 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
             &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
             masm);
+        break;
+      case Express::CVTEXPINT:
+        GenerateShift(instr, masm, false, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::CVTINTEXP:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
         break;
       case Express::SUBINT:
         GenerateXMMFltOp(instr,
@@ -286,12 +312,106 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
     }
   }
 
+  // Generate logical not.
+  void GenerateNot(Express::Op *instr, MacroAssembler *masm) {
+    // Set aux register to all 1s.
+    __ vpcmpeqd(xmmaux(0), xmmaux(0), xmmaux(0));
+
+    // Compute not(x) = xor(1,x).
+    if (instr->src != -1) {
+      // NOT dst,reg
+      switch (type_) {
+        case DT_FLOAT:
+          __ vxorps(xmm(instr->dst), xmmaux(0), xmm(instr->src));
+          break;
+        case DT_DOUBLE:
+          __ vxorpd(xmm(instr->dst), xmmaux(0), xmm(instr->src));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      // NOT dst,[mem]
+      switch (type_) {
+        case DT_FLOAT:
+          __ vxorps(xmm(instr->dst), xmmaux(0), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ vxorpd(xmm(instr->dst), xmmaux(0), addr(instr->args[0]));
+          break;
+        default: UNSUPPORTED;
+      }
+    }
+  }
+
   // Generate compare.
   void GenerateCompare(Express::Op *instr, MacroAssembler *masm, int8 code) {
     GenerateXMMFltOp(instr,
         &Assembler::vcmpps, &Assembler::vcmppd,
         &Assembler::vcmpps, &Assembler::vcmppd,
         code, masm);
+  }
+
+  // Generate conditional.
+  void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    CHECK(instr->src != -1);
+    CHECK(instr->mask != -1);
+    if (instr->src2 != -1) {
+      // COND dst[mask],src,src2
+      switch (type_) {
+        case DT_FLOAT:
+          __ vblendvps(xmm(instr->dst), xmm(instr->src), xmm(instr->src2),
+                       xmm(instr->mask));
+          break;
+        case DT_DOUBLE:
+          __ vblendvpd(xmm(instr->dst), xmm(instr->src), xmm(instr->src2),
+                       xmm(instr->mask));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      // COND dst[mask],src,[mem]
+      switch (type_) {
+        case DT_FLOAT:
+          __ vblendvps(xmm(instr->dst), xmm(instr->src), addr(instr->args[2]),
+                       xmm(instr->mask));
+          break;
+        case DT_DOUBLE:
+          __ vblendvpd(xmm(instr->dst), xmm(instr->src), addr(instr->args[2]),
+                       xmm(instr->mask));
+          break;
+        default: UNSUPPORTED;
+      }
+    }
+  }
+
+  // Generate masked select.
+  void GenerateSelect(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    CHECK(instr->mask != -1);
+    if (instr->src != -1) {
+      // SELECT dst[mask],src
+      switch (type_) {
+        case DT_FLOAT:
+          __ vandps(xmm(instr->dst), xmm(instr->mask), xmm(instr->src));
+          break;
+        case DT_DOUBLE:
+          __ vandpd(xmm(instr->dst), xmm(instr->mask), xmm(instr->src));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      // SELECT dst[mask],[mem]
+      switch (type_) {
+        case DT_FLOAT:
+          __ vandps(xmm(instr->dst), xmm(instr->mask), addr(instr->args[1]));
+          break;
+        case DT_DOUBLE:
+          __ vandpd(xmm(instr->dst), xmm(instr->mask), addr(instr->args[1]));
+          break;
+        default: UNSUPPORTED;
+      }
+    }
   }
 
   // Generate code for reduction operation.

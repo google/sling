@@ -1637,6 +1637,32 @@ class Assembler : public CodeGenerator {
     emit(cmp);
   }
 
+  void vtestps(XMMRegister dst, XMMRegister src) {
+    vinstr(0x0e, dst, xmm0, src, k66, k0F38, kW0);
+  }
+  void vtestps(XMMRegister dst, const Operand &src) {
+    vinstr(0x0e, dst, xmm0, src, k66, k0F38, kW0);
+  }
+  void vtestps(YMMRegister dst, YMMRegister src) {
+    vinstr(0x0e, dst, ymm0, src, k66, k0F38, kW0);
+  }
+  void vtestps(YMMRegister dst, const Operand &src) {
+    vinstr(0x0e, dst, ymm0, src, k66, k0F38, kW0);
+  }
+
+  void vtestpd(XMMRegister dst, XMMRegister src) {
+    vinstr(0x0f, dst, xmm0, src, k66, k0F38, kW0);
+  }
+  void vtestpd(XMMRegister dst, const Operand &src) {
+    vinstr(0x0f, dst, xmm0, src, k66, k0F38, kW0);
+  }
+  void vtestpd(YMMRegister dst, YMMRegister src) {
+    vinstr(0x0f, dst, ymm0, src, k66, k0F38, kW0);
+  }
+  void vtestpd(YMMRegister dst, const Operand &src) {
+    vinstr(0x0f, dst, ymm0, src, k66, k0F38, kW0);
+  }
+
 #define AVX_CMP_P(instr, imm8)                                             \
   void instr##ps(XMMRegister dst, XMMRegister src1, XMMRegister src2) {    \
     vcmpps(dst, src1, src2, imm8);                                         \
@@ -3562,6 +3588,10 @@ class Assembler : public CodeGenerator {
   void zinstr(byte op, OpmaskRegister k, ZMMRegister src1, ZMMRegister src2,
               int8_t imm8, Mask mask, int flags);
   void zinstr(byte op, OpmaskRegister k, ZMMRegister src1, const Operand &src2,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, OpmaskRegister k, ZMMRegister src,
+              int8_t imm8, Mask mask, int flags);
+  void zinstr(byte op, ZMMRegister dst, OpmaskRegister k,
               int8_t imm8, Mask mask, int flags);
 
   // BMI instruction encoding.

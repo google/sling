@@ -67,6 +67,7 @@ class Express {
 
   // Operation type.
   enum OpType {
+    // Binary operators.
     MOV,         // identity operation, r=a
     ADD,         // addition, r=a+b
     SUB,         // subtraction, r=a-b
@@ -75,10 +76,10 @@ class Express {
     MINIMUM,     // minimum, r=max(a,b)
     MAXIMUM,     // maximum, r=min(a,b)
 
+    // Functions.
     NEG,         // negative, r=-x
     ABS,         // absolute value, r=|x|=max(x,neg(x))
     RELU,        // rectified linear unit, r=max(0,a)
-    RELUGRAD,    // rectified linear unit gradient, r=(x>0)*y
     SOFTSIGN,    // softsign, r=x/(|x|+1)
     SOFTPLUS,    // softplus, r=log(exp(x)+1)
     LOGSIGMOID,  // log sigmoid, r=log(1/(1+exp(-x)))=-softplus(-x))
@@ -93,6 +94,7 @@ class Express {
     LOG2,        // base-2 logarithm, r=log2(a)
     EXP2,        // base-2 exponential function, r=2^a
 
+    // Fused multiply.
     MULADD132,   // fused multiply/add, r=a*c+b
     MULADD213,   // fused multiply/add, r=b*a+c
     MULADD231,   // fused multiply/add, r=b*c+a
@@ -100,21 +102,36 @@ class Express {
     MULSUB213,   // fused multiply/sub, r=b*a-c
     MULSUB231,   // fused multiply/sub, r=b*c-a
 
+    // Comparison.
     CMPEQOQ,     // compare equal (ordered, non-signaling)
+    CMPNEUQ,     // compare not equal (unordered, non-signaling)
     CMPLTOQ,     // compare less than (ordered, non-signaling)
+    CMPLEOQ,     // compare less than or equal (ordered, non-signaling)
     CMPGTOQ,     // compare greater than (ordered, non-signaling)
-    CMPNGEUQ,    // compare not greater or equal (unordered, non-signaling)
+    CMPGEOQ,     // compare greater than or equal (ordered, non-signaling)
 
-    SHR23,       // shift right 23 bits
-    SHL23,       // shift left 23 bits
-    AND,         // logical and
-    OR,          // logical or
-    ANDNOT,      // logical and not
+    // Logical operators.
+    AND,        // logical and, p=a&b
+    OR,         // logical or, p=a|b
+    XOR,        // logical exclusive or, p=a^b
+    ANDNOT,     // logical and not, p=a&!b
+    NOT,        // logical not, p=!a
+
+    // Conditionals operators.
+    COND,       // conditional expression, r=p?a:b
+    SELECT,     // conditional selection, r=p?a:0
+
+    // Miscellaneous.
+    BITAND,      // bitwise and
+    BITOR,       // bitwise or
     FLOOR,       // floor function
     CVTFLTINT,   // float to integer conversion
     CVTINTFLT,   // integer to float conversion
+    CVTEXPINT,   // convert float exponent to integer
+    CVTINTEXP,   // convert integer to float exponent
     SUBINT,      // integer subtraction
 
+    // Reductions.
     SUM,         // sum reduction
     PRODUCT,     // product reduction
     MIN,         // min reduction
@@ -126,7 +143,7 @@ class Express {
   // System-defined numeric constants.
   enum ConstantNumber {
     ZERO, ONE, HALF, TWO, N1, P9, N9, P127, LN2, NLN2, LOG2E,
-    PINF, NINF, MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
+    PINF, NINF, QNAN, MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
     CEPHES_LOG_P5, CEPHES_LOG_P6, CEPHES_LOG_P7, CEPHES_LOG_P8,
@@ -146,6 +163,7 @@ class Express {
   struct Var {
     Var(const Var &other) = default;
     Var(VarType type, int id) : type(type), id(id), producer(nullptr) {}
+    char TypeCode() const;
     string AsString() const;
     void GetRecipe(string *recipe) const;
 
@@ -173,6 +191,7 @@ class Express {
     Op *producer;                 // operation producing value for variable
     std::vector<Op *> consumers;  // consumers of variable
     bool single = false;          // single-element memory variable
+    bool predicate = false;       // predicate variable
 
     // Live range for variable.
     Op *first = nullptr;          // first usage of variable
@@ -205,12 +224,34 @@ class Express {
     bool commutative() const {
       return type == ADD || type == MUL ||
              type == MINIMUM || type == MAXIMUM ||
-             type == AND || type == OR;
+             type == BITAND || type == BITOR ||
+             type == CMPEQOQ || type == CMPNEUQ ||
+             type == AND || type == OR || type == XOR;
+    }
+
+    // Check if operation is a fused multiply.
+    bool fma() const {
+      return type >= MULADD132 && type <= MULSUB231;
+    }
+
+    // Check if operation is a comparison.
+    bool compare() const {
+      return type >= CMPEQOQ && type <= CMPGEOQ;
+    }
+
+    // Check if operation is a logic operation.
+    bool logic() const {
+      return type >= AND && type <= NOT;
+    }
+
+    // Check if operation is a conditional operation.
+    bool conditional() const {
+      return type >= COND && type <= SELECT;
     }
 
     // Check if operation is a reduction.
     bool reduction() const {
-      return type == SUM || type == PRODUCT || type == MIN || type == MAX;
+      return type >= SUM && type <= MAX;
     }
 
     // Check if operation is a no-op.
@@ -225,6 +266,7 @@ class Express {
     int dst = -1;                 // register for first operand
     int src = -1;                 // register for second operand
     int src2 = -1;                // register for third operand
+    int mask = -1;                // register for masking
     int acc = -1;                 // register for accumulation
     bool first_is_dest = false;   // first argument is also destination
     int index = -1;               // operation index
@@ -267,6 +309,12 @@ class Express {
     bool fm_reg_reg_reg = false;    // dst = op(dst, src1, src2)
     bool fm_reg_reg_imm = false;    // dst = op(dst, src, imm)
     bool fm_reg_reg_mem = false;    // dst = op(dst, src, [mem])
+
+    // Separate registers for predicates.
+    bool predicate_regs = false;
+
+    // Only use register operands for logic ops.
+    bool logic_in_regs = false;
   };
 
   Express(Target target = INTEL) : target_(target) {}
@@ -365,7 +413,8 @@ class Express {
   bool Rewrite(const Model &model, Express *rewritten) const;
 
   // Allocate registers for operands. Return the number of registers used.
-  int AllocateRegisters();
+  // Registers for predicates can be allocated in a separate pool.
+  int AllocateRegisters(bool predicate_regs = false);
 
   // Generate instructions according to the instruction model and allocate
   // registers for operands.
@@ -373,6 +422,10 @@ class Express {
 
   // Returns the number of register used by expression.
   int NumRegs() const;
+
+  // Return vector with flag for each register indicating if the register is
+  // a predicate register.
+  void GetRegisterTypes(std::vector<bool> *regs) const;
 
   // Computes the complexity of the expression. This counts the number of
   // operations needed to compute the expression. This does not include move
@@ -422,10 +475,22 @@ class Express {
   Var *Div(Var *x, Var *y) { return Do(DIV, x, y); }
   Var *Minimum(Var *x, Var *y) { return Do(MINIMUM, x, y); }
   Var *Maximum(Var *x, Var *y) { return Do(MAXIMUM, x, y); }
-  Var *CmpGt(Var *x, Var *y) { return Do(CMPGTOQ, x, y); }
-  Var *And(Var *x, Var *y) { return Do(AND, x, y); }
   Var *Zero() { return Number(ZERO); }
   Var *One() { return Number(ONE); }
+
+  Var *CmpEq(Var *x, Var *y) { return Do(CMPEQOQ, x, y); }
+  Var *CmpNe(Var *x, Var *y) { return Do(CMPNEUQ, x, y); }
+  Var *CmpLt(Var *x, Var *y) { return Do(CMPLTOQ, x, y); }
+  Var *CmpLe(Var *x, Var *y) { return Do(CMPLEOQ, x, y); }
+  Var *CmpGt(Var *x, Var *y) { return Do(CMPGTOQ, x, y); }
+  Var *CmpGe(Var *x, Var *y) { return Do(CMPGEOQ, x, y); }
+
+  Var *And(Var *x, Var *y) { return Do(AND, x, y); }
+  Var *Or(Var *x, Var *y) { return Do(OR, x, y); }
+  Var *Not(Var *x) { return Do(NOT, x); }
+
+  Var *Cond(Var *p, Var *x, Var *y) { return Do(COND, p, x, y); }
+  Var *Select(Var *p, Var *x) { return Do(SELECT, p, x); }
 
   // Build expressions for intrinsic functions.
   Var *Log(Var *x);
@@ -439,7 +504,6 @@ class Express {
     return target_ == NVIDIA ? Do(ABS, x) : Maximum(x, Neg(x));
   }
   Var *Relu(Var *x) { return Maximum(x, Zero()); }
-  Var *ReluGrad(Var *x, Var *y) { return Mul(And(CmpGt(x, Zero()), One()), y); }
   Var *Softsign(Var *x) { return Div(x, Add(Abs(x), One())); }
   Var *Softplus(Var *x) { return Log(Add(Exp(x), One())); }
   Var *LogSigmoid(Var *x) { return Neg(Softplus(Neg(x))); }
@@ -449,6 +513,9 @@ class Express {
   Var *Square(Var *x) { return Mul(x, x); }
   Var *Sqrt(Var *x) { return Do(SQRT, x); }
   Var *Sigmoid(Var *x) { return Reciprocal(Add(One(), Exp(Neg(x)))); }
+
+  // Commute operation so op(a,b) = commute(op)(b,a).
+  static OpType Commute(OpType type);
 
   // Look up op type for op name. Return INVALID for unknown op name.
   static OpType Lookup(const string &opname);

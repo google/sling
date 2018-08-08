@@ -50,13 +50,20 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
-    if (instructions_.Has(Express::AND) ||
+    if (instructions_.Has(Express::BITAND) ||
+        instructions_.Has(Express::BITOR) ||
+        instructions_.Has(Express::AND) ||
         instructions_.Has(Express::OR) ||
+        instructions_.Has(Express::XOR) ||
         instructions_.Has(Express::ANDNOT) ||
         instructions_.Has(Express::CVTFLTINT) ||
         instructions_.Has(Express::CVTINTFLT) ||
         instructions_.Has(Express::SUBINT)) {
       num_mm_aux = std::max(num_mm_aux, 1);
+    }
+    if (instructions_.Has(Express::NOT)) {
+      num_mm_aux = std::max(num_mm_aux, 2);
+      index_->ReserveAuxRegisters(1);
     }
 
     index_->ReserveAuxXMMRegisters(num_mm_aux);
@@ -160,25 +167,37 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;
+      case Express::CMPNEUQ:
+        GenerateCompare(instr, masm, CMP_NEQ_UQ);
+        break;
       case Express::CMPLTOQ:
         GenerateCompare(instr, masm, CMP_LT_OQ);
+        break;
+      case Express::CMPLEOQ:
+        GenerateCompare(instr, masm, CMP_LE_OQ);
         break;
       case Express::CMPGTOQ:
         GenerateCompare(instr, masm, CMP_GT_OQ);
         break;
-      case Express::CMPNGEUQ:
-        GenerateCompare(instr, masm, CMP_NGE_UQ);
+      case Express::CMPGEOQ:
+        GenerateCompare(instr, masm, CMP_GE_OQ);
         break;
+      case Express::COND:
+        GenerateConditional(instr, masm);
+        break;
+      case Express::SELECT:
+        GenerateSelect(instr, masm);
+        break;
+      case Express::BITAND:
+      case Express::BITOR:
       case Express::AND:
       case Express::OR:
+      case Express::XOR:
       case Express::ANDNOT:
         GenerateRegisterOp(instr, masm);
         break;
-      case Express::SHR23:
-        GenerateShift(instr, masm, false, 23);
-        break;
-      case Express::SHL23:
-        GenerateShift(instr, masm, true, 23);
+      case Express::NOT:
+        GenerateRegisterOp(instr, masm, true);
         break;
       case Express::FLOOR:
         GenerateRound(instr, masm, round_down);
@@ -186,6 +205,12 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
       case Express::CVTFLTINT:
       case Express::CVTINTFLT:
         GenerateRegisterOp(instr, masm, true);
+        break;
+      case Express::CVTEXPINT:
+        GenerateShift(instr, masm, false, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::CVTINTEXP:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
         break;
       case Express::SUBINT:
         GenerateRegisterOp(instr, masm);
@@ -354,12 +379,28 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           __ vmovss(src2, addr(instr->args[1]));
         }
         switch (instr->type) {
-          case Express::AND: __ vandps(dst, src, src2); break;
-          case Express::OR: __ vorps(dst, src, src2); break;
-          case Express::ANDNOT: __ vandnps(dst, src, src2); break;
           case Express::CVTFLTINT: __ vcvttps2dq(dst, src); break;
           case Express::CVTINTFLT: __ vcvtdq2ps(dst, src); break;
           case Express::SUBINT: __ vpsubd(dst, src, src2); break;
+          case Express::BITAND:
+          case Express::AND:
+            __ vandps(dst, src, src2);
+            break;
+          case Express::BITOR:
+          case Express::OR:
+            __ vorps(dst, src, src2);
+            break;
+          case Express::XOR:
+            __ vxorps(dst, src, src2);
+            break;
+          case Express::ANDNOT:
+            __ vandnps(dst, src, src2);
+            break;
+          case Express::NOT:
+            __ movl(aux(0), Immediate(-1));
+            __ vmovd(xmmaux(1), aux(0));
+            __ vxorps(dst, src, xmmaux(1));
+            break;
           default: UNSUPPORTED;
         }
         break;
@@ -370,15 +411,104 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           __ vmovsd(src2, addr(instr->args[1]));
         }
         switch (instr->type) {
-          case Express::AND: __ vandpd(dst, src, src2); break;
-          case Express::OR: __ vorpd(dst, src, src2); break;
-          case Express::ANDNOT: __ vandnpd(dst, src, src2); break;
           case Express::CVTFLTINT: __ vcvttpd2dq(dst, src); break;
           case Express::CVTINTFLT: __ vcvtdq2pd(dst, src); break;
           case Express::SUBINT: __ vpsubq(dst, src, src2); break;
+          case Express::BITAND:
+          case Express::AND:
+            __ vandpd(dst, src, src2);
+            break;
+          case Express::BITOR:
+          case Express::OR:
+            __ vorpd(dst, src, src2);
+            break;
+          case Express::XOR:
+            __ vxorpd(dst, src, src2);
+            break;
+          case Express::ANDNOT:
+            __ vandnpd(dst, src, src2);
+            break;
+          case Express::NOT:
+            __ movq(aux(0), Immediate(-1));
+            __ vmovq(xmmaux(1), aux(0));
+            __ vxorpd(dst, src, xmmaux(1));
+            break;
           default: UNSUPPORTED;
         }
         break;
+      default: UNSUPPORTED;
+    }
+  }
+
+  // Generate conditional.
+  void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    CHECK(instr->src != -1);
+    CHECK(instr->mask != -1);
+    Label l1, l2;
+    switch (type_) {
+      case DT_FLOAT:
+        __ vtestps(xmm(instr->mask), xmm(instr->mask));
+        break;
+      case DT_DOUBLE:
+        __ vtestpd(xmm(instr->mask), xmm(instr->mask));
+        break;
+      default: UNSUPPORTED;
+    }
+    __ j(zero, &l1);
+    __ movaps(xmm(instr->dst), xmm(instr->src));
+    __ jmp(&l2);
+    __ bind(&l1);
+    if (instr->src != -1) {
+      __ vmovaps(xmm(instr->dst), xmm(instr->src2));
+    } else {
+      __ vmovaps(xmm(instr->dst), addr(instr->args[2]));
+    }
+    __ bind(&l2);
+  }
+
+  // Generate masked select.
+  void GenerateSelect(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    CHECK(instr->mask != -1);
+    Label l1, l2;
+    switch (type_) {
+      case DT_FLOAT: {
+        __ vtestps(xmm(instr->mask), xmm(instr->mask));
+        __ j(not_zero, &l1);
+        __ vxorps(xmm(instr->dst), xmm(instr->dst), xmm(instr->dst));
+        if (instr->src == instr->dst) {
+          __ bind(&l1);
+        } else {
+          __ jmp(&l2);
+          __ bind(&l1);
+          if (instr->src != -1) {
+            __ vmovaps(xmm(instr->dst), xmm(instr->src));
+          } else {
+            __ vmovaps(xmm(instr->dst), addr(instr->args[1]));
+          }
+        }
+        __ bind(&l2);
+        break;
+      }
+      case DT_DOUBLE: {
+        __ vtestpd(xmm(instr->mask), xmm(instr->mask));
+        __ j(not_zero, &l1);
+        __ vxorpd(xmm(instr->dst), xmm(instr->dst), xmm(instr->dst));
+        if (instr->src == instr->dst) {
+          __ bind(&l1);
+        } else {
+          __ jmp(&l2);
+          __ bind(&l1);
+          if (instr->src != -1) {
+            __ vmovaps(xmm(instr->dst), xmm(instr->src));
+          } else {
+            __ vmovaps(xmm(instr->dst), addr(instr->args[1]));
+          }
+        }
+        __ bind(&l2);
+        break;
+      }
       default: UNSUPPORTED;
     }
   }

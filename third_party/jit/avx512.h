@@ -1406,6 +1406,12 @@ void vpminuq(ZMMRegister dst, ZMMRegister src1, ZMMRegister src2, Mask mask = no
 void vpminuq(ZMMRegister dst, ZMMRegister src1, const Operand &src2, Mask mask = nomask) {
   zinstr(0x3B, dst, src1, src2, 0, mask, EVEX_BCST | EVEX_BT8 | EVEX_ENDS | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_P66 | EVEX_W1);
 }
+void vpmovb2m(OpmaskRegister dst, ZMMRegister src) {
+  zinstr(0x29, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
+}
+void vpmovd2m(OpmaskRegister dst, ZMMRegister src) {
+  zinstr(0x39, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
+}
 void vpmovdb(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
   zinstr(0x31, dst, src, 0, mask, EVEX_DT4 | EVEX_DT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
 }
@@ -1417,6 +1423,21 @@ void vpmovdw(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
 }
 void vpmovdw(const Operand &dst, ZMMRegister src, Mask mask = nomask) {
   zinstr(0x33, dst, src, 0, mask, EVEX_DT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
+}
+void vpmovm2b(ZMMRegister dst, OpmaskRegister src) {
+  zinstr(0x28, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
+}
+void vpmovm2d(ZMMRegister dst, OpmaskRegister src) {
+  zinstr(0x38, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
+}
+void vpmovm2q(ZMMRegister dst, OpmaskRegister src) {
+  zinstr(0x38, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W1);
+}
+void vpmovm2w(ZMMRegister dst, OpmaskRegister src) {
+  zinstr(0x28, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W1);
+}
+void vpmovq2m(OpmaskRegister dst, ZMMRegister src) {
+  zinstr(0x39, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W1);
 }
 void vpmovqb(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
   zinstr(0x32, dst, src, 0, mask, EVEX_DT2 | EVEX_DT4 | EVEX_DT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
@@ -1525,6 +1546,9 @@ void vpmovusqw(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
 }
 void vpmovusqw(const Operand &dst, ZMMRegister src, Mask mask = nomask) {
   zinstr(0x14, dst, src, 0, mask, EVEX_DT4 | EVEX_DT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W0);
+}
+void vpmovw2m(OpmaskRegister dst, ZMMRegister src) {
+  zinstr(0x29, dst, src, 0, nomask, EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_PF3 | EVEX_W1);
 }
 void vpmovzxbd(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
   zinstr(0x31, dst, src, 0, mask, EVEX_DT4 | EVEX_DT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F38 | EVEX_P66 | EVEX_WIG);

@@ -53,6 +53,9 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         instructions_.Has(Express::MAX)) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
+    if (instructions_.Has(Express::COND)) {
+      num_mm_aux = std::max(num_mm_aux, 2);
+    }
     index_->ReserveAuxXMMRegisters(num_mm_aux);
   }
 
@@ -121,42 +124,55 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;
+      case Express::CMPNEUQ:
+        GenerateCompare(instr, masm, CMP_NEQ_UQ);
+        break;
       case Express::CMPLTOQ:
         GenerateCompare(instr, masm, CMP_LT_OQ);
+        break;
+      case Express::CMPLEOQ:
+        GenerateCompare(instr, masm, CMP_LE_OQ);
         break;
       case Express::CMPGTOQ:
         GenerateCompare(instr, masm, CMP_GT_OQ);
         break;
-      case Express::CMPNGEUQ:
-        GenerateCompare(instr, masm, CMP_NGE_UQ);
+      case Express::CMPGEOQ:
+        GenerateCompare(instr, masm, CMP_GE_OQ);
+        break;
+      case Express::COND:
+        GenerateConditional(instr, masm);
+        break;
+      case Express::SELECT:
+        GenerateSelect(instr, masm);
         break;
       case Express::AND:
+      case Express::BITAND:
         GenerateXMMFltOp(instr,
             &Assembler::andps, &Assembler::andpd,
             &Assembler::andps, &Assembler::andpd,
             masm);
         break;
       case Express::OR:
+      case Express::BITOR:
         GenerateXMMFltOp(instr,
             &Assembler::orps, &Assembler::orpd,
             &Assembler::orps, &Assembler::orpd,
             masm);
         break;
+      case Express::XOR:
+        GenerateXMMFltOp(instr,
+            &Assembler::xorps, &Assembler::xorpd,
+            &Assembler::xorps, &Assembler::xorpd,
+            masm);
+        break;
       case Express::ANDNOT:
-        if (CPU::Enabled(SSE2)) {
-          GenerateXMMFltOp(instr,
-              &Assembler::andnps, &Assembler::andnpd,
-              &Assembler::andnps, &Assembler::andnpd,
-              masm);
-        } else {
-          UNSUPPORTED;
-        }
+        GenerateXMMFltOp(instr,
+            &Assembler::andnps, &Assembler::andnpd,
+            &Assembler::andnps, &Assembler::andnpd,
+            masm);
         break;
-      case Express::SHR23:
-        GenerateShift(instr, masm, false, 23);
-        break;
-      case Express::SHL23:
-        GenerateShift(instr, masm, true, 23);
+      case Express::NOT:
+        GenerateNot(instr, masm);
         break;
       case Express::FLOOR:
         GenerateFloor(instr, masm);
@@ -166,6 +182,12 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         break;
       case Express::CVTINTFLT:
         GenerateIntToFlt(instr, masm);
+        break;
+      case Express::CVTEXPINT:
+        GenerateShift(instr, masm, false, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::CVTINTEXP:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
         break;
       case Express::SUBINT:
         GenerateXMMFltOp(instr,
@@ -286,12 +308,143 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
     }
   }
 
+  // Generate logical not.
+  void GenerateNot(Express::Op *instr, MacroAssembler *masm) {
+    // Compute not(x) = xor(1,x).
+    CHECK(instr->first_is_dest);
+    if (instr->src != -1) {
+      // NOT dst,reg
+      __ pcmpeqd(xmmaux(0), xmmaux(0));
+      switch (type_) {
+        case DT_FLOAT:
+          __ xorps(xmm(instr->dst), xmmaux(0));
+          break;
+        case DT_DOUBLE:
+          __ xorpd(xmm(instr->dst), xmmaux(0));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      // NOT dst,[mem]
+      __ pcmpeqd(xmm(instr->dst), xmm(instr->dst));
+      switch (type_) {
+        case DT_FLOAT:
+          __ xorps(xmm(instr->dst), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ xorpd(xmm(instr->dst), addr(instr->args[0]));
+          break;
+        default: UNSUPPORTED;
+      }
+    }
+  }
+
   // Generate compare.
   void GenerateCompare(Express::Op *instr, MacroAssembler *masm, int8 code) {
     GenerateXMMFltOp(instr,
         &Assembler::cmpps, &Assembler::cmppd,
         &Assembler::cmpps, &Assembler::cmppd,
         code, masm);
+  }
+
+  // Generate conditional.
+  void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    CHECK(instr->src != -1);
+    CHECK(instr->mask != -1);
+
+    // Mask first argument.
+    if (instr->src != -1) {
+      __ movaps(xmmaux(0), xmm(instr->src));
+    } else {
+      __ movaps(xmmaux(0), addr(instr->args[1]));
+    }
+    switch (type_) {
+      case DT_FLOAT:
+        __ andps(xmmaux(0), xmm(instr->mask));
+        break;
+      case DT_DOUBLE:
+        __ andpd(xmmaux(0), xmm(instr->mask));
+        break;
+      default: UNSUPPORTED;
+    }
+
+    // Mask second argument.
+    if (instr->src2 != -1) {
+      __ movaps(xmmaux(1), xmm(instr->src2));
+    } else {
+      __ movaps(xmmaux(1), addr(instr->args[2]));
+    }
+    switch (type_) {
+      case DT_FLOAT:
+        __ andnps(xmmaux(1), xmm(instr->mask));
+        break;
+      case DT_DOUBLE:
+        __ andnpd(xmmaux(1), xmm(instr->mask));
+        break;
+      default: UNSUPPORTED;
+    }
+
+    // Merge masked values.
+    __ movaps(xmm(instr->dst), xmmaux(0));
+    switch (type_) {
+      case DT_FLOAT:
+        __ orps(xmm(instr->dst), xmmaux(1));
+        break;
+      case DT_DOUBLE:
+        __ orpd(xmm(instr->dst), xmmaux(1));
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+
+  // Generate masked select.
+  void GenerateSelect(Express::Op *instr, MacroAssembler *masm) {
+    CHECK(instr->dst != -1);
+    CHECK(instr->mask != -1);
+    bool copy_src = false;
+    int merge_src = true;
+    if (instr->dst == instr->src) {
+      if (instr->dst == instr->mask) return;  // no op
+      merge_src = false;
+    } else if (instr->dst != instr->mask && instr->src != instr->mask) {
+      copy_src = true;
+      merge_src = false;
+    }
+
+    if (copy_src) {
+      if (instr->src != -1) {
+        __ movaps(xmm(instr->dst), xmm(instr->src));
+      } else {
+        __ movaps(xmm(instr->dst), addr(instr->args[1]));
+      }
+    }
+
+    switch (type_) {
+      case DT_FLOAT:
+        if (merge_src) {
+          if (instr->src != -1) {
+            __ andps(xmm(instr->dst), xmm(instr->src));
+          } else {
+            __ andps(xmm(instr->dst), addr(instr->args[1]));
+          }
+        } else {
+          __ andps(xmm(instr->dst), xmm(instr->mask));
+        }
+        break;
+      case DT_DOUBLE:
+        if (merge_src) {
+          if (instr->src != -1) {
+            __ andpd(xmm(instr->dst), xmm(instr->src));
+          } else {
+            __ andpd(xmm(instr->dst), addr(instr->args[1]));
+          }
+        } else {
+          __ andpd(xmm(instr->dst), xmm(instr->mask));
+        }
+        break;
+      default: UNSUPPORTED;
+    }
   }
 
   // Generate code for reduction operation.
