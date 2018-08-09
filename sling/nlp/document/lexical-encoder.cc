@@ -117,8 +117,6 @@ void LexicalFeatures::InitializeLexicon(Vocabulary::Iterator *words,
   lexicon_.set_normalization(normalization);
 
   // Build affix tables.
-  prefix_size_ = spec.max_prefix;
-  suffix_size_ = spec.max_suffix;
   lexicon_.BuildPrefixes(spec.max_prefix);
   lexicon_.BuildSuffixes(spec.max_suffix);
 
@@ -152,12 +150,14 @@ LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
     }
   }
   if (spec.prefix_dim > 0) {
-    auto *f = tf.Feature("prefix", lexicon_.prefixes().size(), prefix_size_,
+    const auto &p = lexicon_.prefixes();
+    auto *f = tf.Feature("prefix", p.size(), p.max_length() + 1,
                          spec.prefix_dim);
     features.push_back(f);
   }
   if (spec.suffix_dim > 0) {
-    auto *f = tf.Feature("suffix", lexicon_.suffixes().size(), suffix_size_,
+    const auto &s = lexicon_.suffixes();
+    auto *f = tf.Feature("suffix", s.size(), s.max_length() + 1,
                          spec.suffix_dim);
     features.push_back(f);
   }
@@ -236,10 +236,6 @@ void LexicalFeatures::Initialize(const Network &net) {
     d_feature_vector_ = net.GetParameter(gname + "/d_feature_vector");
     primal_ = net.GetParameter(gname + "/primal");
   }
-
-  // Get feature sizes.
-  if (prefix_feature_ != nullptr) prefix_size_ = prefix_feature_->elements();
-  if (suffix_feature_ != nullptr) suffix_size_ = suffix_feature_->elements();
 
   // Load pre-trained word embeddings.
   if (!pretrained_embeddings_.empty()) {
@@ -329,7 +325,7 @@ void LexicalFeatureExtractor::Compute(const DocumentFeatures &features,
   if (lex_.prefix_feature_) {
     Affix *affix = features.prefix(index);
     int *a = data_.Get<int>(lex_.prefix_feature_);
-    for (int n = 0; n < lex_.prefix_size_; ++n) {
+    for (int n = 0; n <= lex_.lexicon().prefixes().max_length(); ++n) {
       if (affix != nullptr) {
         *a++ = affix->id();
         affix = affix->shorter();
@@ -343,7 +339,7 @@ void LexicalFeatureExtractor::Compute(const DocumentFeatures &features,
   if (lex_.suffix_feature_) {
     Affix *affix = features.suffix(index);
     int *a = data_.Get<int>(lex_.suffix_feature_);
-    for (int n = 0; n < lex_.suffix_size_; ++n) {
+    for (int n = 0; n <= lex_.lexicon().suffixes().max_length(); ++n) {
       if (affix != nullptr) {
         *a++ = affix->id();
         affix = affix->shorter();

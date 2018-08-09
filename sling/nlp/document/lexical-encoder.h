@@ -113,9 +113,6 @@ class LexicalFeatures {
   myelin::Tensor *feature_vector_ = nullptr;   // output feature vector
   myelin::Tensor *word_embeddings_ = nullptr;  // word embedding matrix
 
-  int prefix_size_ = 0;                        // max prefix length
-  int suffix_size_ = 0;                        // max suffix length
-
   myelin::Cell *gfeatures_ = nullptr;          // gradient cell
   myelin::Tensor *d_feature_vector_;           // feature vector gradient
   myelin::Tensor *primal_;                     // reference to primal cell
