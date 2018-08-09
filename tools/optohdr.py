@@ -18,7 +18,7 @@
 This tools converts the instruction op code table to a header file with methods
 for encoding each instruction.
 
-python tools/optohdr.py > third_party/jit/avx512.h
+python tools/optohdr.py > third_party/jit/avx512.inc
 
 """
 

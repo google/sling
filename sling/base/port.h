@@ -27,6 +27,8 @@
 
 #include "sling/base/types.h"
 
+namespace sling {
+
 #if defined(__APPLE__)
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -520,6 +522,8 @@ inline void UnalignedCopy64(const void *src, void *dst) {
 }
 
 #endif  // defined(__cpluscplus)
+
+}  // namespace sling
 
 #endif  // SLING_BASE_PORT_H_
 

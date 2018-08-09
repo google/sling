@@ -29,6 +29,8 @@
 // Use std::string.
 using std::string;
 
+namespace sling {
+
 // Standard typedefs.
 typedef int8_t int8;
 typedef int16_t int16;
@@ -92,6 +94,8 @@ static const  int32 kint32min  = (( int32) ~0x7FFFFFFF);
 static const  int32 kint32max  = (( int32) 0x7FFFFFFF);
 static const  int64 kint64min  = (( int64) GG_LONGLONG(~0x7FFFFFFFFFFFFFFF));
 static const  int64 kint64max  = (( int64) GG_LONGLONG(0x7FFFFFFFFFFFFFFF));
+
+}  // namespace sling
 
 #endif  // SLING_BASE_TYPES_H_
 

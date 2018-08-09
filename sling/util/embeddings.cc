@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #include <math.h>
+#include <string>
 
 #include "sling/util/embeddings.h"
 
 #include "sling/base/logging.h"
+#include "sling/base/types.h"
 
 namespace sling {
 
@@ -76,10 +78,8 @@ EmbeddingWriter::EmbeddingWriter(const string &filename,
                                  int num_words, int dim)
     : stream_(filename), output_(&stream_) {
   // Write header line.
-  output_.Write(std::to_string(num_words));
-  output_.WriteChar(' ');
-  output_.Write(std::to_string(dim));
-  output_.WriteChar('\n');
+  string hdr = std::to_string(num_words) + " " + std::to_string(dim) + "\n";
+  output_.Write(hdr);
 }
 
 bool EmbeddingWriter::Close() {

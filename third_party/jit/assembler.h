@@ -2742,7 +2742,7 @@ class Assembler : public CodeGenerator {
   }
 
   // AVX-512F instructions.
-  #include "third_party/jit/avx512.h"
+  #include "third_party/jit/avx512.inc"
 
   // BMI instructions.
   void andnq(Register dst, Register src1, Register src2) {

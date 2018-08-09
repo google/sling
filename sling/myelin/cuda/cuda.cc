@@ -315,7 +315,7 @@ void PTXAssembler::Generate(string *ptx) {
     ptx->append(std::to_string(i));
     ptx->append(" = ");
     char str[32];
-    uint64 addr = addresses_[i];
+    uint64_t addr = addresses_[i];
     snprintf(str, sizeof(str), "0x%" PRIx64, addr);
     ptx->append(str);
     ptx->append(";\n");

@@ -161,7 +161,7 @@ void Printer::PrintString(const StringDatum *str) {
           t += WriteUTF8(t, end);
           break;
         }
-        // Fall through.
+        [[fallthrough]];
       case HEX:
         WriteChars('\\', 'x');
         WriteChar(hexdigit[*t >> 4]);

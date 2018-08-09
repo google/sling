@@ -22,11 +22,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "sling/base/types.h"
+
 namespace sling {
 namespace myelin {
 
 // CUDA handles.
-typedef uint64_t CUdeviceptr;
+typedef uint64 CUdeviceptr;
 typedef int CUdevice;
 typedef struct CUctx_st *CUcontext;
 typedef struct CUmod_st *CUmodule;

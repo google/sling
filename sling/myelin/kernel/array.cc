@@ -659,11 +659,15 @@ class SingleGather : public Kernel {
     Tensor *M = step->input(0);
     Tensor *f = step->input(1);
     Tensor *v = step->output(0);
-    int r = f->rank() - 1;
-    if (f->type() != DT_INT32 || f->elements() != 1) return false;
+    if (f->type() != DT_INT32) return false;
     if (M->type() != DT_FLOAT || M->rank() != 2) return false;
-    if (v->type() != DT_FLOAT || v->rank() != r + 1) return false;
-    if (v->shape().outer(r) != 1 || v->dim(r) != M->dim(1)) return false;
+    if (v->type() != DT_FLOAT) return false;
+    int n = f->elements();
+    int d = M->dim(1);
+    int r = v->rank() - 1;
+    if (v->shape().outer(r) != n) return false;
+    if (v->shape().inner(r) != d) return false;
+    if (n != 1) return false;
 
     // Check that the output is not already a reference.
     if (v->ref()) return false;
@@ -734,12 +738,14 @@ class MultiGather : public Kernel {
     Tensor *M = step->input(0);
     Tensor *f = step->input(1);
     Tensor *v = step->output(0);
-    int r = f->rank() - 1;
-    int n = f->elements();
     if (f->type() != DT_INT32) return false;
     if (M->type() != DT_FLOAT || M->rank() != 2) return false;
-    if (v->type() != DT_FLOAT || v->rank() != r + 1) return false;
-    if (v->shape().outer(r) != n || v->dim(r) != M->dim(1)) return false;
+    if (v->type() != DT_FLOAT) return false;
+    int n = f->elements();
+    int d = M->dim(1);
+    int r = v->rank() - 1;
+    if (v->shape().outer(r) != n) return false;
+    if (v->shape().inner(r) != d) return false;
 
     return true;
   }

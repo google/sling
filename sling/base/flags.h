@@ -15,6 +15,7 @@
 #ifndef SLING_BASE_FLAGS_H_
 #define SLING_BASE_FLAGS_H_
 
+#include <inttypes.h>
 #include <string>
 
 #include "sling/base/types.h"
@@ -73,16 +74,16 @@ struct Flag {
   DEFINE_VARIABLE(bool, ::sling::Flag::BOOL, name, value, help)
 
 #define DEFINE_int32(name, value, help) \
-  DEFINE_VARIABLE(int32, ::sling::Flag::INT32, name, value, help)
+  DEFINE_VARIABLE(int32_t, ::sling::Flag::INT32, name, value, help)
 
 #define DEFINE_uint32(name, value, help) \
-  DEFINE_VARIABLE(uint32, ::sling::Flag::UINT32, name, value, help)
+  DEFINE_VARIABLE(uint32_t, ::sling::Flag::UINT32, name, value, help)
 
 #define DEFINE_int64(name, value, help) \
-  DEFINE_VARIABLE(int64, ::sling::Flag::INT64, name, value, help)
+  DEFINE_VARIABLE(int64_t, ::sling::Flag::INT64, name, value, help)
 
 #define DEFINE_uint64(name, value, help) \
-  DEFINE_VARIABLE(uint64, ::sling::Flag::UINT64, name, value, help)
+  DEFINE_VARIABLE(uint64_t, ::sling::Flag::UINT64, name, value, help)
 
 #define DEFINE_double(name, val, txt) \
   DEFINE_VARIABLE(double, ::sling::Flag::DOUBLE, name, val, txt)
@@ -94,10 +95,10 @@ struct Flag {
 #define DECLARE_VARIABLE(type, name) extern type FLAGS_##name;
 
 #define DECLARE_bool(name) DECLARE_VARIABLE(bool, name)
-#define DECLARE_int32(name) DECLARE_VARIABLE(int32, name)
-#define DECLARE_uint32(name) DECLARE_VARIABLE(uint32, name)
-#define DECLARE_int64(name) DECLARE_VARIABLE(int64, name)
-#define DECLARE_uint64(name) DECLARE_VARIABLE(uint64, name)
+#define DECLARE_int32(name) DECLARE_VARIABLE(int32_t, name)
+#define DECLARE_uint32(name) DECLARE_VARIABLE(uint32_t, name)
+#define DECLARE_int64(name) DECLARE_VARIABLE(int64_t, name)
+#define DECLARE_uint64(name) DECLARE_VARIABLE(uint64_t, name)
 #define DECLARE_string(name) DECLARE_VARIABLE(string, name)
 
 #endif  // DEFINE_VARIABLE

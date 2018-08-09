@@ -1760,6 +1760,7 @@ bool Flow::IsConsistent() const {
     }
     varnames.insert(var->name);
     for (const string &alias : var->aliases) {
+      if (alias == var->name) continue;
       if (varnames.count(alias) != 0) {
         LOG(WARNING) << "Variable alias is not unique: " << alias << " for "
                      << "variable " << var->name;

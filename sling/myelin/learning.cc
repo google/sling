@@ -104,7 +104,8 @@ void Optimizer::Build(Flow *flow) {
     }
     CHECK(producer != nullptr) << "No producer for gradient " << dvar->name;
     Flow::Function *func = producer->func;
-    CHECK(func != nullptr) "No producer function for gradient " << dvar->name;
+    CHECK(func != nullptr) << "No producer function for gradient "
+                           << dvar->name;
 
     // Add instance variables for producer functions.
     if (instance_[func] == nullptr) instance_[func] = tf.Instance(func);

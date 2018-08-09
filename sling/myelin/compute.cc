@@ -1272,7 +1272,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->aligned_.set(d, align);
         size *= align;
       }
-      outer = tensor->rank();
+      outer = tensor->rank() - 1;
     }
 
     // For tensors where the size of the outer dimension is one, the stride of

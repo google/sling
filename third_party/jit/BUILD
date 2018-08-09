@@ -50,7 +50,7 @@ cc_library(
     "assembler.h",
     "instructions.h",
     "registers.h",
-    "avx512.h",
+    "avx512.inc",
   ],
   deps = [
     ":code",

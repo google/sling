@@ -525,6 +525,7 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
             __ vminpd(acc, acc, aux);
             __ vpermilpd(aux, acc, 1);
             __ vminpd(acc, acc, aux);
+            break;
           case Express::MAX:
             __ vperm2f128(aux, acc, acc, 1);
             __ vmaxpd(acc, acc, aux);

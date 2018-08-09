@@ -260,7 +260,7 @@ class PTXInstr {
 // PTX assembler instruction argument.
 class PTXArg {
  public:
-  ~PTXArg() = default;
+  virtual ~PTXArg() = default;
   virtual void Generate(string *code) const = 0;
 };
 

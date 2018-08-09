@@ -148,9 +148,7 @@ class IdentityTransformer : public Transformer {
         if (op->indegree() == 1 && op->outdegree() == 1) {
           Flow::Variable *in = op->inputs[0];
           Flow::Variable *out = op->outputs[0];
-          if (in->shape.defined() &&
-              out->shape.defined() &&
-              in->shape == out->shape &&
+          if ((in->shape == out->shape  || out->shape.missing()) &&
               in->type == out->type) {
             noops.push_back(op);
           }
@@ -438,6 +436,21 @@ class StandardTyper : public Typer {
           result->shape = concat;
           return true;
         }
+      }
+    }
+
+    // Infer shape for identity operation.
+    if (op->type == "Identity") {
+      if (op->indegree() == 1 && op->outdegree() == 1) {
+        Flow::Variable *input = op->inputs[0];
+        Flow::Variable *output = op->outputs[0];
+        if (output->shape.missing()) {
+          output->shape = input->shape;
+        }
+        if (output->type == DT_INVALID) {
+          output->type = input->type;
+        }
+        return true;
       }
     }
 
