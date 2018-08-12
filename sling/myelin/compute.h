@@ -637,6 +637,9 @@ class Tensor {
   // Constant tensors are global and cannot be modifed.
   bool constant_ = false;
 
+  // Initialize tensor with random values from normal distrubution.
+  bool random_init_ = false;
+
   // Local tensors are allocated in the instance data block.
   bool local_ = true;
 
@@ -1260,6 +1263,11 @@ class Network {
 
   // Allocate memory in memory pool.
   char *AllocateMemory(size_t size, int alignment);
+
+  // Initialize learnable weights with random values from a normal distribution.
+  void InitLearnableWeights(int64 seed = 0,
+                            float mean = 0.0,
+                            float stddev = 1e-4);
 
   // Save weights after training. This copies the value of each learnable tensor
   // in the network to the corresponding variable in the flow. This clears the

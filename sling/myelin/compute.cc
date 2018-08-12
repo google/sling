@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <algorithm>
 #include <list>
+#include <random>
 #include <string>
 #include <unordered_map>
 
@@ -620,12 +621,12 @@ string Tensor::ToString(const char *data, bool deref) const {
 }
 
 Channel::Channel(const Tensor *format) : format_(format) {
-  // Use the stride of the first dimension as the element size to ensure
+  // Align the element size to the byte alignment of the format tensor to ensure
   // proper alignment of the elements in the channel array.
   DCHECK(format->order() == ROW_MAJOR) << format->name();
   DCHECK_GE(format->rank(), 1) << format->name();
   DCHECK_EQ(format->dim(0), 1) << format->name();
-  element_size_ = format->stride(0);
+  element_size_ = Align(format->size(), format->byte_alignment());
 
   // Channel are aligned to the element alignment and cache lines.
   EnsureAlignment(&alignment_, format->byte_alignment());
@@ -863,6 +864,32 @@ Network::~Network() {
   for (auto *s : steps_) delete s;
 }
 
+void Network::InitLearnableWeights(int64 seed, float mean, float stddev) {
+  // Intialize random generator.
+  std::mt19937_64 prng;
+  prng.seed(seed);
+  std::uniform_real_distribution<float> dist(mean, stddev);
+
+  // Initialize learnable variable with Gaussian noise.
+  for (auto *tensor : globals_) {
+    if (!tensor->random_init_) continue;
+    if (tensor->type() != DT_FLOAT) continue;
+    if (tensor->data() == nullptr) continue;
+
+    if (tensor->HasStandardLayout()) {
+      float *data = reinterpret_cast<float *>(tensor->data());
+      for (int i = 0; i < tensor->elements(); ++i) {
+        data[i] = dist(prng);
+      }
+    } else {
+      for (int i = 0; i < tensor->elements(); ++i) {
+        size_t offset = tensor->LinearOffset(i);
+        *reinterpret_cast<float *>(tensor->data() + offset) = dist(prng);
+      }
+    }
+  }
+}
+
 void Network::SaveLearnedWeights(Flow *flow) {
   // Find all learnable variables in flow.
   for (Flow::Variable *var : flow->vars()) {
@@ -940,6 +967,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       tensor->required_order_ = options_.parameter_element_order;
     } else {
       globals_.push_back(tensor);
+      tensor->random_init_ = var->random() && var->learnable();
     }
     tensor->name_ = var->name;
     names_[var->name] = tensor;
@@ -1252,7 +1280,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
     // Compute stride size for each dimension.
     size_t size = TypeTraits::of(tensor->type()).size();
-    int outer;
     if (tensor->order_ == ROW_MAJOR) {
       for (int d = tensor->rank() - 1; d >= 0; --d) {
         tensor->stride_.set(d, size);
@@ -1262,7 +1289,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->aligned_.set(d, align);
         size *= align;
       }
-      outer = 0;
     } else {
       for (int d = 0; d < tensor->rank(); ++d) {
         tensor->stride_.set(d, size);
@@ -1272,17 +1298,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         tensor->aligned_.set(d, align);
         size *= align;
       }
-      outer = tensor->rank() - 1;
-    }
-
-    // For tensors where the size of the outer dimension is one, the stride of
-    // the first dimension is adjusted to the byte alignment requirement for the
-    // tensor. This ensures that channels allocated using this tensor as the
-    // format will have the correct alignment for all the elements.
-    if (tensor->rank() > 1 &&
-        tensor->shape_.dim(outer) == 1 &&
-        size % tensor->byte_alignment_ != 0) {
-      tensor->stride_.set(outer, Align(size, tensor->byte_alignment_));
     }
 
     // Set tensor size.
@@ -1937,6 +1952,7 @@ string Cell::ToString() const {
                       t->TypeString().c_str(),
                       t->device_offset(),
                       t->space(), t->byte_alignment());
+        StringAppendF(&str, " %s", ordername[t->order()]);
         if (t->linked()) {
           StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
         }
@@ -1968,6 +1984,7 @@ string Cell::ToString() const {
                     t->name().c_str(),
                     t->TypeString().c_str(),
                     t->size(), t->byte_alignment());
+      StringAppendF(&str, " %s", ordername[t->order()]);
       if (t->linked()) {
         StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
       }

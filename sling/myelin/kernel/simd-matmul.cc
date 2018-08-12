@@ -468,7 +468,7 @@ class SIMDMatMul : public Kernel {
           }
           gen->MaskedStore(Operand(c), sum[0]);
         }
-        __ addq(c, Immediate(blksize));
+        __ addq(c, Immediate(phase.masked * dsize));
       }
     }
 
@@ -593,7 +593,7 @@ class SIMDMatMul : public Kernel {
         // Masked phase.
         CHECK_EQ(phase.unrolls, 1);
         gen->MaskedLoad(elem[0], Operand(a, blkstart));
-        gen->MaskedMulAdd(sum[0], sum[0], Operand(b_ptr, blkstart));
+        gen->MaskedMulAdd(sum[0], elem[0], Operand(b_ptr, blkstart));
       }
     }
 
@@ -640,7 +640,6 @@ class SIMDMatMul : public Kernel {
     Register a = masm->rr().alloc();
     Register b = masm->rr().alloc();
     Register c = masm->rr().alloc();
-    Register a_ptr = masm->rr().alloc();
     Register b_ptr = masm->rr().alloc();
     Register a_end = masm->rr().alloc();
     Register b_end = masm->rr().alloc();
@@ -653,49 +652,62 @@ class SIMDMatMul : public Kernel {
     __ LoadTensorAddress(a, args.a().tensor);
     __ LoadTensorAddress(b, args.b().tensor);
     __ LoadTensorAddress(c, args.c().tensor);
+    if (args.a().width() > 1) {
+      __ leaq(a_end, Operand(a, args.a().width() * dsize));
+    }
+    if (args.b().height() > 1) {
+      __ leaq(b_end, Operand(b, args.b().size()));
+    }
 
-    // Loop over rows in B.
-    __ leaq(a_end, Operand(a, args.a().width() * dsize));
-    __ leaq(b_end, Operand(b, args.b().size()));
+    // Loop over columns in A.
     Label l1;
     __ bind(&l1);
 
-    // Loop over columns in A.
-    __ movq(a_ptr, a);
+    // Loop over rows in B.
+    __ movq(b_ptr, b);
     Label l2;
     __ bind(&l2);
 
     // Compute dot product between column in A and row in B.
     auto *gen = sasm.scalar();
-    __ xorq(a_ofs, a_ofs);
-    __ xorq(b_ofs, b_ofs);
-    gen->Zero(sum);
-    Label l3;
-    __ bind(&l3);
-    gen->Load(elem, Operand(a_ptr, a_ofs));
-    gen->MulAdd(sum, elem, Operand(b_ptr, b_ofs), false);
-    __ addq(a_ofs, Immediate(args.a().stride()));
-    __ addq(b_ofs, Immediate(dsize));
-    __ cmpq(b_ofs, Immediate(args.b().width()));
-    __ j(less, &l3);
+    if (args.b().width() == 1) {
+      gen->Load(sum, Operand(a));
+      gen->Mul(sum, sum, Operand(b_ptr));
+    } else {
+      __ xorq(a_ofs, a_ofs);
+      __ xorq(b_ofs, b_ofs);
+      gen->Zero(sum);
+      Label l3;
+      __ bind(&l3);
+      gen->Load(elem, Operand(a, a_ofs));
+      gen->MulAdd(sum, elem, Operand(b_ptr, b_ofs), false);
+      __ addq(a_ofs, Immediate(args.a().stride()));
+      __ addq(b_ofs, Immediate(dsize));
+      __ cmpq(b_ofs, Immediate(args.b().width() * dsize));
+      __ j(less, &l3);
+    }
 
     // Save result in C.
     if (accumulate_) gen->Add(sum, sum, Operand(c));
     gen->Store(Operand(c), sum);
     __ addq(c, Immediate(dsize));
 
-    // Next column in A.
-    __ addq(a_ptr, Immediate(dsize));
-    __ cmpq(a_ptr, a_end);
-    __ j(less, &l2);
-
     // Next row in B.
-    if (args.c().padding() > 0) {
-      __ addq(c, Immediate(args.c().padding()));
+    if (args.b().height() > 1) {
+      __ addq(b_ptr, Immediate(args.b().stride()));
+      __ cmpq(b_ptr, b_end);
+      __ j(less, &l2);
     }
-    __ addq(b, Immediate(args.b().stride()));
-    __ cmpq(b, b_end);
-    __ j(less, &l1);
+
+    // Next column in A.
+    if (args.a().width() > 1) {
+      if (args.c().padding() > 0) {
+        __ addq(c, Immediate(args.c().padding()));
+      }
+      __ addq(a, Immediate(dsize));
+      __ cmpq(a, a_end);
+      __ j(less, &l1);
+    }
   }
 
   int64 Complexity(const Step *step) override {

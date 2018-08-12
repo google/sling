@@ -3204,7 +3204,7 @@ class Assembler : public CodeGenerator {
   // of bytes in the instruction after the operand. Currently only suffix
   // lengths of 0 and 1 are supported.
   // The ts parameter encodes the tuple size used for EVEX disp8*N compression.
-  void emit_operand(int rm, const Operand &adr, int sl = 0, int ts = 0);
+  void emit_operand(int code, const Operand &adr, int sl = 0, int ts = 0);
 
   // Emit a ModR/M byte with registers coded in the reg and rm_reg fields.
   void emit_modrm(Register reg, Register rm_reg) {

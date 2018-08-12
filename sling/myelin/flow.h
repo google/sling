@@ -298,6 +298,7 @@ class Flow {
       REF = 4,        // reference variable
       LEARNABLE = 8,  // learnable global variable
       UNIQUE = 16,    // input with single gradient
+      RANDOM = 32,    // initialize with random values
     };
 
     // Add alias for variable.
@@ -346,6 +347,15 @@ class Flow {
     }
     Variable *clear_unique(bool disable = true) {
       return clear(UNIQUE, disable);
+    }
+
+    // Random intialize flag.
+    bool random() const { return is(RANDOM); }
+    Variable *set_random(bool enable = true) {
+      return set(RANDOM, enable);
+    }
+    Variable *clear_random(bool disable = true) {
+      return clear(RANDOM, disable);
     }
 
     // Check if variable is a constant.

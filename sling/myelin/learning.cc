@@ -32,7 +32,6 @@ void CrossEntropyLoss::Build(Flow *flow,
                              Flow::Variable *dlogits) {
   // Assume logits batch dimension is one.
   CHECK_EQ(logits->rank(), 2);
-  CHECK_EQ(logits->dim(0), 1);
   CHECK(logits->shape == dlogits->shape);
   int size = logits->dim(1);
 
@@ -40,7 +39,7 @@ void CrossEntropyLoss::Build(Flow *flow,
   FlowBuilder tf(flow, name_);
 
   // Inputs are logits and target label.
-  auto *input = tf.Placeholder("logits", DT_FLOAT, logits->shape);
+  auto *input = tf.Placeholder("logits", DT_FLOAT, {1, size});
   input->set_ref();
   auto *target = tf.Placeholder("target", DT_INT32, {});
 
@@ -53,7 +52,7 @@ void CrossEntropyLoss::Build(Flow *flow,
 
   // Compute gradient.
   auto *gradient = tf.Sub(softmax, tf.OneHot(target, size));
-  auto *output = tf.Name(tf.Reshape(gradient, dlogits->shape), "d_logits");
+  auto *output = tf.Name(tf.Reshape(gradient, {1, size}), "d_logits");
   output->set_ref();
 
   // Connect input and output logits.

@@ -663,7 +663,7 @@ class AVXFltVecMatMulHBase : public AVXVecMatMulBase {
         if (avx512) {
           __ vmovaps(elem[0], Operand(input, disp), Mask(mask, zeroing));
           __ vfmadd231ps(sum[0], elem[0], Operand(matrix, disp),
-                         Mask(mask, zeroing));
+                         Mask(mask, merging));
         } else {
           XMMRegister s = acc.xmm();
           XMMRegister e = elem[0].xmm();

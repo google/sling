@@ -114,6 +114,11 @@ class AVX512FloatGenerator : public SIMDGenerator {
   void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
     if (masm_->Enabled(FMA3)) {
       masm_->vfmadd231ps(zmm(dst), zmm(src1), src2);
+    } else if (retain) {
+      ZMMRegister acc = masm_->mm().allocz();
+      masm_->vmulps(acc, zmm(src1), src2);
+      masm_->vaddps(zmm(dst), zmm(dst), acc);
+      masm_->mm().release(acc);
     } else {
       masm_->vmulps(zmm(src1), zmm(src1), src2);
       masm_->vaddps(zmm(dst), zmm(dst), zmm(src1));
@@ -126,7 +131,7 @@ class AVX512FloatGenerator : public SIMDGenerator {
     masm_->vshuff32x4(acc, sum, sum, 0x0E);
     masm_->vaddps(sum, sum, acc);
     masm_->vperm2f128(acc.ymm(), sum.ymm(), sum.ymm(), 1);
-    masm_->vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
+    masm_->vhaddps(sum.ymm(), sum.ymm(), acc.ymm());
     masm_->vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
     masm_->vhaddps(sum.ymm(), sum.ymm(), sum.ymm());
     masm_->mm().release(acc);
@@ -157,15 +162,15 @@ class AVX512FloatGenerator : public SIMDGenerator {
   }
 
   void MaskedAdd(int dst, int src1, const jit::Operand &src2) override {
-    masm_->vaddps(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+    masm_->vaddps(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
   }
 
   void MaskedMul(int dst, int src1, const jit::Operand &src2) override {
-    masm_->vmulps(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+    masm_->vmulps(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
   }
 
   void MaskedMulAdd(int dst, int src1, const jit::Operand &src2) override {
-    masm_->vfmadd231ps(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+    masm_->vfmadd231ps(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
   }
 
  private:
@@ -222,6 +227,11 @@ class AVX256FloatGenerator : public SIMDGenerator {
   void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
     if (masm_->Enabled(FMA3)) {
       masm_->vfmadd231ps(ymm(dst), ymm(src1), src2);
+    } else if (retain) {
+      YMMRegister acc = masm_->mm().allocy();
+      masm_->vmulps(acc, ymm(src1), src2);
+      masm_->vaddps(ymm(dst), ymm(dst), acc);
+      masm_->mm().release(acc);
     } else {
       masm_->vmulps(ymm(src1), ymm(src1), src2);
       masm_->vaddps(ymm(dst), ymm(dst), ymm(src1));
@@ -289,6 +299,11 @@ class AVX128FloatGenerator : public SIMDGenerator {
   void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
     if (masm_->Enabled(FMA3)) {
       masm_->vfmadd231ps(xmm(dst), xmm(src1), src2);
+    } else if (retain) {
+      XMMRegister acc = masm_->mm().allocx();
+      masm_->vmulps(acc, xmm(src1), src2);
+      masm_->vaddps(xmm(dst), xmm(dst), acc);
+      masm_->mm().release(acc);
     } else {
       masm_->vmulps(xmm(src1), xmm(src1), src2);
       masm_->vaddps(xmm(dst), xmm(dst), xmm(src1));
@@ -444,6 +459,11 @@ class AVX512ScalarFloatGenerator : public SIMDGenerator {
   void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
     if (masm_->Enabled(FMA3)) {
       masm_->vfmadd231ss(zmm(dst), zmm(src1), src2);
+    } else if (retain) {
+      ZMMRegister acc = masm_->mm().allocz();
+      masm_->vmulss(acc, zmm(src1), src2);
+      masm_->vaddss(zmm(dst), zmm(dst), acc);
+      masm_->mm().release(acc);
     } else {
       masm_->vmulss(zmm(src1), zmm(src1), src2);
       masm_->vaddss(zmm(dst), zmm(dst), zmm(src1));
@@ -498,6 +518,11 @@ class AVXScalarFloatGenerator : public SIMDGenerator {
     XMMRegister s1 = XMMRegister::from_code(src1);
     if (masm_->Enabled(FMA3)) {
       masm_->vfmadd231ss(d, s1, src2);
+    } else if (retain) {
+      XMMRegister acc = masm_->mm().allocx();
+      masm_->vmulss(acc, s1, src2);
+      masm_->vaddss(d, d, acc);
+      masm_->mm().release(acc);
     } else {
       masm_->vmulss(s1, s1, src2);
       masm_->vaddss(d, d, s1);

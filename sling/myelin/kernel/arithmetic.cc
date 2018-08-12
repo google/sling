@@ -1313,8 +1313,8 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("SubExpr", "Sub", 2));
   library->Register(new Calculate("MulExpr", "Mul", 2));
   library->Register(new Calculate("DivExpr", "Div", 2));
-  library->Register(new Calculate("MaxExpr", "Maximum", 2));
-  library->Register(new Calculate("MinExpr", "Minimum", 2));
+  library->Register(new Calculate("MaximumExpr", "Maximum", 2));
+  library->Register(new Calculate("MinimumExpr", "Minimum", 2));
 
   library->Register(new Calculate("LogExpr", "Log", 1));
   library->Register(new Calculate("ExpExpr", "Exp", 1));

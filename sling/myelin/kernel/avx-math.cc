@@ -709,7 +709,7 @@ class Norm : public Kernel {
       // Compute residual for AVX512 mode using masking.
       if (avx512 && r > 0) {
         __ LoadMask(r, mask);
-        __ vmovaps(elem, Operand(input, offset), Mask(mask, zeroing));
+        __ vmovaps(elem, Operand(input, offset), Mask(mask, merging));
         __ vfmadd231ps(sum, elem, elem);
       }
 
@@ -719,7 +719,7 @@ class Norm : public Kernel {
           __ vshuff32x4(elem, sum, sum, 0x0E);
           __ vaddps(sum, sum, elem);
         }
-        if (vecsize == 8) {
+        if (vecsize >= 8) {
           __ vperm2f128(elem.ymm(), sum.ymm(), sum.ymm(), 1);
           __ vhaddps(sum.ymm(), sum.ymm(), elem.ymm());
         }
@@ -732,26 +732,34 @@ class Norm : public Kernel {
     }
 
     // Compute sum of squares for residual elements.
-    if (!avx512 && r > 0) {
-      Label l;
-      __ bind(&l);
-      if (masm->Enabled(AVX)) {
-        __ vmovss(elem.xmm(), Operand(input, offset));
-        if (masm->Enabled(FMA3)) {
-          __ vfmadd231ss(sum.xmm(), elem.xmm(), elem.xmm());
-        } else {
-          __ vmulss(elem.xmm(), elem.xmm(), elem.xmm());
-          __ vaddss(sum.xmm(), sum.xmm(), elem.xmm());
+    if (r > 0) {
+      if (avx512) {
+        if (vecsize == 1) {
+          __ LoadMask(r, mask);
+          __ vmovaps(elem, Operand(input, offset), Mask(mask, merging));
+          __ vfmadd231ps(sum, elem, elem);
         }
       } else {
-        __ movss(elem.xmm(), Operand(input, offset));
-        __ mulss(elem.xmm(), elem.xmm());
-        __ addss(sum.xmm(), elem.xmm());
-      }
-      if (r > 1) {
-        __ addq(offset, Immediate(sizeof(float)));
-        __ cmpq(offset, Immediate(n * sizeof(float)));
-        __ j(less, &l);
+        Label l;
+        __ bind(&l);
+        if (masm->Enabled(AVX)) {
+          __ vmovss(elem.xmm(), Operand(input, offset));
+          if (masm->Enabled(FMA3)) {
+            __ vfmadd231ss(sum.xmm(), elem.xmm(), elem.xmm());
+          } else {
+            __ vmulss(elem.xmm(), elem.xmm(), elem.xmm());
+            __ vaddss(sum.xmm(), sum.xmm(), elem.xmm());
+          }
+        } else {
+          __ movss(elem.xmm(), Operand(input, offset));
+          __ mulss(elem.xmm(), elem.xmm());
+          __ addss(sum.xmm(), elem.xmm());
+        }
+        if (r > 1) {
+          __ addq(offset, Immediate(sizeof(float)));
+          __ cmpq(offset, Immediate(n * sizeof(float)));
+          __ j(less, &l);
+        }
       }
     }
 
