@@ -93,6 +93,10 @@ or a list of slot tuples:
 ```
 f = store.frame([('a', 10), ('b': 10.5), ('c': "hello")])
 ```
+or just an id string:
+```
+f = store.frame("frame_id")
+```
 Slots can be added or modified using attribute assignment:
 ```
 f.c = "hello world"
@@ -298,7 +302,7 @@ for text in fin.readlines():
   # Read text from input file and tokenize.
   doc = sling.tokenize(text, store=store, schema=docschema)
 
-  # add you frames and mentions here...
+  # Add your frames and mentions here...
 
   # Update underlying frame for document.
   doc.update()
@@ -340,6 +344,11 @@ loves = store.frame({isa: love01, arg0: john, arg1: mary})
 doc.add_mention(0, 1).evoke(john)
 doc.add_mention(1, 2).evoke(loves)
 doc.add_mention(2, 3).evoke(mary)
+
+# Note: One can also say doc.evoke_type(start, end, type) as a short-hand for:
+# f = store.frame({isa: type})
+# doc.add_mention(start, end).evoke(f)
+
 doc.update()
 fout.write("0001", doc.frame.data(binary=True))
 
@@ -367,6 +376,11 @@ The `Document` class has the following methods and properties:
   Adds mention to the document.
 * `add_theme(theme)`<br>
   Adds thematic frame to the document.
+* `evoke(begin, end, frame)`<br>
+  Adds a mention from [begin, end) and evokes `frame` from it. Returns `frame`.
+* `evoke_type(begin, end, type)`<br>
+  Adds a mention from [begin, end) and evokes a new frame of type `type` from
+  it. Returns the newly built frame.
 * `update()`<br>
   Updates the underlying document frame. The `update()` method needs to be
   called after tokens, mentions, or themes have been added to the document.
@@ -409,6 +423,8 @@ The `Mention` class has the following methods and properties:
   Returns a list of of frames evoked by this mention.
 * `evoke(frame)`<br>
   Adds frame evoked by this mention.
+* `evoke_type(type)`<br>
+  Makes a frame of type `type` and evokes it from this mention.
 
 ### LEX format
 

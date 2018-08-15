@@ -26,6 +26,7 @@ from functools import partial
 sys.path.insert(0, "sling/nlp/parser/trainer")
 
 import train_util as utils
+import commons_from_corpora as commons_builder
 
 from train_util import mem
 from train_util import now
@@ -302,8 +303,24 @@ def check_present(args, ls):
 
 
 def train(args):
-  check_present(
-      args, ["commons", "train_corpus", "output_folder", "dev_corpus"])
+  check_present(args, ["train_corpus", "output_folder", "dev_corpus"])
+
+  # Make commons store if needed.
+  if args.commons == '' or not os.path.exists(args.commons):
+    if args.commons == '':
+      import tempfile
+      f = tempfile.NamedTemporaryFile(delete=False)
+      print "Will create a commons store at", f.name
+      args.commons = f.name
+      f.close()
+    else:
+      print "No commons found at", args.commons, ", creating it..."
+    _, symbols = commons_builder.build(
+      [args.train_corpus, args.dev_corpus], args.commons)
+    print "Commons created at", args.commons, "with", len(symbols), \
+      "symbols besides the usual ones."
+
+
   resources = utils.Resources()
   resources.load(commons_path=args.commons,
                  train_path=args.train_corpus,

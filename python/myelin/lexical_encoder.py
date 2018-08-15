@@ -47,11 +47,6 @@ class LexicalEncoder:
     suffix.data = str(spec.write_suffix_table())
     self.suffix_blob = suffix
 
-    actions = flow.blob("actions")
-    actions.type = "frames"
-    actions.data = spec.actions.encoded(spec.commons)
-    self.actions_blob = actions
-
     # Add feature extraction related ops.
     bldr = builder.Builder(flow, "features")
     self.feature_ids = []

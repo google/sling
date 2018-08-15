@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sling
 
 # Represents a single transition.
 class Action:
@@ -84,8 +85,17 @@ class Action:
     for s in self.__dict__.keys():
       val = getattr(self, s)
       if val is not None:
+        if isinstance(val, sling.Frame):
+          assert val.id is not None
+          val = store[val.id]  # ensure we use a store-owned version
         frame[slot_prefix + s] = val
     return frame
+
+  # Reads the action from 'frame'.
+  def from_frame(self, frame):
+    for s in self.__dict__.keys():
+      name = "/table/action/" + s
+      setattr(self, s, frame[name])
 
   # Returns whether the action is a cascade.
   def is_cascade(self):

@@ -7,27 +7,29 @@ detail.
 
 ### Data preparation
 
-The first step consists of preparing the commons store (also called global store).
-This has frame and schema definitions for all types and roles of interest, e.g.
-`/saft/person` or `/pb/love-01` or `/pb/arg0`. In order to build the commons store
-for the OntoNotes-based parser you need to checkout PropBank in a directory
-parallel to the SLING directory:
+SLING's training data consists of training and dev documents formatted as SLING
+frames. These document frames in turn consist of frames that have the desired types (e.g.
+/saft/person, /saft/location, /pb/love-01) and contain the desired roles
+(e.g. /pb/arg0, /pb/argm-loc). These frame types and roles, and any schema that
+organizes them is stored separately in a 'commons store'. Therefore the complete
+training data consists of (a) a commons store, (b) a recordio of training
+documents, (c) a recordio of dev documents.
 
-```shell
-cd ..
-git clone https://github.com/propbank/propbank-frames.git propbank
-cd sling
-sling/nlp/parser/tools/build-commons.sh
-```
+SLING offers users tools to either build the commons store themselves, or
+automatically create it from the training/dev documents. Building the commons
+store yourself allows you to store rich hierarchy and schema information 
+about types and roles in the commons store.
+In case this schema is not needed/exploited, one can instead use the automatic
+commons construction tool that collects all types and roles
+from the documents and puts them in a commons store. Below we describe
+both these tools.
 
-This will build a SLING store with all the schemas needed and put it into
-`/tmp/commons`.
-
-Next, write a converter to convert documents in your existing format to
-[SLING documents](../../sling/nlp/document/document.h). A SLING document is 
-just a document frame of type `/s/document`. An example of such a frame in 
-textual encoding can be seen below. It is best to create one SLING document per 
-input sentence.
+#### Option 1: Automatically building the commons store from documents.
+Here, we just create a corpus of documents that link to frames using types and
+roles that will be automatically collected later. A typical SLING training
+document is just a frame of type `/s/document`. It is best to create one
+SLING document per input sentence. The textual encoding of a sample SLING
+document is shown below:
 
 ```shell
 {
@@ -77,24 +79,44 @@ input sentence.
   }
 }
 ```
+
+SLING documents like these can be built programmatically in C++ using
+the [Document class](../../sling/nlp/document/document.h), or via the
+[SLING Python API](pyapi.md). In either case, all document frames are written
+to a single file in SLING's [recordio file
+format](../../sling/file/recordio.h), where a single record corresponds to one
+encoded document. This file format is up to 25x faster to read than zip files,
+yet provides almost identical compression ratios.
+
+We now illustrate SLING document preparation using the C++ API.
 For writing your converter or getting a better hold of the concepts of frames 
 and store in SLING, you can have a look at detailed deep dive on frames and 
 stores [here](frames.md).
 
-The SLING [Document class](../../sling/nlp/document/document.h)
-also has methods to incrementally make such document frames, e.g.
 ```c++
-Store global;
-// Read global store from a file via LoadStore().
+Store commons;
 
-// Lookup handles in advance.
-Handle h_person = global.Lookup("/saft/person");
-Handle h_love01 = global.Lookup("/pb/love-01");
-Handle h_arg0 = global.Lookup("/pb/arg0");
-Handle h_arg1 = global.Lookup("/pb/arg1");
+// If we have a commons store already built, then do:
+// LoadStore(<filename>, &commons);
 
-// Prepare the document.
-Store store(&global);
+commons.Freeze();
+
+// Writer that will write all documents to a recordio file.
+RecordWriter writer(<filename>);
+
+// BEGIN: Document preparation. This needs to be done per document.
+Store store(&commons); // document will be created in its own local store
+
+// Lookup the types and roles that will be used in this document.
+// These will be first looked up in 'store', but since 'store' is empty,
+// they will then be looked up in 'commons'. If 'commons' was already
+// constructed and had these symbols, their handles would be returned.
+// If not, these symbols will be added as unbound symbols to 'store'.
+Handle h_person = store.Lookup("/saft/person");
+Handle h_love01 = store.Lookup("/pb/love-01");
+Handle h_arg0 = store.Lookup("/pb/arg0");
+Handle h_arg1 = store.Lookup("/pb/arg1");
+
 Document doc(&store);  // empty document
 
 // Add token information.
@@ -123,36 +145,149 @@ doc.AddSpan(0, 1)->Evoke(john_frame);
 doc.AddSpan(1, 2)->Evoke(love_frame);
 doc.AddSpan(2, 3)->Evoke(mary_frame);
 
+// Finish the document.
 doc.Update();
+
+// Write binary encoding of the document to the recordio writer.
 string encoded = Encode(doc.top());
-
-// Append 'encoded' to a recordio file.
-RecordWriter writer(<filename>);
-
 writer.Write(encoded);
-...<write more documents>
+// END: Document preparation.
 
+// Close the recordio writer.
 writer.Close();
 ```
 
-Use the converter to create the following corpora:
-+ Training corpus of annotated SLING documents.
-+ Dev corpus of annotated SLING documents.
+The SLING Python API version of document preparation is as follows:
 
-CASPAR uses the [recordio file format](../../sling/file/recordio.h) for training 
-where each record corresponds to one encoded document. This format is up to 25x 
-faster to read than zip files, with almost identical compression ratios.
+```python
+import sling
+
+commons = sling.Store()
+
+# If we have a commons already built, then do the following:
+# commons.load(<filename>)
+
+schema = sling.DocumentSchema(commons)
+commons.freeze()
+
+# Initialize recordio writer.
+writer = sling.RecordWriter("/tmp/train.rec")
+
+# BEGIN: Document preparation. Needs to done for every document.
+store = sling.Store(commons)
+doc = sling.Document(None, store, schema)
+
+# Add tokens.
+doc.add_token("John")
+doc.add_token("loves")
+doc.add_token("Mary")
+
+# Lookup/create types and roles used in the document.
+person = store["/saft/person"]
+love = store["/pb/love-01"]
+arg0 = store["/pb/arg0"]
+arg1 = store["/pb/arg1"]
+
+# Evoke frames from mentions.
+john_frame = doc.evoke_type(0, 1, person)
+mary_frame = doc.evoke_type(2, 3, person)
+love_frame = doc.evoke_type(1, 2), love)
+
+# Add roles to frames.
+love_frame[arg0] = john_frame
+love_frame[arg1] = mary_frame
+
+# Write the document to the recordio writer.
+doc.update()
+writer.write("unused_key", doc.frame.data(binary=True))
+# END: Document preparation.
+
+# Close recordio writer.
+writer.close()
+```
+
+##### (Optional): Commons store construction from documents.
+
+Once the training and dev recordios are created, one can use
+[this script](../../sling/nlp/parser/tools/commons_from_corpora.py) to
+create a commons store from them. Note that explicit creation of this commons
+store is NOT needed for training, since the training script will anyway invoke
+the same script to create the commons store behind the scenes. But we mention
+this here in case one wishes to inspect the automatically created commons.
+
+```shell
+python sling/nlp/parser/tools/commons_from_corpora.py \
+  --input=<path to train.rec>,<path to dev.rec>,<any other rec files> \
+  --output=<path where commons will be written>
+```
+
+#### Option 2: Manually building the commons store.
+This alternative is useful if one wishes to manually construct their own
+commons store, containing rich schema information that they plan to exploit.
+We illustrate this by building the commons store that was used for Propbank SRL
+and entity tagging. In order to build this commons store
+you first need to checkout PropBank in a directory
+parallel to the SLING directory:
+
+```shell
+cd ..
+git clone https://github.com/propbank/propbank-frames.git propbank
+cd sling
+sling/nlp/parser/tools/build-commons.sh
+```
+
+This will build a SLING store with all the schemas needed and put it into
+`/tmp/commons`. 
+
+Another toy example, where we have access to all frame types and roles in
+advance, is as follows:
+
+```python
+import sling
+
+commons = sling.Store()
+schema = sling.DocumentSchema(commons)
+
+frame_types = ["/saft/person", "/saft/location", "/saft/org", "/saft/other"]
+frame_roles = ["/role/arg0", "/role/arg1", "/role/argloc", "/role/argtmp"]
+for id in frame_types + frame_roles:
+  _ = commons.frame(id)  # create a frame in commons with that id
+
+commons.freeze()
+commons.save(<filename>, binary=True)
+```
+
+Once the commons store is written, it can be loaded via LoadStore() in C++
+or load() in Python, and the same code snippets as in Option 1 can be used to
+create training and dev documents.
+
+##### (Optional but recommended): Document validation.
+
+In both options, it is highly recommended to validate the prepared documents
+for common sources of errors, e.g. crossing spans, nil roles/values, unknown
+frame types etc.
+
+```shell
+python sling/nlp/parser/tools/validate.py \
+  --input=<path to train or dev recordio file> \
+  --commons=<path to manually or automatically built commons store>
+```
+
+The full list of supported error types is
+[here](../../sling/nlp/parser/tools/validate.py#L37).
 
 ### Specify training options and hyperparameters:
 
-Once the commons store and the corpora have been built, you are ready for training
+Once the corpora (and optionally the commons store) have been built, you are ready for training
 a model. For this, use the supplied [training script](../../sling/nlp/parser/tools/train.sh).
 The script provides various commandline arguments. The ones that specify
 the input data are:
-+ `--commons`: File path of the commons store built in the previous step.
++ `--commons`: Optional. File path of the commons store built in the previous
+step. If not specified or non-existent, then a commons store will be
+automatically built by the training script using Option 1 above.
 + `--train`: Path to the training corpus built in the previous step.
 + `--dev`: Path to the annotated dev corpus built in the previous step.
-+ `--output` or `--output_dir`: Output folder where checkpoints, master spec,
++ `--output` or `--output_dir`: Output folder where checkpoints, 
   temporary files, and the final model will be saved.
 
 Then we have the various training options and hyperparameters:
@@ -178,7 +313,7 @@ to avoid supplying them again and again on the commandline.
 
 To test your training setup, you can kick off a small training run:
 ```shell
-./sling/nlp/parser/tools/train.sh --commons=<path to commons> \
+./sling/nlp/parser/tools/train.sh [--commons=<path to commons>] \
    --train=<oath to train recordio> --dev=<path to dev recordio> \
    --report_every=500 --train_steps=1000 --output=<output folder>
 ```
@@ -196,7 +331,7 @@ inside the specified output folder.
 sub-modules inside the model and their dimensionalities.
 
 ```shell
-Modules: Sempar(
+Modules: Caspar(
   (lr_lstm_embedding_words): EmbeddingBag(53257, 32, mode=sum)
   (rl_lstm_embedding_words): EmbeddingBag(53257, 32, mode=sum)
   (lr_lstm_embedding_suffix): EmbeddingBag(8334, 16, mode=sum)
@@ -255,7 +390,7 @@ Modules: Sempar(
   [here](../../sling/nlp/parser/trainer/train_util.py#L30) with your evaluation binary.
 
 * At any point, the best performing checkpoint will be available as a Myelin flow file
-  in `<output folder>/pytorch.best.flow`.
+  in `<output folder>/caspar.best.flow`.
 
 **NOTE:**
 * If you wish to modify the default set of features,

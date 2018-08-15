@@ -23,14 +23,16 @@
 #   /path/to/this/script <flags described in train_pytorch.py and train_util.py>
 #
 # Sample command:
-#   /path/to/this/script --commons=commons_file --train=train.rec --dev=dev.rec \
+#   /path/to/this/script [--commons=commons_file] --train=train.rec --dev=dev.rec \
 #        --output=out_folder [--word_embeddings=word_embeddings.bin] \
 #        [--batch=8] [--report_every=3000] [--steps=100000] [--alpha=0.005]
 #
 # It takes as input:
 # - A file pattern of training documents with gold annotations. Each file should
 #   correspond to one serialized Document frame.
-# - Path to the commons store.
+# - Optional: File path to the commons store.
+#   If no path is specified or the path doesn't exist, then a commons store
+#   will be automatically created.
 # - Name of the output folder. All generated resources e.g. feature lexicons,
 #   action table, master spec, TF graph, trained model etc. will be dumped here.
 # - Word embedding dimension, and optionally a pretrained word embedding.

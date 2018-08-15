@@ -137,8 +137,7 @@ class Actions:
 
 
   # Encodes and returns the action table as a SLING frame.
-  def encoded(self, commons):
-    store = sling.Store(commons)
+  def encoded(self, store):
     table = store.frame({"id": "/table"})
 
     table["/table/max_span_length"] = self.max_span_length
@@ -152,14 +151,39 @@ class Actions:
 
     actions_array = store.array(self.size())
     for index, action in enumerate(self.table):
-      actions_array[index] = action.as_frame(store)
+      f = action.as_frame(store)
+      f["/table/action/count"] = self.counts[index]
+      f["/table/action/disallowed"] = self.disallowed[index]
+      actions_array[index] = f
     table["/table/actions"] = actions_array
 
     symbols = map(
         lambda i: "/table/action/" + i,
-        ["type", "length", "source", "target", "role", "label"])
+        ["type", "length", "source", "target", "role", "label", "delegate", \
+          "count", "disallowed"])
     table["/table/symbols"] = symbols
-    return table.data(binary=True)
+    return table
+
+  # Decodes the action table afresh from 'frame'.
+  def decode(self, frame):
+    assert len(self.table) == 0, "Action table not empty!"
+    assert frame.id == "/table"
+    self.max_span_length = frame["/table/max_span_length"]
+    self.max_connect_source = frame["/table/max_connect_source"]
+    self.max_connect_target = frame["/table/max_connect_target"]
+    self.max_assign_source = frame["/table/max_assign_source"]
+    self.max_refer_target = frame["/table/max_refer_target"]
+    self.max_embed_target = frame["/table/max_embed_target"]
+    self.max_elaborate_source = frame["/table/max_elaborate_source"]
+    self.frame_limit = frame["/table/frame_limit"]
+
+    actions = frame["/table/actions"]
+    self.disallowed = []
+    for i in xrange(len(actions)):
+      action = Action()
+      action.from_frame(actions[i])
+      self.add(action, count=actions[i]["/table/action/count"])
+      self.disallowed.append(actions[i]["/table/action/disallowed"])
 
 
   # Returns a textual representation of the action table.

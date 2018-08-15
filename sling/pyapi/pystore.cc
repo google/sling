@@ -260,11 +260,17 @@ PyObject *PyStore::Symbols() {
 PyObject *PyStore::NewFrame(PyObject *arg) {
   // Check that store is writable.
   if (!Writable()) return nullptr;
-
-  // Parse data into slot list.
+  
   GCLock lock(store);
   std::vector<Slot> slots;
-  if (!SlotList(arg, &slots)) return nullptr;
+
+  // If the argument is a string, create a frame with that id.
+  if (PyString_Check(arg)) {
+    slots.emplace_back(Handle::id(), SymbolValue(arg));
+  } else {
+    // Parse data into slot list.
+    if (!SlotList(arg, &slots)) return nullptr;
+  }
 
   // Allocate new frame.
   Slot *begin = slots.data();

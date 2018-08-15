@@ -389,7 +389,7 @@ class Cascade(object):
 
   """Saves the cascade specificaton to a frame in 'store'."""
   def as_frame(self, store, delegate_cell_prefix):
-    frame = store.frame({"id": "cascade", "name": self.__class__.__name__})
+    frame = store.frame({"id": "/cascade", "name": self.__class__.__name__})
     delegates = store.array(self.size())
     for index, delegate in enumerate(self.delegates):
       d = store.frame({"name": delegate.__class__.__name__, "index": index})

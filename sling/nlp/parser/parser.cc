@@ -48,26 +48,14 @@ void Parser::Load(Store *store, const string &model) {
 
   // Load commons and action stores.
   myelin::Flow::Blob *commons = flow.DataBlock("commons");
-  if (commons != nullptr) {
-    StringDecoder decoder(store, commons->data, commons->size);
-    decoder.DecodeAll();
-  }
-  myelin::Flow::Blob *actions = flow.DataBlock("actions");
-  if (actions != nullptr) {
-    StringDecoder decoder(store, actions->data, actions->size);
-    decoder.DecodeAll();
-  }
+  CHECK(commons != nullptr);
+  StringDecoder decoder(store, commons->data, commons->size);
+  decoder.DecodeAll();
 
   // Read the cascade specification and implementation from the flow.
-  myelin::Flow::Blob *cascade = flow.DataBlock("cascade");
-  CHECK(cascade != nullptr);
-  {
-    StringDecoder decoder(store, cascade->data, cascade->size);
-    decoder.DecodeAll();
-    Frame spec(store, "cascade");
-    CHECK(spec.valid());
-    cascade_.Initialize(network_, spec);
-  }
+  Frame cascade_spec(store, "/cascade");
+  CHECK(cascade_spec.valid());
+  cascade_.Initialize(network_, cascade_spec);
 
   // Initialize action table.
   store_ = store;

@@ -170,13 +170,21 @@ class Spec:
         self.actions.add(action)
 
     self.actions.prune(self.actions_percentile)
+
+    # Save the actions table in commons.
+    actions_frame = self.actions.encoded(self.commons)
+
+    # Re-read the actions table from the commons, so all frames come
+    # from the commons store.
+    self.actions = Actions()
+    self.actions.decode(actions_frame)
+
     self.num_actions = self.actions.size()
     print self.num_actions, "gold actions"
-
     allowed = self.num_actions - sum(self.actions.disallowed)
     print "num allowed actions:", allowed
     print len(self.actions.roles), "unique roles in action table"
-
+  
 
   # Returns suffix(es) of 'word'.
   def get_suffixes(self, word, unicode_chars=None):
@@ -295,16 +303,9 @@ class Spec:
 
 
   # Builds the spec using 'corpora'.
-  def build(self, commons, corpora):
-    if type(commons) is str:
-      self.commons_path = commons
-      commons = sling.Store()
-      commons.load(self.commons_path)
-      commons.freeze()
-
+  def build(self, commons_path, corpora):
     # Prepare lexical dictionaries.
     # For compatibility with DRAGNN, suffixes don't have an OOV item.
-    self.commons = commons
     self.words = Lexicon(self.words_normalize_digits)
     self.suffix = Lexicon(self.words_normalize_digits, oov_item=None)
 
@@ -321,14 +322,27 @@ class Spec:
 
     # Prepare action table.
     corpora.set_gold(True)
+
+    self.commons_path = commons_path
+    self.commons = sling.Store()
+    self.commons.load(commons_path)
+    _ = sling.DocumentSchema(self.commons)
+    # Note: 'commons' is not frozen since we will add actions & cascade to it.
+ 
+    # Build actions table and cascade.
     self._build_action_table(corpora)
+    self.cascade = cascade.ShiftPropbankEvokeCascade(self.actions)
+    print self.cascade
+
+    # Save cascade specification in commons.
+    _ = self.cascade.as_frame(self.commons, delegate_cell_prefix="delegate")
+
+    # Freeze the commons store and save its final version.
+    self.commons.freeze()
+    self.commons.save(self.commons_path, binary=True)
 
     # Add feature specs.
     self._specify_features()
-
-    # Build cascade.
-    self.cascade = cascade.ShiftPropbankEvokeCascade(self.actions)
-    print self.cascade
 
 
   # Loads embeddings for words in the lexicon.
