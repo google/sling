@@ -213,6 +213,9 @@ class WikiParser {
   // Extract URL.
   void ExtractUrl(int index);
 
+  // Extract tag.
+  void ExtractTag(int index);
+
   // Extract heading.
   void ExtractHeading(int index);
 

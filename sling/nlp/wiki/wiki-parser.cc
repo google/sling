@@ -46,27 +46,44 @@ typedef std::unordered_map<string, WikiParser::Special> TemplatePrefixMap;
 
 // Link prefixes for images and categories.
 static const LinkPrefixMap link_prefix = {
-  {"Archivo",   WikiParser::IMAGE},      // es
-  {"Bestand",   WikiParser::IMAGE},      // nl
-  {"Categoría", WikiParser::CATEGORY},   // es
-  {"Categoria", WikiParser::CATEGORY},   // it, pt
-  {"Catégorie", WikiParser::CATEGORY},   // fr
-  {"Categorie", WikiParser::CATEGORY},   // nl
-  {"Category",  WikiParser::CATEGORY},   // en
-  {"Datei",     WikiParser::IMAGE},      // de
-  {"Ficheiro",  WikiParser::IMAGE},      // pt
-  {"Fichier",   WikiParser::IMAGE},      // fr
-  {"File",      WikiParser::IMAGE},      // en
-  {"Fil",       WikiParser::IMAGE},      // da, no, sv
-  {"Image",     WikiParser::IMAGE},      // en
-  {"Immagine",  WikiParser::IMAGE},      // it
-  {"Kategoria", WikiParser::CATEGORY},   // pl
-  {"Kategorie", WikiParser::CATEGORY},   // de
-  {"Kategori",  WikiParser::CATEGORY},   // da, no, sv
-  {"Luokka",    WikiParser::CATEGORY},   // fi
-  {"Media",     WikiParser::IMAGE},      // en
-  {"Plik",      WikiParser::IMAGE},      // pl
-  {"Tiedosto",  WikiParser::IMAGE},      // fi
+  {"Archivo",    WikiParser::IMAGE},       // es
+  {"Bestand",    WikiParser::IMAGE},       // nl
+  {"Categoría",  WikiParser::CATEGORY},    // es
+  {"Categoria",  WikiParser::CATEGORY},    // it, pt, ca, la
+  {"Catégorie",  WikiParser::CATEGORY},    // fr
+  {"Categorie",  WikiParser::CATEGORY},    // nl, ro
+  {"Category",   WikiParser::CATEGORY},    // en
+  {"Datei",      WikiParser::IMAGE},       // de
+  {"Datoteka",   WikiParser::IMAGE},       // sh
+  {"Dosiero",    WikiParser::IMAGE},       // eo
+  {"Fájl",       WikiParser::IMAGE},       // hu
+  {"Fasciculus", WikiParser::IMAGE},       // la
+  {"Ficheiro",   WikiParser::IMAGE},       // pt
+  {"Fichier",    WikiParser::IMAGE},       // fr
+  {"File",       WikiParser::IMAGE},       // en, el
+  {"Fil",        WikiParser::IMAGE},       // da, no, sv
+  {"Fișier",     WikiParser::IMAGE},       // ro
+  {"Fitxategi",  WikiParser::IMAGE},       // eu
+  {"Fitxer",     WikiParser::IMAGE},       // ca
+  {"Image",      WikiParser::IMAGE},       // en
+  {"Immagine",   WikiParser::IMAGE},       // it
+  {"Kategória",  WikiParser::CATEGORY},    // hu
+  {"Kategoria",  WikiParser::CATEGORY},    // pl, eu
+  {"Kategorie",  WikiParser::CATEGORY},    // de, cs
+  {"Kategorija", WikiParser::CATEGORY},    // sh
+  {"Kategorio",  WikiParser::CATEGORY},    // eo
+  {"Kategori",   WikiParser::CATEGORY},    // da, no, sv
+  {"Luokka",     WikiParser::CATEGORY},    // fi
+  {"Media",      WikiParser::IMAGE},       // en
+  {"Plik",       WikiParser::IMAGE},       // pl
+  {"Soubor",     WikiParser::IMAGE},       // cs
+  {"Tiedosto",   WikiParser::IMAGE},       // fi
+  {"Κατηγορία",  WikiParser::CATEGORY},    // el
+  {"Датотека",   WikiParser::IMAGE},       // sr
+  {"Категорија", WikiParser::CATEGORY},    // sr
+  {"Категория",  WikiParser::CATEGORY},    // bg, ru
+  {"Категорія",  WikiParser::CATEGORY},    // uk
+  {"Файл",       WikiParser::IMAGE},       // bg, ru, uk
 };
 
 // Link prefixes for templates.
@@ -383,6 +400,12 @@ void WikiParser::ParseTemplateBegin() {
 }
 
 void WikiParser::ParseTemplateEnd() {
+  if (!Inside(TEMPLATE)) {
+    // Ignore unmatched }}.
+    ptr_ += 2;
+    return;
+  }
+
   int node = UnwindUntil(TEMPLATE);
   ptr_ += 2;
   if (node != -1) {
@@ -464,6 +487,12 @@ void WikiParser::ParseLinkBegin() {
 }
 
 void WikiParser::ParseLinkEnd() {
+  if (!Inside(LINK)) {
+    // Ignore unmatched ]].
+    ptr_ += 2;
+    return;
+  }
+
   int node = UnwindUntil(LINK);
   ptr_ += 2;
   if (node != -1) {
@@ -484,11 +513,11 @@ void WikiParser::ParseUrl() {
   while (*ptr_ != 0 && *ptr_ != ' ' && *ptr_ != ']') ptr_++;
   SetName(node, name, ptr_);
 
-  // TODO: Parse the rest of the URL element as wikitext.
   if (*ptr_ == ' ') {
+    // Parse the rest of the URL element as wikitext.
     while (*ptr_ == ' ') ptr_++;
     txt_ = ptr_;
-    while (*ptr_ != 0 && *ptr_ != ']') ptr_++;
+    ParseUntil(']');
   } else {
     txt_ = name;
   }
@@ -521,6 +550,16 @@ void WikiParser::ParseTag() {
     if (*ptr_ != 0) ptr_ += 7;
     nodes_[node].end = ptr_;
     txt_ = ptr_;
+  } else if (Matches("<nowiki>")) {
+    ptr_ += 8;
+    txt_ = ptr_;
+    while (*ptr_ != 0) {
+      if (*ptr_ == '<' && Matches("</nowiki>")) break;
+      ptr_++;
+    }
+    EndText();
+    if (*ptr_ != 0) ptr_ += 9;
+    txt_ = ptr_;
   } else if (Matches("</gallery>")) {
     ptr_ += 10;
     if (Inside(GALLERY)) UnwindUntil(GALLERY);
@@ -534,10 +573,12 @@ void WikiParser::ParseTag() {
       p++;
     }
 
-    // Parse tag name.
+    // Parse tag name. Skip if tag name is empty or starts with a digit since
+    // this is most likely an unescaped <.
     const char *tagname = p;
     while (IsNameChar(*p)) p++;
-    if (p == tagname) {
+    if (p == tagname || ascii_isdigit(*tagname)) {
+      txt_ = ptr_;
       ptr_++;
       return;
     }
@@ -551,6 +592,7 @@ void WikiParser::ParseTag() {
     ParseAttributes("/>");
 
     // Parse end of tag '>' (ETAG) or '/>' (TAG).
+    while (*ptr_ == ' ') ptr_++;
     if (*ptr_ == '/') {
       type = TAG;
       ptr_++;
@@ -579,6 +621,7 @@ void WikiParser::ParseTag() {
 
 void WikiParser::ParseGallery() {
   // Parse link name at the start of a gallery line.
+  if (*ptr_ == '<') return;
   int node = Push(LINK);
   const char *name = ptr_;
   while (*ptr_ != 0 && *ptr_ != '|' && *ptr_ != '\n')  ptr_++;
@@ -671,6 +714,7 @@ void WikiParser::ParseTableRow() {
 
   Push(ROW);
   ptr_ += 2;
+  if (*ptr_ == '-') ptr_++;
   if (!ParseAttributes("\n")) SkipWhitespace();
   txt_ = ptr_;
 }
@@ -770,7 +814,7 @@ bool WikiParser::ParseAttributes(const char *delimiters) {
       attrlen = p++ - attr;
     } else {
       attr = p;
-      while (IsNameChar(*p)) p++;
+      while (IsNameChar(*p)  || *p == '#'  || *p == '%') p++;
       if (p == attr) return false;
       attrlen = p - attr;
     }
@@ -809,7 +853,7 @@ void WikiParser::Extract(int index) {
     case CATEGORY: break;
     case URL: ExtractUrl(index); break;
     case COMMENT: break;
-    case TAG: break;
+    case TAG: ExtractTag(index); break;
     case BTAG: break;
     case ETAG: break;
     case MATH: break;
@@ -837,6 +881,10 @@ void WikiParser::ExtractLink(int index) {
 
 void WikiParser::ExtractUrl(int index) {
   ExtractChildren(index);
+}
+
+void WikiParser::ExtractTag(int index) {
+  if (nodes_[index].name() == "br") Append("<br>");
 }
 
 void WikiParser::ExtractListItem(int index) {

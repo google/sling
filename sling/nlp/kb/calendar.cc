@@ -39,7 +39,7 @@ void Date::Init(const Object &object) {
   precision = NONE;
   if (object.IsInt()) {
     int num = object.AsInt();
-    CHECK(num > 0);
+    CHECK(num >= 0);
     ParseFromNumber(num);
   } else if (object.IsString()) {
     Text datestr = object.AsString().text();

@@ -78,7 +78,7 @@ class Calendar {
   // integer. This can only be used for dates after 1000 AD.
   static int DateNumber(const Date &date);
 
-  // Convert date to string format. The date format dependends on the precision:
+  // Convert date to string format. The date format depends on the precision:
   // DAY:        [+|-]YYYY-MM-DD
   // MONTH:      [+|-]YYYY-MM
   // YEAR:       [+|-]YYYY
