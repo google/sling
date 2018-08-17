@@ -42,8 +42,9 @@
 #include "third_party/snappy/endian.h"
 #include "third_party/snappy/snappy-sinksource.h"
 
-namespace sling {
 namespace snappy {
+
+using namespace sling;
 
 using std::min;
 using std::vector;
@@ -1587,5 +1588,4 @@ bool Uncompress(Source *compressed, Sink *uncompressed) {
 }
 
 }  // namespace snappy
-}  // namespace sling
 

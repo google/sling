@@ -30,7 +30,6 @@
 
 #include <string.h>
 
-namespace sling {
 namespace snappy {
 
 Source::~Source() { }
@@ -103,5 +102,4 @@ char *UncheckedByteArraySink::GetAppendBufferVariable(
 }
 
 }  // namespace snappy
-}  // namespace sling
 

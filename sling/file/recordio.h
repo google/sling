@@ -19,7 +19,7 @@
 #include "sling/base/status.h"
 #include "sling/base/types.h"
 #include "sling/file/file.h"
-#include "third_party/snappy/snappy-sinksource.h"
+#include "sling/util/snappy.h"
 
 namespace sling {
 

@@ -36,8 +36,8 @@
 // using BMDiff and then compressing the output of BMDiff with
 // Snappy.
 
-#ifndef SLING_UTIL_SNAPPY_H_
-#define SLING_UTIL_SNAPPY_H_
+#ifndef SNAPPY_H_
+#define SNAPPY_H_
 
 #include <stddef.h>
 #include <sys/uio.h>
@@ -45,8 +45,11 @@
 
 #include "sling/base/types.h"
 
-namespace sling {
 namespace snappy {
+
+typedef sling::uint32 uint16;
+typedef sling::uint32 uint32;
+typedef sling::uint64 uint64;
 
 class Source;
 class Sink;
@@ -203,6 +206,5 @@ static const int kMaxHashTableBits = 14;
 static const size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
 
 }  // namespace snappy
-}  // namespace sling
 
-#endif  // SLING_UTIL_SNAPPY_H_
+#endif  // SNAPPY_H_

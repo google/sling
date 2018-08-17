@@ -33,7 +33,7 @@
 #include "sling/base/macros.h"
 #include "sling/base/types.h"
 
-namespace sling {
+namespace snappy {
 
 #define HAVE_BUILTIN_CTZ
 
@@ -111,7 +111,7 @@ inline int Bits::FindLSBSetNonZero64(uint64 n) {
 
 #endif  // end portable versions
 
-}  // namespace sling
+}  // namespace snappy
 
 #endif  // SNAPPY_BITS_H_
 

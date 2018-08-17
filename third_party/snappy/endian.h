@@ -12,7 +12,10 @@
 #include "sling/base/port.h"
 #include "sling/base/types.h"
 
-namespace sling {
+namespace snappy {
+
+typedef sling::uint32 uint32;
+typedef sling::uint64 uint64;
 
 inline uint64 gbswap_64(uint64 host_int) {
 #if defined(COMPILER_GCC3) && defined(__x86_64__)
@@ -155,7 +158,7 @@ class LittleEndian {
 #define gntohs(x) ghtons(x)
 #define gntohll(x) ghtonll(x)
 
-}  // namespace sling
+}  // namespace snappy
 
-#endif  // SNAPPY_ENDIAN_ENDIAN_H_
+#endif  // SNAPPY_ENDIAN_H_
 

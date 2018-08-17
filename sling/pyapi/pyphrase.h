@@ -17,7 +17,6 @@
 
 #include "sling/nlp/document/phrase-tokenizer.h"
 #include "sling/nlp/wiki/phrase-table.h"
-#include "sling/task/job.h"
 #include "sling/pyapi/pybase.h"
 #include "sling/pyapi/pystore.h"
 

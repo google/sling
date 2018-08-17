@@ -46,8 +46,8 @@ cc_library(
   deps = [
     ":file",
     "//sling/base",
+    "//sling/util:snappy",
     "//sling/util:varint",
-    "//third_party/snappy",
   ],
 )
 

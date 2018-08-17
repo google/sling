@@ -26,12 +26,11 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SLING_UTIL_SNAPPY_SINKSOURCE_H_
-#define SLING_UTIL_SNAPPY_SINKSOURCE_H_
+#ifndef SNAPPY_SINKSOURCE_H_
+#define SNAPPY_SINKSOURCE_H_
 
 #include <stddef.h>
 
-namespace sling {
 namespace snappy {
 
 // A Sink is an interface that consumes a sequence of bytes.
@@ -179,7 +178,6 @@ class UncheckedByteArraySink : public Sink {
 };
 
 }  // namespace snappy
-}  // namespace sling
 
-#endif  // SLING_UTIL_SNAPPY_SINKSOURCE_H_
+#endif  // SNAPPY_SINKSOURCE_H_
 
