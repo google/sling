@@ -238,12 +238,12 @@ def _validate(document, options):
       results.error(Error.BAD_SPAN_END, [document, mention])
 
     # Check for crossing spans.
-    # TODO: Use an interval tree or bitset here for efficiency.
     for m2 in document.mentions:
+      if m2.begin < begin: continue  # don't double count crossing spans
       if m2.begin >= end: break   # mentions are sorted
-      if m2.begin < begin and m2.end > mention.begin and m2.end < end:
+      if m2.begin < begin and m2.end > begin and m2.end < end:
         results.error(Error.CROSSING_SPAN, [document, mention, m2])
-      if m2.begin > begin and m2.end > mention.end:
+      if m2.begin > begin and m2.end > end:
         results.error(Error.CROSSING_SPAN, [document, mention, m2])
 
     # Check valid evoked frames.
@@ -263,7 +263,7 @@ def _validate(document, options):
 
 # Main entry point.
 # Checks the corpora in 'recordio_filename' for errors.
-def validate(commons, recordio_filename, options=Options()):
+def validate(commons, recordio_filename, output_recordio='', options=Options()):
   schema = None
   if type(commons) is not sling.Store:
     assert type(commons) is str
@@ -278,6 +278,10 @@ def validate(commons, recordio_filename, options=Options()):
   corpus = corpora.Corpora(recordio_filename, commons, schema)
   aggregate = Results(options)
   count = 0
+  writer = None
+  written = 0
+  if output_recordio != '':
+    writer = sling.RecordWriter(output_recordio)
   for document in corpus:
     count += 1
     results = _validate(document, options)
@@ -285,8 +289,14 @@ def validate(commons, recordio_filename, options=Options()):
     if not results.ok() and options.stop_on_first_bad_document:
       print "Stopping after first bad document as requested"
       break
+    if writer and results.ok():
+      writer.write('', document.frame.data(binary=True))
+      written += 1
 
-  return aggregate, count
+  if writer:
+    writer.close()
+
+  return aggregate, count, written
 
 
 if __name__ == "__main__":
@@ -301,8 +311,16 @@ if __name__ == "__main__":
                default="",
                type=str,
                metavar='COMMONS')
+  flags.define('--output',
+               help='Output recordio file name for valid documents',
+               default="",
+               type=str,
+               metavar='OUTPUT_RECORDIO')
   flags.parse()
 
-  results, count = validate(flags.arg.commons, flags.arg.input)
-  print "Went over", count, "documents"
+  results, total, written = validate(
+      flags.arg.commons, flags.arg.input, flags.arg.output)
+  print "Went over", total, "documents"
+  if flags.arg.output:
+    print "Wrote", written, "valid documents to", flags.arg.output
   print results
