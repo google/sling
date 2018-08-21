@@ -15,7 +15,6 @@
 """Wrapper classes for document, token, and mention frames"""
 
 import sling
-import sling.pysling as api
 
 # Token break types.
 NO_BREAK = 0

@@ -252,6 +252,7 @@ Status File::WriteContents(const string &filename,
 size_t File::ReadOrDie(void *buffer, size_t size) {
   uint64 read;
   CHECK(Read(buffer, size, &read));
+  CHECK_EQ(read, size) << "Read " << read << " bytes, expected " << size;
   return read;
 }
 

@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sling.myelin.builder as builder
-import sling.myelin.nn as nn
+import builder
+import nn
 
 # Adds a lexical encoder to 'flow', as per 'spec' (which is a Spec object).
 # 'lstm_feature_embeddings' is a list of embeddings data (e.g. numpy arrays),

@@ -31,7 +31,7 @@ PyMethodDef PyStore::methods[] = {
   {"freeze", PYFUNC(PyStore::Freeze), METH_NOARGS, ""},
   {"load", PYFUNC(PyStore::Load), METH_VARARGS | METH_KEYWORDS, ""},
   {"save", PYFUNC(PyStore::Save), METH_VARARGS | METH_KEYWORDS, ""},
-  {"parse", PYFUNC(PyStore::Parse), METH_VARARGS| METH_KEYWORDS, ""},
+  {"parse", PYFUNC(PyStore::Parse), METH_VARARGS | METH_KEYWORDS, ""},
   {"frame", PYFUNC(PyStore::NewFrame), METH_O, ""},
   {"array", PYFUNC(PyStore::NewArray), METH_O, ""},
   {"globals", PYFUNC(PyStore::Globals), METH_NOARGS, ""},
@@ -260,7 +260,7 @@ PyObject *PyStore::Symbols() {
 PyObject *PyStore::NewFrame(PyObject *arg) {
   // Check that store is writable.
   if (!Writable()) return nullptr;
-  
+
   GCLock lock(store);
   std::vector<Slot> slots;
 
