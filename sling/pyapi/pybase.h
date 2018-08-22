@@ -17,19 +17,62 @@
 
 #include <python2.7/Python.h>
 #include <python2.7/structmember.h>
+#include <vector>
 
 #include "sling/string/text.h"
 
 namespace sling {
 
+template <class T> struct MemberPtr { T ptr; ptrdiff_t adj; };
+
 template <class Dest, class Source>
 inline Dest method_cast(const Source &source) {
-  Dest dest;
-  memcpy(&dest, &source, sizeof(dest));
-  return dest;
+  union { Source s; MemberPtr<Dest> d; };
+  s = source;
+  return d.ptr;
 }
 
-#define PYFUNC(method) method_cast<PyCFunction>(&method)
+// Method table for Python member funtions.
+class PyMethodTable {
+ public:
+  // Initialize method table.
+  PyMethodTable();
+
+  // Add method to method table.
+  void Add(const char *name, PyCFunction method,  int flags);
+
+  // Add member function with no arguments.
+  template<class T> void Add(const char *name, PyObject *(T::*method)()) {
+    Add(name, method_cast<PyCFunction>(method), METH_NOARGS);
+  }
+
+  // Add member function with argument list.
+  template<class T> void Add(
+      const char *name,
+      PyObject *(T::*method)(PyObject *args)) {
+    Add(name, method_cast<PyCFunction>(method), METH_VARARGS);
+  }
+
+  // Add member function with arguments and keywords.
+  template<class T> void Add(
+      const char *name,
+      PyObject *(T::*method)(PyObject *args, PyObject *kw)) {
+    Add(name, method_cast<PyCFunction>(method), METH_VARARGS | METH_KEYWORDS);
+  }
+
+  // Add member function with a single object argument.
+  template<class T> void AddO(
+      const char *name,
+      PyObject *(T::*method)(PyObject *obj)) {
+    Add(name, method_cast<PyCFunction>(method), METH_O);
+  }
+
+  // Return pointer to method table.
+  PyMethodDef *table() { return table_.data(); }
+
+ private:
+  std::vector<PyMethodDef> table_;
+};
 
 // Base class for Python wrapper objects. This has the Python object header
 // information for reference counting and type information.

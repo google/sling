@@ -25,20 +25,19 @@ namespace sling {
 
 // Python type declarations.
 PyTypeObject PyTokenizer::type;
+PyMethodTable PyTokenizer::methods;
 PyTypeObject PyParser::type;
-
-PyMethodDef PyTokenizer::methods[] = {
-  {"tokenize", PYFUNC(PyTokenizer::Tokenize), METH_VARARGS, ""},
-  {"lex", PYFUNC(PyTokenizer::Lex), METH_VARARGS, ""},
-  {nullptr}
-};
+PyMethodTable PyParser::methods;
 
 void PyTokenizer::Define(PyObject *module) {
   InitType(&type, "sling.api.Tokenizer", sizeof(PyTokenizer), true);
 
   type.tp_init = method_cast<initproc>(&PyTokenizer::Init);
   type.tp_dealloc = method_cast<destructor>(&PyTokenizer::Dealloc);
-  type.tp_methods = methods;
+
+  methods.Add("tokenize", &PyTokenizer::Tokenize);
+  methods.Add("lex", &PyTokenizer::Lex);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Tokenizer");
 }
@@ -109,17 +108,15 @@ PyObject *PyTokenizer::Lex(PyObject *args) {
   return frame->AsObject();
 }
 
-PyMethodDef PyParser::methods[] = {
-  {"parse", PYFUNC(PyParser::Parse), METH_VARARGS, ""},
-  {nullptr}
-};
 
 void PyParser::Define(PyObject *module) {
   InitType(&type, "sling.api.Parser", sizeof(PyParser), true);
 
   type.tp_init = method_cast<initproc>(&PyParser::Init);
   type.tp_dealloc = method_cast<destructor>(&PyParser::Dealloc);
-  type.tp_methods = methods;
+
+  methods.Add("parse", &PyParser::Parse);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Parser");
 }

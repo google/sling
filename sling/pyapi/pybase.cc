@@ -16,6 +16,25 @@
 
 namespace sling {
 
+PyMethodTable::PyMethodTable() {
+  // Add terminator element.
+  table_.resize(1);
+  table_[0].ml_name = nullptr;
+}
+
+void PyMethodTable::Add(const char *name, PyCFunction method,  int flags) {
+  // Set last element to new method.
+  PyMethodDef &def = table_.back();
+  def.ml_name = name;
+  def.ml_meth = method;
+  def.ml_flags = flags;
+  def.ml_doc = "";
+
+  // Add new terminator element.
+  table_.resize(table_.size() + 1);
+  table_[table_.size() - 1].ml_name = nullptr;
+}
+
 void PyBase::InitType(PyTypeObject *type,
                       const char *name,
                       size_t size,

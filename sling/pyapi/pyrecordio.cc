@@ -21,7 +21,9 @@ namespace sling {
 
 // Python type declarations.
 PyTypeObject PyRecordReader::type;
+PyMethodTable PyRecordReader::methods;
 PyTypeObject PyRecordWriter::type;
+PyMethodTable PyRecordWriter::methods;
 
 // Check status.
 static bool CheckIO(Status status) {
@@ -30,17 +32,6 @@ static bool CheckIO(Status status) {
   return ok;
 }
 
-PyMethodDef PyRecordReader::methods[] = {
-  {"close", PYFUNC(PyRecordReader::Close), METH_NOARGS, ""},
-  {"read", PYFUNC(PyRecordReader::Read), METH_VARARGS, ""},
-  {"tell", PYFUNC(PyRecordReader::Tell), METH_NOARGS, ""},
-  {"seek", PYFUNC(PyRecordReader::Seek), METH_O, ""},
-  {"rewind", PYFUNC(PyRecordReader::Rewind), METH_NOARGS, ""},
-  {"done", PYFUNC(PyRecordReader::Done), METH_NOARGS, ""},
-
-  {nullptr}
-};
-
 void PyRecordReader::Define(PyObject *module) {
   InitType(&type, "sling.RecordReader", sizeof(PyRecordReader), true);
 
@@ -48,7 +39,14 @@ void PyRecordReader::Define(PyObject *module) {
   type.tp_dealloc = method_cast<destructor>(&PyRecordReader::Dealloc);
   type.tp_iter = method_cast<getiterfunc>(&PyRecordReader::Self);
   type.tp_iternext = method_cast<iternextfunc>(&PyRecordReader::Next);
-  type.tp_methods = methods;
+
+  methods.Add("close", &PyRecordReader::Close);
+  methods.Add("read", &PyRecordReader::Read);
+  methods.Add("tell", &PyRecordReader::Tell);
+  methods.AddO("seek", &PyRecordReader::Seek);
+  methods.Add("rewind", &PyRecordReader::Rewind);
+  methods.Add("done", &PyRecordReader::Done);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "RecordReader");
 }
@@ -141,19 +139,16 @@ PyObject *PyRecordReader::Self() {
   return AsObject();
 }
 
-PyMethodDef PyRecordWriter::methods[] = {
-  {"close", PYFUNC(PyRecordWriter::Close), METH_NOARGS, ""},
-  {"write", PYFUNC(PyRecordWriter::Write), METH_VARARGS, ""},
-  {"tell", PYFUNC(PyRecordWriter::Tell), METH_NOARGS, ""},
-  {nullptr}
-};
-
 void PyRecordWriter::Define(PyObject *module) {
   InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter), true);
 
   type.tp_init = method_cast<initproc>(&PyRecordWriter::Init);
   type.tp_dealloc = method_cast<destructor>(&PyRecordWriter::Dealloc);
-  type.tp_methods = methods;
+
+  methods.Add("close", &PyRecordWriter::Close);
+  methods.Add("write", &PyRecordWriter::Write);
+  methods.Add("tell", &PyRecordWriter::Tell);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "RecordWriter");
 }

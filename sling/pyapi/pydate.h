@@ -34,7 +34,6 @@ struct PyDate : public PyBase {
 
   // Registration.
   static PyTypeObject type;
-  static PyMethodDef methods[];
   static PyMemberDef members[];
   static void Define(PyObject *module);
 };
@@ -72,7 +71,7 @@ struct PyCalendar : public PyBase {
 
   // Registration.
   static PyTypeObject type;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 

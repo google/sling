@@ -29,24 +29,23 @@ static task::Dashboard *dashboard = nullptr;
 
 // Python type declarations.
 PyTypeObject PyJob::type;
+PyMethodTable PyJob::methods;
 PyTypeObject PyResource::type;
 PyTypeObject PyTask::type;
-
-PyMethodDef PyJob::methods[] = {
-  {"start", PYFUNC(PyJob::Start), METH_NOARGS, ""},
-  {"wait", PYFUNC(PyJob::Wait), METH_NOARGS, ""},
-  {"done", PYFUNC(PyJob::Done), METH_NOARGS, ""},
-  {"wait_for", PYFUNC(PyJob::WaitFor), METH_O, ""},
-  {"counters", PYFUNC(PyJob::Counters), METH_NOARGS, ""},
-  {nullptr}
-};
+PyMethodTable PyTask::methods;
 
 void PyJob::Define(PyObject *module) {
   InitType(&type, "sling.api.Job", sizeof(PyJob), true);
 
   type.tp_init = method_cast<initproc>(&PyJob::Init);
   type.tp_dealloc = method_cast<destructor>(&PyJob::Dealloc);
-  type.tp_methods = methods;
+
+  methods.Add("start", &PyJob::Start);
+  methods.Add("wait", &PyJob::Wait);
+  methods.Add("done", &PyJob::Done);
+  methods.AddO("wait_for", &PyJob::WaitFor);
+  methods.Add("counters", &PyJob::Counters);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Job");
 }
@@ -317,23 +316,20 @@ void PyResource::Dealloc() {
   Free();
 }
 
-PyMethodDef PyTask::methods[] = {
-  {"name", PYFUNC(PyTask::GetName), METH_NOARGS, ""},
-  {"input", PYFUNC(PyTask::GetInput), METH_VARARGS, ""},
-  {"inputs", PYFUNC(PyTask::GetInputs), METH_VARARGS, ""},
-  {"output", PYFUNC(PyTask::GetOutput), METH_VARARGS, ""},
-  {"outputs", PYFUNC(PyTask::GetOutputs), METH_VARARGS, ""},
-  {"param", PYFUNC(PyTask::GetParameter), METH_VARARGS, ""},
-  {"increment", PYFUNC(PyTask::Increment), METH_VARARGS, ""},
-  {nullptr}
-};
-
 void PyTask::Define(PyObject *module) {
   InitType(&type, "sling.api.Task", sizeof(PyTask), false);
 
   type.tp_init = method_cast<initproc>(&PyTask::Init);
   type.tp_dealloc = method_cast<destructor>(&PyTask::Dealloc);
-  type.tp_methods = methods;
+
+  methods.Add("name", &PyTask::GetName);
+  methods.Add("input", &PyTask::GetInput);
+  methods.Add("inputs", &PyTask::GetInputs);
+  methods.Add("output", &PyTask::GetOutput);
+  methods.Add("outputs", &PyTask::GetOutputs);
+  methods.Add("param", &PyTask::GetParameter);
+  methods.Add("increment", &PyTask::Increment);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Task");
 }

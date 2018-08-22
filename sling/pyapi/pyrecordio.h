@@ -57,7 +57,7 @@ struct PyRecordReader : public PyBase {
 
   // Registration.
   static PyTypeObject type;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 
@@ -83,7 +83,7 @@ struct PyRecordWriter : public PyBase {
 
   // Registration.
   static PyTypeObject type;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 

@@ -22,6 +22,7 @@ namespace sling {
 
 // Python type declarations.
 PyTypeObject PyCalendar::type;
+PyMethodTable PyCalendar::methods;
 PyTypeObject PyDate::type;
 
 PyMemberDef PyDate::members[] = {
@@ -83,23 +84,20 @@ void PyDate::Dealloc() {
   Free();
 }
 
-PyMethodDef PyCalendar::methods[] = {
-  {"str", PYFUNC(PyCalendar::Str), METH_O, ""},
-  {"value", PYFUNC(PyCalendar::Value), METH_O, ""},
-  {"day", PYFUNC(PyCalendar::Day), METH_O, ""},
-  {"month", PYFUNC(PyCalendar::Month), METH_O, ""},
-  {"year", PYFUNC(PyCalendar::Year), METH_O, ""},
-  {"decade", PYFUNC(PyCalendar::Decade), METH_O, ""},
-  {"century", PYFUNC(PyCalendar::Century), METH_O, ""},
-  {"millennium", PYFUNC(PyCalendar::Millennium), METH_O, ""},
-  {nullptr}
-};
-
 void PyCalendar::Define(PyObject *module) {
   InitType(&type, "sling.Calendar", sizeof(PyCalendar), true);
   type.tp_init = method_cast<initproc>(&PyCalendar::Init);
-  type.tp_methods = methods;
   type.tp_dealloc = method_cast<destructor>(&PyCalendar::Dealloc);
+
+  methods.AddO("str", &PyCalendar::Str);
+  methods.AddO("value", &PyCalendar::Value);
+  methods.AddO("day", &PyCalendar::Day);
+  methods.AddO("month", &PyCalendar::Month);
+  methods.AddO("year", &PyCalendar::Year);
+  methods.AddO("decade", &PyCalendar::Decade);
+  methods.AddO("century", &PyCalendar::Century);
+  methods.AddO("millennium", &PyCalendar::Millennium);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Calendar");
 }

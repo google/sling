@@ -102,7 +102,7 @@ struct PyFrame : public PyBase, public Root {
   static PyTypeObject type;
   static PyMappingMethods mapping;
   static PySequenceMethods sequence;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 

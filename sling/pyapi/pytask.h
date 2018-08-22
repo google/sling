@@ -76,7 +76,7 @@ struct PyJob : public PyBase {
 
   // Registration.
   static PyTypeObject type;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 
@@ -140,7 +140,7 @@ struct PyTask : public PyBase {
 
   // Registration.
   static PyTypeObject type;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 

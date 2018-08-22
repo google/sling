@@ -22,18 +22,8 @@ namespace sling {
 PyTypeObject PyFrame::type;
 PyMappingMethods PyFrame::mapping;
 PySequenceMethods PyFrame::sequence;
+PyMethodTable PyFrame::methods;
 PyTypeObject PySlots::type;
-
-PyMethodDef PyFrame::methods[] = {
-  {"data", PYFUNC(PyFrame::Data), METH_KEYWORDS, ""},
-  {"append", PYFUNC(PyFrame::Append), METH_VARARGS, ""},
-  {"extend", PYFUNC(PyFrame::Extend), METH_O, ""},
-  {"store", PYFUNC(PyFrame::GetStore), METH_NOARGS, ""},
-  {"islocal", PYFUNC(PyFrame::IsLocal), METH_NOARGS, ""},
-  {"isglobal", PYFUNC(PyFrame::IsGlobal), METH_NOARGS, ""},
-  {"resolve", PYFUNC(PyFrame::Resolve), METH_NOARGS, ""},
-  {nullptr}
-};
 
 void PyFrame::Define(PyObject *module) {
   InitType(&type, "sling.Frame", sizeof(PyFrame), false);
@@ -46,7 +36,6 @@ void PyFrame::Define(PyObject *module) {
   type.tp_call = method_cast<ternaryfunc>(&PyFrame::Find);
   type.tp_hash = method_cast<hashfunc>(&PyFrame::Hash);
   type.tp_richcompare = method_cast<richcmpfunc>(&PyFrame::Compare);
-  type.tp_methods = methods;
 
   type.tp_as_mapping = &mapping;
   mapping.mp_length = method_cast<lenfunc>(&PyFrame::Size);
@@ -55,6 +44,15 @@ void PyFrame::Define(PyObject *module) {
 
   type.tp_as_sequence = &sequence;
   sequence.sq_contains = method_cast<objobjproc>(&PyFrame::Contains);
+
+  methods.Add("data", &PyFrame::Data);
+  methods.Add("append", &PyFrame::Append);
+  methods.Add("extend", &PyFrame::Extend);
+  methods.Add("store", &PyFrame::GetStore);
+  methods.Add("islocal", &PyFrame::IsLocal);
+  methods.Add("isglobal", &PyFrame::IsGlobal);
+  methods.Add("resolve", &PyFrame::Resolve);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Frame");
 }
@@ -178,7 +176,7 @@ PyObject *PyFrame::GetAttr(PyObject *key) {
   if (name == nullptr) return nullptr;
 
   // Resolve methods.
-  PyObject *method = Py_FindMethod(methods, AsObject(), name);
+  PyObject *method = Py_FindMethod(methods.table(), AsObject(), name);
   if (method != nullptr) return method;
   PyErr_Clear();
 

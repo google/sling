@@ -25,18 +25,8 @@ namespace sling {
 PyTypeObject PyStore::type;
 PyMappingMethods PyStore::mapping;
 PySequenceMethods PyStore::sequence;
+PyMethodTable PyStore::methods;
 PyTypeObject PySymbols::type;
-
-PyMethodDef PyStore::methods[] = {
-  {"freeze", PYFUNC(PyStore::Freeze), METH_NOARGS, ""},
-  {"load", PYFUNC(PyStore::Load), METH_VARARGS | METH_KEYWORDS, ""},
-  {"save", PYFUNC(PyStore::Save), METH_VARARGS | METH_KEYWORDS, ""},
-  {"parse", PYFUNC(PyStore::Parse), METH_VARARGS | METH_KEYWORDS, ""},
-  {"frame", PYFUNC(PyStore::NewFrame), METH_O, ""},
-  {"array", PYFUNC(PyStore::NewArray), METH_O, ""},
-  {"globals", PYFUNC(PyStore::Globals), METH_NOARGS, ""},
-  {nullptr}
-};
 
 void PyStore::Define(PyObject *module) {
   InitType(&type, "sling.Store", sizeof(PyStore), true);
@@ -44,7 +34,15 @@ void PyStore::Define(PyObject *module) {
   type.tp_init = method_cast<initproc>(&PyStore::Init);
   type.tp_dealloc = method_cast<destructor>(&PyStore::Dealloc);
   type.tp_iter = method_cast<getiterfunc>(&PyStore::Symbols);
-  type.tp_methods = methods;
+
+  methods.Add("freeze", &PyStore::Freeze);
+  methods.Add("load", &PyStore::Load);
+  methods.Add("save", &PyStore::Save);
+  methods.Add("parse", &PyStore::Parse);
+  methods.AddO("frame", &PyStore::NewFrame);
+  methods.AddO("array", &PyStore::NewArray);
+  methods.Add("globals", &PyStore::Globals);
+  type.tp_methods = methods.table();
 
   type.tp_as_mapping = &mapping;
   mapping.mp_length = method_cast<lenfunc>(&PyStore::Size);

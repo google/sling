@@ -20,19 +20,17 @@ namespace sling {
 
 // Python type declarations.
 PyTypeObject PyPhraseTable::type;
-
-PyMethodDef PyPhraseTable::methods[] = {
-  {"lookup", PYFUNC(PyPhraseTable::Lookup), METH_O, ""},
-  {"query", PYFUNC(PyPhraseTable::Query), METH_O, ""},
-  {nullptr}
-};
+PyMethodTable PyPhraseTable::methods;
 
 void PyPhraseTable::Define(PyObject *module) {
   InitType(&type, "sling.api.PhraseTable", sizeof(PyPhraseTable), true);
 
   type.tp_init = method_cast<initproc>(&PyPhraseTable::Init);
   type.tp_dealloc = method_cast<destructor>(&PyPhraseTable::Dealloc);
-  type.tp_methods = methods;
+
+  methods.AddO("lookup", &PyPhraseTable::Lookup);
+  methods.AddO("query", &PyPhraseTable::Query);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "PhraseTable");
 }

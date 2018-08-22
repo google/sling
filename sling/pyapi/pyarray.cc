@@ -21,13 +21,8 @@ namespace sling {
 // Python type declarations.
 PyTypeObject PyArray::type;
 PySequenceMethods PyArray::sequence;
+PyMethodTable PyArray::methods;
 PyTypeObject PyItems::type;
-
-PyMethodDef PyArray::methods[] = {
-  {"store", PYFUNC(PyArray::GetStore), METH_NOARGS, ""},
-  {"data", PYFUNC(PyArray::Data), METH_KEYWORDS, ""},
-  {nullptr}
-};
 
 void PyArray::Define(PyObject *module) {
   InitType(&type, "sling.Array", sizeof(PyArray), false);
@@ -35,7 +30,10 @@ void PyArray::Define(PyObject *module) {
   type.tp_str = method_cast<reprfunc>(&PyArray::Str);
   type.tp_iter = method_cast<getiterfunc>(&PyArray::Items);
   type.tp_hash = method_cast<hashfunc>(&PyArray::Hash);
-  type.tp_methods = methods;
+
+  methods.Add("store", &PyArray::GetStore);
+  methods.Add("data", &PyArray::Data);
+  type.tp_methods = methods.table();
 
   type.tp_as_sequence = &sequence;
   sequence.sq_length = method_cast<lenfunc>(&PyArray::Size);

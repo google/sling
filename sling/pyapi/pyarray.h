@@ -71,7 +71,7 @@ struct PyArray : public PyBase, public Root {
   // Registration.
   static PyTypeObject type;
   static PySequenceMethods sequence;
-  static PyMethodDef methods[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 
