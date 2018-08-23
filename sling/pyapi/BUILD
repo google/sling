@@ -14,6 +14,7 @@ cc_library(
     "pyrecordio.cc",
     "pystore.cc",
     "pytask.cc",
+    "pywiki.cc",
   ],
   hdrs = [
     "pyarray.h",
@@ -26,6 +27,7 @@ cc_library(
     "pyrecordio.h",
     "pystore.h",
     "pytask.h",
+    "pywiki.h",
   ],
   deps = [
     ":tasks",
@@ -41,10 +43,12 @@ cc_library(
     "//sling/nlp/document:phrase-tokenizer",
     "//sling/nlp/kb:calendar",
     "//sling/nlp/parser",
+    "//sling/nlp/wiki:wikidata-converter",
     "//sling/task:dashboard",
     "//sling/task:job",
     "//sling/task:process",
     "//sling/stream:file",
+    "//sling/stream:memory",
     "//sling/stream:unix-file",
     "//sling/string:text",
   ],

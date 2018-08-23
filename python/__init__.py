@@ -12,6 +12,7 @@ RecordWriter=api.RecordWriter
 PhraseTable=api.PhraseTable
 Calendar=api.Calendar
 Date=api.Date
+WikiConverter=api.WikiConverter
 
 MILLENNIUM=api.MILLENNIUM
 CENTURY=api.CENTURY

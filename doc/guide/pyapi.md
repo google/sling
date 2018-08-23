@@ -644,3 +644,20 @@ if __name__ == '__main__':
   # Parse command-line arguments.
   flags.parse()
 ```
+
+The WikiConverter class can convert
+[Wikidata items in JSON format](https://www.mediawiki.org/wiki/Wikibase/DataModel/JSON)
+to SLING frame notation.
+```
+import sling
+
+store = sling.Store()
+wikiconv = sling.WikiConverter(store)
+
+qid = "Q1254"
+url = "https://www.wikidata.org/wiki/Special:EntityData/" + qid + ".json"
+json = urllib2.urlopen(url).read()[len(qid) + 16:-2]
+
+item = wikiconv.convert_wikidata(store, json)
+print item.data(pretty=True)
+```

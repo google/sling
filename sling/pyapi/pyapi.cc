@@ -24,6 +24,7 @@
 #include "sling/pyapi/pyrecordio.h"
 #include "sling/pyapi/pystore.h"
 #include "sling/pyapi/pytask.h"
+#include "sling/pyapi/pywiki.h"
 
 namespace sling {
 
@@ -57,6 +58,7 @@ static void RegisterPythonModule() {
   PyTask::Define(module);
   PyCalendar::Define(module);
   PyDate::Define(module);
+  PyWikiConverter::Define(module);
 }
 
 }  // namespace sling

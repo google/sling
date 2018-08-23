@@ -13,6 +13,19 @@ cc_library(
 )
 
 cc_library(
+  name = "wikidata-converter",
+  srcs = ["wikidata-converter.cc"],
+  hdrs = ["wikidata-converter.h"],
+  deps = [
+    ":wiki",
+    "//sling/frame",
+    "//sling/nlp/kb:calendar",
+    "//sling/string:text",
+    "//sling/string:numbers",
+  ],
+)
+
+cc_library(
   name = "wikipedia-map",
   srcs = ["wikipedia-map.cc"],
   hdrs = ["wikipedia-map.h"],
@@ -40,11 +53,11 @@ cc_library(
   name = "wikidata-importer",
   srcs = ["wikidata-importer.cc"],
   deps = [
-    ":wiki",
+  ":wiki",
+  ":wikidata-converter",
     "//sling/frame",
-    "//sling/nlp/kb:calendar",
     "//sling/stream:input",
-    "//sling/stream:output",
+    "//sling/stream:memory",
     "//sling/string:text",
     "//sling/string:numbers",
     "//sling/task",
