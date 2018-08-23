@@ -269,9 +269,9 @@ The global store then serves as an extension of the local store. The frames
 in the local store can have reference to the frames in the global store. You
 can create multiple local store on top of the same global store. Typically you
 initialize one global store with all the shared information like schemas or
-other static common knowledge data. You then create local store for each
-document/query/request that can each contain the frame analysis for the
-item being analyzed. This analysis can contain references to the frame in the
+other static common knowledge data. You then create a local store for each
+document/query/request that can contain the frame analysis for the
+item being analyzed. This analysis can contain references to the frames in the
 global store. By construction, you cannot have references from the global store
 to the local store since the local stores cannot be created until the global
 store has been frozen and then the global store can no longer be updated.
@@ -500,13 +500,13 @@ classes can be used for writing frames to strings and files.
 
 The id slots are used for making references between frames when reading them
 into a store. This will add all the frames with ids to the symbol table. If this
-is not desirable, you can instead use temporary ids with the form `#@<number>`.
+is not desirable, you can instead use temporary ids with the form `#<number>`.
 These ids are only used while reading the frame from the input, but this does
 not add any id slots to the frames, e.g.:
 
 ```sling
-{=#@1 :/toy/person name: "Homer Simpson" /toy/person/spouse: #@2}
-{=#@2 :/toy/person name: "Marge Simpson" /toy/person/spouse: #@1}
+{=#1 :/toy/person name: "Homer Simpson" /toy/person/spouse: #2}
+{=#2 :/toy/person name: "Marge Simpson" /toy/person/spouse: #1}
 ```
 
 A number of flags can be used to control which frames are output by the frame
