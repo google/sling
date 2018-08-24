@@ -89,6 +89,9 @@ class WorkerPool {
   // Wait for all workers to terminate.
   void Join();
 
+  // Return the number of worker threads in the pool.
+  int size() const { return workers_.size(); }
+
  private:
   // Worker threads.
   std::vector<ClosureThread> workers_;

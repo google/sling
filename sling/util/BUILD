@@ -28,6 +28,24 @@ cc_library(
 )
 
 cc_library(
+  name = "bloom",
+  hdrs = ["bloom.h"],
+  deps = [
+    "//sling/base",
+  ],
+)
+
+cc_library(
+  name = "sortmap",
+  hdrs = ["sortmap.h"],
+)
+
+cc_library(
+  name = "top",
+  hdrs = ["top.h"],
+)
+
+cc_library(
   name = "unicode",
   hdrs = [
     "unicode.h",

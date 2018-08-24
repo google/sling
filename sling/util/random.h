@@ -40,13 +40,12 @@ class Random {
 
   // Return uniformly distributed random number between 0 and n (exclusive).
   int UniformInt(int n) {
-    return dist_(prng_) * n;
+    return prng_() % n;
   }
 
  private:
-  // Mersenne Twister pseudo-random generator of 32-bit numbers with a state
-  // size of 19937 bits.
-  std::mt19937 prng_;
+  // Mersenne Twister pseudo-random generator of 64-bit numbers.
+  std::mt19937_64 prng_;
 
   // Uniform distribution.
   std::uniform_real_distribution<float> dist_;

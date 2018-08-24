@@ -48,10 +48,10 @@ bool EmbeddingReader::Next() {
   // Optionally normalize embedding vector to unit length.
   if (normalize_) {
     float sum = 0.0;
-    for (int i = 0; i < dim_; ++i) sum += data[i] * data[i];
+    for (int i = 0; i < dim_; ++i) sum += embedding_[i] * embedding_[i];
     if (sum > 0.0) {
       float l2 = sqrt(sum);
-      for (int i = 0; i < dim_; ++i) data[i] /= l2;
+      for (int i = 0; i < dim_; ++i) embedding_[i] /= l2;
     }
   }
 
@@ -70,6 +70,7 @@ void EmbeddingReader::NextWord(string *output) {
     char ch;
     CHECK(input_.Next(&ch));
     if (ch == ' ' || ch == '\n') break;
+    if (ch == '_') ch = ' ';
     output->push_back(ch);
   }
 }
@@ -90,7 +91,11 @@ bool EmbeddingWriter::Close() {
 void EmbeddingWriter::Write(const string &word,
                             const std::vector<float> &embedding) {
   // Write word.
-  output_.Write(word);
+  if (word.find(' ') == string::npos) {
+    output_.Write(word);
+  } else {
+    for (char c : word) output_.WriteChar(c == ' ' ? '_' : c);
+  }
   output_.WriteChar(' ');
 
   // Write embedding vector.
@@ -101,4 +106,3 @@ void EmbeddingWriter::Write(const string &word,
 }
 
 }  // namespace sling
-
