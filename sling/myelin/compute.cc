@@ -564,6 +564,10 @@ int Tensor::ConsumerTask() const {
   return consumer_task == -2 ? -1 : consumer_task;
 }
 
+Tensor *Tensor::Gradient() const {
+  return cell()->network()->LookupParameter(GradientVarName(name_));
+}
+
 string Tensor::TypeString() const {
   string str;
   if (ref_) str.append("&");
@@ -728,7 +732,7 @@ void Instance::Clear() {
   cell_->runtime()->ClearInstance(this);
 }
 
-string Instance::ToString(Tensor *param) const {
+string Instance::ToString(const Tensor *param) const {
   // Locate parameter in instance.
   char *p;
   char *buffer = nullptr;
@@ -1874,6 +1878,14 @@ Tensor *Cell::LookupParameter(const string &name) const {
 
 Tensor *Cell::GetParameter(const string &name) const {
   return network_->GetParameter(name);
+}
+
+Cell *Cell::Gradient() const {
+  return network()->LookupCell(GradientFuncName(name_));
+}
+
+Tensor *Cell::Primal() const {
+  return network()->LookupParameter(PrimalVarName(name_));
 }
 
 void Cell::WriteCodeToFile(const string &filename) const {

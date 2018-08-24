@@ -30,14 +30,14 @@ void BiLSTM::LSTM::Initialize(const Network &net, const string &name) {
   c_out = net.GetParameter(name + "/c_out");
 
   // Initialize gradient cell for LSTM.
-  gcell = net.LookupCell("gradients/" + name);
+  gcell = cell->Gradient();
   if (gcell != nullptr) {
-    dinput = net.GetParameter("gradients/" + name + "/d_input");
-    primal = net.GetParameter("gradients/" + name + "/primal");
-    dh_in = net.GetParameter("gradients/" + name + "/d_h_in");
-    dh_out = net.GetParameter("gradients/" + name + "/d_h_out");
-    dc_in = net.GetParameter("gradients/" + name + "/d_c_in");
-    dc_out = net.GetParameter("gradients/" + name + "/d_c_out");
+    primal = cell->Primal();
+    dinput = input->Gradient();
+    dh_in = h_in->Gradient();
+    dh_out = h_out->Gradient();
+    dc_in = c_in->Gradient();
+    dc_out = c_out->Gradient();
   }
 }
 
@@ -61,10 +61,10 @@ BiLSTM::Outputs BiLSTM::Build(Flow *flow, const Library &library, int dim,
 
   // Build gradients for learning.
   if (dinput != nullptr) {
-    auto *glr = Gradient(flow, lr.func(), library);
-    auto *grl = Gradient(flow, rl.func(), library);
-    out.dlr = flow->Var(glr->name + "/d_input");
-    out.drl = flow->Var(grl->name + "/d_input");
+    Gradient(flow, lr.func(), library);
+    Gradient(flow, rl.func(), library);
+    out.dlr = flow->GradientVar(lr_input);
+    out.drl = flow->GradientVar(rl_input);
     flow->Connect({dinput, out.dlr, out.drl});
   } else {
     out.dlr = nullptr;

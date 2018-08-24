@@ -79,6 +79,9 @@ class FlowBuilder : public Scope {
   // Add learnable parameter variable to flow.
   Variable *Parameter(const string &name, Type type, const Shape &shape);
 
+  // Initialize variable with random values. Returns the variable itself.
+  Variable *Random(Variable *var);
+
   // Add input variable to function.
   Variable *Placeholder(const string &name, Type type, const Shape &shape,
                         bool ref = false);
@@ -98,6 +101,14 @@ class FlowBuilder : public Scope {
 
   // Add operation with no output to function.
   Operation *RawOp(const string &op, const std::vector<Variable *> &args);
+
+  // Mark variable as non-differentiable.
+  Variable *NoGradient(Variable *x) {
+    if (x->producer != nullptr) {
+      x->producer->set(Flow::Operation::NOGRADIENT);
+    }
+    return x;
+  }
 
   // Add constant to flow.
   Variable *Const(const void *data, Type type, const Shape &shape);
@@ -154,30 +165,44 @@ class FlowBuilder : public Scope {
 
   // Comparison.
   Variable *Equal(Variable *x, Variable *y) {
-    return Op("Equal", {x, y});
+    return NoGradient(Op("Equal", {x, y}));
   }
   Variable *NotEqual(Variable *x, Variable *y) {
-    return Op("NotEqual", {x, y});
+    return NoGradient(Op("NotEqual", {x, y}));
   }
   Variable *Less(Variable *x, Variable *y) {
-    return Op("Less", {x, y});
+    return NoGradient(Op("Less", {x, y}));
   }
   Variable *LessEqual(Variable *x, Variable *y) {
-    return Op("LessEqual", {x, y});
+    return NoGradient(Op("LessEqual", {x, y}));
   }
   Variable *Greater(Variable *x, Variable *y) {
-    return Op("Greater", {x, y});
+    return NoGradient(Op("Greater", {x, y}));
   }
   Variable *GreaterEqual(Variable *x, Variable *y) {
-    return Op("GreaterEqual", {x, y});
+    return NoGradient(Op("GreaterEqual", {x, y}));
   }
 
+  Variable *IsZero(Variable *x) { return Equal(x, Zero()); }
+  Variable *IsPositive(Variable *x) { return Greater(x, Zero()); }
+  Variable *IsNegative(Variable *x) { return Less(x, Zero()); }
+
   // Logic operators.
-  Variable *And(Variable *x, Variable *y) { return Op("And", {x, y}); }
-  Variable *Or(Variable *x, Variable *y) { return Op("Or", {x, y}); }
-  Variable *Xor(Variable *x, Variable *y) { return Op("Xor", {x, y}); }
-  Variable *AndNot(Variable *x, Variable *y) { return Op("AndNot", {x, y}); }
-  Variable *Not(Variable *x) { return Op("Not", {x}); }
+  Variable *And(Variable *x, Variable *y) {
+    return NoGradient(Op("And", {x, y}));
+  }
+  Variable *Or(Variable *x, Variable *y) {
+    return NoGradient(Op("Or", {x, y}));
+  }
+  Variable *Xor(Variable *x, Variable *y) {
+    return NoGradient(Op("Xor", {x, y}));
+  }
+  Variable *AndNot(Variable *x, Variable *y) {
+    return NoGradient(Op("AndNot", {x, y}));
+  }
+  Variable *Not(Variable *x) {
+    return NoGradient(Op("Not", {x}));
+  }
 
   Variable *Cond(Variable *cond, Variable *x, Variable *y) {
     return Op("Cond", {cond, x, y});

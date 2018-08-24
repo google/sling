@@ -461,6 +461,11 @@ void Task::Done() {
     // Notify processor.
     processor_->Done(this);
 
+    // The processor is no longer needed after it is done, so the processor is
+    // deleted here to free up resources.
+    delete processor_;
+    processor_ = nullptr;
+
     // Close any remaining output channels.
     for (Channel *channel : sinks_) {
       if (!channel->closed()) channel->Close();

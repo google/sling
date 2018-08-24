@@ -60,6 +60,11 @@ Flow::Variable *FlowBuilder::Parameter(const string &name,
   return var;
 }
 
+Flow::Variable *FlowBuilder::Random(Variable *var) {
+  var->set_random(true);
+  return var;
+}
+
 Flow::Variable *FlowBuilder::Placeholder(const string &name,
                                          Type type,
                                          const Shape &shape,
@@ -181,7 +186,7 @@ Flow::Variable *FlowBuilder::FFLayers(Variable *input,
     int width = layers[l];
 
     // Add weight matrix.
-    auto *W = Parameter("W" + std::to_string(l), type, {height, width});
+    auto *W = Random(Parameter("W" + std::to_string(l), type, {height, width}));
     v = MatMul(v, W);
 
     // Optionally add bias.
@@ -212,18 +217,18 @@ Flow::Variable *FlowBuilder::LSTMLayer(Variable *input, int size) {
   int input_dim = input->dim(1);
 
   // Define parameters.
-  auto *x2i = Parameter("x2i", type, {input_dim, size});
-  auto *h2i = Parameter("h2i", type, {size, size});
-  auto *c2i = Parameter("c2i", type, {size, size});
+  auto *x2i = Random(Parameter("x2i", type, {input_dim, size}));
+  auto *h2i = Random(Parameter("h2i", type, {size, size}));
+  auto *c2i = Random(Parameter("c2i", type, {size, size}));
   auto *bi = Parameter("bi", type, {1, size});
 
-  auto *x2o = Parameter("x2o", type, {input_dim, size});
-  auto *h2o = Parameter("h2o", type, {size, size});
-  auto *c2o = Parameter("c2o", type, {size, size});
+  auto *x2o = Random(Parameter("x2o", type, {input_dim, size}));
+  auto *h2o = Random(Parameter("h2o", type, {size, size}));
+  auto *c2o = Random(Parameter("c2o", type, {size, size}));
   auto *bo = Parameter("bo", type, {1, size});
 
-  auto *x2c = Parameter("x2c", type, {input_dim, size});
-  auto *h2c = Parameter("h2c", type, {size, size});
+  auto *x2c = Random(Parameter("x2c", type, {input_dim, size}));
+  auto *h2c = Random(Parameter("h2c", type, {size, size}));
   auto *bc = Parameter("bc", type, {1, size});
 
   // Channels -- h_in, c_in = h_{t-1}, c_{t-1}

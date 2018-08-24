@@ -434,7 +434,7 @@ void Job::TaskCompleted(Task *task) {
       stage->Start();
     }
 
-    // Notify monitor on completion. This need to be called when the job is not
+    // Notify monitor on completion. This needs to be called when the job is not
     // locked.
     if (monitor_on_completion != nullptr) {
       monitor_on_completion->OnJobDone(this);

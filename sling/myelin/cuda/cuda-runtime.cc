@@ -210,7 +210,7 @@ void CUDARuntime::SyncMain(void *instance) {
   CHECK_CUDA(cuStreamSynchronize(rt->mainstream));
 }
 
-DevicePtr CUDARuntime::CopyTensorToDevice(Tensor *tensor) {
+DevicePtr CUDARuntime::CopyTensorToDevice(const Tensor *tensor) {
   // Allocate memory for constant tensor on device.
   DevicePtr dest;
   CHECK_CUDA(cuMemAlloc(&dest, tensor->space()));
@@ -224,11 +224,12 @@ DevicePtr CUDARuntime::CopyTensorToDevice(Tensor *tensor) {
   return dest;
 }
 
-void CUDARuntime::RemoveTensorFromDevice(Tensor *tensor) {
+void CUDARuntime::RemoveTensorFromDevice(const Tensor *tensor) {
   CHECK_CUDA(cuMemFree(tensor->device_data()));
 }
 
-char *CUDARuntime::FetchTensorFromDevice(const Instance *data, Tensor *tensor) {
+char *CUDARuntime::FetchTensorFromDevice(const Instance *data,
+                                         const Tensor *tensor) {
   // Allocate host memory buffer for tensor.
   char *dest = reinterpret_cast<char *>(malloc(tensor->space()));
 

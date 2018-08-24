@@ -1932,6 +1932,18 @@ Flow::Variable *Flow::Var(const string &name) {
   return nullptr;
 }
 
+Flow::Variable *Flow::GradientVar(Variable *var) {
+  return Var(GradientVarName(var->name));
+}
+
+Flow::Function *Flow::GradientFunc(Function *func) {
+  return Func(GradientFuncName(func->name));
+}
+
+Flow::Variable *Flow::PrimalVar(Function *func) {
+  return Var(PrimalVarName(func->name));
+}
+
 Flow::Operation *Flow::Op(const string &name) {
   for (Operation *op : ops_) {
     if (op->name == name) return op;
@@ -1958,6 +1970,20 @@ Flow::Blob *Flow::DataBlock(const string &name) {
     if (blob->name == name) return blob;
   }
   return nullptr;
+}
+
+string GradientVarName(const string &name) {
+  int slash = name.rfind('/');
+  if (slash == -1) return "gradients/d_" + name;
+  return "gradients/" + name.substr(0, slash) + "/d_" + name.substr(slash + 1);
+}
+
+string GradientFuncName(const string &name) {
+  return "gradients/" + name;
+}
+
+string PrimalVarName(const string &name) {
+  return "gradients/" + name + "/primal";
 }
 
 }  // namespace myelin

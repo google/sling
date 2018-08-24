@@ -82,11 +82,12 @@ class CUDARuntime : public Runtime {
   int ExtraInstanceData(Cell *cell) override { return sizeof(CUDAInstance); }
 
   // Constant tensor copying.
-  DevicePtr CopyTensorToDevice(Tensor *tensor) override;
-  void RemoveTensorFromDevice(Tensor *tensor) override;
+  DevicePtr CopyTensorToDevice(const Tensor *tensor) override;
+  void RemoveTensorFromDevice(const Tensor *tensor) override;
 
   // Fetch tensor from device.
-  char *FetchTensorFromDevice(const Instance *data, Tensor *tensor) override;
+  char *FetchTensorFromDevice(const Instance *data,
+                              const Tensor *tensor) override;
 
   // Instance tensor copying.
   void EmitTensorTransfers(const Transfers &xfers,

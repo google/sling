@@ -237,14 +237,15 @@ class Runtime {
   virtual int ExtraInstanceData(Cell *cell) { return 0; }
 
   // Copy constant tensor to device.
-  virtual DevicePtr CopyTensorToDevice(Tensor *tensor) { return DEVICE_NULL; }
+  virtual DevicePtr CopyTensorToDevice(const Tensor *tensor) { return DEVICE_NULL; }
 
   // Remove constant tensor from device.
-  virtual void RemoveTensorFromDevice(Tensor *tensor) {}
+  virtual void RemoveTensorFromDevice(const Tensor *tensor) {}
 
   // Fetch copy of tensor from device. Caller takes ownership of the returned
   // data buffer.
-  virtual char *FetchTensorFromDevice(const Instance *data, Tensor *tensor) {
+  virtual char *FetchTensorFromDevice(const Instance *data,
+                                      const Tensor *tensor) {
     return nullptr;
   }
 
@@ -318,7 +319,7 @@ class Tensor {
   bool SupportsAlignment(const Shape &align) const;
 
   // Check if pointer is aligned properly for tensor.
-  bool IsAligned(void *ptr) {
+  bool IsAligned(void *ptr) const {
     return (reinterpret_cast<size_t>(ptr) & (byte_alignment_ - 1)) == 0;
   }
 
@@ -568,6 +569,9 @@ class Tensor {
 
   // Byte alignment.
   int byte_alignment() const { return byte_alignment_; }
+
+  // Return corresponding gradient tensor.
+  Tensor *Gradient() const;
 
   // Return tensor type as string.
   string TypeString() const;
@@ -851,7 +855,7 @@ class TensorData {
  public:
   TensorData(const TensorData &other)
       : data_(other.data_), format_(other.format_) {}
-  TensorData(char *data, Tensor *format)
+  TensorData(char *data, const Tensor *format)
       : data_(data), format_(format) {}
 
   // Tensor element access.
@@ -924,8 +928,8 @@ class TensorData {
   string ToString() const { return format_->ToString(data_); }
 
  private:
-  char *data_;      // data for tensor
-  Tensor *format_;  // tensor format
+  char *data_;            // data for tensor
+  const Tensor *format_;  // tensor format
 };
 
 // A profile summary stores the profiling data for a cell and can be used for
@@ -965,7 +969,7 @@ class Instance {
   inline void Compute();
 
   // Get raw pointer to location of parameter in instance memory.
-  char *GetAddress(Tensor *param) {
+  char *GetAddress(const Tensor *param) {
     DCHECK(param != nullptr);
     DCHECK(param->IsLocal()) << param->name();
     DCHECK(param->cell() == cell_) << param->name();
@@ -973,7 +977,7 @@ class Instance {
   }
 
   // Get pointer to location of parameter in instance memory.
-  template<typename T> T *Get(Tensor *param) {
+  template<typename T> T *Get(const Tensor *param) {
     DCHECK(param != nullptr);
     DCHECK(param->IsLocal()) << param->name();
     DCHECK(!param->ref()) << param->name();
@@ -983,7 +987,7 @@ class Instance {
   }
 
   // Get pointer to location of element of parameter in instance memory.
-  template<typename T> T *Get(Tensor *param, int r) {
+  template<typename T> T *Get(const Tensor *param, int r) {
     DCHECK(param != nullptr);
     DCHECK(param->IsLocal()) << param->name();
     DCHECK(!param->ref()) << param->name();
@@ -991,7 +995,7 @@ class Instance {
     DCHECK_EQ(Traits<T>().type(), param->type()) << param->name();
     return reinterpret_cast<T *>(data_ + param->offset() + param->offset(r));
   }
-  template<typename T> T *Get(Tensor *param, int r, int c) {
+  template<typename T> T *Get(const Tensor *param, int r, int c) {
     DCHECK(param != nullptr);
     DCHECK(param->IsLocal()) << param->name();
     DCHECK(!param->ref()) << param->name();
@@ -1002,7 +1006,7 @@ class Instance {
   }
 
   // Set link to element in channel.
-  void Set(Tensor *param, Channel *channel, int index = 0) {
+  void Set(const Tensor *param, Channel *channel, int index = 0) {
     DCHECK(param->ref()) << param->name();
     DCHECK(param->cell() == cell_) << param->name();
     DCHECK(param->IsAligned(channel->at(index))) << param->name();
@@ -1010,14 +1014,14 @@ class Instance {
   }
 
   // Set link to other instance.
-  void Set(Tensor *param, Instance *instance) {
+  void Set(const Tensor *param, Instance *instance) {
     DCHECK(param->cell() == cell_) << param->name();
     *reinterpret_cast<char **>(data_ + param->offset()) = instance->data();
   }
 
   // Sets a reference parameter to an address. Caller is responsible for
   // ensuring proper alignment and any other constraints.
-  void SetReference(Tensor *param, void *address) {
+  void SetReference(const Tensor *param, void *address) {
     DCHECK(param != nullptr);
     DCHECK(param->IsLocal()) << param->name();
     DCHECK(param->ref()) << param->name();
@@ -1027,7 +1031,7 @@ class Instance {
   }
 
   // Clear instance tensor.
-  void Clear(Tensor *param) {
+  void Clear(const Tensor *param) {
     memset(GetAddress(param), 0, param->space());
   }
 
@@ -1035,13 +1039,13 @@ class Instance {
   inline void set_profile(ProfileSummary *summary);
 
   // Return tensor data object for parameter in instance.
-  TensorData operator[](Tensor *param) {
+  TensorData operator[](const Tensor *param) {
     return TensorData(data_ + param->offset(), param);
   }
   inline TensorData operator[](const string &name);
 
   // Return parameter as string.
-  string ToString(Tensor *param) const;
+  string ToString(const Tensor *param) const;
 
   // Return all parameters as string.
   string ToString() const;
@@ -1138,6 +1142,12 @@ class Cell {
 
   // Profile summary for global profiling.
   ProfileSummary *profile_summary() const { return profile_summary_; }
+
+  // Return corresponding gradient cell.
+  Cell *Gradient() const;
+
+  // Return tensor for primal reference in gradient cell.
+  Tensor *Primal() const;
 
   // Return cell in text format.
   string ToString() const;

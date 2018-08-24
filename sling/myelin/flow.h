@@ -615,6 +615,15 @@ class Flow {
   // Look up blob by name.
   Blob *DataBlock(const string &name);
 
+  // Return corresponding gradient variable.
+  Variable *GradientVar(Variable *var);
+
+  // Return corresponding gradient function.
+  Function *GradientFunc(Function *func);
+
+  // Return primal variable for function.
+  Variable *PrimalVar(Function *func);
+
   // Return flow in text format.
   string ToString() const;
 
@@ -786,6 +795,15 @@ class Transformations {
   // Gradient components.
   std::unordered_map<string, GradientFunc *> gradients_;
 };
+
+// Return name of corresponding gradient variable.
+string GradientVarName(const string &name);
+
+// Return name of corresponding gradient function.
+string GradientFuncName(const string &name);
+
+// Return name of primal variable in gradient function.
+string PrimalVarName(const string &name);
 
 }  // namespace myelin
 }  // namespace sling

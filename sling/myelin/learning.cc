@@ -20,13 +20,6 @@
 namespace sling {
 namespace myelin {
 
-// Return name of gradient variable.
-static string GradientName(const string &name) {
-  int slash = name.rfind('/');
-  if (slash == -1) return "gradients/d_" + name;
-  return "gradients/" + name.substr(0, slash) + "/d_" + name.substr(slash + 1);
-}
-
 void CrossEntropyLoss::Build(Flow *flow,
                              Flow::Variable *logits,
                              Flow::Variable *dlogits) {
@@ -74,7 +67,8 @@ void CrossEntropyLoss::Initialize(const Network &network) {
   dlogits_ = network.GetParameter(name_ + "/d_logits");
 }
 
-float CrossEntropyLoss::Compute(float *logits, int target, float *dlogits) {
+float CrossEntropyLoss::Compute(float *logits, int target,
+                                float *dlogits) const {
   Instance data(cell_);
   data.SetReference(logits_, logits);
   data.SetReference(dlogits_, dlogits);
@@ -91,7 +85,7 @@ void Optimizer::Build(Flow *flow) {
     if (!var->learnable()) continue;
 
     // Get gradient variable for learnable variable.
-    Flow::Variable *dvar = flow->Var(GradientName(var->name));
+    Flow::Variable *dvar = flow->GradientVar(var);
     CHECK(dvar != nullptr) << "No gradient found for " << var->name;
 
     // Find function for gradient variable.
@@ -139,11 +133,11 @@ void Optimizer::Initialize(const Network &network) {
   InitializeOptimizer();
 }
 
-void Optimizer::Apply(std::vector<Instance *> &gradients) {
+void Optimizer::Apply(const std::vector<Instance *> &gradients) {
   // Set instance references to gradients in update.
   for (Instance *g : gradients) {
     auto f = refs_.find(g->cell());
-    CHECK(f != refs_.end());
+    CHECK(f != refs_.end()) << g->cell()->name();
     data_->Set(f->second, g);
   }
 
@@ -197,6 +191,85 @@ void GradientDescentOptimizer::InitializeOptimizer() {
 }
 
 float GradientDescentOptimizer::DecayLearningRate() {
+  float &lr = *data_->Get<float>(alpha_);
+  lr *= decay_;
+  return lr;
+}
+
+void MomentumOptimizer::BuildOptimizer(const GradientMap &gradmap,
+                                       FlowBuilder *update) {
+  // Momentum update rule:
+  //   t <- t + 1
+  //   v_t <- momentum * v_{t-1} + alpha * dv
+  //   var <- var - v_t
+  //
+  // See also: http://ruder.io/optimizing-gradient-descent/index.html#momentum
+  FlowBuilder &tf = *update;
+
+  // Add hyperparameter inputs.
+  auto *alpha = tf.Var("alpha", DT_FLOAT, {})->set_in()->set_out();
+  auto *gamma = tf.Name(tf.Const(momentum_), "gamma");
+
+  // Optionally add hyperparameter for gradient clipping.
+  Flow::Variable *threshold = nullptr;
+  if (clipping_threshold_ != 0.0) {
+    threshold = tf.Name(tf.Const(clipping_threshold_), "threshold");
+  }
+
+  // Update learnable variables from gradients.
+  int i = 0;
+  for (auto it : gradmap) {
+    auto *var = it.first;
+    auto *dv = it.second;
+
+    // Reference to previous update.
+    auto *v_in = tf.Var("vin" + std::to_string(i), DT_FLOAT, var->shape);
+    v_in->set_in()->set_ref();
+
+    // Optionally add clipping.
+    Flow::Variable *clip = nullptr;
+    if (threshold != nullptr) {
+      // Compute L2 norm of threshold.
+      auto *norm = tf.Norm(dv);
+
+      // Compute clipping factor.
+      clip = tf.Div(threshold, tf.Maximum(norm, threshold));
+    }
+
+    // Blend current and new update.
+    auto *v_out = tf.Add(tf.Mul(gamma, v_in), tf.Mul(alpha, dv));
+    if (clip != nullptr) v_out = tf.Mul(v_out, clip);
+    v_out->set_out();
+    tf.Name(v_out, "vout" + std::to_string(i));
+
+    // Update parameters.
+    tf.Assign(var, tf.Sub(var, v_out));
+    i++;
+
+    // Link input to output.
+    tf.flow()->Connect({v_in, v_out});
+  }
+  num_linked_ = i;
+}
+
+void MomentumOptimizer::InitializeOptimizer() {
+  // Set initial learning rate.
+  alpha_ = GetParameter(name_ + "/alpha");
+  *data_->Get<float>(alpha_) = lr_;
+
+  // Link input and output.
+  for (int i = 0; i < num_linked_; ++i) {
+    Tensor *vin = GetParameter(name_ + "/vin" + std::to_string(i));
+    Tensor *vout = GetParameter(name_ + "/vout" + std::to_string(i));
+    data_->SetReference(vin, data_->GetAddress(vout));
+  }
+}
+
+void MomentumOptimizer::Apply(const std::vector<Instance *> &gradients) {
+  Optimizer::Apply(gradients);
+}
+
+float MomentumOptimizer::DecayLearningRate() {
   float &lr = *data_->Get<float>(alpha_);
   lr *= decay_;
   return lr;
@@ -287,7 +360,7 @@ void AdamOptimizer::InitializeOptimizer() {
   *data_->Get<float>(beta2_t) = 1.0;
 }
 
-void AdamOptimizer::Apply(std::vector<Instance *> &gradients) {
+void AdamOptimizer::Apply(const std::vector<Instance *> &gradients) {
   Optimizer::Apply(gradients);
 }
 
