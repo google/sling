@@ -340,6 +340,7 @@ For each language, the following data sets are produced:
   * `<lang>/categories-?????-of-?????.rec` (produced by `wikipedia-import` task)
   * `<lang>/mapping.sling` (produced by `wikipedia-mapping` task)
   * `<lang>/documents-?????-of-?????.rec` (produced by `wikipedia-parsing` task)
+  * `<lang>/category-documents-?????-of-?????.rec` (produced by `wikipedia-parsing` task)
   * `<lang>/aliases-?????-of-?????.rec` (produced by `wikipedia-parsing` task)
   * `<lang>/names-?????-of-?????.rec` (produced by `name-extraction` task)
   * `<lang>/name-table.repo` (produced by `name-table` task)

@@ -69,6 +69,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
 
     // Get counters.
     num_article_pages_ = task->GetCounter("article_pages");
+    num_category_pages_ = task->GetCounter("category_pages");
     num_disambiguation_pages_ = task->GetCounter("disambiguation_pages");
     num_list_pages_ = task->GetCounter("list_pages");
     num_unknown_pages_ = task->GetCounter("unknown_wikipedia_pages");
@@ -109,6 +110,9 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
       Wiki::SplitTitle(page.title.str(), &name, &disambiguation);
       OutputAlias(page.qid, name, SRC_WIKIPEDIA_REDIRECT);
     }
+
+    // Get output channel for parsed category documents.
+    categories_ = task->GetSink("categories");
   }
 
   void Process(Slice key, const Frame &frame) override {
@@ -129,6 +133,16 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
         OutputAnchorAliases(frame);
         Output(page.qid, frame);
         num_article_pages_->Increment();
+        break;
+
+      case WikipediaMap::CATEGORY:
+        // Category: parse article, output anchors as aliases.
+        ProcessArticle(frame, page.qid);
+        OutputAnchorAliases(frame);
+        if (categories_ != nullptr) {
+          categories_->Send(task::CreateMessage(page.qid, frame));
+        }
+        num_category_pages_->Increment();
         break;
 
       case WikipediaMap::DISAMBIGUATION:
@@ -368,6 +382,9 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   // Channel for aliases.
   task::Channel *aliases_ = nullptr;
 
+  // Channel for categories.
+  task::Channel *categories_ = nullptr;
+
   // Symbols.
   Name n_name_{names_, "name"};
   Name n_lang_{names_, "lang"};
@@ -402,6 +419,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
 
   // Statistics.
   task::Counter *num_article_pages_;
+  task::Counter *num_category_pages_;
   task::Counter *num_disambiguation_pages_;
   task::Counter *num_list_pages_;
   task::Counter *num_unknown_pages_;

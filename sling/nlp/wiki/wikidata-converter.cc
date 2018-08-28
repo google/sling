@@ -78,12 +78,11 @@ WikidataConverter::WikidataConverter(Store *commons, const string &language) {
   int priority = 1;
   while (*lang != 0) {
     LanguageInfo info;
-    info.priority = priority;
+    info.priority = priority++;
     info.language = commons->Lookup(StrCat("/lang/", *lang));
     info.wikisite = commons->Lookup(StrCat(*lang, "wiki"));
     languages_[commons->Lookup(*lang)] = info;
     lang++;
-    priority++;
   }
 }
 
@@ -110,11 +109,48 @@ Frame WikidataConverter::Convert(const Frame &item) {
     builder.AddIsA(n_item_);
   }
 
-  // Get label and description based on language.
-  Handle label = PickName(labels);
-  if (!label.IsNil()) builder.Add(n_name_, label);
-  Handle description = PickName(descriptions);
-  if (!description.IsNil()) builder.Add(n_description_, description);
+  // Pick label with highest language priority.
+  Handle label_language = Handle::nil();
+  if (labels.valid()) {
+    int priority = 999;
+    Handle label = Handle::nil();
+    for (const Slot &l : labels) {
+      bool pick = false;
+      if (only_primary_language_) {
+        // Pick label if it is in the primary language.
+        if (l.name == primary_language_) pick = true;
+      } else {
+        // Pick label language if it is top priority.
+        auto f = languages_.find(l.name);
+        if (f != languages_.end()) {
+          if (f->second.priority < priority) {
+            pick = true;
+            priority = f->second.priority;
+          }
+        } else if (label.IsNil() && !only_known_languages_) {
+          // Unknown language; pick if no other options.
+          pick = true;
+        }
+      }
+
+      if (pick) {
+        label = Frame(store, l.value).GetHandle(s_value_);
+        label_language = l.name;
+      }
+    }
+    if (!label.IsNil()) builder.Add(n_name_, label);
+  }
+
+  // Pick description matching label language.
+  if (!label_language.IsNil() && descriptions.valid()) {
+    for (const Slot &l : descriptions) {
+      if (l.name == label_language) {
+        Handle description = Frame(store, l.value).GetHandle(s_value_);
+        if (!description.IsNil()) builder.Add(n_description_, description);
+        break;
+      }
+    }
+  }
 
   // Add data type for property.
   if (kind == WIKIDATA_PROPERTY) {
@@ -402,25 +438,6 @@ Handle WikidataConverter::ConvertValue(const Frame &datavalue) {
       return Handle::nil();
     }
   }
-}
-
-Handle WikidataConverter::PickName(const Frame &names) {
-  Store *store = names.store();
-  if (names.invalid()) return Handle::nil();
-  int priority = 999;
-  Handle name = Handle::nil();
-  for (const Slot &l : names) {
-    auto f = languages_.find(l.name);
-    if (f != languages_.end()) {
-      if (f->second.priority < priority) {
-        name = Frame(store, l.value).GetHandle(s_value_);
-        priority = f->second.priority;
-      }
-    } else if (name.IsNil()) {
-      name = Frame(store, l.value).GetHandle(s_value_);
-    }
-  }
-  return name;
 }
 
 }  // namespace nlp

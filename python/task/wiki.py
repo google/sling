@@ -206,6 +206,14 @@ class WikiWorkflow:
                             dir=corpora.wikidir(language),
                             format="records/document")
 
+  def wikipedia_category_documents(self, language=None):
+    """Resource for parsed Wikipedia category documents.
+    """
+    if language == None: language = flags.arg.language
+    return self.wf.resource("category-documents@10.rec",
+                            dir=corpora.wikidir(language),
+                            format="records/document")
+
   def wikipedia_aliases(self, language=None):
     """Resource for wikipedia aliases. The aliases are extracted from the
     Wiipedia pages from anchors, redirects, disambiguation pages etc. This is
@@ -281,6 +289,7 @@ class WikiWorkflow:
 
   def parse_wikipedia_articles(self,
                                articles=None,
+                               categories=None,
                                redirects=None,
                                commons=None,
                                wikimap=None,
@@ -289,18 +298,21 @@ class WikiWorkflow:
     Returns channels for documents and aliases."""
     if language == None: language = flags.arg.language
     if articles == None: articles = self.wikipedia_articles(language)
+    if categories == None: categories = self.wikipedia_categories(language)
     if redirects == None: redirects = self.wikipedia_redirects(language)
     if commons == None: commons = self.language_defs()
     if wikimap == None: wikimap = self.wikipedia_mapping(language)
 
     parser = self.wf.task("wikipedia-document-builder", "wikipedia-documents")
     self.wf.connect(self.wf.read(articles, name="article-reader"), parser)
+    self.wf.connect(self.wf.read(categories, name="category-reader"), parser)
     parser.attach_input("commons", commons)
     parser.attach_input("wikimap", wikimap)
     parser.attach_input("redirects", redirects)
     documents = self.wf.channel(parser, format="message/document")
     aliases = self.wf.channel(parser, "aliases", format="message/qid:alias")
-    return documents, aliases
+    catdocs = self.wf.channel(parser, "categories", format="message/qid:alias")
+    return documents, aliases, catdocs
 
   def parse_wikipedia(self, language=None):
     """Parse Wikipedia articles and build alias table."""
@@ -312,11 +324,16 @@ class WikiWorkflow:
 
       with self.wf.namespace("parsing"):
         # Parse Wikipedia articles to SLING documents.
-        documents, aliases = self.parse_wikipedia_articles(language=language)
+        documents, aliases, catdocs = \
+          self.parse_wikipedia_articles(language=language)
 
         # Write Wikipedia documents.
         document_output = self.wikipedia_documents(language)
         self.wf.write(documents, document_output, name="document-writer")
+
+        # Write Wikipedia category documents.
+        category_document_output = self.wikipedia_category_documents(language)
+        self.wf.write(catdocs, category_document_output, name="document-writer")
 
       with self.wf.namespace("aliases"):
         # Collect aliases.
@@ -348,6 +365,7 @@ class WikiWorkflow:
       documents = []
       for language in languages:
         documents.extend(self.wikipedia_documents(language))
+        documents.extend(self.wikipedia_category_documents(language))
       return self.wf.mapreduce(input=documents,
                                output=self.wikipedia_items(),
                                mapper="category-item-extractor",

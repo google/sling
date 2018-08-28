@@ -458,7 +458,7 @@ class Workflow(object):
 
   def write(self, producer, output, sharding=None, name=None):
     """Add writers for output resource(s). The format of the output resource is
-    used for selecting an appropriate reader task for the format."""
+    used for selecting an appropriate writer task for the format."""
     # Determine fan-in (channels) and fan-out (files).
     if not isinstance(producer, list): producer = [producer]
     if not isinstance(output, list): output = [output]

@@ -35,6 +35,14 @@ class WikidataConverter {
   // Convert Wikidata JSON item to frame representation.
   Frame Convert(const Frame &item);
 
+  // Only import labels and description in primary language.
+  bool only_primary_language() const { return only_primary_language_; }
+  void set_only_primary_language(bool b) { only_primary_language_ = b; }
+
+  // Only import labels and description in known languages.
+  bool only_known_languages() const { return only_known_languages_; }
+  void set_known_primary_languages(bool b) { only_known_languages_ = b; }
+
  private:
   // Return symbol for Wikidata item.
   static Handle Item(Store *store, int id) {
@@ -73,9 +81,6 @@ class WikidataConverter {
   // Convert Wikidata value.
   Handle ConvertValue(const Frame &datavalue);
 
-  // Pick name based on language priority.
-  Handle PickName(const Frame &names);
-
   // Symbols.
   Names names_;
 
@@ -85,6 +90,8 @@ class WikidataConverter {
   // Primary language.
   string primary_language_name_;
   Handle primary_language_;
+  bool only_primary_language_ = false;
+  bool only_known_languages_ = false;
 
   // Per-language information.
   struct LanguageInfo {

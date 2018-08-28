@@ -176,6 +176,7 @@ class WikipediaXMLParser : public XMLParser {
       Builder builder(&store);
       builder.AddId(id);
       builder.AddIsA(n_page_);
+      if (ns == WIKIPEDIA_NAMESPACE_CATEGORY) builder.AddIsA(n_category_);
       builder.Add(n_page_pageid_, pageid);
       builder.Add(n_page_title_, title);
       builder.AddLink(n_lang_, "/lang/" + lang_);
@@ -278,6 +279,7 @@ class WikipediaXMLParser : public XMLParser {
   Name n_page_pageid_{names_, "/wp/page/pageid"};
   Name n_page_title_{names_, "/wp/page/title"};
   Name n_page_text_{names_, "/wp/page/text"};
+  Name n_category_{names_, "/wp/category"};
 
   Name n_redirect_{names_, "/wp/redirect"};
   Name n_redirect_pageid_{names_, "/wp/redirect/pageid"};
