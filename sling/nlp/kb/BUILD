@@ -14,6 +14,17 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "facts",
+  srcs = ["facts.cc"],
+  hdrs = ["facts.h"],
+  deps = [
+    ":calendar",
+    "//sling/frame:object",
+    "//sling/frame:store",
+  ],
+)
+
 embed_data(
   name = "app",
   srcs = [
