@@ -538,6 +538,7 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
       slots->emplace_back(name, value);
     }
   } else {
+    PyErr_SetString(PyExc_ValueError, "Invalid slot list");
     return false;
   }
   return true;

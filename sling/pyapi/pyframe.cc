@@ -47,7 +47,7 @@ void PyFrame::Define(PyObject *module) {
 
   methods.Add("data", &PyFrame::Data);
   methods.Add("append", &PyFrame::Append);
-  methods.Add("extend", &PyFrame::Extend);
+  methods.AddO("extend", &PyFrame::Extend);
   methods.Add("store", &PyFrame::GetStore);
   methods.Add("islocal", &PyFrame::IsLocal);
   methods.Add("isglobal", &PyFrame::IsGlobal);
@@ -262,6 +262,7 @@ PyObject *PyFrame::Extend(PyObject *arg) {
   Slot *begin = slots.data();
   Slot *end = slots.data() + slots.size();
   handle_ = pystore->store->AllocateFrame(begin, end, handle_);
+
   Py_RETURN_NONE;
 }
 
