@@ -456,7 +456,7 @@ class Workflow(object):
       output = self.channel(reader, format=format.as_message())
       return output
 
-  def write(self, producer, output, sharding=None, name=None):
+  def write(self, producer, output, sharding=None, name=None, params=None):
     """Add writers for output resource(s). The format of the output resource is
     used for selecting an appropriate writer task for the format."""
     # Determine fan-in (channels) and fan-out (files).
@@ -494,6 +494,7 @@ class Workflow(object):
       else:
         writer = self.task(tasktype, name=name, shard=Shard(shard, fanout))
       writer.attach_output("output", output[shard])
+      writer.add_params(params)
       writer_tasks.append(writer)
 
     # Connect producer(s) to writer task(s).
@@ -586,7 +587,7 @@ class Workflow(object):
                              format=format_of(output).as_message())
 
     # Write reduce output.
-    self.write(reduced, output)
+    self.write(reduced, output, params=params)
 
   def mapreduce(self, input, output, mapper, reducer=None, params=None,
                 format=None):

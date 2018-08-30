@@ -15,6 +15,7 @@
 #include "sling/file/file.h"
 
 #include <pthread.h>
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 
@@ -203,14 +204,27 @@ Status File::Match(const string &pattern, std::vector<string> *filenames) {
   int at = rest.find('@');
   if (at != string::npos) {
     string shards = rest.substr(at + 1);
+    int dot = shards.find('.');
+    string ext;
+    if (dot != string::npos) {
+      ext = shards.substr(dot);
+      shards.resize(dot);
+    }
     rest.resize(at);
     rest.append("-\?\?\?\?\?-of-");
     rest.append(5 - shards.size(), '0');
     rest.append(shards);
+    rest.append(ext);
   }
 
   // Find files.
-  return fs->Match(rest, filenames);
+  Status st = fs->Match(rest, filenames);
+  if (!st.ok()) return st;
+
+  // Sort file names.
+  std::sort(filenames->begin(), filenames->end());
+
+  return Status::OK;
 }
 
 Status File::ReadContents(const string &filename, string *data) {
@@ -249,11 +263,10 @@ Status File::WriteContents(const string &filename,
   return f->Close();
 }
 
-size_t File::ReadOrDie(void *buffer, size_t size) {
+void File::ReadOrDie(void *buffer, size_t size) {
   uint64 read;
   CHECK(Read(buffer, size, &read));
   CHECK_EQ(read, size) << "Read " << read << " bytes, expected " << size;
-  return read;
 }
 
 void File::WriteOrDie(const void *buffer, size_t size) {

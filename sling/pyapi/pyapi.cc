@@ -52,6 +52,7 @@ static void RegisterPythonModule() {
   PyPhraseTable::Define(module);
   PyParser::Define(module);
   PyRecordReader::Define(module);
+  PyRecordDatabase::Define(module);
   PyRecordWriter::Define(module);
   PyJob::Define(module);
   PyResource::Define(module);

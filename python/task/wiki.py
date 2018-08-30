@@ -18,6 +18,11 @@ from workflow import *
 import corpora
 import sling.flags as flags
 
+flags.define("--index",
+             help="index wiki data sets",
+             default=False,
+             action='store_true')
+
 class WikiWorkflow:
   def __init__(self, name=None, wf=None):
     if wf == None: wf = Workflow(name)
@@ -329,11 +334,13 @@ class WikiWorkflow:
 
         # Write Wikipedia documents.
         document_output = self.wikipedia_documents(language)
-        self.wf.write(documents, document_output, name="document-writer")
+        self.wf.write(documents, document_output, name="document-writer",
+                      params={"indexed": flags.arg.index})
 
         # Write Wikipedia category documents.
         category_document_output = self.wikipedia_category_documents(language)
-        self.wf.write(catdocs, category_document_output, name="document-writer")
+        self.wf.write(catdocs, category_document_output, name="document-writer",
+                      params={"indexed": flags.arg.index})
 
       with self.wf.namespace("aliases"):
         # Collect aliases.
@@ -391,7 +398,8 @@ class WikiWorkflow:
                                output=self.fused_items(),
                                mapper=None,
                                reducer="item-merger",
-                               format="message/frame")
+                               format="message/frame",
+                               params={"indexed": flags.arg.index})
 
   #---------------------------------------------------------------------------
   # Knowledge base

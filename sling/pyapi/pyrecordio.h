@@ -61,6 +61,29 @@ struct PyRecordReader : public PyBase {
   static void Define(PyObject *module);
 };
 
+// Python wrapper for record database.
+struct PyRecordDatabase : public PyBase {
+  // Initialize record database wrapper.
+  int Init(PyObject *args, PyObject *kwds);
+
+  // Deallocate record database wrapper.
+  void Dealloc();
+
+  // Look up record in database.
+  PyObject *Lookup(PyObject *obj);
+
+  // Close record database.
+  PyObject *Close();
+
+  // Record reader.
+  RecordDatabase *db;
+
+  // Registration.
+  static PyTypeObject type;
+  static PyMethodTable methods;
+  static void Define(PyObject *module);
+};
+
 // Python wrapper for record writer.
 struct PyRecordWriter : public PyBase {
   // Initialize record writer wrapper.

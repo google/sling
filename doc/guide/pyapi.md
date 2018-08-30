@@ -185,6 +185,8 @@ for key,value in recin:
 recin.close()
 ```
 The `RecordReader` class has the following methods:
+* `__init__(filename[, bufsize])`<br>
+  Opens record file for reading.
 * `close()`<br>
   Closes the record reader.
 * `read()`<br>
@@ -207,12 +209,47 @@ recout.close()
 ```
 
 The `RecordWriter` class has the following methods:
+* `__init__(filename, [bufsize], [chunksize], [compression], [index])`<br>
+  Initialize record file writer.
 * `close()`<br>
   Closes the record writer.
 * `write(key, value)`<br>
   Writes record to record file.
 * `tell()`<br>
   Returns the current file position in the record file.
+
+A set of sharded record files can be treated as a key-value database store,
+and you can use a `RecordDatabase` for looking up records by key. Record file
+sets consisting of multiple files need to be sharded by key fingerprint. If the
+`index` parameter is set to True when creating a record file, an internal index
+will be generated for the record file. This speeds up random access using
+the `lookup` method.
+
+```
+# Write records to indexed record file.
+N=1000
+writer = sling.RecordWriter("/tmp/test.rec", index=True)
+for i in range(N):
+  writer.write(str(i), "Data for record number " + str(i))
+writer.close()
+
+# Look up each record in record database.
+db = sling.RecordDatabase("/tmp/test.rec")
+for i in range(N):
+  print db.lookup(str(i))
+db.close()
+```
+
+The `RecordDatabase` class has the following methods:
+* `__init__(filepattern, [bufsize], [cache])`<br>
+  Opens a set of record files specified by `filepattern`.
+* `close()`<br>
+  Closes the record database.
+* `lookup(key)`<br>
+  Look up record by key in the record file set. If the record files are indexed,
+  the index is used for looking up the record. Otherwise, a linear scan is used
+  for finding a matching record, which can be slow for large files.
+
 
 ## Documents
 

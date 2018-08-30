@@ -26,7 +26,7 @@
 
 DEFINE_int32(v, 0, "Log level for VLOG");
 DEFINE_int32(loglevel, 0, "Discard messages logged at a lower severity");
-DEFINE_bool(logtostderr, true, "Log messages to stderr");
+DEFINE_bool(logtostderr, false, "Log messages to stderr");
 
 namespace sling {
 

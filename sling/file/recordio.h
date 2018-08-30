@@ -15,6 +15,8 @@
 #ifndef SLING_FILE_RECORDIO_H_
 #define SLING_FILE_RECORDIO_H_
 
+#include <vector>
+
 #include "sling/base/slice.h"
 #include "sling/base/status.h"
 #include "sling/base/types.h"
@@ -23,6 +25,13 @@
 
 namespace sling {
 
+// Record types.
+enum RecordType {
+  DATA_RECORD = 1,
+  FILLER_RECORD = 2,
+  INDEX_RECORD = 3,
+};
+
 // Record with key and value.
 struct Record {
   Record() {}
@@ -30,6 +39,7 @@ struct Record {
 
   Slice key;
   Slice value;
+  RecordType type = DATA_RECORD;
 };
 
 // Record buffer.
@@ -100,14 +110,9 @@ class RecordFile {
   // Maximum skip record length.
   static const int MAX_SKIP_LEN = 12;
 
-  // Magic number for identifying record files.
-  static const uint32 MAGIC = 0x46434552;
-
-  // Record types.
-  enum RecordType {
-    DATA_RECORD = 1,
-    FILLER_RECORD = 2,
-  };
+  // Magic numbers for identifying record files.
+  static const uint32 MAGIC1 = 0x46434552;  // RECF
+  static const uint32 MAGIC2 = 0x44434552;  // RECD
 
   // Compression types.
   enum CompressionType {
@@ -121,8 +126,11 @@ class RecordFile {
     uint8 hdrlen;
     uint8 compression;
     uint16 flags;
-    uint64 index;
+    uint64 index_root;
     uint64 chunk_size;
+    uint64 index_start;
+    uint32 index_page_size;
+    uint32 index_depth;
   };
 
   // Record header information.
@@ -130,6 +138,31 @@ class RecordFile {
     RecordType record_type;
     uint64 record_size;
     uint64 key_size;
+  };
+
+  // An index record consists of a list of index entries containing the key
+  // fingerprint of the record and the position of the record in the record
+  // file, or the fingerprint of the first record in the subtree for non-leaf
+  // index records.
+  struct IndexEntry {
+    IndexEntry(uint64 fp, uint64 pos) : fingerprint(fp), position(pos) {}
+    uint64 fingerprint;
+    uint64 position;
+  };
+  typedef std::vector<IndexEntry> Index;
+
+  // One page in a record file index.
+  struct IndexPage {
+    IndexPage(uint64 pos, const Slice &data);
+    ~IndexPage();
+
+    // Find index of last entry in page that is less than fp.
+    int Find(uint64 fp) const;
+
+    uint64 position;
+    int size;
+    IndexEntry *entries;
+    uint64 lru;
   };
 
   // Parse header from data. Returns the number of bytes read or -1 on error.
@@ -142,20 +175,29 @@ class RecordFile {
 // Configuration options for record file.
 struct RecordFileOptions {
   // Input/output buffer size.
-  int buffer_size = 1 << 20;
+  int buffer_size = 4096;
 
   // Chunk size. Records never overlap chunk boundaries.
   int chunk_size = 64 * (1 << 20);
 
   // Record compression.
   RecordFile::CompressionType compression = RecordFile::SNAPPY;
+
+  // Record files can be indexed for fast retrieval by key.
+  bool indexed = false;
+
+  // Number of entries in each index record.
+  int index_page_size = 1024;
+
+  // Number of pages in index page cache.
+  int index_cache_size = 256;
 };
 
 // Reader for reading records from a record file.
 class RecordReader : public RecordFile {
  public:
   // Open record file for reading.
-  RecordReader(File *file, const RecordFileOptions &options);
+  RecordReader(File *file, const RecordFileOptions &options, bool owned = true);
   RecordReader(const string &filename, const RecordFileOptions &options);
   explicit RecordReader(File *file);
   explicit RecordReader(const string &filename);
@@ -182,12 +224,27 @@ class RecordReader : public RecordFile {
   // Skip bytes in input. The offset can be negative.
   Status Skip(int64 n);
 
+  // Read index page. Ownership of the index page is transferred to the caller.
+  IndexPage *ReadIndexPage(uint64 position);
+
+  // Record file header information.
+  const FileHeader &info() const { return info_; }
+
+  // Underlying file object for reader.
+  File *file() const { return file_; }
+
+  // File size.
+  uint64 size() const { return size_; }
+
  private:
   // Fill input buffer.
   Status Fill();
 
   // Input file.
   File *file_;
+
+  // Flag to indicate that file object is owned by reader.
+  bool owned_;
 
   // File size.
   uint64 size_;
@@ -203,6 +260,62 @@ class RecordReader : public RecordFile {
 
   // Buffer for decompressed record data.
   RecordBuffer decompressed_data_;
+};
+
+// Index for looking up records in an indexed record file.
+class RecordIndex : public RecordFile {
+ public:
+  RecordIndex(RecordReader *reader, const RecordFileOptions &options);
+  ~RecordIndex();
+
+  // Look up record by key. Returns false if no matching record is found.
+  bool Lookup(const Slice &key, Record *record, uint64 fp);
+  bool Lookup(const Slice &key, Record *record);
+
+  // Return record reader.
+  RecordReader *reader() const { return reader_; }
+
+ private:
+  // Get index page at position.
+  IndexPage *GetIndexPage(uint64 position);
+
+  // Mark index page as accessed.
+  IndexPage *access(IndexPage *page) {
+    page->lru = epoch_++;
+    return page;
+  }
+
+  // Record file with index (not owned).
+  RecordReader *reader_;
+
+  // Root index page.
+  IndexPage *root_;
+
+  // Maximum index page cache size.
+  int cache_size_;
+
+  // Epoch for LRU cache eviction.
+  uint64 epoch_ = 0;
+
+  // Index page cache.
+  std::vector<RecordFile::IndexPage *> cache_;
+};
+
+// A record database is a sharded set of indexed record files where records can
+// be looked up by key. The records must be sharded by key fingerprint.
+class RecordDatabase {
+ public:
+  // Open record database.
+  RecordDatabase(const string &filepattern, const RecordFileOptions &options);
+  RecordDatabase(const std::vector<string> &filenames,
+                 const RecordFileOptions &options);
+  ~RecordDatabase();
+
+  // Look up record by key. Returns false if no matching record is found.
+  bool Lookup(const Slice &key, Record *record);
+
+ private:
+  std::vector<RecordIndex *> shards_;
 };
 
 // Writer for writing records to record file.
@@ -234,9 +347,22 @@ class RecordWriter : public RecordFile {
   // Return current position in record file.
   uint64 Tell() const { return position_; }
 
+  // Add index to existing record file.
+  static Status AddIndex(const string &filename,
+                         const RecordFileOptions &options);
+
  private:
+  // Special constructor for reindexing record files.
+  explicit RecordWriter(RecordReader *reader, const RecordFileOptions &options);
+
   // Flush output buffer to disk.
   Status Flush();
+
+  // Write index to disk.
+  Status WriteIndex();
+
+  // Write one level of the index to file.
+  Status WriteIndexLevel(const Index &level, Index *parent, int page_size);
 
   // Output file.
   File *file_;
@@ -252,6 +378,9 @@ class RecordWriter : public RecordFile {
 
   // Buffer for compressed record data.
   RecordBuffer compressed_data_;
+
+  // Index entries for building index.
+  Index index_;
 };
 
 }  // namespace sling

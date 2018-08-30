@@ -34,7 +34,9 @@ class RecordFileWriter : public Processor {
     }
 
     // Open record file writer.
-    writer_ = new RecordWriter(output->resource()->name());
+    RecordFileOptions options;
+    if (task->Get("indexed", false)) options.indexed = true;
+    writer_ = new RecordWriter(output->resource()->name(), options);
   }
 
   void Receive(Channel *channel, Message *message) override {

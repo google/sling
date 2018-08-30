@@ -23,3 +23,13 @@ cc_binary(
   ],
 )
 
+cc_binary(
+  name = "index",
+  srcs = ["index.cc"],
+  deps = [
+    "//sling/base",
+    "//sling/file",
+    "//sling/file:recordio",
+    "//sling/file:posix",
+  ],
+)

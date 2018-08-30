@@ -22,6 +22,8 @@ namespace sling {
 // Python type declarations.
 PyTypeObject PyRecordReader::type;
 PyMethodTable PyRecordReader::methods;
+PyTypeObject PyRecordDatabase::type;
+PyMethodTable PyRecordDatabase::methods;
 PyTypeObject PyRecordWriter::type;
 PyMethodTable PyRecordWriter::methods;
 
@@ -139,6 +141,65 @@ PyObject *PyRecordReader::Self() {
   return AsObject();
 }
 
+void PyRecordDatabase::Define(PyObject *module) {
+  InitType(&type, "sling.RecordDatabase", sizeof(PyRecordDatabase), true);
+
+  type.tp_init = method_cast<initproc>(&PyRecordDatabase::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyRecordDatabase::Dealloc);
+
+  methods.Add("close", &PyRecordDatabase::Close);
+  methods.AddO("lookup", &PyRecordDatabase::Lookup);
+  type.tp_methods = methods.table();
+
+  RegisterType(&type, module, "RecordDatabase");
+}
+
+int PyRecordDatabase::Init(PyObject *args, PyObject *kwds) {
+  // Get arguments.
+  static const char *kwlist[] = {"filename", "bufsize", "cache", nullptr};
+  char *pattern = nullptr;
+  RecordFileOptions options;
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ii",
+          const_cast<char **>(kwlist),
+          &pattern, &options.buffer_size,
+          &options.index_cache_size)) return -1;
+
+  // Find matching file names.
+  std::vector<string> filenames;
+  if (!CheckIO(File::Match(pattern, &filenames))) return -1;
+  if (filenames.empty()) {
+    PyErr_SetString(PyExc_IOError, "No matching files");
+    return -1;
+  }
+
+  // Create record database.
+  db = new RecordDatabase(filenames, options);
+  return 0;
+}
+
+void PyRecordDatabase::Dealloc() {
+  delete db;
+  Free();
+}
+
+PyObject *PyRecordDatabase::Close() {
+  delete db;
+  db = nullptr;
+  Py_RETURN_NONE;
+}
+
+PyObject *PyRecordDatabase::Lookup(PyObject *obj) {
+  // Get key.
+  char *key = PyString_AsString(obj);
+  if (key == nullptr) return nullptr;
+
+  // Look up record.
+  CHECK(db != nullptr);
+  Record record;
+  if (!db->Lookup(key, &record)) Py_RETURN_NONE;
+  return PyString_FromStringAndSize(record.value.data(), record.value.size());
+}
+
 void PyRecordWriter::Define(PyObject *module) {
   InitType(&type, "sling.RecordWriter", sizeof(PyRecordWriter), true);
 
@@ -156,13 +217,13 @@ void PyRecordWriter::Define(PyObject *module) {
 int PyRecordWriter::Init(PyObject *args, PyObject *kwds) {
   // Get arguments.
   static const char *kwlist[] = {
-      "filename", "bufsize", "chunksize", "compression", nullptr};
+      "filename", "bufsize", "chunksize", "compression", "index", nullptr};
   char *filename = nullptr;
   RecordFileOptions options;
-  if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ii",
+  if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|iiib",
           const_cast<char **>(kwlist),
           &filename, &options.buffer_size, &options.chunk_size,
-          &options.compression)) return -1;
+          &options.compression, &options.indexed)) return -1;
 
   // Open file.
   File *f;

@@ -32,7 +32,7 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
   CHECK_GE(size, sizeof(EOCDRecord));
   CHECK(file_->Seek(size - sizeof(EOCDRecord)));
   EOCDRecord eocd;
-  CHECK_EQ(file_->ReadOrDie(&eocd, sizeof(EOCDRecord)), sizeof(EOCDRecord));
+  file_->ReadOrDie(&eocd, sizeof(EOCDRecord));
   CHECK_EQ(eocd.signature, 0x06054b50);
   CHECK_LE(eocd.dirofs + eocd.dirsize, size);
   uint64 num_records = eocd.numrecs;
@@ -44,7 +44,7 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
   if (locator_offset >= 0) {
     CHECK(file_->Seek(locator_offset));
     EOCD64Locator locator;
-    CHECK_EQ(file_->ReadOrDie(&locator, locator_size), locator_size);
+    file_->ReadOrDie(&locator, locator_size);
     if (locator.signature == 0x07064b50) {
       // 64-bit locator is present. Get the offset of the EOCD64Record.
       CHECK_EQ(locator.disknum, 0);
@@ -54,7 +54,7 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
       // Read the 64-bit record.
       EOCD64Record eocd64;
       uint32 eocd64size = sizeof(EOCD64Record);
-      CHECK_EQ(file_->ReadOrDie(&eocd64, eocd64size), eocd64size);
+      file_->ReadOrDie(&eocd64, eocd64size);
       CHECK_EQ(eocd64.signature, 0x06064b50);
       CHECK_EQ(eocd64.eocd64size, eocd64size - sizeof(uint32) - sizeof(uint64));
       CHECK_EQ(eocd64.disknum, 0);
@@ -71,7 +71,7 @@ ZipFileReader::ZipFileReader(const string &filename, int block_size) {
   // Read file directory.
   char *directory = new char[eocd.dirsize];
   CHECK(file_->Seek(eocd.dirofs));
-  CHECK_EQ(file_->ReadOrDie(directory, eocd.dirsize), eocd.dirsize);
+  file_->ReadOrDie(directory, eocd.dirsize);
   char *dirptr = directory;
   char *dirend = dirptr + eocd.dirsize;
   files_.resize(num_records);
@@ -112,7 +112,7 @@ InputStream *ZipFileReader::Read(const Entry &entry) {
   // Read file header.
   FileHeader header;
   CHECK(file_->Seek(entry.offset));
-  CHECK_EQ(file_->ReadOrDie(&header, sizeof(header)), sizeof(header));
+  file_->ReadOrDie(&header, sizeof(header));
   CHECK_EQ(header.signature, 0x04034b50);
   CHECK(file_->Skip(header.fnlen + header.extralen));
 

@@ -21,6 +21,7 @@
 #include "sling/base/status.h"
 #include "sling/base/types.h"
 #include "sling/file/file.h"
+#include "sling/string/text.h"
 
 namespace sling {
 
@@ -88,13 +89,14 @@ class TextMapOutput {
  public:
   // Open text map file for writing.
   TextMapOutput(const string &filename, int buffer_size = 1 << 16);
-
-  // Flush and close text map.
   ~TextMapOutput();
 
+  // Flush and close text map.
+  void Close();
+
   // Write entry to text map.
-  void Write(const string &key, const string &value);
-  void Write(const string &key, int64 value);
+  void Write(Text key, Text value);
+  void Write(Text key, int64 value);
 
  private:
   // Output buffered data to file.
@@ -115,4 +117,3 @@ class TextMapOutput {
 }  // namespace sling
 
 #endif  // SLING_FILE_TEXTMAP_H_
-
