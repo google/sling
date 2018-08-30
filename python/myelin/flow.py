@@ -15,7 +15,11 @@
 
 """Myelin computation flows."""
 
+import os
+from struct import calcsize
 from struct import pack
+from struct import unpack
+from struct import unpack_from
 
 class File:
   """Flow file writer."""
@@ -66,9 +70,57 @@ class File:
       data = pack('i', a);
       self.write_long(len(data))
       self.f.write(data)
+    elif isinstance(a, memoryview):
+      self.write_long(len(a))
+      self.f.write(a)
     else:
       self.write_long(a.nbytes)
       self.write(a.tostring())
+
+
+class FileReader:
+  """Flow file reader."""
+  def __init__(self, filename):
+    size = os.path.getsize(filename)
+    with open(filename, 'rb') as f:
+      b = bytearray(size)
+      f.readinto(b)
+    self.view = memoryview(b)
+    self.next = 0  # index of next byte to read
+  
+  def slice(self, size):
+    """Returns a slice of given size from the current byte and skips ahead."""
+    current = self.next
+    self.next += size
+    return self.view[current:self.next]
+
+  def read(self, n):
+    """Returns the next n bytes."""
+    s = self.view[self.next:self.next + n]
+    self.next += n
+    return s
+
+  def _read_fmt(self, fmt):
+    """Reads an element of format 'fmt'."""
+    size = calcsize(fmt)
+    val = unpack_from(fmt, self.view, self.next)[0]
+    self.next += size
+    return val
+
+  def read_int(self):
+    """Reads an integer."""
+    return self._read_fmt('i')
+
+  def read_long(self):
+    """Reads a long integer."""
+    return self._read_fmt('Q')
+
+  def read_string(self):
+    """Reads a string."""
+    size = self.read_int()
+    if size > 0:
+      return self.read(size).tobytes()
+    return ''
 
 
 class Variable:
@@ -211,7 +263,6 @@ class Blob:
       if value == True: value = 1
       elif value == False: value = 0
     self.attrs[name] = str(value)
-
 
 class Flow:
   """Flow with variables, operations, and functions."""
@@ -443,6 +494,80 @@ class Flow:
       f.write_object(blob.data)
 
     f.close()
+
+  # Loads flow from 'filename'.
+  def load(self, filename):
+    f = FileReader(filename)
+    magic = f.read(4)
+    assert magic == 'flow', magic
+
+    version = f.read_int()
+    assert version == 4, version
+
+    num_vars = f.read_int()
+    for _ in xrange(num_vars):
+      name = f.read_string()
+      assert f.read_int() == 0
+      t = f.read_string()
+      ref = False
+      if t[0] == '&':
+        ref = True
+        t = t[1:]
+      shape_size = f.read_int()
+      shape = []
+      for _ in xrange(shape_size):
+        shape.append(f.read_int())
+
+      var = self.var(name, type=t, shape=shape)
+      if ref: var.ref = True
+      data_size = f.read_long()
+      var.data = f.slice(data_size)  # avoid creating a copy
+      
+    num_ops = f.read_int()
+    for _ in xrange(num_ops):
+      name = f.read_string()
+      op = self.op(name)
+
+      op.type = f.read_string()
+      num_in = f.read_int()
+      for _ in xrange(num_in):
+        op.add_input(self.var(name=f.read_string()))
+
+      num_out = f.read_int()
+      for _ in xrange(num_out):
+        op.add_output(self.var(name=f.read_string()))
+
+      num_attr = f.read_int()
+      for _ in xrange(num_attr):
+        attr_name = f.read_string()
+        attr_val = f.read_string()
+        op.add_attr(attr_name, attr_val)
+
+    num_funcs = f.read_int()
+    for _ in xrange(num_funcs):
+      func = self.func(name=f.read_string())
+      n = f.read_int()
+      for _ in xrange(n):
+        func.add(self.op(f.read_string()))
+
+    num_cnxs = f.read_int()
+    for _ in xrange(num_cnxs):
+      cnx = self.cnx(f.read_string())
+      n = f.read_int()
+      for _ in xrange(n):
+        cnx.add(self.var(f.read_string()))
+
+    num_blobs = f.read_int()
+    for _ in xrange(num_blobs):
+      blob = self.blob(f.read_string())
+      blob.type = f.read_string()
+      n = f.read_int()
+      for _ in xrange(n):
+        name = f.read_string()
+        val = f.read_string()
+        blob.add_attr(name, val)
+      data_size = f.read_long()
+      blob.data = f.slice(data_size)  # avoid creating a copy
 
   def __str__(self):
     s = ""
