@@ -74,7 +74,7 @@ void Date::ParseFromNumber(int num) {
     // YY**
     year = num * 100 + 1;
     precision = CENTURY;
-  } else {
+  } else if (num >= 0) {
     // Y***
     year = num * 1000 + 1;
     precision = MILLENNIUM;
@@ -124,7 +124,8 @@ void Date::ParseFromString(Text str) {
 
 void Date::ParseFromFrame(const Frame &frame) {
   // Try to get the 'point in time' property from frame and parse it.
-  Object time = frame.Get("P585");
+  Store *store = frame.store();
+  Object time(store, store->Resolve(frame.GetHandle("P585")));
   if (time.invalid()) return;
   if (time.IsInt()) {
     int num = time.AsInt();
@@ -145,41 +146,23 @@ void Calendar::Init(Store *store) {
   Frame cal(store, "/w/calendar");
   if (!cal.valid()) return;
 
-  // Get weekdays.
-  for (const Slot &s : cal.GetFrame("/w/weekdays")) {
-    weekdays_[s.name.AsInt()] = s.value;
-  }
-
-  // Get months.
-  for (const Slot &s : cal.GetFrame("/w/months")) {
-    months_[s.name.AsInt()] = s.value;
-  }
-
-  // Get days.
-  for (const Slot &s : cal.GetFrame("/w/days")) {
-    days_[s.name.AsInt()] = s.value;
-  }
-
-  // Get years.
-  for (const Slot &s : cal.GetFrame("/w/years")) {
-    years_[s.name.AsInt()] = s.value;
-  }
-
-  // Get decades.
-  for (const Slot &s : cal.GetFrame("/w/decades")) {
-    decades_[s.name.AsInt()] = s.value;
-  }
-
-  // Get centuries.
-  for (const Slot &s : cal.GetFrame("/w/centuries")) {
-    centuries_[s.name.AsInt()] = s.value;
-  }
-
-  // Get millennia.
-  for (const Slot &s : cal.GetFrame("/w/millennia")) {
-    millennia_[s.name.AsInt()] = s.value;
-  }
+  // Build calendar mappings.
+  BuildCalendarMapping(&weekdays_, cal.GetFrame("/w/weekdays"));
+  BuildCalendarMapping(&months_, cal.GetFrame("/w/months"));
+  BuildCalendarMapping(&days_, cal.GetFrame("/w/days"));
+  BuildCalendarMapping(&years_, cal.GetFrame("/w/years"));
+  BuildCalendarMapping(&decades_, cal.GetFrame("/w/decades"));
+  BuildCalendarMapping(&centuries_, cal.GetFrame("/w/centuries"));
+  BuildCalendarMapping(&millennia_, cal.GetFrame("/w/millennia"));
 };
+
+bool Calendar::BuildCalendarMapping(CalendarMap *mapping, const Frame &source) {
+  if (!source.valid()) return false;
+  for (const Slot &s : source) {
+    (*mapping)[s.name.AsInt()] = s.value;
+  }
+  return true;
+}
 
 string Calendar::DateAsString(const Date &date) const {
   // Parse date.
@@ -396,16 +379,16 @@ string Calendar::DateString(const Date &date) {
         }
         break;
       case Date::DECADE:
-        sprintf(str, "%+03d*", year / 10);
+        sprintf(str, "%+04d*", year / 10);
         break;
       case Date::YEAR:
-        sprintf(str, "%+04d", year);
+        sprintf(str, "%+05d", year);
         break;
       case Date::MONTH:
-        sprintf(str, "%+04d-%02d", date.year, date.month);
+        sprintf(str, "%+05d-%02d", date.year, date.month);
         break;
       case Date::DAY:
-        sprintf(str, "%+04d-%02d-%02d", date.year, date.month, date.day);
+        sprintf(str, "%+05d-%02d-%02d", date.year, date.month, date.day);
         break;
     }
   }

@@ -118,11 +118,14 @@ class Calendar {
   Text MillenniumName(int year) const { return ItemName(Millennium(year)); }
 
  private:
+  // Mapping from calendar item key to the corresponding calendar item.
+  typedef std::unordered_map<int, Handle> CalendarMap;
+
   // Get name for item.
   Text ItemName(Handle item) const;
 
-  // Mapping from calendar item key to the corresponding calendar item.
-  typedef std::unordered_map<int, Handle> CalendarMap;
+  // Build calendar mapping.
+  bool BuildCalendarMapping(CalendarMap *mapping, const Frame &source);
 
   // Store with calendar.
   Store *store_ = nullptr;
