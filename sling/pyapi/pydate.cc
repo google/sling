@@ -21,9 +21,10 @@
 namespace sling {
 
 // Python type declarations.
+PyTypeObject PyDate::type;
+PyMethodTable PyDate::methods;
 PyTypeObject PyCalendar::type;
 PyMethodTable PyCalendar::methods;
-PyTypeObject PyDate::type;
 
 PyMemberDef PyDate::members[] = {
   {"year", T_INT, offsetof(struct PyDate, date.year), 0, ""},
@@ -38,6 +39,9 @@ void PyDate::Define(PyObject *module) {
   type.tp_init = method_cast<initproc>(&PyDate::Init);
   type.tp_dealloc = method_cast<destructor>(&PyDate::Dealloc);
   type.tp_members = members;
+
+  methods.Add("iso", &PyDate::ISO);
+  type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Date");
 
@@ -82,6 +86,11 @@ int PyDate::Init(PyObject *args, PyObject *kwds) {
 
 void PyDate::Dealloc() {
   Free();
+}
+
+PyObject *PyDate::ISO() {
+  string str = date.ISO8601();
+  return PyString_FromStringAndSize(str.data(), str.size());
 }
 
 void PyCalendar::Define(PyObject *module) {

@@ -49,6 +49,9 @@ class Date {
   // Parse date from frame.
   void ParseFromFrame(const Frame &frame);
 
+  // Date in  ISO 8601 format, e.g. "+2013-05-01T00:00:00Z" is May 1, 2013.
+  string ISO8601() const;
+
   // Year or 0 if date is invalid.
   int year = 0;
 

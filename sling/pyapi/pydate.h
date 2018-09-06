@@ -29,12 +29,16 @@ struct PyDate : public PyBase {
   // Deallocate date wrapper.
   void Dealloc();
 
+  // Date in  ISO 8601 format.
+  PyObject *ISO();
+
   // Date object.
   nlp::Date date;
 
   // Registration.
   static PyTypeObject type;
   static PyMemberDef members[];
+  static PyMethodTable methods;
   static void Define(PyObject *module);
 };
 

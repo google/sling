@@ -137,6 +137,28 @@ void Date::ParseFromFrame(const Frame &frame) {
   }
 }
 
+string Date::ISO8601() const {
+  char str[32];
+  *str = 0;
+  switch (precision) {
+    case Date::NONE: break;
+    case Date::MILLENNIUM:
+    case Date::CENTURY:
+    case Date::DECADE:
+    case Date::YEAR:
+      sprintf(str, "%+05d-00-00T00:00:00Z", year);
+      break;
+    case Date::MONTH:
+      sprintf(str, "%+05d-%02d-00T00:00:00Z", year, month);
+      break;
+    case Date::DAY:
+      sprintf(str, "%+05d-%02d-%02dT00:00:00Z", year, month, day);
+      break;
+  }
+
+  return str;
+}
+
 void Calendar::Init(Store *store) {
   // Get symbols.
   store_ = store;

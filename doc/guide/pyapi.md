@@ -600,6 +600,8 @@ The `Date` class has the following properties:
     * `YEAR` if date represents a year.
     * `MONTH` if date represents a month.
     * `DAY` if date represents a day.
+* `iso()`<br>
+  Returns date in ISO 8601 format.
 
 A `Calendar` object can be used for converting `Date` objects to text and
 backing off to more coarse-grained date representations. A `Calendar` object
