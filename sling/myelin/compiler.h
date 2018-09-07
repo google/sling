@@ -37,13 +37,23 @@ class Compiler {
   Runtime *runtime() const { return runtime_; }
   void set_runtime(Runtime *runtime) { runtime_ = runtime; }
 
+  // Perf module FLOP counter support.
+  bool perf_flopctr() const { return perf_flopctr_; }
+  void set_perf_flopctr(bool enabled) { perf_flopctr_ = enabled; }
+
  private:
   // Compiler library with kernels, transformations, etc.
   Library library_;
 
   // Custom runtime for generated network.
   Runtime *runtime_ = nullptr;
+
+  // Enable perf FLOP counter.
+  bool perf_flopctr_ = true;
 };
+
+// Enable/disable CPU features for compiler.
+void SetCPUFeatures(const string &features);
 
 // Log profile report if profiling enabled.
 void LogProfile(const Network &net);

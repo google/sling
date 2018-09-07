@@ -570,6 +570,9 @@ class Tensor {
   // Byte alignment.
   int byte_alignment() const { return byte_alignment_; }
 
+  // Size of of channel elements based on this tensor.
+  int ChannelElementSize() const;
+
   // Return corresponding gradient tensor.
   Tensor *Gradient() const;
 

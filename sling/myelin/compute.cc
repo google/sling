@@ -526,6 +526,10 @@ bool Tensor::SupportsAlignment(const Shape &align) const {
   return true;
 }
 
+int Tensor::ChannelElementSize() const {
+  return Align(size(), byte_alignment());
+}
+
 bool Tensor::SupportsOrder(Order order) {
   return combined_order[required_order_][order] != CONFLICTING_ORDER;
 }
@@ -630,7 +634,7 @@ Channel::Channel(const Tensor *format) : format_(format) {
   DCHECK(format->order() == ROW_MAJOR) << format->name();
   DCHECK_GE(format->rank(), 1) << format->name();
   DCHECK_EQ(format->dim(0), 1) << format->name();
-  element_size_ = Align(format->size(), format->byte_alignment());
+  element_size_ = format->ChannelElementSize();
 
   // Channel are aligned to the element alignment and cache lines.
   EnsureAlignment(&alignment_, format->byte_alignment());

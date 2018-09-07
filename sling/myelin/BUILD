@@ -140,21 +140,15 @@ cc_library(
   ],
 )
 
-cc_binary(
-  name = "analyze",
-  srcs = ["analyze.cc"],
+cc_library(
+  name = "aot-linker",
+  srcs = ["aot-linker.cc"],
+  hdrs = ["aot-linker.h"],
   deps = [
     ":compute",
-    ":elf-linker",
-    ":flow",
-    ":graph",
-    ":profile",
     "//sling/base",
-    "//sling/file:posix",
-    "//sling/myelin/cuda:cuda-runtime",
-    "//sling/myelin/kernel:cuda",
-    "//sling/myelin/kernel:dragnn",
-    "//sling/myelin/kernel:tensorflow",
+    "//sling/file",
+    "//sling/util:elf-writer",
   ],
 )
 
@@ -175,4 +169,34 @@ cc_library(
     "//sling/myelin/kernel:tensorflow",
   ],
 )
+
+cc_binary(
+  name = "analyze",
+  srcs = ["analyze.cc"],
+  deps = [
+    ":compute",
+    ":elf-linker",
+    ":flow",
+    ":graph",
+    ":profile",
+    "//sling/base",
+    "//sling/file:posix",
+    "//sling/myelin/cuda:cuda-runtime",
+    "//sling/myelin/kernel:cuda",
+    "//sling/myelin/kernel:dragnn",
+    "//sling/myelin/kernel:tensorflow",
+  ],
+)
+
+cc_binary(
+  name = "nnc",
+  srcs = ["nnc.cc"],
+  deps = [
+    ":compiler",
+    ":aot-linker",
+    "//sling/base",
+    "//sling/file:posix",
+  ],
+)
+
 

@@ -51,52 +51,7 @@ Compiler::Compiler() {
   RegisterTensorflowLibrary(&library_);
 
   // Parse CPU feature flags and enable/disable CPU features.
-  if (!FLAGS_cpu.empty()) {
-    const char *p = FLAGS_cpu.c_str();
-    while (*p != 0) {
-      bool enable = true;
-      if (*p == '+') {
-        enable = true;
-        p++;
-      }
-      if (*p == '-') {
-        enable = false;
-        p++;
-      }
-      const char *q = p;
-      while (*q != 0 && *q != '+' && *q != '-') q++;
-      string name(p, q - p);
-      jit::CpuFeature feature;
-      if (name == "sse") {
-        feature = jit::SSE;
-      } else if (name == "sse2") {
-        feature = jit::SSE2;
-      } else if (name == "sse3") {
-        feature = jit::SSE3;
-      } else if (name == "sse4.1") {
-        feature = jit::SSE4_1;
-      } else if (name == "sse4.2") {
-        feature = jit::SSE4_2;
-      } else if (name == "avx") {
-        feature = jit::AVX;
-      } else if (name == "avx2") {
-        feature = jit::AVX2;
-      } else if (name == "avx512") {
-        feature = jit::AVX512F;
-      } else if (name == "fma3") {
-        feature = jit::FMA3;
-      } else {
-        LOG(FATAL) << "Unknown CPU feature: " << name;
-      }
-      p = q;
-
-      if (enable) {
-        jit::CPU::Enable(feature);
-      } else {
-        jit::CPU::Disable(feature);
-      }
-    }
-  }
+  if (!FLAGS_cpu.empty()) SetCPUFeatures(FLAGS_cpu);
 
   // Initialize CUDA runtime and register CUDA kernels in GPU mode.
   if (FLAGS_gpu) {
@@ -151,7 +106,7 @@ void Compiler::Compile(Flow *flow, Network *net) {
   if (runtime_ != nullptr) net->set_runtime(runtime_);
 
   // Set FLOPs counter for measuring performance.
-  if (net->options().flops_address == nullptr) {
+  if (perf_flopctr_ && net->options().flops_address == nullptr) {
     net->options().flops_address = Perf::flopptr();
   }
 
@@ -194,6 +149,68 @@ void LogProfile(const Network &net) {
       report.append(profile.ASCIIReport());
     }
     LOG(INFO) << "Profiling report:\n" << report;
+  }
+}
+
+void SetCPUFeatures(const string &features) {
+  const char *p = features.c_str();
+
+  if (*p == '0') {
+    // Disable all features initially.
+    jit::CPU::Disable(jit::SSE);
+    jit::CPU::Disable(jit::SSE2);
+    jit::CPU::Disable(jit::SSE3);
+    jit::CPU::Disable(jit::SSE4_1);
+    jit::CPU::Disable(jit::SSE4_2);
+    jit::CPU::Disable(jit::AVX);
+    jit::CPU::Disable(jit::AVX2);
+    jit::CPU::Disable(jit::AVX512F);
+    jit::CPU::Disable(jit::FMA3);
+    p++;
+  }
+
+  while (*p != 0) {
+    bool enable = true;
+    if (*p == '+') {
+      enable = true;
+      p++;
+    }
+    if (*p == '-') {
+      enable = false;
+      p++;
+    }
+    const char *q = p;
+    while (*q != 0 && *q != '+' && *q != '-') q++;
+    string name(p, q - p);
+    jit::CpuFeature feature;
+    if (name == "sse") {
+      feature = jit::SSE;
+    } else if (name == "sse2") {
+      feature = jit::SSE2;
+    } else if (name == "sse3") {
+      feature = jit::SSE3;
+    } else if (name == "sse4.1") {
+      feature = jit::SSE4_1;
+    } else if (name == "sse4.2") {
+      feature = jit::SSE4_2;
+    } else if (name == "avx") {
+      feature = jit::AVX;
+    } else if (name == "avx2") {
+      feature = jit::AVX2;
+    } else if (name == "avx512") {
+      feature = jit::AVX512F;
+    } else if (name == "fma3") {
+      feature = jit::FMA3;
+    } else {
+      LOG(FATAL) << "Unknown CPU feature: " << name;
+    }
+    p = q;
+
+    if (enable) {
+      jit::CPU::Enable(feature);
+    } else {
+      jit::CPU::Disable(feature);
+    }
   }
 }
 
