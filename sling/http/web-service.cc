@@ -82,6 +82,8 @@ WebService::WebService(Store *commons,
     input_format_ = CJSON;
   } else if (content_type == "text/json") {
     input_format_ = JSON;
+  } else if (content_type == "text/plain") {
+    input_format_ = PLAIN;
   }
 
   // Decode input.
@@ -110,6 +112,18 @@ WebService::WebService(Store *commons,
         Reader reader(&store_, &in);
         reader.set_json(true);
         input_ = reader.Read();
+        break;
+      }
+
+      case PLAIN: {
+        // Get plain text from request body.
+        size_t size = request->content_length();
+        Handle str = store_.AllocateString(size);
+        StringDatum *obj = store_.Deref(str)->AsString();
+        if (in.Read(obj->data(), size)) {
+          input_ = Object(&store_, str);
+        }
+        break;
       }
 
       case EMPTY:
@@ -127,6 +141,7 @@ WebService::~WebService() {
 
   // Use input format to determine output format if it has not been set.
   if (output_format_ == EMPTY) output_format_ = input_format_;
+  if (output_format_ == PLAIN) output_format_ = TEXT;
 
   // Change output format based on fmt parameter.
   Text fmt = Get("fmt");
@@ -199,6 +214,7 @@ WebService::~WebService() {
       break;
     }
 
+    case PLAIN:
     case EMPTY:
     case UNKNOWN:
       // Ignore empty or unknown output formats.

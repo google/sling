@@ -333,9 +333,10 @@ void HTTPServer::Worker() {
   // Keep processing events until server is shut down.
   while (!stop_) {
     // Get new events.
+    idle_++;
     int rc = epoll_wait(pollfd_, events, max_events, 2000);
+    idle_--;
     if (stop_) break;
-    if (errno == EAGAIN) continue;
     if (rc < 0) {
       LOG(ERROR) << Error("epoll_wait");
       break;
@@ -343,6 +344,17 @@ void HTTPServer::Worker() {
     if (rc == 0) {
       ShutdownIdleConnections();
       continue;
+    }
+
+    // Start new worker if all workers are busy.
+    if (++active_ == workers_.size()) {
+      MutexLock lock(&mu_);
+      if (workers_.size() < options_.max_workers) {
+        VLOG(3) << "Starting new worker thread " << workers_.size();
+        workers_.Start(1, [this](int index) { this->Worker(); });
+      } else {
+        LOG(WARNING) << "All HTTP worker threads are busy";
+      }
     }
 
     // Process events.
@@ -391,6 +403,7 @@ void HTTPServer::Worker() {
         }
       }
     }
+    active_--;
   }
 
   // Free event structure.
@@ -511,6 +524,7 @@ void HTTPServer::ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp) {
   rsp->Append("<td>Header state</td>");
   rsp->Append("<td>Keep</td>");
   rsp->Append("<td>Idle</td>");
+  rsp->Append("<td>URL</td>");
   rsp->Append("</tr>\n");
   HTTPConnection *conn = connections_;
   time_t now = time(0);
@@ -564,10 +578,26 @@ void HTTPServer::ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp) {
     // Idle time.
     rsp->Append("<td>" + SimpleItoa(now - conn->last_) + "</td>");
 
+    // Request URL.
+    rsp->Append("<td>");
+    if (conn->request()) {
+      if (conn->request()->full_path()) {
+        rsp->Append(HTMLEscape(conn->request()->full_path()));
+      }
+      if (conn->request()->query()) {
+        rsp->Append("?");
+        rsp->Append(HTMLEscape(conn->request()->query()));
+      }
+    }
+    rsp->Append("</td>");
+
     rsp->Append("</tr>\n");
     conn = conn->next_;
   }
   rsp->Append("</table>\n");
+  rsp->Append("<p>" + std::to_string(workers_.size()) + " worker threads, " +
+              std::to_string(active_) + " active, " +
+              std::to_string(idle_) + " idle</p>\n");
   rsp->Append("</body></html>\n");
 }
 
@@ -1023,7 +1053,7 @@ HTTPRequest::HTTPRequest(HTTPConnection *conn, HTTPBuffer *hdr) : conn_(conn) {
 
   // Parse URL path.
   if (*s) {
-    path_ = s;
+    full_path_ = path_ = s;
 
     // Parse URL query.
     char *q = strchr(s, '?');
@@ -1082,7 +1112,7 @@ HTTPRequest::HTTPRequest(HTTPConnection *conn, HTTPBuffer *hdr) : conn_(conn) {
       keep_alive_ = strcasecmp(s, "keep-alive") == 0;
     }
 
-    VLOG(3) << "HTTP request header: " << l << ": " << s;
+    VLOG(4) << "HTTP request header: " << l << ": " << s;
     headers_.emplace_back(l, s);
   }
 
@@ -1206,7 +1236,7 @@ void HTTPResponse::WriteHeader(HTTPBuffer *hdr) {
   hdr->append(StatusText(status_));
   hdr->append("\r\n");
 
-  VLOG(3) << "HTTP response: " << status_ << " " << StatusText(status_);
+  VLOG(4) << "HTTP response: " << status_ << " " << StatusText(status_);
 
   // Output HTTP headers.
   for (const HTTPHeader &h : headers_) {
@@ -1214,7 +1244,7 @@ void HTTPResponse::WriteHeader(HTTPBuffer *hdr) {
     hdr->append(": ");
     hdr->append(h.value);
     hdr->append("\r\n");
-    VLOG(3) << "HTTP response header: " << h.name << ": " << h.value;
+    VLOG(4) << "HTTP response header: " << h.name << ": " << h.value;
   }
 
   hdr->append("\r\n");

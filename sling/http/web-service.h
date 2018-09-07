@@ -35,6 +35,7 @@ class WebService {
     COMPACT,  // frames in compact text format, i.e. no indentation
     JSON,     // human-readable JSON encoding with indentation (text/json)
     CJSON,    // compact JSON (application/json)
+    PLAIN,    // plain text (text/plain)
   };
 
   // Initialize web service from HTTP request and response.

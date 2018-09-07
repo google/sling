@@ -18,6 +18,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <time.h>
+#include <atomic>
 #include <string>
 
 #include "sling/base/status.h"
@@ -120,6 +121,9 @@ struct HTTPServerOptions {
   // Number of worker threads.
   int num_workers = 5;
 
+  // Maximum number of worker threads.
+  int max_workers = 200;
+
   // Number of events per worker poll.
   int max_events = 1;
 
@@ -141,15 +145,6 @@ class HTTPServer {
  public:
   // HTTP handler.
   typedef std::function<void(HTTPRequest *, HTTPResponse *)> Handler;
-
-  // HTTP context for serving requests under an URI.
-  struct Context {
-    Context(const string &u, const Handler &h) : uri(u), handler(h) {
-      if (uri == "/") uri = "";
-    }
-    string uri;
-    Handler handler;
-  };
 
   // Initialize HTTP server to listen on port.
   HTTPServer(const HTTPServerOptions &options, int port);
@@ -181,6 +176,15 @@ class HTTPServer {
   const HTTPServerOptions &options() const { return options_; }
 
  private:
+  // HTTP context for serving requests under an URI.
+  struct Context {
+    Context(const string &u, const Handler &h) : uri(u), handler(h) {
+      if (uri == "/") uri = "";
+    }
+    string uri;
+    Handler handler;
+  };
+
   // Worker handler.
   void Worker();
 
@@ -228,6 +232,12 @@ class HTTPServer {
 
   // Worker threads.
   WorkerPool workers_;
+
+  // Number of active worker threads.
+  std::atomic<int> active_{0};
+
+  // Number of idle worker threads.
+  std::atomic<int> idle_{0};
 
   // Flag to determine if server is shutting down.
   bool stop_;
@@ -349,6 +359,7 @@ class HTTPRequest {
   const char *method() const { return method_; }
 
   // HTTP URL path.
+  const char *full_path() const { return full_path_; }
   const char *path() const { return path_; }
   void set_path(const char *path) { path_ = path; }
 
@@ -399,6 +410,9 @@ class HTTPRequest {
 
   // HTTP method.
   const char *method_ = nullptr;
+
+  // HTTP URI full path (including context).
+  const char *full_path_ = nullptr;
 
   // HTTP URI path.
   const char *path_ = nullptr;
