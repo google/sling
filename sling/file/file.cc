@@ -14,6 +14,7 @@
 
 #include "sling/file/file.h"
 
+#include <unistd.h>
 #include <pthread.h>
 #include <algorithm>
 #include <string>
@@ -263,6 +264,19 @@ Status File::WriteContents(const string &filename,
   return f->Close();
 }
 
+Status File::Read(void *buffer, size_t size) {
+  // Keep reading partial data until all data has been read. Return error if
+  // then end of the file is reached or a read error occurred.
+  while (size > 0) {
+    uint64 bytes;
+    Status st = Read(buffer, size, &bytes);
+    if (!st.ok()) return st;
+    if (bytes == 0) return Status(1, "Truncated", filename());
+    size -= bytes;
+  }
+  return Status::OK;
+}
+
 void File::ReadOrDie(void *buffer, size_t size) {
   uint64 read;
   CHECK(Read(buffer, size, &read));
@@ -311,6 +325,23 @@ uint64 File::Size() {
   uint64 size;
   if (!GetSize(&size).ok()) return -1;
   return size;
+}
+
+size_t File::PageSize() {
+  return sysconf(_SC_PAGESIZE);
+}
+
+void *File::MapMemory(uint64 pos, size_t size) {
+  return nullptr;
+}
+
+Status File::FreeMappedMemory(void *data, size_t size) {
+  if (default_file_system == nullptr) return NoFileSystem("mmunmap");
+  return default_file_system->FreeMappedMemory(data, size);
+}
+
+Status FileSystem::FreeMappedMemory(void *data, size_t size) {
+  return Status(ENOSYS, "Memory-mapped files not supported");
 }
 
 REGISTER_INITIALIZER(filesystem, {

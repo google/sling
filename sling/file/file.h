@@ -47,6 +47,10 @@ class File {
   // Read up to "size" bytes from the file at the current position.
   virtual Status Read(void *buffer, size_t size, uint64 *read) = 0;
 
+  // Reads "size" bytes to buffer from file. Returns errors if less than "size"
+  // bytes read.
+  Status Read(void *buffer, size_t size);
+
   // Reads "size" bytes to buffer from file. Fails on read errors or if less
   // than "size" bytes read.
   void ReadOrDie(void *buffer, size_t size);
@@ -68,6 +72,9 @@ class File {
 
   // Write string to file and append a newline.
   Status WriteLine(const string &line);
+
+  // Map file region into memory. Return null on error or if not supported.
+  virtual void *MapMemory(uint64 pos, size_t size);
 
   // Set the current file position.
   virtual Status Seek(uint64 pos) = 0;
@@ -151,6 +158,12 @@ class File {
   static Status WriteContents(const string &filename, const string &data) {
     return WriteContents(filename, data.data(), data.size());
   }
+
+  // Return page size for memory mapping.
+  static size_t PageSize();
+
+  // Free memory mapping.
+  static Status FreeMappedMemory(void *data, size_t size);
 };
 
 // Abstract file system interface.
@@ -197,6 +210,9 @@ class FileSystem : public Singleton<FileSystem> {
   // Find file names matching pattern.
   virtual Status Match(const string &pattern,
                        std::vector<string> *filenames) = 0;
+
+  // Release mapped memory.
+  virtual Status FreeMappedMemory(void *data, size_t size);
 };
 
 }  // namespace sling

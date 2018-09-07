@@ -32,7 +32,11 @@ Repository::Repository()  {}
 Repository::~Repository()  {
   // Delete all memory blocks and temporary files.
   for (Block &block : blocks_) {
-    free(block.data);
+    if (block.mmaped) {
+      File::FreeMappedMemory(block.data, block.size);
+    } else {
+      free(block.data);
+    }
     if (block.file != nullptr) {
       string tmpfile = block.file->filename();
       block.file->Close();
@@ -58,13 +62,13 @@ void Repository::Open(const string &filename) {
   uint64 bytes;
   CHECK(file_->PRead(0, &header, sizeof(Header), &bytes));
   CHECK_EQ(bytes, sizeof(Header))
-    << "Unable to read entity repository file header: " << filename;
+      << "Unable to read repository file header: " << filename;
 
   // Check magic signature and version.
   CHECK_EQ(header.magic, kRepositoryMagic)
-    << "Invalid entity repository file: " << filename;
+      << "Invalid repository file: " << filename;
   CHECK(header.version == kRepositoryVersion)
-    << "Unsupported repository file version: " <<  header.version;
+      << "Unsupported repository file version: " <<  header.version;
 
   // Read repository directory.
   char *directory = static_cast<char *>(malloc(header.directory_size));
@@ -72,7 +76,7 @@ void Repository::Open(const string &filename) {
                      directory,
                      header.directory_size, &bytes));
   CHECK_EQ(bytes, header.directory_size)
-    << "Unable to read entity repository directory: " << filename;
+      << "Unable to read repository directory: " << filename;
 
   // Add blocks from directory.
   Entry *entries = reinterpret_cast<Entry *>(directory);
@@ -115,18 +119,26 @@ bool Repository::LoadBlock(const string &name) {
   Block &block = blocks_[block_index];
   if (block.data != nullptr) return true;
 
-  // Allocate memory block.
-  block.data = reinterpret_cast<char *>(malloc(block.size));
-  CHECK(block.data != nullptr)
-     << "Unable to allocate " << block.size << " bytes for block " << name;
+  // Try to memory-map block.
+  void *mapping = file_->MapMemory(block.position, block.size);
+  if (mapping != nullptr) {
+    VLOG(3) << "Mapped block " << name << " (" << block.size << " bytes)";
+    block.data = static_cast<char *>(mapping);
+    block.mmaped = true;
+  } else {
+    // Allocate memory block.
+    block.data = reinterpret_cast<char *>(malloc(block.size));
+    CHECK(block.data != nullptr)
+         << "Unable to allocate " << block.size << " bytes for block " << name;
 
-  // Read data.
-  VLOG(3) << "Reading block " << name << " (" << block.size << " bytes)";
-  CHECK(file_ != nullptr);
-  uint64 bytes;
-  CHECK(file_->PRead(block.position, block.data, block.size, &bytes));
-  CHECK_EQ(bytes, block.size)
-    << "Could not read block " << name << " from repository";
+    // Read data.
+    VLOG(3) << "Reading block " << name << " (" << block.size << " bytes)";
+    CHECK(file_ != nullptr);
+    uint64 bytes;
+    CHECK(file_->PRead(block.position, block.data, block.size, &bytes));
+    CHECK_EQ(bytes, block.size)
+        << "Could not read block " << name << " from repository";
+  }
 
   return true;
 }
@@ -147,6 +159,7 @@ void Repository::Write(const string &filename) {
   File *output = File::OpenOrDie(filename, "w");
 
   // Setup positions and sizes of each block.
+  size_t pagesize = File::PageSize();
   int64 position = sizeof(Header);
   int names_size = 0;
   for (Block &block : blocks_) {
@@ -154,6 +167,12 @@ void Repository::Write(const string &filename) {
     if (block.file != nullptr) {
       block.size = block.file->Size();
     }
+
+    // Try to align large blocks on page boundaries.
+    if (position % pagesize != 0 && block.size >= pagesize) {
+      position += pagesize - position % pagesize;
+    }
+
     block.position = position;
     position += block.size;
     names_size += block.name.size();
@@ -188,6 +207,7 @@ void Repository::Write(const string &filename) {
 
   // Write each block.
   for (Block &block : blocks_) {
+    CHECK(output->Seek(block.position));
     if (block.data != nullptr) {
       // Write data block.
       output->WriteOrDie(block.data, block.size);

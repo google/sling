@@ -33,14 +33,10 @@ void PhraseTable::Load(Store *store, const string &filename) {
     normalization_.assign(norm, repository_.GetBlockSize("normalization"));
   }
 
-  // Resolve all the entity ids in the store.
+  // Allocate handle array for resolved entities.
+  store_ = store;
   entity_table_ = new Handles(store);
   entity_table_->resize(entity_index_.size());
-  for (int i = 0; i < entity_index_.size(); ++i) {
-    const EntityItem *entity = entity_index_.GetEntity(i);
-    Handle handle = store->LookupExisting(entity->id());
-    (*entity_table_)[i] = handle;
-  }
 }
 
 void PhraseTable::Lookup(uint64 fp, Handles *matches) {
@@ -52,7 +48,14 @@ void PhraseTable::Lookup(uint64 fp, Handles *matches) {
     if (phrase->fingerprint() == fp) {
       const EntityPhrase *entities = phrase->entities();
       for (int i = 0; i < phrase->num_entities(); ++i) {
-        matches->push_back((*entity_table_)[entities[i].index]);
+        int index = entities[i].index;
+        Handle handle = (*entity_table_)[index];
+        if (handle.IsNil()) {
+          const EntityItem *entity = entity_index_.GetEntity(index);
+          handle = store_->LookupExisting(entity->id());
+          (*entity_table_)[index] = handle;
+        }
+        matches->push_back(handle);
       }
       break;
     }
@@ -69,9 +72,15 @@ void PhraseTable::Lookup(uint64 fp, MatchList *matches) {
     if (phrase->fingerprint() == fp) {
       const EntityPhrase *entities = phrase->entities();
       for (int i = 0; i < phrase->num_entities(); ++i) {
-        Handle entity = (*entity_table_)[entities[i].index];
+        int index = entities[i].index;
         int count = entities[i].count;
-        matches->emplace_back(entity, count);
+        Handle handle = (*entity_table_)[index];
+        if (handle.IsNil()) {
+          const EntityItem *entity = entity_index_.GetEntity(index);
+          handle = store_->LookupExisting(entity->id());
+          (*entity_table_)[index] = handle;
+        }
+        matches->emplace_back(handle, count);
       }
       break;
     }

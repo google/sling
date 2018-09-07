@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -99,6 +100,12 @@ class PosixFile : public File {
     if (rc < 0) IOError(filename_, errno);
     if (rc < size) IOError(filename_, EIO);
     return Status::OK;
+  }
+
+  void *MapMemory(uint64 pos, size_t size) override {
+    void *mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE, fd_, pos);
+    return mapping == MAP_FAILED ? nullptr : mapping;
   }
 
   Status Seek(uint64 pos) override {
@@ -261,6 +268,11 @@ class PosixFileSystem : public FileSystem {
       filenames->push_back(globbuf.gl_pathv[i]);
     }
     globfree(&globbuf);
+    return Status::OK;
+  }
+
+  Status FreeMappedMemory(void *data, size_t size) override {
+    if (munmap(data, size) != 0) return IOError("munmap", errno);
     return Status::OK;
   }
 };

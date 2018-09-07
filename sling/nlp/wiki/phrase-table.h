@@ -137,6 +137,9 @@ class PhraseTable {
   // Entity index.
   EntityIndex entity_index_;
 
+  // Store for resolving entity ids.
+  Store *store_ = nullptr;
+
   // Entities resolved to frame handles.
   Handles *entity_table_ = nullptr;
 

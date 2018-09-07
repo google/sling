@@ -104,6 +104,7 @@ class Repository {
     size_t size = 0;
     File *file = nullptr;
     uint64 position = 0;
+    bool mmaped = false;
   };
 
   // Entry in repository directory.
