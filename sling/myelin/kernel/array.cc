@@ -653,20 +653,24 @@ class SingleGather : public Kernel {
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
-    if (step->indegree() != 2 || step->outdegree() != 1) return false;
+    if (step->indegree() != 2 && step->indegree() != 3) return false;
+    if (step->outdegree() != 1) return false;
 
     // Check types.
     Tensor *M = step->input(0);
     Tensor *f = step->input(1);
+    Tensor *oov = step->indegree() == 3 ? step->input(2) : nullptr;
     Tensor *v = step->output(0);
     if (f->type() != DT_INT32) return false;
     if (M->type() != DT_FLOAT || M->rank() != 2) return false;
     if (v->type() != DT_FLOAT) return false;
+    if (oov != nullptr && oov->type() != DT_FLOAT) return false;
     int n = f->elements();
     int d = M->dim(1);
     int r = v->rank() - 1;
     if (v->shape().outer(r) != n) return false;
     if (v->shape().inner(r) != d) return false;
+    if (oov != nullptr && v->shape().inner(r) != oov->elements()) return false;
     if (n != 1) return false;
 
     // Check that the output is not already a reference.
@@ -681,6 +685,7 @@ class SingleGather : public Kernel {
     DCHECK(!v->ref());
     v->set_ref(true);
     v->Link(step->input(0));
+    if (step->indegree() == 3) v->Link(step->input(2));
 
     // Embedding matrix must be row-major.
     step->input(0)->SetRequiredOrder(ROW_MAJOR);
@@ -690,6 +695,7 @@ class SingleGather : public Kernel {
     // Get inputs and outputs.
     Tensor *M = step->input(0);
     Tensor *f = step->input(1);
+    Tensor *oov = step->indegree() == 3 ? step->input(2) : nullptr;
     Tensor *v = step->output(0);
     CHECK(f->IsLocal());
     CHECK(v->IsLocal());
@@ -708,12 +714,28 @@ class SingleGather : public Kernel {
       __ movsxlq(acc, Operand(masm->instance(), f->offset()));
     }
 
+    // Check for OOV feature.
+    Label l1;
+    if (oov != nullptr) {
+      __ testq(acc, acc);
+      __ j(negative, &l1);
+    }
+
     // Compute offset in embedding.
     __ Multiply(acc, M->stride(0));
 
     // Lookup element in embedding.
     __ LoadTensorAddress(embeddings, M);
     __ addq(acc, embeddings);
+
+    // Use oov vector for negative features.
+    if (oov != nullptr) {
+      Label l2;
+      __ jmp(&l2);
+      __ bind(&l1);
+      __ LoadTensorAddress(acc, oov);
+      __ bind(&l2);
+    }
 
     // Save reference to embedding vector.
     __ movq(Operand(masm->instance(), v->offset()), acc);
@@ -732,20 +754,24 @@ class MultiGather : public Kernel {
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
-    if (step->indegree() != 2 || step->outdegree() != 1) return false;
+    if (step->indegree() != 2 && step->indegree() != 3) return false;
+    if (step->outdegree() != 1) return false;
 
     // Check types.
     Tensor *M = step->input(0);
     Tensor *f = step->input(1);
+    Tensor *oov = step->indegree() == 3 ? step->input(2) : nullptr;
     Tensor *v = step->output(0);
     if (f->type() != DT_INT32) return false;
     if (M->type() != DT_FLOAT || M->rank() != 2) return false;
     if (v->type() != DT_FLOAT) return false;
+    if (oov != nullptr && oov->type() != DT_FLOAT) return false;
     int n = f->elements();
     int d = M->dim(1);
     int r = v->rank() - 1;
     if (v->shape().outer(r) != n) return false;
     if (v->shape().inner(r) != d) return false;
+    if (oov != nullptr && v->shape().inner(r) != oov->elements()) return false;
 
     return true;
   }
@@ -759,6 +785,7 @@ class MultiGather : public Kernel {
     // Get inputs and outputs.
     Tensor *M = step->input(0);
     Tensor *f = step->input(1);
+    Tensor *oov = step->indegree() == 3 ? step->input(2) : nullptr;
     Tensor *v = step->output(0);
     CHECK(f->IsLocal());
     CHECK(v->IsLocal());
@@ -785,10 +812,26 @@ class MultiGather : public Kernel {
     // Get feature index.
     __ movsxlq(acc, Operand(input, index, times_4));
 
+    // Check for OOV feature.
+    Label l1;
+    if (oov != nullptr) {
+      __ testq(acc, acc);
+      __ j(negative, &l1);
+    }
+
     // Compute address in embedding.
     __ movq(src, embeddings);
     __ Multiply(acc, M->stride(0));
     __ addq(src, acc);
+
+    // Use oov vector for negative features.
+    if (oov != nullptr) {
+      Label l2;
+      __ jmp(&l2);
+      __ bind(&l1);
+      __ LoadTensorAddress(src, oov);
+      __ bind(&l2);
+    }
 
     // Copy embedding vector to output.
     __ movq(cnt, Immediate(M->stride(0)));
