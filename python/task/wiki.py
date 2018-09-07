@@ -23,6 +23,16 @@ flags.define("--index",
              default=False,
              action='store_true')
 
+flags.define("--only_primary_language",
+             help="only use wikidata labels from primary language",
+             default=False,
+             action='store_true')
+
+flags.define("--only_known_languages",
+             help="only use wikidata labels from known languages",
+             default=False,
+             action='store_true')
+
 class WikiWorkflow:
   def __init__(self, name=None, wf=None):
     if wf == None: wf = Workflow(name)
@@ -86,6 +96,8 @@ class WikiWorkflow:
     """Task for converting Wikidata JSON to SLING items and properties."""
     task = self.wf.task("wikidata-importer", name=name)
     task.add_param("primary_language", flags.arg.language)
+    task.add_param("only_primary_language", flags.arg.only_primary_language)
+    task.add_param("only_known_languages", flags.arg.only_known_languages)
     self.wf.connect(input, task)
     items = self.wf.channel(task, name="items", format="message/frame")
     properties = self.wf.channel(task, name="properties",
@@ -364,6 +376,13 @@ class WikiWorkflow:
                             dir=corpora.wikidir(),
                             format="records/frame")
 
+  def wikipedia_members(self):
+    """Resource for members of categories.
+    """
+    return self.wf.resource("wikipedia-members.rec",
+                            dir=corpora.wikidir(),
+                            format="records/frame")
+
   def merge_wikipedia_categories(self, languages=None):
     """Merge Wikipedia categories for all languages."""
     if languages == None: languages = flags.arg.languages
@@ -379,6 +398,17 @@ class WikiWorkflow:
                                reducer="category-item-merger",
                                format="message/frame")
 
+  def invert_wikipedia_categories(self, languages=None):
+    """Invert category membership."""
+    if languages == None: languages = flags.arg.languages
+
+    with self.wf.namespace("wikipedia-members"):
+      return self.wf.mapreduce(input=self.wikipedia_items(),
+                               output=self.wikipedia_members(),
+                               mapper="category-inverter",
+                               reducer="category-member-merger",
+                               format="message/string")
+
   #---------------------------------------------------------------------------
   # Fused items
   #---------------------------------------------------------------------------
@@ -392,7 +422,9 @@ class WikiWorkflow:
                             format="records/frame")
 
   def fuse_items(self, items=None):
-    if items == None: items = self.wikidata_items() + [self.wikipedia_items()]
+    if items == None:
+      items = self.wikidata_items() + [self.wikipedia_items(),
+                                       self.wikipedia_members()]
     with self.wf.namespace("fused-items"):
       return self.wf.mapreduce(input=items,
                                output=self.fused_items(),
@@ -440,7 +472,10 @@ class WikiWorkflow:
 
     with self.wf.namespace("wikidata"):
       # Prune information from Wikidata items.
-      pruned_items = self.wf.map(items, "wikidata-pruner")
+      pruned_items = self.wf.map(items, "wikidata-pruner",
+        params={"prune_aliases": True,
+                "prune_wiki_links": True,
+                "prune_category_members": True})
 
       # Collect property catalog.
       property_catalog = self.wf.map(properties, "wikidata-property-collector")

@@ -41,7 +41,7 @@ class WikidataConverter {
 
   // Only import labels and description in known languages.
   bool only_known_languages() const { return only_known_languages_; }
-  void set_known_primary_languages(bool b) { only_known_languages_ = b; }
+  void set_only_known_languages(bool b) { only_known_languages_ = b; }
 
  private:
   // Return symbol for Wikidata item.

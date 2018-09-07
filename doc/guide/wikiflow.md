@@ -22,6 +22,7 @@ The Wiki processing pipeline performs the following tasks:
   * Build name table for searching for entities (`name-table`)
   * Build phrase table for matching phrases in text to entities (`phrase-table`)
   * Merging of Wikipedia categories across languages (`category-merging`)
+  * Inversion of category membership graph (`category-inversion`)
   * Fusing information about items to produce final item frame (`item-fusing`)
   * Build frame store with knowledge base (`knowledge-base`)
 
@@ -66,6 +67,7 @@ This is equivalent to running each of the step separately:
          --import_wikipedia
          --parse_wikipedia
          --merge_categories
+         --invert_categories
          --fuse_items
          --build_kb
          --extract_names
@@ -303,11 +305,13 @@ alias matching a phrase.
 
 Once the Wikipedia documents have been parsed for all the languages you need,
 the information from these documents are collected into a Wikipedia item for
-each entity. Currently, only Wikipedia categories are collected from Wikipedia
-documents in the `category-merging`task. The Wikipedia items are consolidated
-with the Wikidata items in the `item-fusing` task into the final items. These
-are then used in the `knowledge-base`task for building a knowledge base
-repository, which can be loaded into memory.
+each entity. Wikipedia categories are collected from Wikipedia documents in the
+`category-merging` task and the category membership graph is inverted in the
+`category-inversion` task, adding all the members of each category to the item
+for these categories. The Wikipedia items are consolidated with the Wikidata
+items in the `item-fusing` task into the final items. These are then used in
+the `knowledge-base`task for building a knowledge base repository, which can be
+loaded into memory.
 
 # Browsing the knowledge base
 
@@ -330,6 +334,7 @@ The Wiki processing pipeline produces the following data sets in
   * `wikidata-items-?????-of-?????.rec` (produced by `wikidata-import` task)
   * `properties.rec` (produced by `wikidata-import` task)
   * `wikipedia-items.rec` (produced by `category-merging` task)
+  * `wikipedia-members.rec` (produced by `category-inversion` task)
   * `items-?????-of-?????.rec` (produced by `item-fusing` task)
   * `kb.sling` (produced by `knowledge-base` task)
 

@@ -61,6 +61,11 @@ class WikidataImporter : public task::Processor {
     string lang = task->Get("primary_language", "");
     commons_ = new Store();
     converter_ = new WikidataConverter(commons_, lang);
+    bool only_primary = task->Get("only_primary_language", false);
+    bool only_known = task->Get("only_known_languages", false);
+    converter_->set_only_primary_language(only_primary);
+    converter_->set_only_known_languages(only_known);
+
     names_.Bind(commons_);
     commons_->Freeze();
   }
@@ -279,6 +284,11 @@ REGISTER_TASK_PROCESSOR("item-merger", ItemMerger);
 class WikidataPruner : public task::FrameProcessor {
  public:
   void Startup(task::Task *task) override {
+    // Get parameters.
+    task->Fetch("prune_aliases", &prune_aliases_);
+    task->Fetch("prune_wiki_links", &prune_wiki_links_);
+    task->Fetch("prune_category_members", &prune_category_members_);
+
     // Initialize aux filter.
     filter_.Init(commons_);
     aux_output_ = task->GetSink("aux");
@@ -295,8 +305,9 @@ class WikidataPruner : public task::FrameProcessor {
 
     // Remove aliases and wikilinks from item.
     Builder item(frame);
-    item.Delete(n_profile_alias_);
-    item.Delete(n_wikipedia_);
+    if (prune_aliases_) item.Delete(n_profile_alias_);
+    if (prune_wiki_links_) item.Delete(n_wikipedia_);
+    if (prune_category_members_) item.Delete(n_member_);
     item.Update();
 
     // Filter out aux items.
@@ -317,12 +328,18 @@ class WikidataPruner : public task::FrameProcessor {
   // Symbols.
   Name n_profile_alias_{names_, "/s/profile/alias"};
   Name n_wikipedia_{names_, "/w/item/wikipedia"};
+  Name n_member_{names_, "/w/item/member"};
 
   // Item filter.
   AuxFilter filter_;
 
   // Optional output channel for aux items.
   task::Channel *aux_output_;
+
+  // Parameters.
+  bool prune_aliases_ = true;
+  bool prune_wiki_links_ = true;
+  bool prune_category_members_ = true;
 
   // Statistics.
   task::Counter *num_kb_items_;

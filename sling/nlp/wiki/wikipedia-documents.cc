@@ -577,6 +577,58 @@ class CategoryItemMerger : public task::Reducer {
 
 REGISTER_TASK_PROCESSOR("category-item-merger", CategoryItemMerger);
 
+// Invert category links by taking inputs of items with categories and
+// outputting pairs of (category, member).
+class CategoryInverter : public task::FrameProcessor {
+ public:
+  void Process(Slice key, const Frame &frame) override {
+    for (const Slot &slot : frame) {
+      if (slot.name == n_item_category_) {
+        Frame category(frame.store(), slot.value);
+        output_->Send(new task::Message(category.Id().slice(), key));
+      }
+    }
+  }
+
+ private:
+  // Symbols.
+  Name n_item_category_{names_, "/w/item/category"};
+};
+
+REGISTER_TASK_PROCESSOR("category-inverter", CategoryInverter);
+
+// Merge category members.
+class CategoryMemberMerger : public task::Reducer {
+ public:
+  void Start(task::Task *task) override {
+    task::Reducer::Start(task);
+    CHECK(names_.Bind(&commons_));
+    commons_.Freeze();
+  }
+
+  void Reduce(const task::ReduceInput &input) override {
+    // Merge all categories members.
+    Store store(&commons_);
+    Builder members(&store);
+    for (task::Message *message : input.messages()) {
+      members.AddLink(n_item_member_, message->value());
+    }
+
+    // Output members for category.
+    Output(input.shard(), task::CreateMessage(input.key(), members.Create()));
+  }
+
+ private:
+  // Commons store.
+  Store commons_;
+
+  // Symbols.
+  Names names_;
+  Name n_item_member_{names_, "/w/item/member"};
+};
+
+REGISTER_TASK_PROCESSOR("category-member-merger", CategoryMemberMerger);
+
 }  // namespace nlp
 }  // namespace sling
 
