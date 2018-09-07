@@ -49,6 +49,10 @@ static const Word kInitialHeap[] = {
   STRING         |  2, 0x48, 'i' | ('s' << 8), 0,
 };
 
+// Size of pristine store.
+static const int kPristineSymbols = 3;
+static const int kPristineHandles = 11;
+
 // Default store options.
 const Store::Options Store::kDefaultOptions;
 
@@ -155,6 +159,7 @@ Store::Store(const Options *options) : options_(options) {
   for (Datum *datum = begin; datum < end; datum = datum->next()) {
     if (datum->IsSymbol()) InsertSymbol(datum->AsSymbol());
   }
+
   UnlockGC();
 }
 
@@ -848,18 +853,80 @@ SymbolDatum *Store::LocalSymbol(SymbolDatum *symbol) {
   return local;
 }
 
-uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
-  // Fingerprint mixing constants.
-  enum FingerprintSeed : uint64 {
-    FP_NUMBER =  0xd1ac3c3a168f9a23,
-    FP_STRING =  0xedbf08a562d55ca0,
-    FP_FRAME =   0x07a535307e971126,
-    FP_SYMBOL =  0x06c498392bf66124,
-    FP_ARRAY =   0x7e71d2f093c19cd1,
-    FP_NIL =     0xe958f32bf433420c,
-    FP_INVALID = 0x159ba7c32c364f9b,
-  };
+bool Store::Equal(Handle x, Handle y) const {
+  // Trivial case.
+  if (x == y) return true;
 
+  if (x.IsNumber() || y.IsNumber()) {
+    // Use the bit pattern for comparison.
+    return x.bits == y.bits;
+  } else {
+    if (x.IsNil() || y.IsNil()) return false;
+    const Datum *xdatum = GetObject(x);
+    const Datum *ydatum = GetObject(y);
+    if (xdatum->type() != ydatum->type()) return false;
+    if (xdatum->size() != ydatum->size()) return false;
+    switch (xdatum->type()) {
+      case FRAME: {
+        const FrameDatum *xframe = xdatum->AsFrame();
+        const FrameDatum *yframe = ydatum->AsFrame();
+
+        // Compare named frames by reference.
+        if (xframe->IsNamed() || yframe->IsNamed()) {
+          // Already tested if handles are equal.
+          return false;
+        }
+
+        // Compare unnamed frames by value.
+        const Slot *sx = xframe->begin();
+        const Slot *sy = yframe->begin();
+        while (sx < xframe->end()) {
+          if (!Equal(sx->name, sy->name)) return false;
+          if (!Equal(sx->value, sy->value)) return false;
+          sx++;
+          sy++;
+        }
+        return true;
+      }
+      case STRING: {
+        // Compare string content.
+        const StringDatum *xstr = xdatum->AsString();
+        const StringDatum *ystr = ydatum->AsString();
+        return xstr->equals(*ystr);
+      }
+      case SYMBOL: {
+        // Already tested if handles are equal.
+        return false;
+      }
+      case ARRAY: {
+        // Compare all elements of the array.
+        const ArrayDatum *xarray = xdatum->AsArray();
+        const ArrayDatum *yarray = ydatum->AsArray();
+        const Handle *hx = xarray->begin();
+        const Handle *hy = yarray->begin();
+        while (hx < xarray->end()) {
+          if (!Equal(*hx++, *hy++)) return false;
+        }
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+}
+
+// Fingerprint mixing constants.
+enum FingerprintSeed : uint64 {
+  FP_NUMBER =  0xd1ac3c3a168f9a23,
+  FP_STRING =  0xedbf08a562d55ca0,
+  FP_FRAME =   0x07a535307e971126,
+  FP_SYMBOL =  0x06c498392bf66124,
+  FP_ARRAY =   0x7e71d2f093c19cd1,
+  FP_NIL =     0xe958f32bf433420c,
+  FP_INVALID = 0x159ba7c32c364f9b,
+};
+
+uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
   if (handle.IsNumber()) {
     // Use the bit pattern of the integer or float for hashing.
     return HashMix(HashMix(seed, FP_NUMBER), handle.bits);
@@ -909,6 +976,17 @@ uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
       }
     }
   }
+}
+
+uint64 Store::Fingerprint(ArrayDatum *array,
+                          int begin, int end, int step) const {
+  // Hash array slice.
+  uint64 fp = HashMix(0, FP_ARRAY);
+  for (int i = begin; i != end; i += step) {
+    Handle h = *(array->begin() + i);
+    fp = Fingerprint(h, fp);
+  }
+  return fp;
 }
 
 void Store::ReplaceProxy(ProxyDatum *proxy, FrameDatum *frame) {
@@ -1034,6 +1112,12 @@ Handle Store::Resolve(Handle handle) {
     if (qua == Handle::nil()) return handle;
     handle = qua;
   }
+}
+
+bool Store::Pristine() const {
+  return globals_ == nullptr &&
+         num_symbols_ == kPristineSymbols &&
+         handles_.length() == kPristineHandles;
 }
 
 void Store::Mark() {
@@ -1274,7 +1358,7 @@ void Store::Freeze() {
   CHECK(globals_ == nullptr);
 
   // Run garbage collection to free up unused space.
-  GC();
+  if (gc_locks_ == 0) GC();
 
   // Shrink all the heaps to fit the allocated data. This will force slow case
   // in object memory allocation where we check for frozen store.

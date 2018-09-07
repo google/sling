@@ -14,6 +14,7 @@
 
 #include "sling/pyapi/pystore.h"
 
+#include "sling/frame/snapshot.h"
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/stream/file.h"
@@ -42,6 +43,8 @@ void PyStore::Define(PyObject *module) {
   methods.AddO("frame", &PyStore::NewFrame);
   methods.AddO("array", &PyStore::NewArray);
   methods.Add("globals", &PyStore::Globals);
+  methods.Add("lockgc", &PyStore::LockGC);
+  methods.Add("unlockgc", &PyStore::UnlockGC);
   type.tp_methods = methods.table();
 
   type.tp_as_mapping = &mapping;
@@ -105,12 +108,13 @@ PyObject *PyStore::Freeze() {
 
 PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
   // Parse arguments.
-  static const char *kwlist[] = {"file", "binary", nullptr};
+  static const char *kwlist[] = {"file", "binary", "snapshot", nullptr};
   PyObject *file = nullptr;
   bool force_binary = false;
+  bool snapshot = false;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "O|b", const_cast<char **>(kwlist),
-                &file, &force_binary);
+                args, kw, "O|bb", const_cast<char **>(kwlist),
+                &file, &force_binary, &snapshot);
   if (!ok) return nullptr;
 
   // Check that store is writable.
@@ -130,25 +134,36 @@ PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
     }
     return PyValue(result.handle());
   } else if (PyString_Check(file)) {
-    // Load store store from file. First, open input file.
-    File *f;
-    Status st = File::Open(PyString_AsString(file), "r", &f);
-    if (!st.ok()) {
-      PyErr_SetString(PyExc_IOError, st.message());
-      return nullptr;
-    }
+    char *filename = PyString_AsString(file);
+    if (snapshot && store->Pristine() && Snapshot::Valid(filename)) {
+      // Load store from snapshot.
+      Status st = Snapshot::Read(store, filename);
+      if (!st.ok()) {
+        PyErr_SetString(PyExc_IOError, st.message());
+        return nullptr;
+      }
+      Py_RETURN_NONE;
+    } else {
+      // Load store store from file. First, open input file.
+      File *f;
+      Status st = File::Open(filename, "r", &f);
+      if (!st.ok()) {
+        PyErr_SetString(PyExc_IOError, st.message());
+        return nullptr;
+      }
 
-    // Load frames from file.
-    FileInputStream stream(f);
-    InputParser parser(store, &stream, force_binary);
-    store->LockGC();
-    Object result = parser.ReadAll();
-    store->UnlockGC();
-    if (parser.error()) {
-      PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
-      return nullptr;
+      // Load frames from file.
+      FileInputStream stream(f);
+      InputParser parser(store, &stream, force_binary);
+      store->LockGC();
+      Object result = parser.ReadAll();
+      store->UnlockGC();
+      if (parser.error()) {
+        PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
+        return nullptr;
+      }
+      return PyValue(result.handle());
     }
-    return PyValue(result.handle());
   } else {
     PyErr_SetString(PyExc_ValueError, "File or string argument expected");
     return nullptr;
@@ -288,7 +303,7 @@ PyObject *PyStore::NewArray(PyObject *arg) {
   GCLock lock(store);
   Handle handle;
   if (PyList_Check(arg)) {
-    // Inialize new array from Python list.
+    // Initialize new array from Python list.
     int size = PyList_Size(arg);
     handle = store->AllocateArray(size);
     ArrayDatum *array = store->Deref(handle)->AsArray();
@@ -324,6 +339,16 @@ PyObject *PyStore::Globals() {
 
   Py_INCREF(pyglobals);
   return pyglobals->AsObject();
+}
+
+PyObject *PyStore::LockGC() {
+  store->LockGC();
+  Py_RETURN_NONE;
+}
+
+PyObject *PyStore::UnlockGC() {
+  store->UnlockGC();
+  Py_RETURN_NONE;
 }
 
 PyObject *PyStore::PyValue(Handle handle) {

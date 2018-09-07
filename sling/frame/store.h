@@ -17,6 +17,7 @@
 
 #include <stdlib.h>
 #include <atomic>
+#include <functional>
 #include <string>
 #include <utility>
 
@@ -340,7 +341,7 @@ struct Handle {
     return Handle{static_cast<Word>(n << kIntShift) | kIndexMask};
   }
 
-  // A signalling NaN is used as an error value for handles.
+  // A signaling NaN is used as an error value for handles.
   static const Word kError = kFloatTag | 0xFFBFFF00;
 
   // Checks if a handle is an error handle.
@@ -385,6 +386,7 @@ struct HandleHash {
 
 // Forward declarations.
 class Store;
+class Snapshot;
 struct StringDatum;
 struct FrameDatum;
 struct SymbolDatum;
@@ -632,6 +634,22 @@ struct FrameDatum : public Datum {
   bool has(Handle name) const {
     for (const Slot *slot = begin(); slot < end(); ++slot) {
       if (slot->name == name) return true;
+    }
+    return false;
+  }
+
+  // Checks if frame has isa: type.
+  bool isa(Handle type) const {
+    for (const Slot *slot = begin(); slot < end(); ++slot) {
+      if (slot->name == Handle::isa() && slot->value == type) return true;
+    }
+    return false;
+  }
+
+  // Checks if frame has is: type.
+  bool is(Handle type) const {
+    for (const Slot *slot = begin(); slot < end(); ++slot) {
+      if (slot->name == Handle::is() && slot->value == type) return true;
     }
     return false;
   }
@@ -971,11 +989,15 @@ class Store {
   // Deletes all slots in a frame with a particular name.
   void Delete(Handle frame, Handle name);
 
+  // Compares two objects by value.
+  bool Equal(Handle x, Handle y) const;
+
   // Computes a fingerprint for an object. This fingerprint is independent of
   // the specific handle values in this store. Fingerprints of frames with ids
   // only depend on the name, no the content of the frame. The object cannot
   // contain cycles.
   uint64 Fingerprint(Handle handle, uint64 seed = 0) const;
+  uint64 Fingerprint(ArrayDatum *array, int begin, int end, int step) const;
 
   // Returns a display name for the handle. This should only be used for display
   // purposes and should not be used as an alternative identifier for the
@@ -1031,6 +1053,20 @@ class Store {
 
   // Returns the number of symbols in the symbol table.
   int num_symbols() const { return num_symbols_; }
+
+  // Iterate all objects in the symbol table. This requires the store to be
+  // stable during iteration to avoid invalidating the iterator.
+  void ForAll(std::function<void(Handle handle)> callback) {
+    const MapDatum *map = GetMap(symbols());
+    for (Handle *bucket = map->begin(); bucket < map->end(); ++bucket) {
+      Handle h = *bucket;
+      while (!h.IsNil()) {
+        const SymbolDatum *symbol = GetSymbol(h);
+        if (symbol->bound()) callback(symbol->value);
+        h = symbol->next;
+      }
+    }
+  }
 
   // Checks if this handle is owned by this store.
   bool Owned(Handle handle) const {
@@ -1150,6 +1186,11 @@ class Store {
 
   // Performs garbage collection.
   void GC();
+
+  // Check is store is pristine, i.e. the store only contains the standard
+  // frames. This can be used for checking if a snapshot can be used for
+  // restoring the store without overwriting any existing content.
+  bool Pristine() const;
 
   // Iterator for enumerating all objects in the heaps. This will also iterate
   // over invalidated object in the heaps. The iterator will be invalidated by
@@ -1352,6 +1393,9 @@ class Store {
 
   // Default configuration options.
   static const Options kDefaultOptions;
+
+  // Allow internal access for snapshots.
+  friend class Snapshot;
 };
 
 // Utility class for GC locking in store.

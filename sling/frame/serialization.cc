@@ -15,6 +15,7 @@
 #include "sling/frame/serialization.h"
 
 #include "sling/base/logging.h"
+#include "sling/frame/snapshot.h"
 #include "sling/frame/wire.h"
 
 namespace sling {
@@ -91,10 +92,14 @@ string Encode(const Object &object) {
 }
 
 void LoadStore(const string &filename, Store *store) {
-  FileDecoder decoder(store, filename);
-  store->LockGC();
-  decoder.DecodeAll();
-  store->UnlockGC();
+  if (store->Pristine() && Snapshot::Valid(filename)) {
+    CHECK(Snapshot::Read(store, filename));
+  } else {
+    FileDecoder decoder(store, filename);
+    store->LockGC();
+    decoder.DecodeAll();
+    store->UnlockGC();
+  }
 }
 
 }  // namespace sling

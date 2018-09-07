@@ -9,6 +9,7 @@ cc_library(
     ":printer",
     ":reader",
     ":serialization",
+    ":snapshot",
     ":store",
   ],
 )
@@ -123,6 +124,17 @@ cc_library(
 )
 
 cc_library(
+  name = "snapshot",
+  srcs = ["snapshot.cc"],
+  hdrs = ["snapshot.h"],
+  deps = [
+    ":store",
+    "//sling/base",
+    "//sling/file",
+  ],
+)
+
+cc_library(
   name = "serialization",
   srcs = ["serialization.cc"],
   hdrs = ["serialization.h"],
@@ -132,6 +144,7 @@ cc_library(
     ":object",
     ":printer",
     ":reader",
+    ":snapshot",
     ":store",
     ":wire",
     "//sling/base",

@@ -62,6 +62,10 @@ struct PyStore : public PyBase {
   // Return global store for local store.
   PyObject *Globals();
 
+  // Lock/unlock garbage collection for the store.
+  PyObject *LockGC();
+  PyObject *UnlockGC();
+
   // Create new Python object for handle value.
   PyObject *PyValue(Handle handle);
 

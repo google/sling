@@ -33,3 +33,17 @@ cc_binary(
     "//sling/file:posix",
   ],
 )
+
+cc_binary(
+  name = "snaps",
+  srcs = ["snaps.cc"],
+  deps = [
+    "//sling/base",
+    "//sling/file",
+    "//sling/file:posix",
+    "//sling/frame:serialization",
+    "//sling/frame:snapshot",
+    "//sling/frame:store",
+  ],
+)
+
