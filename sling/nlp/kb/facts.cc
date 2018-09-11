@@ -33,8 +33,13 @@ void FactCatalog::Init(Store *store) {
     Frame property(store, s.value);
     Handle target = property.GetHandle(p_target_);
     if (target == n_item_) {
-      Handle baseprop = property.GetHandle(p_subproperty_of_);
-      if (baseprop == p_location_) {
+      bool is_location = false;
+      for (const Slot &s : property) {
+        if (s.name == p_subproperty_of_) {
+          if (store->Resolve(s.value) == p_location_) is_location = true;
+        }
+      }
+      if (is_location) {
         SetExtractor(property, &Facts::ExtractLocation);
       } else {
         SetExtractor(property, &Facts::ExtractSimple);
@@ -50,6 +55,27 @@ void FactCatalog::Init(Store *store) {
   SetExtractor(p_employer_, &Facts::ExtractEmployer);
   SetExtractor(p_occupation_, &Facts::ExtractOccupation);
   SetExtractor(p_position_, &Facts::ExtractPosition);
+  SetExtractor(p_member_of_sports_team_, &Facts::ExtractTeam);
+
+  // Set up items that stops closure expansion.
+  static const char *baseids[] = {
+    "Q215627",    // person
+    "Q17334923",  // location
+    "Q41176",     // building
+    "Q43229",     // organization
+    "Q2385804",   // educational institution
+    "Q294163",    // public institution
+    "Q1935049",   // military school
+    "Q15401930",  // product
+    "Q12737077",  // occupation
+    "Q192581",    // job
+    "Q4164871",   // position
+    "Q216353",    // title
+    nullptr,
+  };
+  for (const char **id = baseids; *id != nullptr; ++id) {
+    base_items_.insert(store_->Lookup(*id));
+  }
 }
 
 void Facts::Extract(Handle item) {
@@ -74,11 +100,13 @@ void Facts::ExtractSimple(Handle value) {
 
 void Facts::ExtractClosure(Handle item, Handle relation) {
   Handles closure(store_);
-  closure.push_back(store_->Resolve(item));
+  item = store_->Resolve(item);
+  closure.push_back(item);
   int current = 0;
   while (current < closure.size()) {
     Frame f(store_, closure[current++]);
     AddFact(f.handle());
+    if (catalog_->IsBaseItem(f.handle())) continue;
     for (const Slot &s : f) {
       if (s.name != relation) continue;
 
@@ -174,6 +202,11 @@ void Facts::ExtractOccupation(Handle occupation) {
 void Facts::ExtractPosition(Handle position) {
   ExtractType(position);
   ExtractProperty(position, catalog_->p_jurisdiction_);
+}
+
+void Facts::ExtractTeam(Handle team) {
+  ExtractSimple(team);
+  ExtractProperty(team, catalog_->p_league_);
 }
 
 void Facts::AddFact(Handle value) {

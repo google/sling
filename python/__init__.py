@@ -14,6 +14,7 @@ PhraseTable=api.PhraseTable
 Calendar=api.Calendar
 Date=api.Date
 WikiConverter=api.WikiConverter
+FactExtractor=api.FactExtractor
 
 MILLENNIUM=api.MILLENNIUM
 CENTURY=api.CENTURY

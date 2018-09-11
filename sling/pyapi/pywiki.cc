@@ -18,6 +18,8 @@
 #include "sling/frame/reader.h"
 #include "sling/frame/serialization.h"
 #include "sling/frame/store.h"
+#include "sling/pyapi/pyarray.h"
+#include "sling/pyapi/pyframe.h"
 #include "sling/stream/memory.h"
 
 namespace sling {
@@ -25,6 +27,8 @@ namespace sling {
 // Python type declarations.
 PyTypeObject PyWikiConverter::type;
 PyMethodTable PyWikiConverter::methods;
+PyTypeObject PyFactExtractor::type;
+PyMethodTable PyFactExtractor::methods;
 
 void PyWikiConverter::Define(PyObject *module) {
   InitType(&type, "sling.WikiConverter", sizeof(PyWikiConverter), true);
@@ -39,21 +43,21 @@ void PyWikiConverter::Define(PyObject *module) {
 
 int PyWikiConverter::Init(PyObject *args, PyObject *kwds) {
   // Get store argument.
-  pystore = nullptr;
+  pycommons = nullptr;
   converter = nullptr;
-  if (!PyArg_ParseTuple(args, "O", &pystore)) return -1;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return -1;
+  if (!PyArg_ParseTuple(args, "O", &pycommons)) return -1;
+  if (!PyObject_TypeCheck(pycommons, &PyStore::type)) return -1;
 
   // Initialize converter.
-  Py_INCREF(pystore);
-  converter = new nlp::WikidataConverter(pystore->store, "");
+  Py_INCREF(pycommons);
+  converter = new nlp::WikidataConverter(pycommons->store, "");
 
   return 0;
 }
 
 void PyWikiConverter::Dealloc() {
   delete converter;
-  if (pystore) Py_DECREF(pystore);
+  if (pycommons) Py_DECREF(pycommons);
   Free();
 }
 
@@ -85,4 +89,55 @@ PyObject *PyWikiConverter::ConvertWikidata(PyObject *args, PyObject *kw) {
   return pystore->PyValue(item.handle());
 }
 
+void PyFactExtractor::Define(PyObject *module) {
+  InitType(&type, "sling.FactExtractor", sizeof(PyFactExtractor), true);
+  type.tp_init = method_cast<initproc>(&PyFactExtractor::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyFactExtractor::Dealloc);
+
+  methods.Add("extract_facts", &PyFactExtractor::ExtractFacts);
+  type.tp_methods = methods.table();
+
+  RegisterType(&type, module, "FactExtractor");
+}
+
+int PyFactExtractor::Init(PyObject *args, PyObject *kwds) {
+  // Get store argument.
+  pycommons = nullptr;
+  catalog = nullptr;
+  if (!PyArg_ParseTuple(args, "O", &pycommons)) return -1;
+  if (!PyObject_TypeCheck(pycommons, &PyStore::type)) return -1;
+
+  // Initialize fact extractor catalog.
+  Py_INCREF(pycommons);
+  catalog = new nlp::FactCatalog();
+  catalog->Init(pycommons->store);
+
+  return 0;
+}
+
+void PyFactExtractor::Dealloc() {
+  delete catalog;
+  if (pycommons) Py_DECREF(pycommons);
+  Free();
+}
+
+PyObject *PyFactExtractor::ExtractFacts(PyObject *args, PyObject *kw) {
+  // Get store and Wikidata item.
+  PyStore *pystore = nullptr;
+  PyFrame *pyitem = nullptr;
+  if (!PyArg_ParseTuple(args, "OO", &pystore, &pyitem)) return nullptr;
+  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return nullptr;
+  if (!PyObject_TypeCheck(pyitem, &PyFrame::type)) return nullptr;
+
+  // Extract facts.
+  nlp::Facts facts(catalog, pystore->store);
+  facts.Extract(pyitem->handle());
+
+  // Return array of facts.
+  const Handle *begin = facts.list().data();
+  const Handle *end = begin + facts.list().size();
+  return pystore->PyValue(pystore->store->AllocateArray(begin, end));
+}
+
 }  // namespace sling
+

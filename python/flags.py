@@ -40,11 +40,17 @@ def parse():
   # Register all the C++ flags.
   flags = api.get_flags()
   for name, help, default in flags:
-    parser.add_argument("--" + name,
-                        help=help,
-                        type=type(default),
-                        default=default,
-                        metavar="VAL")
+    if type(default) == bool:
+      parser.add_argument("--" + name,
+                          help=help,
+                          default=default,
+                          action="store_true")
+    else:
+      parser.add_argument("--" + name,
+                          help=help,
+                          type=type(default),
+                          default=default,
+                          metavar="VAL")
 
   # Parse command line flags.
   global arg

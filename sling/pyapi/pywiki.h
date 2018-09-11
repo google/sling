@@ -15,6 +15,7 @@
 #ifndef SLING_PYAPI_PYWIKI_H_
 #define SLING_PYAPI_PYWIKI_H_
 
+#include "sling/nlp/kb/facts.h"
 #include "sling/nlp/wiki/wikidata-converter.h"
 #include "sling/pyapi/pybase.h"
 #include "sling/pyapi/pystore.h"
@@ -30,10 +31,30 @@ struct PyWikiConverter : public PyBase {
   PyObject *ConvertWikidata(PyObject *args, PyObject *kw);
 
   // Commons store for converter.
-  PyStore *pystore;
+  PyStore *pycommons;
 
   // Wikidata converter.
   nlp::WikidataConverter *converter;
+
+  // Registration.
+  static PyTypeObject type;
+  static PyMethodTable methods;
+  static void Define(PyObject *module);
+};
+
+// Python wrapper for Wiki fact extractor.
+struct PyFactExtractor : public PyBase {
+  int Init(PyObject *args, PyObject *kwds);
+  void Dealloc();
+
+  // Extract list of facts from item.
+  PyObject *ExtractFacts(PyObject *args, PyObject *kw);
+
+  // Commons store for converter.
+  PyStore *pycommons;
+
+  // Fact extractor.
+  nlp::FactCatalog *catalog;
 
   // Registration.
   static PyTypeObject type;

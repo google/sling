@@ -46,6 +46,9 @@ class FactCatalog {
     SetExtractor(property.handle(), extractor);
   }
 
+  // Check if item is a base item.
+  bool IsBaseItem(Handle item) const { return base_items_.count(item) != 0; }
+
   // Knowledge base store.
   Store *store_ = nullptr;
 
@@ -54,6 +57,9 @@ class FactCatalog {
 
   // Calendar.
   Calendar calendar_;
+
+  // Items that stops closure expansion.
+  HandleSet base_items_;
 
   // Symbols.
   Names names_;
@@ -70,6 +76,8 @@ class FactCatalog {
   Name p_jurisdiction_{names_, "P1001"};
   Name p_position_{names_, "P39"};
   Name p_academic_degree_{names_, "P512"};
+  Name p_member_of_sports_team_{names_, "P54"};
+  Name p_league_{names_, "P118"};
 
   Name n_time_{names_, "/w/time"};
   Name n_item_{names_, "/w/item"};
@@ -83,7 +91,7 @@ class FactCatalog {
 // starting frame.
 class Facts {
  public:
-  Facts(FactCatalog *catalog, Store *store)
+  Facts(const FactCatalog *catalog, Store *store)
       : catalog_(catalog), store_(store), list_(store), path_(store) {}
 
   // Extract facts for item.
@@ -128,6 +136,9 @@ class Facts {
   // Extract position.
   void ExtractPosition(Handle position);
 
+  // Extract team.
+  void ExtractTeam(Handle team);
+
   // Add fact based on current path.
   void AddFact(Handle value);
 
@@ -143,7 +154,7 @@ class Facts {
 
  private:
   // Catalog for facts.
-  FactCatalog *catalog_;
+  const FactCatalog *catalog_;
 
   // Store for facts.
   Store *store_;

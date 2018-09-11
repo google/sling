@@ -60,6 +60,7 @@ static void RegisterPythonModule() {
   PyCalendar::Define(module);
   PyDate::Define(module);
   PyWikiConverter::Define(module);
+  PyFactExtractor::Define(module);
 }
 
 }  // namespace sling

@@ -42,6 +42,7 @@ cc_library(
     "//sling/nlp/document:lex",
     "//sling/nlp/document:phrase-tokenizer",
     "//sling/nlp/kb:calendar",
+    "//sling/nlp/kb:facts",
     "//sling/nlp/parser",
     "//sling/nlp/wiki:wikidata-converter",
     "//sling/task:dashboard",
