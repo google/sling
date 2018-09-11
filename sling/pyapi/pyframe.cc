@@ -49,6 +49,7 @@ void PyFrame::Define(PyObject *module) {
   methods.Add("append", &PyFrame::Append);
   methods.AddO("extend", &PyFrame::Extend);
   methods.Add("store", &PyFrame::GetStore);
+  methods.AddO("isa", &PyFrame::IsA);
   methods.Add("islocal", &PyFrame::IsLocal);
   methods.Add("isglobal", &PyFrame::IsGlobal);
   methods.Add("resolve", &PyFrame::Resolve);
@@ -86,11 +87,12 @@ Py_ssize_t PyFrame::Size() {
 }
 
 long PyFrame::Hash() {
-  return handle().bits;
+  uint64 fp = pystore->store->Fingerprint(handle());
+  return fp ^ (fp >> 32);
 }
 
 PyObject *PyFrame::Compare(PyObject *other, int op) {
-  // Only equality check is suported.
+  // Only equality check is supported.
   if (op != Py_EQ && op != Py_NE) {
     PyErr_SetString(PyExc_TypeError, "Invalid frame comparison");
     return nullptr;
@@ -99,9 +101,13 @@ PyObject *PyFrame::Compare(PyObject *other, int op) {
   // Check if other object is a frame.
   bool match = false;
   if (PyObject_TypeCheck(other, &PyFrame::type)) {
-    // Check if the stores and handles are the same.
     PyFrame *pyother = reinterpret_cast<PyFrame *>(other);
-    match = CompatibleStore(pyother) && pyother->handle() == handle();
+    if (CompatibleStore(pyother)) {
+      // Check if frames are equal.
+      match = pystore->store->Equal(handle(), pyother->handle());
+    } else {
+      match = false;
+    }
   }
 
   if (op == Py_NE) match = !match;
@@ -321,6 +327,18 @@ PyObject *PyFrame::Data(PyObject *args, PyObject *kw) {
     const string &text = printer.text();
     return PyString_FromStringAndSize(text.data(), text.size());
   }
+}
+
+PyObject *PyFrame::IsA(PyObject *arg) {
+  // Look up type.
+  Handle type = pystore->RoleValue(arg, true);
+  if (type.IsError()) return nullptr;
+
+  // Return False if the type name does not exist.
+  if (type.IsNil()) Py_RETURN_FALSE;
+
+  // Check type.
+  return PyBool_FromLong(frame()->isa(type));
 }
 
 PyObject *PyFrame::IsLocal() {

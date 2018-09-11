@@ -23,8 +23,39 @@ namespace sling {
 
 // Python wrapper for array.
 struct PyArray : public PyBase, public Root {
-  // Initialize array wrapper.
-  void Init(PyStore *pystore, Handle handle);
+  // A slice represents a subset of the elements in an array.
+  struct Slice {
+    // Initialize slice from Python slice object.
+    int Init(PySliceObject *slice, Py_ssize_t size) {
+      int rc = PySlice_GetIndicesEx(slice, size, &start, &stop, &step, &length);
+      stop = start + step * length;
+      return rc;
+    }
+
+    // Combine slice with a base slice.
+    void Combine(Slice *base) {
+      start = base->pos(start);
+      stop = base->pos(stop);
+      step *= base->step;
+      DCHECK_EQ(stop, start + step * length);
+    }
+
+    // Position of index in underlying array, where index is between 0 and
+    // length.
+    int pos(int index) const {
+      DCHECK_GE(index, 0);
+      DCHECK_LT(index, length);
+      return start + step * index;
+    }
+
+    Py_ssize_t start;
+    Py_ssize_t stop;
+    Py_ssize_t step;
+    Py_ssize_t length;
+  };
+
+  // Initialize array wrapper. Takes ownership of the slice.
+  void Init(PyStore *pystore, Handle handle, Slice *slice = nullptr);
 
   // Deallocate array wrapper.
   void Dealloc();
@@ -35,6 +66,9 @@ struct PyArray : public PyBase, public Root {
   // Get element from array.
   PyObject *GetItem(Py_ssize_t index);
 
+  // Get elements from array.
+  PyObject *GetItems(PyObject *key);
+
   // Set element in array.
   int SetItem(Py_ssize_t index, PyObject *value);
 
@@ -43,6 +77,9 @@ struct PyArray : public PyBase, public Root {
 
   // Return handle as hash value for array.
   long Hash();
+
+  // Check if array is equal to another object.
+  PyObject *Compare(PyObject *other, int op);
 
   // Check if array contains value.
   int Contains(PyObject *key);
@@ -53,11 +90,28 @@ struct PyArray : public PyBase, public Root {
   // Return array as string.
   PyObject *Str();
 
-  // Return array in ascii or binary encoding.
+  // Return array in text or binary encoding.
   PyObject *Data(PyObject *args, PyObject *kw);
+
+  // Check if another array belongs to a compatible store.
+  bool CompatibleStore(PyArray *other);
 
   // Check if array can be modified.
   bool Writable();
+
+  // Return handle for array. If it is an array slice, this will create a new
+  // array with the sliced elements.
+  Handle AsValue();
+
+  // Return length of array (or slice).
+  int length() {
+    return slice == nullptr ? array()->length() : slice->length;
+  }
+
+  // Return element position in the underlying array.
+  int pos(int index) {
+    return slice == nullptr ? index : slice->pos(index);
+  }
 
   // Return handle for array.
   Handle handle() const { return handle_; }
@@ -65,11 +119,15 @@ struct PyArray : public PyBase, public Root {
   // Dereference array reference.
   ArrayDatum *array() { return pystore->store->Deref(handle())->AsArray(); }
 
-  // Store for frame.
+  // Store for array.
   PyStore *pystore;
+
+  // Array slice or the whole array if the slice is null.
+  Slice *slice;
 
   // Registration.
   static PyTypeObject type;
+  static PyMappingMethods mapping;
   static PySequenceMethods sequence;
   static PyMethodTable methods;
   static void Define(PyObject *module);

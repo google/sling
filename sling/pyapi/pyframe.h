@@ -62,8 +62,11 @@ struct PyFrame : public PyBase, public Root {
   // Return handle as hash value for frame.
   long Hash();
 
-  // Check id frame is the same as another object.
+  // Check if frame is equal to another object.
   PyObject *Compare(PyObject *other, int op);
+
+  // Check if frame has isa: type.
+  PyObject *IsA(PyObject *arg);
 
   // Return store for frame.
   PyObject *GetStore();
