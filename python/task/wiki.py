@@ -33,6 +33,11 @@ flags.define("--only_known_languages",
              default=False,
              action='store_true')
 
+flags.define("--snapshot_kb",
+             help="create snapshot for knowledge base",
+             default=False,
+             action='store_true')
+
 class WikiWorkflow:
   def __init__(self, name=None, wf=None):
     if wf == None: wf = Workflow(name)
@@ -482,7 +487,8 @@ class WikiWorkflow:
 
       # Collect frames into knowledge base store.
       parts = self.wf.collect(pruned_items, property_catalog, schemas)
-      return self.wf.write(parts, self.knowledge_base())
+      return self.wf.write(parts, self.knowledge_base(),
+                          params={"snapshot": flags.arg.snapshot_kb})
 
   #---------------------------------------------------------------------------
   # Item names

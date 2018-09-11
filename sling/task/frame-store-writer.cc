@@ -15,6 +15,7 @@
 #include "sling/base/logging.h"
 #include "sling/frame/encoder.h"
 #include "sling/frame/object.h"
+#include "sling/frame/snapshot.h"
 #include "sling/stream/file.h"
 #include "sling/task/frames.h"
 #include "sling/task/task.h"
@@ -66,6 +67,11 @@ class FrameStoreWriter : public Processor {
     encoder.EncodeAll();
     output.Flush();
     CHECK(stream.Close());
+
+    // Write snapshot if requested.
+    if (task->Get("snapshot", false)) {
+      CHECK(Snapshot::Write(store_, file->resource()->name()));
+    }
 
     // Delete store.
     delete store_;
