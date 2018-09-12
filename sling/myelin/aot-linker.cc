@@ -187,7 +187,7 @@ void AOTLinker::AddData(Tensor *data) {
 
 void AOTLinker::AddChannel(const string &name, Tensor *format) {
   int align = jit::CPU::CacheLineSize();
-  if (format->byte_alignment() > align) align = align;
+  if (format->byte_alignment() > align) align = format->byte_alignment();
 
   string cname = SanitizedClassName(name);
   const char *ctype = TypeTraits::of(format->type()).ctype();

@@ -130,7 +130,6 @@ class WikidataImporter : public task::Processor {
   task::Counter *num_items_ = nullptr;
   task::Counter *num_lexemes_ = nullptr;
   task::Counter *num_properties_ = nullptr;
-  task::Counter *num_statements_ = nullptr;
 
   // Symbols.
   Names names_;
