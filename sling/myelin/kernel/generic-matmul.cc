@@ -651,8 +651,8 @@ class TransposeTransformer : public Transformer {
     for (Flow::Operation *op : flow->Find("MatMul|Transpose")) {
       Flow::Operation *transpose = op;
       Flow::Operation *matmul = transpose->inputs[0]->producer;
-      if (transpose->outputs[0]->usages() != 1) continue;
-      if (transpose->outputs[0]->out()) continue;
+      if (matmul->outputs[0]->usages() != 1) continue;
+      if (matmul->outputs[0]->out()) continue;
 
       matmul->outputs[0]->shape = transpose->outputs[0]->shape;
       flow->Eliminate(transpose);

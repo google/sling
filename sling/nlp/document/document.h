@@ -233,6 +233,8 @@ class Document {
   }
 
   // Set document text. This will delete all existing tokens.
+  void SetText(Handle text);
+  void SetText(const String &text) { SetText(text.handle()); }
   void SetText(Text text);
 
   // Add token to document.

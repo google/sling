@@ -196,7 +196,7 @@ LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
   // Build gradient function for feature extractor.
   if (learn) {
     Gradient(flow, tf.func(), library);
-    vars.dfv = flow->Var("gradients/" + name_ + "/d_feature_vector");
+    vars.dfv = flow->GradientVar(vars.fv);
   } else {
     vars.dfv = nullptr;
   }
@@ -230,11 +230,10 @@ void LexicalFeatures::Initialize(const Network &net) {
   word_embeddings_ = net.GetParameter(name_ + "/word_embeddings");
 
   // Optionally initialize gradient cell.
-  gfeatures_ = net.LookupCell("gradients/" + name_);
+  gfeatures_ = features_->Gradient();
   if (gfeatures_ != nullptr) {
-    const string &gname = gfeatures_->name();
-    d_feature_vector_ = net.GetParameter(gname + "/d_feature_vector");
-    primal_ = net.GetParameter(gname + "/primal");
+    primal_ = features_->Primal();
+    d_feature_vector_ = feature_vector_->Gradient();
   }
 
   // Load pre-trained word embeddings.

@@ -600,6 +600,7 @@ class ExpressionTransformer : public Transformer {
     }
 
     // Return merged recipe.
+    expr1.EliminateRedundantMoves();
     return expr1.AsRecipe();
   }
 

@@ -21,6 +21,7 @@ import sling.log as log
 import sling.task.corpora as corpora
 import sling.task.download as download
 import sling.task.wiki as wiki
+import sling.task.embedding as embedding
 import sling.task.workflow as workflow
 
 # Command-line flags.
@@ -84,8 +85,33 @@ flags.define("--build_phrasetab",
              default=False,
              action='store_true')
 
+flags.define("--extract_vocabulary",
+             help="extract vocabulary for word embeddings",
+             default=False,
+             action='store_true')
+
 flags.define("--build_wiki",
              help="run all workflow for building knowledge base",
+             default=False,
+             action='store_true')
+
+flags.define("--train_word_embeddings",
+             help="train word embeddings",
+             default=False,
+             action='store_true')
+
+flags.define("--extract_fact_lexicon",
+             help="extract fact and category lexicons",
+             default=False,
+             action='store_true')
+
+flags.define("--extract_facts",
+             help="extract facts from knowledge base",
+             default=False,
+             action='store_true')
+
+flags.define("--train_fact_embeddings",
+             help="train fact and category embeddings",
              default=False,
              action='store_true')
 
@@ -215,6 +241,44 @@ def build_knowledge_base():
       wf.build_phrase_table(language=language)
       run_workflow(wf)
 
+def train_embeddings():
+  # Extract vocabulary for word embeddings.
+  if flags.arg.extract_vocabulary:
+    for language in flags.arg.languages:
+      log.info("Extract " + language + " vocabulary")
+      wf = embedding.EmbeddingWorkflow(language + "-vocabulary")
+      wf.extract_vocabulary(language=language)
+      run_workflow(wf)
+
+  # Train word embeddings.
+  if flags.arg.train_word_embeddings:
+    for language in flags.arg.languages:
+      log.info("Train " + language + " word embeddings")
+      wf = embedding.EmbeddingWorkflow(language + "-word-embeddings")
+      wf.train_word_embeddings(language=language)
+      run_workflow(wf)
+
+  # Extract vocabulary for fact and category embeddings.
+  if flags.arg.extract_fact_lexicon:
+    log.info("Extract fact and category lexicons")
+    wf = embedding.EmbeddingWorkflow("fact-lexicon")
+    wf.extract_fact_lexicon()
+    run_workflow(wf)
+
+  # Extract facts from knowledge base.
+  if flags.arg.extract_facts:
+    log.info("Extract facts from knowledge base")
+    wf = embedding.EmbeddingWorkflow("fact-extraction")
+    wf.extract_facts()
+    run_workflow(wf)
+
+  # Train fact and category embeddings.
+  if flags.arg.train_fact_embeddings:
+    log.info("Train fact and category embeddings")
+    wf = embedding.EmbeddingWorkflow("fact-embeddings")
+    wf.train_fact_embeddings()
+    run_workflow(wf)
+
 
 if __name__ == '__main__':
   # Parse command-line arguments.
@@ -241,6 +305,7 @@ if __name__ == '__main__':
   parse_wikipedia()
   fuse_items()
   build_knowledge_base()
+  train_embeddings()
 
   # Stop task monitor.
   if flags.arg.monitor > 0: workflow.stop_monitor()

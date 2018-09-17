@@ -102,7 +102,6 @@ class SIMDAssembler {
   // Generator cascade from bigger to smaller vector registers.
   const std::vector<SIMDGenerator *> cascade() const { return cascade_; }
 
-
   // Allocate SIMD register(s).
   int alloc() { return main()->Alloc(); }
   std::vector<int> alloc(int n) {

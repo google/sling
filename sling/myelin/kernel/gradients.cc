@@ -86,16 +86,16 @@ void matmul_grad(Flow::Operation *op, Gradients *g) {
 
 // z = x / y
 // dx = y * dz
-// dy = (-x / y^2) * dz
+// dy = (-x / y^2) * dz = -z / y * dz
 void div_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
   auto y = op->inputs[1];
   auto z = op->outputs[0];
-  g->add(x, g->Div(g->d(z), g->v(y)));
-  g->add(y, g->Mul(g->d(z), g->Div(g->Neg(g->v(x)),g->Square(g->v(y)))));
+  g->add(x, g->Mul(g->d(z), g->v(y)));
+  g->add(y, g->Mul(g->d(z), g->Div(g->Neg(g->v(z)), g->v(y))));
 }
 
-// y = x * x
+// y = x^ 2
 // dx = 2 * x * dy
 void square_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
@@ -104,19 +104,19 @@ void square_grad(Flow::Operation *op, Gradients *g) {
 }
 
 // y = sqrt(x)
-// dx = 1 / (2 sqrt(x)) = 1 / 2y * dy
+// dx = dy / (2 sqrt(x)) = dy / 2y
 void sqrt_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
   auto y = op->outputs[0];
-  g->add(x, g->Reciprocal(g->Mul(g->Two(), g->v(y))));
+  g->add(x, g->Div(g->d(y), g->Mul(g->Two(), g->v(y))));
 }
 
 // y = 1 / x
-// dx = -1 / x^2 * dy
+// dx = -dy / x^2
 void reciprocal_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
   auto y = op->outputs[0];
-  g->add(x, g->Mul(g->d(y), g->Neg(g->Reciprocal(g->Square(g->v(x))))));
+  g->add(x, g->Neg(g->Div(g->d(y), g->Square(g->v(x)))));
 }
 
 // y = -x
@@ -124,7 +124,7 @@ void reciprocal_grad(Flow::Operation *op, Gradients *g) {
 void neg_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
   auto y = op->outputs[0];
-  g->add(x, g->Mul(g->d(y), g->Neg(g->v(x))));
+  g->add(x, g->Neg(g->d(y)));
 }
 
 // y = sin(x)
@@ -181,6 +181,14 @@ void relu_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
   auto y = op->outputs[0];
   g->add(x, g->Select(g->Greater(g->v(x), g->Zero()), g->d(y)));
+}
+
+// y = norm(x) = sqrt(sum(square(x))) = |x|
+// dx = x/|x| * dy = x/y * dy
+void norm_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Mul(g->d(y), g->Div(g->v(x), g->v(y))));
 }
 
 // y = x
@@ -241,6 +249,27 @@ void transpose_grad(Flow::Operation *op, Gradients *g) {
   g->add(x, g->Transpose(g->d(y)));
 }
 
+// y = select(p, x)
+// dx = select(p, dy)
+void select_grad(Flow::Operation *op, Gradients *g) {
+  auto p = op->inputs[0];
+  auto x = op->inputs[1];
+  auto y = op->outputs[0];
+  g->add(x, g->Select(g->v(p), g->d(y)));
+}
+
+// z = cond(p, x, y)
+// dx = select(p, dz)
+// dy = select(not(p), dz)
+void cond_grad(Flow::Operation *op, Gradients *g) {
+  auto p = op->inputs[0];
+  auto x = op->inputs[1];
+  auto y = op->inputs[2];
+  auto z = op->outputs[0];
+  g->add(x, g->Select(g->v(p), g->d(z)));
+  g->add(y, g->Select(g->Not(g->v(p)), g->d(z)));
+}
+
 } // namespace
 
 void RegisterStandardGradients(Transformations *library) {
@@ -260,12 +289,15 @@ void RegisterStandardGradients(Transformations *library) {
   library->RegisterGradient("Sigmoid", sigmoid_grad);
   library->RegisterGradient("Tanh", tanh_grad);
   library->RegisterGradient("Relu", relu_grad);
+  library->RegisterGradient("Norm", norm_grad);
   library->RegisterGradient("Identity", identity_grad);
   library->RegisterGradient("Gather", gather_grad);
   library->RegisterGradient("GatherSum", gathersum_grad);
   library->RegisterGradient("ConcatV2", concat_grad);
   library->RegisterGradient("Sum", sum_grad);
   library->RegisterGradient("Transpose", transpose_grad);
+  library->RegisterGradient("Select", select_grad);
+  library->RegisterGradient("Cond", cond_grad);
 }
 
 }  // namespace myelin

@@ -268,6 +268,12 @@ void Document::Update() {
   builder.Update();
 }
 
+void Document::SetText(Handle text) {
+  top_.Set(names_->n_document_text, text);
+  tokens_.clear();
+  tokens_changed_ = true;
+}
+
 void Document::SetText(Text text) {
   top_.Set(names_->n_document_text, text);
   tokens_.clear();

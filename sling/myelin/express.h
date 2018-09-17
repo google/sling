@@ -142,7 +142,7 @@ class Express {
 
   // System-defined numeric constants.
   enum ConstantNumber {
-    ZERO, ONE, HALF, TWO, N1, P9, N9, P127, LN2, NLN2, LOG2E,
+    ZERO, ONE, TWO, HALF, N1, P9, N9, P127, LN2, NLN2, LOG2E,
     PINF, NINF, QNAN, MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
@@ -364,6 +364,9 @@ class Express {
 
   // Compact temporary variable ids and return the number of temporary variable.
   int CompactTempVars();
+
+  // Eliminate redundant move instructions.
+  void EliminateRedundantMoves();
 
   // Eliminate common subexpressions.
   void EliminateCommonSubexpressions();

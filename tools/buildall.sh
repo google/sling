@@ -10,10 +10,11 @@ bazel build -c opt $* \
   sling/myelin/generator:* \
   sling/myelin/cuda:* \
   sling/nlp/document:* \
+  sling/nlp/embedding:* \
+  sling/nlp/kb:* \
   sling/nlp/parser:* \
   sling/nlp/parser/tools:* \
   sling/nlp/parser/trainer:* \
-  sling/nlp/kb:* \
   sling/nlp/wiki:* \
   sling/pyapi:* \
   sling/stream:* \

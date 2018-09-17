@@ -404,8 +404,8 @@ class RecipeParser {
 Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(0.0),    // ZERO
   FLTCONST(1.0),    // ONE
-  FLTCONST(0.5),    // HALF
   FLTCONST(2.0),    // TWO
+  FLTCONST(0.5),    // HALF
   FLTCONST(-1.0),   // N1
   FLTCONST(9.0),    // P9
   FLTCONST(-9.0),   // N9
@@ -690,6 +690,25 @@ int Express::CompactTempVars() {
   return n;
 }
 
+void Express::EliminateRedundantMoves() {
+  int eliminated = 0;
+  for (int i = 0; i < ops_.size(); ++i) {
+    Op *op = ops_[i];
+    if (op->type != MOV) continue;
+    Var *src = op->args[0];
+    Var *dst = op->result;
+    if (src->usages() != 1) continue;
+    if (dst->type != TEMP) continue;
+
+    dst->Redirect(src);
+    RemoveOp(op);
+    RemoveVar(dst);
+    eliminated++;
+    i--;
+  }
+  if (eliminated > 0) CompactTempVars();
+}
+
 void Express::EliminateCommonSubexpressions() {
   // Coalesce system constant variables.
   std::map<int, Var *> sysvars;
@@ -860,26 +879,30 @@ void Express::CacheResults() {
       assign->Assign(var);
       assign->AddArgument(temp);
       cached_vars++;
-    } else if (var->type == INPUT && (var->usages() > 1 || var->single)) {
-      // Make temp variable and update all usages to use this instead.
-      Var *temp = Temp();
-      var->consumers.swap(temp->consumers);
-      Op *first = nullptr;
-      for (Op *o : ops_) {
-        for (int i = 0; i < o->args.size(); ++i) {
-          if (o->args[i] == var) {
-            o->args[i] = temp;
-            if (first == nullptr) first = o;
+    } else if (var->type == INPUT && var->usages() > 0) {
+      // Single-element input variables must be cached but other input variables
+      // are only cached if there are two or more usages.
+      if (var->single || var->usages() > 1) {
+        // Make temp variable and update all usages to use this instead.
+        Var *temp = Temp();
+        var->consumers.swap(temp->consumers);
+        Op *first = nullptr;
+        for (Op *o : ops_) {
+          for (int i = 0; i < o->args.size(); ++i) {
+            if (o->args[i] == var) {
+              o->args[i] = temp;
+              if (first == nullptr) first = o;
+            }
           }
         }
-      }
-      CHECK(first != nullptr);
+        CHECK(first != nullptr);
 
-      // Assign temp variable to input.
-      Op *assign = OperationBefore(first, MOV);
-      assign->Assign(temp);
-      assign->AddArgument(var);
-      cached_vars++;
+        // Assign temp variable to input.
+        Op *assign = OperationBefore(first, MOV);
+        assign->Assign(temp);
+        assign->AddArgument(var);
+        cached_vars++;
+      }
     }
   }
   if (cached_vars > 0) CompactTempVars();
