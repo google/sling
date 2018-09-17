@@ -25,6 +25,7 @@
 #include "sling/base/types.h"
 #include "sling/file/file.h"
 #include "sling/frame/store.h"
+#include "sling/myelin/compiler.h"
 #include "sling/myelin/compute.h"
 #include "sling/myelin/flow.h"
 #include "sling/nlp/document/document.h"
@@ -101,6 +102,9 @@ class Parser {
   // Parser network.
   myelin::Network network_;
 
+  // JIT compiler.
+  myelin::Compiler compiler_;
+
   // Lexical encoder.
   LexicalEncoder encoder_;
 
@@ -121,12 +125,6 @@ class Parser {
 
   // Set of roles considered.
   RoleSet roles_;
-
-  // Symbols.
-  Names names_;
-  Name n_document_tokens_{names_, "/s/document/tokens"};
-  Name n_token_text_{names_, "/s/token/text"};
-  Name n_token_break_{names_, "/s/token/break"};
 
   friend class ParserInstance;
 };
