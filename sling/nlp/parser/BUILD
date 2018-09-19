@@ -85,7 +85,6 @@ cc_library(
     "//sling/frame:serialization",
     "//sling/frame:store",
     "//sling/myelin:compiler",
-    "//sling/myelin/kernel:dragnn",
     "//sling/nlp/document",
     "//sling/nlp/document:lexical-encoder",
     "//sling/string:strcat",

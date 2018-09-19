@@ -144,6 +144,27 @@ class Builder:
   def maximum(self, x, y, name=None):
     return self.op("Maximum", [x, y], name)
 
+  def gather(self, embedding, indices, oov=None, name=None):
+    inputs = [embedding, indices]
+    if oov is not None:
+      inputs.append(oov)
+    result = self.op('Gather', inputs, name)
+    result.type = embedding.type
+    if len(embedding.shape) == 2 and len(indices.shape) == 2:
+      result.shape = [indices.shape[1], embedding.shape[1]]
+    else:
+      result.shape = [0]
+    return result
+
+  def gather_sum(self, embedding, indices, name=None):
+    result = self.op('GatherSum', [embedding, indices], name)
+    result.type = embedding.type
+    if len(embedding.shape) == 2:
+      result.shape = [1, embedding.shape[1]]
+    else:
+      result.shape = [0]
+    return result
+
   def matmul(self, x, y, name=None):
     result = self.op("MatMul", [x, y], name)
     result.type = x.type

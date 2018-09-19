@@ -83,25 +83,33 @@ class Projection(nn.Module):
         ", out=" + str(s[1]) + ", bias=" + str(self.bias is not None) + ")"
 
 
-# Transforms input x to x * A. If x is None, returns a special vector.
-class LinkTransform(Projection):
+# Transforms input x to x * A. If x is None, returns OOV * A.
+class LinkTransform(nn.Module):
   def __init__(self, activation_size, dim):
-    super(LinkTransform, self).__init__(activation_size + 1, dim, bias=False)
+    super(LinkTransform, self).__init__()
+    self.projection = Projection(activation_size, dim, bias=False)
+    self.oov = Param(torch.randn(1, activation_size))
 
 
   # Forward pass.
   def forward(self, activation=None):
     if activation is None:
-      return self.weight[-1].view(1, -1)  # last row
-    else:
-      return torch.mm(activation.view(1, -1), self.weight[0:-1])
+      activation = self.oov
+    return self.projection.forward(activation)
+
+
+  # Initializes all weights with (mean=0, stddev=stddev).
+  def init(self, stddev):
+    self.projection.init(stddev)
+    self.oov.data.normal_()
+    self.oov.data.mul_(stddev)
 
 
   # Returns a string specification of the module.
   def __repr__(self):
-    s = self.weight.size()
-    return self.__class__.__name__ + "(input_activation=" + str(s[0] - 1) + \
-        ", dim=" + str(s[1]) + ", oov_vector=" + str(s[1])+ ")"
+    s = self.projection.weight.size()
+    return self.__class__.__name__ + "(input_activation=" + str(s[0]) + \
+        ", dim=" + str(s[1]) + ", oov_vector=" + str(s[0])+ ")"
 
 
 # PyTorch replication of the DRAGNN LSTM Cell. This is slightly different from
@@ -450,7 +458,7 @@ class Caspar(nn.Module):
         activations = rl_lstm_output
 
       # Get indices into the activations. Recall that missing indices are
-      # indicated via None, and they map to the last row in 'transform'.
+      # indicated via None and they will map to an OOV vector.
       indices = self.spec.translated_ff_link_features(f, state)
       assert len(indices) == f.num
 
@@ -578,11 +586,8 @@ class Caspar(nn.Module):
       embedding = bldr.var(name=feature.name + "_embedding", shape=[s[0], s[1]])
       embedding.data = bag.weight.data.numpy()
 
-      lookup = bldr.rawop(optype="Lookup", name=feature.name + "/Lookup")
-      lookup.add_input(indices)
-      lookup.add_input(embedding)
-      embedded = bldr.var(name=feature.name + "_embedded", shape=[1, s[1]])
-      lookup.add_output(embedded)
+      name = feature.name + '/GatherSum'
+      embedded = bldr.gather_sum(embedding, indices, name=name)
       concat_op.add_input(embedded)
 
     # Finishes the concatenation op assuming all inputs have been added.
@@ -640,24 +645,19 @@ class Caspar(nn.Module):
       else:
         raise ValueError("Unknown feature %r" % n)
 
-      name = feature.name + "/Collect"
-      collect = ff.rawop(optype="Collect", name=name)
-      collect.add_input(indices)
-      collect.add_input(activations)
-      collected = ff.var(
-          name=name + ":0", shape=[feature.num, activations.shape[1] + 1])
-      collect.add_output(collected)
+      activation_dim = activations.shape[1]
+      name = feature.name + "/Gather"
+      oov_var = ff.var(name=name + "/oov", shape=[1, activation_dim])
+      oov_var.data = feature.transform.oov.data.numpy()
+      gathered = ff.gather(activations, indices, oov_var, name=name)
 
-      sz = feature.transform.weight.size()
+      projection = feature.transform.projection.weight
+      sz = projection.size()
       transform = ff.var(name=feature.name + "/transform", shape=[sz[0], sz[1]])
-      transform.data = feature.transform.weight.data.numpy()
+      transform.data = projection.data.numpy()
 
       name = feature.name + "/MatMul"
-      matmul = ff.rawop(optype="MatMul", name=name)
-      matmul.add_input(collected)
-      matmul.add_input(transform)
-      output = ff.var(name + ":0", shape=[feature.num, sz[1]])
-      matmul.add_output(output)
+      output = ff.matmul(gathered, transform, name=name)
       ff_concat_op.add_input(output)
 
     finish_concat_op(ff, ff_concat_op)

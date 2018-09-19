@@ -17,7 +17,6 @@
 #include "sling/nlp/parser/parser.h"
 
 #include "sling/frame/serialization.h"
-#include "sling/myelin/kernel/dragnn.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/features.h"
 #include "sling/nlp/document/lexicon.h"
@@ -26,9 +25,6 @@ namespace sling {
 namespace nlp {
 
 void Parser::Load(Store *store, const string &model) {
-  // Register kernels for implementing parser ops.
-  RegisterDragnnLibrary(compiler_.library());
-
   // Load and analyze parser flow file.
   myelin::Flow flow;
   CHECK(flow.Load(model));
