@@ -87,8 +87,7 @@ Py_ssize_t PyFrame::Size() {
 }
 
 long PyFrame::Hash() {
-  uint64 fp = pystore->store->Fingerprint(handle());
-  return fp ^ (fp >> 32);
+  return handle().bits;
 }
 
 PyObject *PyFrame::Compare(PyObject *other, int op) {
@@ -102,12 +101,10 @@ PyObject *PyFrame::Compare(PyObject *other, int op) {
   bool match = false;
   if (PyObject_TypeCheck(other, &PyFrame::type)) {
     PyFrame *pyother = reinterpret_cast<PyFrame *>(other);
-    if (CompatibleStore(pyother)) {
-      // Check if frames are equal.
-      match = pystore->store->Equal(handle(), pyother->handle());
-    } else {
-      match = false;
-    }
+
+    // Frames are compared by reference, so check if the stores and handles are
+    // the same.
+    match = CompatibleStore(pyother) && pyother->handle() == handle();
   }
 
   if (op == Py_NE) match = !match;

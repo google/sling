@@ -853,7 +853,7 @@ SymbolDatum *Store::LocalSymbol(SymbolDatum *symbol) {
   return local;
 }
 
-bool Store::Equal(Handle x, Handle y) const {
+bool Store::Equal(Handle x, Handle y, bool byref) const {
   // Trivial case.
   if (x == y) return true;
 
@@ -868,14 +868,13 @@ bool Store::Equal(Handle x, Handle y) const {
     if (xdatum->size() != ydatum->size()) return false;
     switch (xdatum->type()) {
       case FRAME: {
-        const FrameDatum *xframe = xdatum->AsFrame();
-        const FrameDatum *yframe = ydatum->AsFrame();
+        // Already tested if handles are equal.
+        if (byref) return false;
 
         // Compare named frames by reference.
-        if (xframe->IsNamed() || yframe->IsNamed()) {
-          // Already tested if handles are equal.
-          return false;
-        }
+        const FrameDatum *xframe = xdatum->AsFrame();
+        const FrameDatum *yframe = ydatum->AsFrame();
+        if (xframe->IsNamed() || yframe->IsNamed()) return false;
 
         // Compare unnamed frames by value.
         const Slot *sx = xframe->begin();
@@ -924,9 +923,10 @@ enum FingerprintSeed : uint64 {
   FP_ARRAY =   0x7e71d2f093c19cd1,
   FP_NIL =     0xe958f32bf433420c,
   FP_INVALID = 0x159ba7c32c364f9b,
+  FP_HANDLE  = 0xd0bd1444ad3c9d01,
 };
 
-uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
+uint64 Store::Fingerprint(Handle handle, bool byref, uint64 seed) const {
   if (handle.IsNumber()) {
     // Use the bit pattern of the integer or float for hashing.
     return HashMix(HashMix(seed, FP_NUMBER), handle.bits);
@@ -942,11 +942,15 @@ uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
         const SymbolDatum *symbol = GetSymbol(id);
         return HashMix(seed, symbol->hash.bits);
       } else {
-        // Hash all slots in frame.
         uint64 fp = HashMix(seed, FP_FRAME);
-        for (const Slot *s = frame->begin(); s < frame->end(); ++s) {
-          fp = Fingerprint(s->name, fp);
-          fp = Fingerprint(s->value, fp);
+        if (byref) {
+          fp = HashMix(fp, handle.bits);
+        } else {
+          // Hash all slots in frame.
+          for (const Slot *s = frame->begin(); s < frame->end(); ++s) {
+            fp = Fingerprint(s->name, byref, fp);
+            fp = Fingerprint(s->value, byref, fp);
+          }
         }
         return fp;
       }
@@ -967,7 +971,7 @@ uint64 Store::Fingerprint(Handle handle, uint64 seed) const {
           const ArrayDatum *array = datum->AsArray();
           uint64 fp = HashMix(seed, FP_ARRAY);
           for (const Handle *h = array->begin(); h < array->end(); ++h) {
-            fp = Fingerprint(*h, fp);
+            fp = Fingerprint(*h, byref, fp);
           }
           return fp;
         }
@@ -984,7 +988,7 @@ uint64 Store::Fingerprint(ArrayDatum *array,
   uint64 fp = HashMix(0, FP_ARRAY);
   for (int i = begin; i != end; i += step) {
     Handle h = *(array->begin() + i);
-    fp = Fingerprint(h, fp);
+    fp = Fingerprint(h, true, fp);
   }
   return fp;
 }

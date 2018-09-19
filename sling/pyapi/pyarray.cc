@@ -141,7 +141,7 @@ PyObject *PyArray::Items() {
 
 long PyArray::Hash() {
   if (slice == nullptr) {
-    return pystore->store->Fingerprint(handle());
+    return pystore->store->Fingerprint(handle(), true);
   } else {
     return pystore->store->Fingerprint(array(),
                                        slice->start,
@@ -162,9 +162,10 @@ PyObject *PyArray::Compare(PyObject *other, int op) {
   if (PyObject_TypeCheck(other, &PyArray::type)) {
     PyArray *pyother = reinterpret_cast<PyArray *>(other);
     if (CompatibleStore(pyother)) {
-      // Check if arrays are equal.
+      // Check if arrays are equal. Arrays are compared by value, except that
+      // elements that are frames are compared by reference.
       if (slice == nullptr && pyother->slice == nullptr) {
-        match = pystore->store->Equal(handle(), pyother->handle());
+        match = pystore->store->Equal(handle(), pyother->handle(), true);
       } else {
         int len = length();
         if (len == pyother->length()) {
@@ -173,7 +174,7 @@ PyObject *PyArray::Compare(PyObject *other, int op) {
           match = true;
           for (int i = 0; i < len && match; ++i) {
             match = pystore->store->Equal(arr->get(pos(i)),
-                                          other->get(pyother->pos(i)));
+                                          other->get(pyother->pos(i)), true);
           }
         }
       }
@@ -193,11 +194,11 @@ int PyArray::Contains(PyObject *key) {
   ArrayDatum *arr = array();
   if (slice == nullptr) {
     for (int idx = 0; idx < arr->length(); ++idx) {
-      if (pystore->store->Equal(arr->get(idx), handle)) return true;
+      if (pystore->store->Equal(arr->get(idx), handle), true) return true;
     }
   } else {
     for (int idx = slice->start; idx != slice->stop; idx += slice->step) {
-      if (pystore->store->Equal(arr->get(idx), handle)) return true;
+      if (pystore->store->Equal(arr->get(idx), handle, true)) return true;
     }
   }
   return false;
