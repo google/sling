@@ -190,8 +190,8 @@ string ToLex(const Document &document) {
       if (s->begin() == token.index()) output.WriteChar('[');
     }
 
-    // Add token text.
-    output.Write(token.text());
+    // Add token word.
+    output.Write(token.word());
 
     // Add span close brackets.
     for (Span *s = span; s != nullptr; s = s->parent()) {

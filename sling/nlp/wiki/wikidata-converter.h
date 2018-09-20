@@ -124,8 +124,8 @@ class WikidataConverter {
   Name n_lng_{names_, "/w/lng"};
   Name n_globe_{names_, "/w/globe"};
 
-  Name n_profile_alias_{names_, "/s/profile/alias"};
-  Name n_alias_sources_{names_, "/s/alias/sources"};
+  Name n_alias_{names_, "alias"};
+  Name n_sources_{names_, "sources"};
 
   // Wikidata attribute names.
   Name s_id_{names_, "_id"};

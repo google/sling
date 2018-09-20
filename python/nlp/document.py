@@ -28,45 +28,39 @@ CHAPTER_BREAK = 6
 class DocumentSchema:
   def __init__(self, store):
     self.isa = store['isa']
-    self.document = store['/s/document']
-    self.document_text = store['/s/document/text']
-    self.document_tokens = store['/s/document/tokens']
-    self.document_mention = store['/s/document/mention']
-    self.document_theme = store['/s/document/theme']
+    self.document = store['document']
+    self.document_text = store['text']
+    self.document_tokens = store['tokens']
+    self.document_mention = store['mention']
+    self.document_theme = store['theme']
 
-    self.token = store['/s/token']
-    self.token_index = store['/s/token/index']
-    self.token_text = store['/s/token/text']
-    self.token_start = store['/s/token/start']
-    self.token_length = store['/s/token/length']
-    self.token_break = store['/s/token/break']
+    self.token = store['token']
+    self.token_index = store['index']
+    self.token_word = store['word']
+    self.token_start = store['start']
+    self.token_size = store['size']
+    self.token_break = store['break']
 
-    self.phrase = store['/s/phrase']
-    self.phrase_begin = store['/s/phrase/begin']
-    self.phrase_length = store['/s/phrase/length']
-    self.phrase_evokes = store['/s/phrase/evokes']
+    self.phrase = store['phrase']
+    self.phrase_begin = store['begin']
+    self.phrase_length = store['length']
+    self.phrase_evokes = store['evokes']
 
 
 class Token(object):
-  def __init__(self, schema, frame):
-    self.schema = schema
+  def __init__(self, document, frame, index):
+    self.document = document
+    self.schema = document.schema
     self.frame = frame
+    self.index = index
 
   @property
-  def index(self):
-    return self.frame[self.schema.token_index]
+  def word(self):
+    return self.frame[self.schema.token_word]
 
-  @index.setter
-  def index(self, value):
-    self.frame[self.schema.token_index] = value
-
-  @property
-  def text(self):
-    return self.frame[self.schema.token_text]
-
-  @text.setter
-  def text(self, value):
-    self.frame[self.schema.token_text] = value
+  @word.setter
+  def word(self, value):
+    self.frame[self.schema.token_word] = value
 
   @property
   def start(self):
@@ -77,18 +71,18 @@ class Token(object):
     self.frame[self.schema.token_start] = value
 
   @property
-  def length(self):
-    l = self.frame[self.schema.token_length]
-    if l == None: l = 1
-    return l
+  def size(self):
+    s = self.frame[self.schema.token_size]
+    if s == None: s = 1
+    return s
 
-  @length.setter
-  def length(self, value):
-    self.frame[self.schema.token_length] = value
+  @size.setter
+  def size(self, value):
+    self.frame[self.schema.token_size] = value
 
   @property
   def end(self):
-    return self.start + self.length
+    return self.start + self.size
 
   @property
   def brk(self):
@@ -166,7 +160,7 @@ class Document(object):
     tokens = frame[schema.document_tokens]
     if tokens != None:
       for t in tokens:
-        token = Token(schema, t)
+        token = Token(self, t, len(self.tokens))
         self.tokens.append(token)
 
     # Get mentions.
@@ -178,28 +172,26 @@ class Document(object):
     for theme in frame(schema.document_theme):
       self.themes.append(theme)
 
-  def add_token(self, text=None, start=None, length=None, brk=SPACE_BREAK):
-    slots = [
-      (self.schema.isa, self.schema.token),
-      (self.schema.token_index, len(self.tokens)),
-    ]
-    if text != None: slots.append((self.schema.token_text, text))
+  @property
+  def store(self):
+    return self.frame.store()
+
+  def add_token(self, word=None, start=None, length=None, brk=SPACE_BREAK):
+    slots = []
+    if word != None: slots.append((self.schema.token_word, word))
     if start != None: slots.append((self.schema.token_start, start))
     if length != None: slots.append((self.schema.token_length, length))
     if brk != SPACE_BREAK: slots.append((self.schema.token_break, brk))
-    token = Token(self.schema, self.frame.store().frame(slots))
+    token = Token(self, self.store.frame(slots), len(self.tokens))
     self.tokens.append(token)
     self.tokens_dirty = True
     return token
 
   def add_mention(self, begin, end):
     length = end - begin
-    slots = [
-      (self.schema.isa, self.schema.phrase),
-      (self.schema.phrase_begin, begin),
-    ]
+    slots = [(self.schema.phrase_begin, begin)]
     if length != 1: slots.append((self.schema.phrase_length, length))
-    mention = Mention(self.schema, self.frame.store().frame(slots))
+    mention = Mention(self.schema, self.store.frame(slots))
     self.mentions.append(mention)
     self.mentions_dirty = True
     return mention
@@ -255,12 +247,23 @@ class Document(object):
     parts = []
     for token in self.tokens[begin:end]:
       if len(parts) > 0 and token.brk != NO_BREAK: parts.append(' ')
-      parts.append(token.text)
+      parts.append(token.word)
     return ''.join(parts)
 
   def tolex(self):
     self.update()
     return sling.api.tolex(self.frame)
+
+  def decorate(self):
+    self.update()
+    index = 0
+    for t in self.tokens:
+      t.frame.index = index
+      if t.frame.word == None: t.word = self.text[t.start:t.end]
+      index += 1
+    for m in self.mentions:
+      if m.frame.name == None:
+        m.frame.name = self.phrase(m.begin, m.end)
 
   def remove_annotations(self):
     if len(self.mentions) > 0:
@@ -282,4 +285,21 @@ class Document(object):
     for theme in self.frame(self.schema.document_theme):
       self.themes.append(theme)
     self.themes_dirty = False
+
+
+class Corpus:
+  def __init__(self, filename, commons=None):
+    self.input = sling.RecordReader(filename)
+    self.iter = iter(self.input)
+    self.commons = sling.Store() if commons == None else commons
+    self.docschema = sling.DocumentSchema(self.commons)
+    if commons == None: self.commons.freeze()
+
+  def __iter__(self):
+    return self
+
+  def next(self):
+    _, data = self.input.next()
+    f = sling.Store(self.commons).parse(data)
+    return sling.Document(f, schema=self.docschema)
 

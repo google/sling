@@ -309,7 +309,7 @@ class ParserState:
       mention = document.add_mention(s.start, s.end)
       for f in s.evoked:
         assert f in frames
-        mention.frame.append("/s/phrase/evokes", frames[f])
+        mention.frame.append("evokes", frames[f])
 
     document.update()
 

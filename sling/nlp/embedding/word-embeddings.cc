@@ -55,7 +55,7 @@ class WordEmbeddingsVocabularyMapper : public DocumentProcessor {
     for (const Token &token : document.tokens()) {
       // Normalize token.
       string normalized;
-      UTF8::Normalize(token.text(), normalization_, &normalized);
+      UTF8::Normalize(token.word(), normalization_, &normalized);
 
       // Discard empty tokens.
       if (normalized.empty()) continue;
@@ -428,7 +428,7 @@ class WordEmbeddingsTrainer : public Process {
         words.clear();
         for (int t = s.begin(); t < s.end(); ++t) {
           // Sub-sample words.
-          const string &word = document.token(t).text();
+          const string &word = document.token(t).word();
           int index = vocabulary_.Lookup(word, normalization_);
           if (rnd.UniformProb() < vocabulary_.SubsamplingProbability(index)) {
             words.push_back(index);

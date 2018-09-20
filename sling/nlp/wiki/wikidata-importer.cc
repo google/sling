@@ -304,7 +304,7 @@ class WikidataPruner : public task::FrameProcessor {
 
     // Remove aliases and wikilinks from item.
     Builder item(frame);
-    if (prune_aliases_) item.Delete(n_profile_alias_);
+    if (prune_aliases_) item.Delete(n_alias_);
     if (prune_wiki_links_) item.Delete(n_wikipedia_);
     if (prune_category_members_) item.Delete(n_member_);
     item.Update();
@@ -325,7 +325,7 @@ class WikidataPruner : public task::FrameProcessor {
 
  private:
   // Symbols.
-  Name n_profile_alias_{names_, "/s/profile/alias"};
+  Name n_alias_{names_, "alias"};
   Name n_wikipedia_{names_, "/w/item/wikipedia"};
   Name n_member_{names_, "/w/item/member"};
 

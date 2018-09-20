@@ -30,7 +30,7 @@ namespace nlp {
 
 uint64 Token::Fingerprint() const {
   // Compute token fingerprint if not already done.
-  if (fingerprint_ == 0) fingerprint_ = Fingerprinter::Fingerprint(text_);
+  if (fingerprint_ == 0) fingerprint_ = Fingerprinter::Fingerprint(word_);
   return fingerprint_;
 }
 
@@ -148,8 +148,11 @@ Document::Document(const Frame &top, const DocumentNames *names)
     top_ = builder.Create();
   }
 
+  // Get document text.
+  text_ = top_.GetString(names_->n_text);
+
   // Get tokens.
-  Array tokens = top_.Get(names_->n_document_tokens).AsArray();
+  Array tokens = top_.Get(names_->n_tokens).AsArray();
   if (tokens.valid()) {
     // Initialize tokens.
     int num_tokens = tokens.length();
@@ -158,31 +161,33 @@ Document::Document(const Frame &top, const DocumentNames *names)
       // Get token information from token frame.
       Handle h = tokens.get(i);
       FrameDatum *token = store()->GetFrame(h);
-      Handle text = token->get(names_->n_token_text.handle());
-      Handle start = token->get(names_->n_token_start.handle());
-      Handle length = token->get(names_->n_token_length.handle());
-      Handle brk = token->get(names_->n_token_break.handle());
+      Handle word = token->get(names_->n_word.handle());
+      Handle start = token->get(names_->n_start.handle());
+      Handle size = token->get(names_->n_size.handle());
+      Handle brk = token->get(names_->n_break.handle());
 
       // Fill token from frame.
       Token &t = tokens_[i];
       t.document_ = this;
       t.handle_ = h;
       t.index_ = i;
-      if (!start.IsNil() && !length.IsNil()) {
+      if (!start.IsNil()) {
         t.begin_ = start.AsInt();
-        t.end_ = t.begin_ + length.AsInt();
+        t.end_ = t.begin_ + (size.IsNil() ? 1 : size.AsInt());
       } else {
         t.begin_ = -1;
         t.end_ = -1;
       }
-      if (!text.IsNil()) {
-        StringDatum *str = store()->GetString(text);
-        t.text_.assign(str->data(), str->size());
+      if (!word.IsNil()) {
+        StringDatum *str = store()->GetString(word);
+        t.word_.assign(str->data(), str->size());
+      } else if (t.begin_ != -1 && t.end_ != -1) {
+        t.word_ = text_.substr(t.begin_, t.end_ - t.begin_);
       }
       if (!brk.IsNil()) {
         t.brk_ = static_cast<BreakType>(brk.AsInt());
       } else {
-        t.brk_ = SPACE_BREAK;
+        t.brk_ = i == 0 ? NO_BREAK : SPACE_BREAK;
       }
       t.fingerprint_ = 0;
       t.span_ = nullptr;
@@ -217,6 +222,7 @@ Document::Document(const Frame &top, const DocumentNames *names)
 Document::~Document() {
   // Delete all spans. This also clears all references to the mention frames.
   for (auto *s : spans_) delete s;
+  delete extras_;
 
   // Release names.
   names_->Release();
@@ -235,22 +241,23 @@ void Document::Update() {
     for (int i = 0; i < tokens_.size(); ++i) {
       Token &t = tokens_[i];
       Builder token(store());
-      token.AddIsA(names_->n_token);
-      token.Add(names_->n_token_index, i);
-      token.Add(names_->n_token_text, t.text_);
+      if (t.begin_ != -1 && t.end_ != -1 &&
+          text_.compare(t.begin_, t.end_ - t.begin_, t.word_) != 0) {
+        token.Add(names_->n_word, t.word_);
+      }
       if (t.begin_ != -1) {
-        token.Add(names_->n_token_start, t.begin_);
-        if (t.end_ != -1) {
-          token.Add(names_->n_token_length, t.end_ - t.begin_);
+        token.Add(names_->n_start, t.begin_);
+        if (t.end_ != -1 && t.end_ != t.begin_ + 1) {
+          token.Add(names_->n_size, t.end_ - t.begin_);
         }
       }
-      if (t.brk_ != SPACE_BREAK) {
-        token.Add(names_->n_token_break, t.brk_);
+      if (t.brk_ != (i == 0 ? NO_BREAK : SPACE_BREAK)) {
+        token.Add(names_->n_break, t.brk_);
       }
       tokens.push_back(token.Create().handle());
     }
     Array token_array(store(), tokens);
-    builder.Set(names_->n_document_tokens, token_array);
+    builder.Set(names_->n_tokens, token_array);
     tokens_changed_ = false;
   }
 
@@ -265,22 +272,31 @@ void Document::Update() {
     builder.Add(names_->n_theme, theme);
   }
 
+  // Add extra slots to document frame.
+  if (extras_ != nullptr) {
+    for (const Slot &s : *extras_) {
+      builder.Add(s.name, s.value);
+    }
+  }
+
   builder.Update();
 }
 
 void Document::SetText(Handle text) {
-  top_.Set(names_->n_document_text, text);
+  top_.Set(names_->n_text, text);
+  text_ = String(store(), text).value();
   tokens_.clear();
   tokens_changed_ = true;
 }
 
 void Document::SetText(Text text) {
-  top_.Set(names_->n_document_text, text);
+  top_.Set(names_->n_text, text);
+  text_ = text.str();
   tokens_.clear();
   tokens_changed_ = true;
 }
 
-void Document::AddToken(Text text, int begin, int end, BreakType brk) {
+void Document::AddToken(Text word, int begin, int end, BreakType brk) {
   // Expand token array.
   int index = tokens_.size();
   tokens_.resize(index + 1);
@@ -292,9 +308,9 @@ void Document::AddToken(Text text, int begin, int end, BreakType brk) {
   t.index_ = index;
   t.begin_ = begin;
   t.end_ = end;
-  t.text_.assign(text.data(), text.size());
+  t.word_.assign(word.data(), word.size());
   t.brk_ = brk;
-  t.fingerprint_ = Fingerprinter::Fingerprint(text);
+  t.fingerprint_ = 0;
   t.span_ = nullptr;
   tokens_changed_ = true;
 }
@@ -308,13 +324,13 @@ Span *Document::AddSpan(int begin, int end, Handle type) {
     // Create phrase frame.
     int length = end - begin;
     Builder phrase(store());
-    phrase.AddIsA(type);
+    if (type != Handle::nil()) phrase.AddIsA(type);
     phrase.Add(names_->n_begin, begin);
     if (length != 1) phrase.Add(names_->n_length, length);
     span->mention_ = phrase.Create();
   } else {
     // Span already exists. Add the type to the phrase frame.
-    if (!span->mention_.IsA(type)) {
+    if (type != Handle::nil() && !span->mention_.IsA(type)) {
       span->mention_.AddIsA(type);
     }
   }
@@ -348,6 +364,11 @@ void Document::AddTheme(Handle handle) {
 void Document::RemoveTheme(Handle handle) {
   auto it = std::find(themes_.begin(), themes_.end(), handle);
   if (it != themes_.end()) themes_.erase(it);
+}
+
+void Document::AddExtra(Handle name, Handle value) {
+  if (extras_ == nullptr) extras_ = new Slots(store());
+  extras_->emplace_back(name, value);
 }
 
 void Document::AddMention(Handle handle, Span *span) {
@@ -396,7 +417,7 @@ string Document::PhraseText(int begin, int end) const {
   for (int t = begin; t < end; ++t) {
     const Token &token = tokens_[t];
     if (t > begin && token.brk() != NO_BREAK) phrase.push_back(' ');
-    phrase.append(token.text());
+    phrase.append(token.word());
   }
 
   return phrase;

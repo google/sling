@@ -59,7 +59,7 @@ void ActionTableGenerator::Save(const string &table_file,
 
 void ActionTableGenerator::GetUnknownSymbols(const Document &document) {
   Store *store = document.store();
-  Handle h_evokes = store->Lookup("/s/phrase/evokes");
+  Handle h_evokes = store->Lookup("evokes");
   CHECK(!h_evokes.IsNil());
   for (int i = 0; i < document.num_spans(); ++i) {
     Span *span = document.span(i);

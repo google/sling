@@ -56,14 +56,14 @@ class ProfileAliasExtractor : public task::FrameProcessor {
       if (s.name == n_name_) {
         // Add item name as alias.
         AddAlias(&a, s.value, SRC_WIKIDATA_LABEL);
-      } else if (s.name == n_profile_alias_) {
+      } else if (s.name == n_alias_) {
         Frame alias(store, s.value);
         if (alias.GetHandle(n_lang_) == language_) {
-          a.Add(n_profile_alias_, alias);
+          a.Add(n_alias_, alias);
         } else {
           // Add aliases in other languages as foreign alias.
           AddAlias(&a, alias.GetHandle(n_name_), SRC_WIKIDATA_FOREIGN,
-                   alias.GetHandle(n_lang_), alias.GetInt(n_alias_count_));
+                   alias.GetHandle(n_lang_), alias.GetInt(n_count_));
         }
       } else if (s.name == n_native_name_ || s.name == n_native_label_) {
         // Output native names/labels as native aliases.
@@ -96,18 +96,18 @@ class ProfileAliasExtractor : public task::FrameProcessor {
     Builder alias(aliases->store());
     alias.Add(n_name_, name);
     if (!lang.IsNil()) alias.Add(n_lang_, lang);
-    if (count > 0) alias.Add(n_alias_count_, count);
-    alias.Add(n_alias_sources_, 1 << source);
-    aliases->Add(n_profile_alias_, alias.Create());
+    if (count > 0) alias.Add(n_count_, count);
+    alias.Add(n_sources_, 1 << source);
+    aliases->Add(n_alias_, alias.Create());
   }
 
  private:
   // Symbols.
   Name n_lang_{names_, "lang"};
   Name n_name_{names_, "name"};
-  Name n_profile_alias_{names_, "/s/profile/alias"};
-  Name n_alias_count_{names_, "/s/alias/count"};
-  Name n_alias_sources_{names_, "/s/alias/sources"};
+  Name n_alias_{names_, "alias"};
+  Name n_count_{names_, "count"};
+  Name n_sources_{names_, "sources"};
 
   Name n_native_name_{names_, "P1559"};
   Name n_native_label_{names_, "P1705"};
@@ -168,11 +168,11 @@ class ProfileAliasReducer : public task::Reducer {
 
       // Get all aliases from profile.
       for (const Slot &slot : profile) {
-        if (slot.name != n_profile_alias_) continue;
+        if (slot.name != n_alias_) continue;
         Frame alias(&store, slot.value);
         string name = alias.GetString(n_name_);
-        int count = alias.GetInt(n_alias_count_, 1);
-        int sources = alias.GetInt(n_alias_sources_);
+        int count = alias.GetInt(n_count_, 1);
+        int sources = alias.GetInt(n_sources_);
 
         // Check that alias is valid UTF-8.
         if (!UTF8::Valid(name)) {
@@ -217,9 +217,9 @@ class ProfileAliasReducer : public task::Reducer {
       Builder a(&store);
       a.Add(n_name_, name);
       a.Add(n_lang_, language_);
-      a.Add(n_alias_count_, alias->count);
-      a.Add(n_alias_sources_, alias->sources);
-      merged.Add(n_profile_alias_, a.Create());
+      a.Add(n_count_, alias->count);
+      a.Add(n_sources_, alias->sources);
+      merged.Add(n_alias_, a.Create());
     }
 
     // Output alias profile.
@@ -285,9 +285,9 @@ class ProfileAliasReducer : public task::Reducer {
   Names names_;
   Name n_name_{names_, "name"};
   Name n_lang_{names_, "lang"};
-  Name n_profile_alias_{names_, "/s/profile/alias"};
-  Name n_alias_count_{names_, "/s/alias/count"};
-  Name n_alias_sources_{names_, "/s/alias/sources"};
+  Name n_alias_{names_, "alias"};
+  Name n_count_{names_, "count"};
+  Name n_sources_{names_, "sources"};
 
   // Language.
   Handle language_;

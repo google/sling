@@ -92,27 +92,27 @@ Q2534120: {
   :/w/item
   name: "Annette Vadim"
   description: "Danish actress"
-  /s/profile/alias: { name: "Annette Strøyberg" lang: /lang/pl /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Stroyberg" lang: /lang/pl /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/pl /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Strøyberg" lang: /lang/sv /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/sv /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Ströyberg" lang: /lang/sv /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Stroyberg" lang: /lang/sv /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Ströyberg" lang: /lang/sv /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Strøyberg" lang: /lang/da /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Stroyberg" lang: /lang/de /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/de /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Susanne Strøyberg" lang: /lang/de /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Stroyberg" lang: /lang/fr /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/fr /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Ströyberg" lang: /lang/fr /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/es /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/en /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Strøyberg" lang: /lang/it /s/alias/sources: 2 }
-  /s/profile/alias: { name: "Annette Stroyberg" lang: /lang/it /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/it /s/alias/sources: 4 }
-  /s/profile/alias: { name: "Annette Vadim" lang: /lang/nl /s/alias/sources: 2 }
+  alias: { name: "Annette Strøyberg" lang: /lang/pl sources: 2 }
+  alias: { name: "Annette Stroyberg" lang: /lang/pl sources: 4 }
+  alias: { name: "Annette Vadim" lang: /lang/pl sources: 4 }
+  alias: { name: "Annette Strøyberg" lang: /lang/sv sources: 2 }
+  alias: { name: "Annette Vadim" lang: /lang/sv sources: 4 }
+  alias: { name: "Annette Ströyberg" lang: /lang/sv sources: 4 }
+  alias: { name: "Annette Stroyberg" lang: /lang/sv sources: 4 }
+  alias: { name: "Ströyberg" lang: /lang/sv sources: 4 }
+  alias: { name: "Annette Strøyberg" lang: /lang/da sources: 2 }
+  alias: { name: "Annette Stroyberg" lang: /lang/de sources: 2 }
+  alias: { name: "Annette Vadim" lang: /lang/de sources: 4 }
+  alias: { name: "Annette Susanne Strøyberg" lang: /lang/de sources: 4 }
+  alias: { name: "Annette Stroyberg" lang: /lang/fr sources: 2 }
+  alias: { name: "Annette Vadim" lang: /lang/fr sources: 4 }
+  alias: { name: "Annette Ströyberg" lang: /lang/fr sources: 4 }
+  alias: { name: "Annette Vadim" lang: /lang/es sources: 2 }
+  alias: { name: "Annette Vadim" lang: /lang/en sources: 2 }
+  alias: { name: "Annette Strøyberg" lang: /lang/it sources: 2 }
+  alias: { name: "Annette Stroyberg" lang: /lang/it sources: 4 }
+  alias: { name: "Annette Vadim" lang: /lang/it sources: 4 }
+  alias: { name: "Annette Vadim" lang: /lang/nl sources: 2 }
   P26: {
     +Q383420
     P580: 1958
@@ -165,7 +165,7 @@ Q2534120: {
 ```
 
 The item frame contains the id, name and optionally description of the item.
-A `/s/profile/alias` is generated for each label and alias for the item. The
+An `alias` is generated for each label and alias for the item. The
 `/w/item/wikipedia` contains the ids for each of the Wikipedia pages for the
 item in different languages. One frame slot is added for each Wikidata
 _statement_ for the item, e.g.
@@ -229,56 +229,46 @@ Q2534120: {
   lang: /lang/en
   /wp/page/text: "{{Use dmy dates|date=January 2014}}\n{{Infobox person\n|..."
   /wp/page/item: Q2534120
-  :/s/document
-  /s/document/url: "http://en.wikipedia.org/wiki/Annette_Stroyberg"
-  /s/document/title: "Annette Stroyberg"
-  /s/document/text: "<b>Annette Strøyberg</b> (7 December 1936  – 12 December 2005) was a Danish actress..."
-  /s/document/tokens: [{=#1
-    :/s/token
-    /s/token/index: 0
-    /s/token/text: "Annette"
-    /s/token/start: 3
-    /s/token/length: 7
+  :document
+  url: "http://en.wikipedia.org/wiki/Annette_Stroyberg"
+  title: "Annette Stroyberg"
+  text: "<b>Annette Strøyberg</b> (7 December 1936  – 12 December 2005) was a Danish actress..."
+  tokens: [{=#1
+    start: 3
+    size: 7
   }, {=#2
-    :/s/token
-    /s/token/index: 1
-    /s/token/text: "Strøyberg"
-    /s/token/start: 11
-    /s/token/length: 10
+    start: 11
+    size: 10
   }, {=#3
-    :/s/token
-    /s/token/index: 2
-    /s/token/text: "("
-    /s/token/start: 26
-    /s/token/length: 1
+    start: 26
   }
   ...
   ]
-  /s/document/mention: {=#401
+  mention: {=#401
     :/wp/link
-    /s/phrase/begin: 13
+    begin: 13
     name: "Danish"
-    /s/phrase/evokes: Q35
+    evokes: Q35
   }
-  /s/document/mention: {=#402
+  mention: {=#402
     :/wp/link
-    /s/phrase/begin: 14
+    begin: 14
     name: "actress"
-    /s/phrase/evokes: Q33999
+    evokes: Q33999
   }
-  /s/document/mention: {=#403
+  mention: {=#403
     :/wp/link
-    /s/phrase/begin: 19
-    /s/phrase/length: 3
+    begin: 19
+    length: 3
     name: "Les Liaisons Dangereuses"
-    /s/phrase/evokes: Q1498136
+    evokes: Q1498136
   }
-  /s/document/mention: {=#404
+  mention: {=#404
     :/wp/link
-    /s/phrase/begin: 34
-    /s/phrase/length: 2
+    begin: 34
+    length: 2
     name: "Roger Vadim"
-    /s/phrase/evokes: Q383420
+    evokes: Q383420
   }
   ...
   /wp/page/category: Q6135380

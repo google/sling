@@ -62,7 +62,7 @@ class NameTableBuilder : public task::FrameProcessor {
 
     // Add aliases.
     for (const Slot &s : frame) {
-      if (s.name == n_profile_alias_) {
+      if (s.name == n_alias_) {
         // Check language.
         Frame alias(frame.store(), s.value);
         if (alias.GetHandle(n_lang_) != language_) continue;
@@ -70,7 +70,7 @@ class NameTableBuilder : public task::FrameProcessor {
 
         // Normalize name.
         Text name = alias.GetText(n_name_);
-        int count = alias.GetInt(n_alias_count_, 1);
+        int count = alias.GetInt(n_count_, 1);
         string normalized;
         UTF8::Normalize(name.data(), name.size(), normalization_, &normalized);
         if (normalized.empty()) continue;
@@ -180,8 +180,8 @@ class NameTableBuilder : public task::FrameProcessor {
   // Symbols.
   Name n_lang_{names_, "lang"};
   Name n_name_{names_, "name"};
-  Name n_profile_alias_{names_, "/s/profile/alias"};
-  Name n_alias_count_{names_, "/s/alias/count"};
+  Name n_alias_{names_, "alias"};
+  Name n_count_{names_, "count"};
 
   // Language for aliases.
   Handle language_;

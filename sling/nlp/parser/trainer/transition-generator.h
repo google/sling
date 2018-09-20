@@ -226,8 +226,8 @@ class TransitionGenerator {
   // Lazily bound names.
   Names names_;
   Name n_name_{names_, "name"};
-  Name n_thing_{names_, "/s/thing"};
-  Name n_evokes_{names_, "/s/phrase/evokes"};
+  Name n_thing_{names_, "thing"};
+  Name n_evokes_{names_, "evokes"};
 };
 
 }  // namespace nlp

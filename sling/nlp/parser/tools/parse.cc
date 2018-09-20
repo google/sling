@@ -59,8 +59,8 @@ using namespace sling::nlp;
 
 Document *RemoveAnnotations(Document *document) {
   Store *store = document->store();
-  Handle h_mention = store->Lookup("/s/document/mention");
-  Handle h_theme = store->Lookup("/s/document/theme");
+  Handle h_mention = store->Lookup("mention");
+  Handle h_theme = store->Lookup("theme");
   Builder b(store);
   for (const Slot &s : document->top()) {
     if (s.name != Handle::id() &&
@@ -197,7 +197,7 @@ int main(int argc, char *argv[]) {
 
       num_documents++;
       num_tokens += document->num_tokens();
-      if (num_documents % 10 == 0) {
+      if (num_documents % 100 == 0) {
         std::cout << num_documents << " documents\r";
         std::cout.flush();
       }

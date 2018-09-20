@@ -33,7 +33,7 @@ void DocumentTokenizer::Tokenize(Document *document, Text text) const {
 }
 
 void DocumentTokenizer::Tokenize(Document *document) const {
-  string text = document->GetText();
+  const string &text = document->text();
   tokenizer_.Tokenize(text,
     [document](const Tokenizer::Token &t) {
       document->AddToken(t.text, t.begin, t.end, t.brk);

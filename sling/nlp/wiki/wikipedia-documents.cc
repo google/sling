@@ -17,8 +17,8 @@
 
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
-#include "sling/nlp/document/text-tokenizer.h"
-#include "sling/nlp/document/tokens.h"
+#include "sling/nlp/document/document.h"
+#include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/wiki/wikipedia-map.h"
 #include "sling/nlp/wiki/wiki-parser.h"
 #include "sling/task/frames.h"
@@ -64,8 +64,8 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
     wikimap_.Freeze();
     task->GetCounter("wiki_redirects")->Increment(wikimap_.redirects().size());
 
-    // Initialize tokenizer.
-    tokenizer_.InitLDC();
+    // Initialize document schema.
+    docnames_ = new DocumentNames(commons_);
 
     // Get counters.
     num_article_pages_ = task->GetCounter("article_pages");
@@ -115,30 +115,40 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
     categories_ = task->GetSink("categories");
   }
 
+  void Flush(task::Task *task) override {
+    if (docnames_) {
+      docnames_->Release();
+      docnames_ = nullptr;
+    }
+  }
+
   void Process(Slice key, const Frame &frame) override {
     // Look up Wikidata page information in mapping.
     WikipediaMap::PageInfo page;
-    if (!wikimap_.GetPageInfo(frame.Id(), &page)) {
+    if (!wikimap_.GetPageInfo(frame.Id(), &page) ||
+        page.type == WikipediaMap::UNKNOWN) {
       VLOG(4) << "Unknown page: " << frame.Id();
       num_unknown_pages_->Increment();
       return;
     }
 
+    // Convert article to document.
+    ProcessArticle(frame, page.qid);
+    Document document(frame, docnames_);
+
     // Handle the different page types.
     switch (page.type) {
       case WikipediaMap::ARTICLE:
         // Article: parse, extract aliases, output anchors as aliases for links.
-        ProcessArticle(frame, page.qid);
-        OutputTitleAlias(frame);
-        OutputAnchorAliases(frame);
+        OutputTitleAlias(document);
+        OutputAnchorAliases(document);
         Output(page.qid, frame);
         num_article_pages_->Increment();
         break;
 
       case WikipediaMap::CATEGORY:
         // Category: parse article, output anchors as aliases.
-        ProcessArticle(frame, page.qid);
-        OutputAnchorAliases(frame);
+        OutputAnchorAliases(document);
         if (categories_ != nullptr) {
           categories_->Send(task::CreateMessage(page.qid, frame));
         }
@@ -147,15 +157,13 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
 
       case WikipediaMap::DISAMBIGUATION:
         // Disambiguation: output aliases for all links.
-        ProcessArticle(frame, page.qid);
-        OutputDisambiguationAliases(frame);
+        OutputDisambiguationAliases(document);
         num_disambiguation_pages_->Increment();
         break;
 
       case WikipediaMap::LIST:
         // Only keep anchor aliases from list pages.
-        ProcessArticle(frame, page.qid);
-        OutputAnchorAliases(frame);
+        OutputAnchorAliases(document);
         num_list_pages_->Increment();
         break;
 
@@ -171,7 +179,6 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
     GetLanguageInfo(page.GetHandle(n_lang_), &lang);
 
     // Parse Wikipedia article.
-    Store *store = page.store();
     string wikitext = page.GetString(n_page_text_);
     WikiParser parser(wikitext.c_str());
     parser.Parse();
@@ -180,38 +187,22 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
     // Add basic document information.
     Builder article(page);
     article.AddLink(n_page_item_, qid);
-    article.AddIsA(n_document_);
+    article.AddIsA(docnames_->n_document);
     string title = page.GetString(n_page_title_);
-    article.Add(n_document_url_, Wiki::URL(lang.code.str(), title));
-    article.Add(n_document_title_, page.GetHandle(n_page_title_));
-
-    // Add document text and tokens.
+    article.Add(docnames_->n_url, Wiki::URL(lang.code.str(), title));
+    article.Add(docnames_->n_title, page.GetHandle(n_page_title_));
     const string &text =  parser.text();
-    article.Add(n_document_text_, text);
-    Handles tokens(store);
-    tokenizer_.Tokenize(text,
-      [this, store, &tokens](const nlp::Tokenizer::Token &t) {
-        int index = tokens.size();
-        Builder token(store);
-        token.AddIsA(n_token_);
-        token.Add(n_token_index_, index);
-        token.Add(n_token_text_, t.text);
-        token.Add(n_token_start_, t.begin);
-        token.Add(n_token_length_, t.end - t.begin);
-        if (t.brk != nlp::SPACE_BREAK) {
-          token.Add(n_token_break_, t.brk);
-        }
-        tokens.push_back(token.Create().handle());
-      }
-    );
-    Array token_array(store, tokens);
-    article.Add(n_document_tokens_, token_array);
+    article.Add(docnames_->n_text, text);
+    article.Update();
+
+    // Tokenize article.
+    Document document(page, docnames_);
+    tokenizer_.Tokenize(&document);
 
     // Add links as mentions.
-    nlp::Tokens document_tokens(token_array);
     num_wiki_ast_nodes_->Increment(parser.num_ast_nodes());
-    num_article_text_bytes_->Increment(parser.text().size());
-    num_article_tokens_->Increment(tokens.size());
+    num_article_text_bytes_->Increment(text.size());
+    num_article_tokens_->Increment(document.num_tokens());
     for (const auto &node : parser.nodes()) {
       switch (node.type) {
         case WikiParser::IMAGE:
@@ -243,7 +234,8 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
             VLOG(7) << "Unknown category: " << node.name();
             num_unknown_categories_->Increment();
           } else {
-            article.AddLink(n_page_category_, category);
+            document.AddExtra(n_page_category_,
+                              document.store()->Lookup(category));
           }
           break;
         }
@@ -260,21 +252,15 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
               num_dead_links_->Increment();
             } else if (node.anchored()) {
               // Get tokens span.
-              int begin = document_tokens.Locate(node.text_begin);
-              int end = document_tokens.Locate(node.text_end);
-              int length = end - begin;
+              int begin = document.Locate(node.text_begin);
+              int end = document.Locate(node.text_end);
 
               if (begin == -1 || begin == end) {
                 num_empty_phrases_->Increment();
               } else {
                 // Add mention with link.
-                Builder mention(store);
-                mention.AddIsA(n_link_);
-                mention.Add(n_phrase_begin_, begin);
-                if (length != 1) mention.Add(n_phrase_length_, length);
-                mention.Add(n_name_, document_tokens.Phrase(begin, end));
-                mention.AddLink(n_phrase_evokes_, link);
-                article.Add(n_document_mention_, mention.Create());
+                Span *span = document.AddSpan(begin, end, n_link_);
+                span->Evoke(document.store()->Lookup(link));
               }
               num_anchors_->Increment();
             }
@@ -286,14 +272,13 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
       }
     }
 
-    // Update article document.
-    article.Update();
+    document.Update();
   }
 
   // Output alias for article title.
-  void OutputTitleAlias(const Frame &document) {
-    string qid = document.GetFrame(n_page_item_).Id().str();
-    string title = document.GetString(n_page_title_);
+  void OutputTitleAlias(const Document &document) {
+    string qid = document.top().Id().str();
+    string title = document.top().GetString(n_page_title_);
     string name;
     string disambiguation;
     Wiki::SplitTitle(title, &name, &disambiguation);
@@ -301,37 +286,27 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   }
 
   // Output aliases for anchors.
-  void OutputAnchorAliases(const Frame &document) {
-    nlp::Tokens tokens(document);
-    for (const Slot &s : document) {
-      if (s.name != n_document_mention_) continue;
-      Frame mention(document.store(), s.value);
-      int begin = mention.GetInt(n_phrase_begin_, 0);
-      int length = mention.GetInt(n_phrase_length_, 1);
-      string anchor = tokens.Phrase(begin, begin + length);
-      for (const Slot &e : mention) {
-        if (e.name != n_phrase_evokes_) continue;
-        Text qid = Frame(document.store(), e.value).Id();
-        OutputAlias(qid, anchor, SRC_WIKIPEDIA_ANCHOR);
-      }
+  void OutputAnchorAliases(const Document &document) {
+    for (int i = 0; i < document.num_spans(); ++i) {
+      Span *span = document.span(i);
+      string anchor = span->GetText();
+      Text qid = span->Evoked().Id();
+      OutputAlias(qid, anchor, SRC_WIKIPEDIA_ANCHOR);
     }
   }
 
   // Output aliases for disambiguation.
-  void OutputDisambiguationAliases(const Frame &document) {
-    string title = document.GetString(n_document_title_);
+  void OutputDisambiguationAliases(const Document &document) {
+    string title = document.title().str();
     if (title.empty()) return;
     string name;
     string disambiguation;
     Wiki::SplitTitle(title, &name, &disambiguation);
-    for (const Slot &s : document) {
-      if (s.name != n_document_mention_) continue;
-      Frame mention(document.store(), s.value);
-      for (const Slot &e : mention) {
-        if (e.name != n_phrase_evokes_) continue;
-        Text qid = Frame(document.store(), e.value).Id();
-        OutputAlias(qid, name, SRC_WIKIPEDIA_DISAMBIGUATION);
-      }
+    for (int i = 0; i < document.num_spans(); ++i) {
+      Span *span = document.span(i);
+      string anchor = span->GetText();
+      Text qid = span->Evoked().Id();
+      OutputAlias(qid, name, SRC_WIKIPEDIA_DISAMBIGUATION);
     }
   }
 
@@ -377,7 +352,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   WikipediaMap wikimap_;
 
   // Plain text tokenizer.
-  nlp::Tokenizer tokenizer_;
+  nlp::DocumentTokenizer tokenizer_;
 
   // Channel for aliases.
   task::Channel *aliases_ = nullptr;
@@ -386,11 +361,12 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   task::Channel *categories_ = nullptr;
 
   // Symbols.
+  DocumentNames *docnames_ = nullptr;
   Name n_name_{names_, "name"};
   Name n_lang_{names_, "lang"};
   Name n_lang_code_{names_, "code"};
   Name n_lang_category_{names_, "/lang/wikilang/wiki_category"};
-  Name n_lang_template_{names_, "/lang/wikilang//wiki_template"};
+  Name n_lang_template_{names_, "/lang/wikilang/wiki_template"};
 
   Name n_page_text_{names_, "/wp/page/text"};
   Name n_page_title_{names_, "/wp/page/title"};
@@ -398,24 +374,6 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   Name n_page_item_{names_, "/wp/page/item"};
   Name n_link_{names_, "/wp/link"};
   Name n_redirect_{names_, "/wp/redirect"};
-
-  Name n_document_{names_, "/s/document"};
-  Name n_document_title_{names_, "/s/document/title"};
-  Name n_document_url_{names_, "/s/document/url"};
-  Name n_document_text_{names_, "/s/document/text"};
-  Name n_document_tokens_{names_, "/s/document/tokens"};
-  Name n_document_mention_{names_, "/s/document/mention"};
-
-  Name n_token_{names_, "/s/token"};
-  Name n_token_index_{names_, "/s/token/index"};
-  Name n_token_text_{names_, "/s/token/text"};
-  Name n_token_start_{names_, "/s/token/start"};
-  Name n_token_length_{names_, "/s/token/length"};
-  Name n_token_break_{names_, "/s/token/break"};
-
-  Name n_phrase_begin_{names_, "/s/phrase/begin"};
-  Name n_phrase_length_{names_, "/s/phrase/length"};
-  Name n_phrase_evokes_{names_, "/s/phrase/evokes"};
 
   // Statistics.
   task::Counter *num_article_pages_;
@@ -484,9 +442,9 @@ class WikipediaAliasReducer : public task::Reducer {
       Builder alias(&store);
       alias.Add(n_name_, a.first);
       alias.Add(n_lang_, language_);
-      alias.Add(n_alias_sources_, a.second.second);
-      alias.Add(n_alias_count_, a.second.first);
-      profile.Add(n_profile_alias_, alias.Create());
+      alias.Add(n_sources_, a.second.second);
+      alias.Add(n_count_, a.second.first);
+      profile.Add(n_alias_, alias.Create());
     }
     Frame alias_profile  = profile.Create();
 
@@ -502,9 +460,9 @@ class WikipediaAliasReducer : public task::Reducer {
   Names names_;
   Name n_name_{names_, "name"};
   Name n_lang_{names_, "lang"};
-  Name n_profile_alias_{names_, "/s/profile/alias"};
-  Name n_alias_count_{names_, "/s/alias/count"};
-  Name n_alias_sources_{names_, "/s/alias/sources"};
+  Name n_alias_{names_, "alias"};
+  Name n_count_{names_, "count"};
+  Name n_sources_{names_, "sources"};
 
   // Language.
   Handle language_;
@@ -602,6 +560,7 @@ class CategoryMemberMerger : public task::Reducer {
  public:
   void Start(task::Task *task) override {
     task::Reducer::Start(task);
+    task->Fetch("threshold", &threshold_);
     CHECK(names_.Bind(&commons_));
     commons_.Freeze();
   }
@@ -610,8 +569,17 @@ class CategoryMemberMerger : public task::Reducer {
     // Merge all categories members.
     Store store(&commons_);
     Builder members(&store);
+    int num_members = 0;
     for (task::Message *message : input.messages()) {
       members.AddLink(n_item_member_, message->value());
+      num_members++;
+    }
+
+    // Check if category should be skipped.
+    if (threshold_ > 0 && num_members > threshold_) {
+      LOG(WARNING) << "Skipping category " << input.key()
+                   << " with " << num_members << " members";
+      return;
     }
 
     // Output members for category.
@@ -621,6 +589,9 @@ class CategoryMemberMerger : public task::Reducer {
  private:
   // Commons store.
   Store commons_;
+
+  // Threshold for skipping categories with many members.
+  int threshold_ = 0;
 
   // Symbols.
   Names names_;

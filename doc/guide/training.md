@@ -17,7 +17,7 @@ documents, (c) a recordio of dev documents.
 
 SLING offers users tools to either build the commons store themselves, or
 automatically create it from the training/dev documents. Building the commons
-store yourself allows you to store rich hierarchy and schema information 
+store yourself allows you to store rich hierarchy and schema information
 about types and roles in the commons store.
 In case this schema is not needed/exploited, one can instead use the automatic
 commons construction tool that collects all types and roles
@@ -27,55 +27,34 @@ both these tools.
 #### Option 1: Automatically building the commons store from documents.
 Here, we just create a corpus of documents that link to frames using types and
 roles that will be automatically collected later. A typical SLING training
-document is just a frame of type `/s/document`. It is best to create one
+document is just a frame of type `document`. It is best to create one
 SLING document per input sentence. The textual encoding of a sample SLING
 document is shown below:
 
 ```shell
 {
-  :/s/document
-  /s/document/text: "John loves Mary"
-  /s/document/tokens: [
-  {
-      :/s/document/token
-      /s/token/index: 0
-      /s/token/start: 0
-      /s/token/length: 4
-      /s/token/break: 0
-      /s/token/text: "John"
-  },
-  {
-      :/s/document/token
-      /s/token/index: 1
-      /s/token/start: 5
-      /s/token/length: 5
-      /s/token/text: "loves"
-  },
-  {
-      :/s/document/token
-      /s/token/index: 2
-      /s/token/start: 11
-      /s/token/length: 4
-      /s/token/text: "Mary"
-  }]
-  /s/document/mention: {=#1
-    :/s/phrase
-    /s/phrase/begin: 0
-    /s/phrase/evokes: {=#2 :/saft/person }
+  :document
+  text: "John loves Mary"
+  tokens: [
+    {start: 0 size: 4},
+    {start: 5 size: 5},
+    {start: 11 size: 4}
+  ]
+  mention: {=#1
+    begin: 0
+    evokes: {=#2 :/saft/person }
   }
-  /s/document/mention: {=#3
-    :/s/phrase
-    /s/phrase/begin: 1
-    /s/phrase/evokes: {=#4
+  mention: {=#3
+    begin: 1
+    evokes: {=#4
       :/pb/love-01
       /pb/arg0: #2
       /pb/arg1: {=#5 :/saft/person }
     }
   }
-  /s/document/mention: {=#6
-    :/s/phrase
-    /s/phrase/begin: 2
-    /s/phrase/evokes: #5
+  mention: {=#6
+    begin: 2
+    evokes: #5
   }
 }
 ```
@@ -89,8 +68,8 @@ encoded document. This file format is up to 25x faster to read than zip files,
 yet provides almost identical compression ratios.
 
 We now illustrate SLING document preparation using the C++ API.
-For writing your converter or getting a better hold of the concepts of frames 
-and store in SLING, you can have a look at detailed deep dive on frames and 
+For writing your converter or getting a better hold of the concepts of frames
+and store in SLING, you can have a look at detailed deep dive on frames and
 stores [here](frames.md).
 
 ```c++
@@ -237,7 +216,7 @@ sling/nlp/parser/tools/build-commons.sh
 ```
 
 This will build a SLING store with all the schemas needed and put it into
-`/tmp/commons`. 
+`/tmp/commons`.
 
 Another toy example, where we have access to all frame types and roles in
 advance, is as follows:
@@ -287,7 +266,7 @@ step. If not specified or non-existent, then a commons store will be
 automatically built by the training script using Option 1 above.
 + `--train`: Path to the training corpus built in the previous step.
 + `--dev`: Path to the annotated dev corpus built in the previous step.
-+ `--output` or `--output_dir`: Output folder where checkpoints, 
++ `--output` or `--output_dir`: Output folder where checkpoints,
   temporary files, and the final model will be saved.
 
 Then we have the various training options and hyperparameters:

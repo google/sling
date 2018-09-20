@@ -35,23 +35,25 @@ class Document;
 struct DocumentNames : public SharedNames {
   DocumentNames(Store *store) { CHECK(Bind(store)); }
 
-  Name n_document{*this, "/s/document"};
-  Name n_document_text{*this, "/s/document/text"};
-  Name n_document_tokens{*this, "/s/document/tokens"};
-  Name n_mention{*this, "/s/document/mention"};
-  Name n_theme{*this, "/s/document/theme"};
+  Name n_document{*this, "document"};
+  Name n_title{*this, "title"};
+  Name n_url{*this, "url"};
+  Name n_text{*this, "text"};
+  Name n_tokens{*this, "tokens"};
+  Name n_mention{*this, "mention"};
+  Name n_theme{*this, "theme"};
 
-  Name n_token{*this, "/s/token"};
-  Name n_token_index{*this, "/s/token/index"};
-  Name n_token_start{*this, "/s/token/start"};
-  Name n_token_length{*this, "/s/token/length"};
-  Name n_token_text{*this, "/s/token/text"};
-  Name n_token_break{*this, "/s/token/break"};
+  Name n_token{*this, "token"};
+  Name n_index{*this, "index"};
+  Name n_start{*this, "start"};
+  Name n_size{*this, "size"};
+  Name n_word{*this, "word"};
+  Name n_break{*this, "break"};
 
-  Name n_phrase{*this, "/s/phrase"};
-  Name n_begin{*this, "/s/phrase/begin"};
-  Name n_length{*this, "/s/phrase/length"};
-  Name n_evokes{*this, "/s/phrase/evokes"};
+  Name n_phrase{*this, "phrase"};
+  Name n_begin{*this, "begin"};
+  Name n_length{*this, "length"};
+  Name n_evokes{*this, "evokes"};
 };
 
 // A token represents a range of characters in the document text. A token is a
@@ -73,9 +75,10 @@ class Token {
   // token.
   int begin() const { return begin_; }
   int end() const { return end_; }
+  int size() const { return end_ - begin_; }
 
-  // Token text.
-  const string &text() const { return text_; }
+  // Token word.
+  const string &word() const { return word_; }
 
   // Break level before token.
   BreakType brk() const { return brk_; }
@@ -94,7 +97,7 @@ class Token {
   int begin_;                   // first byte position of token
   int end_;                     // first byte position after token
 
-  string text_;                 // token text
+  string word_;                 // token word
   BreakType brk_;               // break level before token
 
   mutable uint64 fingerprint_;  // fingerprint for token text
@@ -228,9 +231,13 @@ class Document {
   void Update();
 
   // Return the document text.
-  string GetText() const {
-    return top_.GetString(names_->n_document_text);
-  }
+  const string &text() const { return text_; }
+
+  // Return document title.
+  Text title() const { return top_.GetText(names_->n_title); }
+
+  // Return document url.
+  Text url() const { return top_.GetText(names_->n_url); }
 
   // Set document text. This will delete all existing tokens.
   void SetText(Handle text);
@@ -238,7 +245,7 @@ class Document {
   void SetText(Text text);
 
   // Add token to document.
-  void AddToken(Text text,
+  void AddToken(Text word,
                 int begin = -1, int end = -1,
                 BreakType brk = SPACE_BREAK);
 
@@ -251,7 +258,7 @@ class Document {
     return AddSpan(begin, end, type.Lookup(store()));
   }
   Span *AddSpan(int begin, int end) {
-    return AddSpan(begin, end, names_->n_phrase);
+    return AddSpan(begin, end, Handle::nil());
   }
 
   // Deletes span from the document.
@@ -303,6 +310,15 @@ class Document {
 
   // Returns list of thematic frames for document.
   const Handles &themes() const { return themes_; }
+
+  // Add extra slots to document frame.
+  void AddExtra(Handle name, Handle value);
+  void AddExtra(const Name &name, Handle value) {
+    AddExtra(name.handle(), value);
+  }
+  void AddExtra(const Name &name, Text value) {
+    AddExtra(name.handle(), store()->AllocateString(value));
+  }
 
   // Types for mapping from frame to spans that evoke it.
   typedef std::unordered_multimap<Handle, Span *, HandleHash> MentionMap;
@@ -381,6 +397,9 @@ class Document {
   // Document frame.
   Frame top_;
 
+  // Document text.
+  string text_;
+
   // Document tokens.
   std::vector<Token> tokens_;
 
@@ -395,6 +414,9 @@ class Document {
   // List of thematic frames. These are frames that are not evoked by any
   // particular phrase in the text.
   Handles themes_;
+
+  // Additional slots that should be added to document.
+  Slots *extras_ = nullptr;
 
   // Inverse mapping from frames to spans that can be used for looking up all
   // mentions of a frame. The handles are tracked by the mention frame in the

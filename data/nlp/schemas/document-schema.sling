@@ -1,613 +1,153 @@
 ; SLING document schema definitions.
 
 ; Document schema.
-{=/s/document +named :schema
+{=document +named :schema
   name: "Document"
-  family: /schema/document
+  family: document
 
-  role: {=/s/document/text :slot
-    name: "text"
-    description: "Document text"
-    source: /s/document
+  role: {=url :slot
+    name: "url"
+    description: "Document URL"
+    source: document
     target: string
   }
 
-  role: {=/s/document/tokens :slot
-    name: "tokens"
-    description: "Document tokens"
-    source: /s/document
-    target: /s/token
+  role: {=title :slot
+    name: "title"
+    description: "Document title"
+    source: document
+    target: string
   }
 
-  role: {=/s/document/mention :slot
+  role: {=text :slot
+    name: "text"
+    description: "Document text"
+    source: document
+    target: string
+  }
+
+  role: {=tokens :slot
+    name: "tokens"
+    description: "Document tokens"
+    source: document
+    target: token
+  }
+
+  role: {=mention :slot
     name: "mention"
     description: "Mention phrase"
-    source: /s/document
-    target: /s/phrase
+    source: document
+    target: phrase
     multi: 1
   }
 
-  role: {=/s/document/theme :slot
+  role: {=theme :slot
     name: "theme"
     description: "Thematic frame"
-    source: /s/document
+    source: document
     multi: 1
   }
 }
 
 ; Token schema.
-{=/s/token :schema
+{=token :schema
   name: "Phrase"
   family: /schema/document
 
-  role: {=/s/token/index :slot
+  role: {=index :slot
     name: "index"
     description: "Index of token in document"
-    source: /s/token
+    source: token
     target: int
   }
 
-  role: {=/s/token/start :slot
+  role: {=start :slot
     name: "start"
     description: "First byte for token in document text"
-    source: /s/token
+    source: token
     target: int
   }
 
-  role: {=/s/token/length :slot
-    name: "length"
+  role: {=size :slot
+    name: "size"
     description: "Length of token in document text in bytes"
-    source: /s/token
+    source: token
     target: int
   }
 
-  role: {=/s/token/break :slot
+  role: {=break :slot
     name: "break"
     description: "Break type before token"
-    source: /s/token
+    source: token
     target: int
   }
-  
-  role: {=/s/token/text :slot
-    name: "text"
-    description: "Token text"
-    source: /s/token
+
+  role: {=word :slot
+    name: "word"
+    description: "Token word"
+    source: token
     target: string
   }
 }
 
 ; Phrase schema.
-{=/s/phrase :schema
+{=phrase :schema
   name: "Phrase"
   family: /schema/document
 
-  role: {=/s/phrase/begin :slot
+  role: {=begin :slot
     name: "begin"
     description: "First token in document for phrase"
-    source: /s/phrase
+    source: phrase
     target: int
   }
 
-  role: {=/s/phrase/length :slot
+  role: {=length :slot
     name: "length"
     description: "Number of tokens in phrase"
-    source: /s/phrase
+    source: phrase
     target: int
   }
 
-  role: {=/s/phrase/evokes :slot
+  role: {=evokes :slot
     name: "evokes"
     description: "Frame evoked by phrase"
-    source: /s/phrase
+    source: phrase
     multi: 1
   }
-}
-
-; Noun phrase schema.
-{=/s/np :schema +/s/phrase
-  name: "Noun phrase"
-  family: /schema/document
-}
-
-; Pronoun schema.
-{=/s/pronoun :schema +/s/np
-  name: "Pronoun"
-  family: /schema/document
-}
-
-; Nominal schema.
-{=/s/nominal :schema +/s/np
-  name: "Nominal"
-  family: /schema/document
-}
-
-; Proper noun schema.
-{=/s/proper :schema +/s/np
-  name: "Proper noun"
-  family: /schema/document
-}
-
-; Schemas for thing, i.e. anything that can be evoked by a phrase.
-{=/s/thing +named :schema
-  name: "Thing"
-  family: /schema/document
-}
-
-{=/s/entity +/s/thing :schema
-  name: "Entity"
-  family: /schema/document
-}
-
-{=/s/concept +/s/thing :schema
-  name: "Concept"
-  family: /schema/document
-}
-
-{=/s/event +/s/thing :schema
-  name: "Event"
-  family: /schema/document
-}
-
-; Schema for person.
-{=/s/person +/s/entity :schema
-  name: "Person"
-  family: /schema/document
-
-  role: {=/s/person/name :slot
-    name: "person name"
-    source: /s/person
-    target: /s/person_name
-  }
-
-  role: {=/s/person/position :slot
-    name: "position"
-    source: /s/person
-    target: /s/position
-  }
-
-  role: {=/s/person/place :slot
-    name: "place"
-    source: /s/person
-    target: /s/location
-  }
-
-  role: {=/s/person/gender :slot
-    name: "gender"
-    source: /s/person
-    target: /s/gender
-  }
-}
-
-{=/s/gender +/s/concept :schema
-  name: "Gender"
-  family: /schema/document
-  simple: 1
-
-  value: {=/s/male :/s/gender name: "Male"  qua: Q6581097}
-  value: {=/s/female :/s/gender name: "Female" qua: Q6581072}
-}
-
-{=/s/title +/s/concept :schema
-  name: "Title"
-  family: /schema/document
-}
-
-{=/s/position +/s/concept :schema
-  name: "Position"
-  family: /schema/document
-
-  role: {=/s/position/title :slot
-    name: "title"
-    source: /s/position
-    target: /s/title
-  }
-
-  role: {=/s/position/organization :slot
-    name: "organization"
-    source: /s/position
-    target: /s/organization
-  }
-
-  role: {=/s/position/jurisdiction :slot
-    name: "jurisdiction"
-    source: /s/position
-    target: /s/location
-  }
-}
-
-; Schema for organization.
-{=/s/organization +/s/entity :schema
-  name: "Organization"
-  family: /schema/document
-
-  role: {=/s/organization/place :slot
-    name: "place"
-    source: /s/organization
-    target: /s/location
-  }
-}
-
-; Schema for location.
-{=/s/location +/s/entity :schema
-  name: "Location"
-  family: /schema/document
-
-  role: {=/s/location/region :slot
-    name: "region"
-    source: /s/location
-    target: /s/location
-  }
-}
-
-; Schemas for names.
-{=/s/name +/s/thing :schema
-  name: "Name"
-  family: /schema/document
-}
-
-{=/s/person_name +/s/name :schema
-  name: "Person name"
-  family: /schema/document
-
-  role: {=/s/person_name/first :slot
-    name: "first name"
-    source: /s/person_name
-    target: /s/first_name
-  }
-
-  role: {=/s/person_name/middle :slot
-    name: "middle name"
-    source: /s/person_name
-    target: /s/middle_name
-  }
-
-  role: {=/s/person_name/last :slot
-    name: "last name"
-    source: /s/person_name
-    target: /s/last_name
-  }
-
-  role: {=/s/person_name/prefix :slot
-    name: "prefix"
-    source: /s/person_name
-    target: /s/name_prefix
-  }
-
-  role: {=/s/person_name/suffix :slot
-    name: "suffix"
-    source: /s/person_name
-    target: /s/name_suffix
-  }
-
-  role: {=/s/person_name/auxiliary :slot
-    name: "auxiliary"
-    source: /s/person_name
-    target: /s/auxiliary_name
-  }
-
-  role: {=/s/person_name/patronym :slot
-    name: "patronym"
-    source: /s/person_name
-    target: /s/patronym
-  }
-}
-
-{=/s/first_name +/s/name :schema
-  name: "First name"
-  family: /schema/document
-}
-
-{=/s/middle_name +/s/name :schema
-  name: "Middle name"
-  family: /schema/document
-}
-
-{=/s/last_name +/s/name :schema
-  name: "Last name"
-  family: /schema/document
-}
-
-{=/s/name_prefix +/s/name :schema
-  name: "Name prefix"
-  family: /schema/document
-}
-
-{=/s/name_suffix +/s/name :schema
-  name: "Name sufix"
-  family: /schema/document
-}
-
-{=/s/auxiliary_name +/s/name :schema
-  name: "Auxiliary name"
-  family: /schema/document
-}
-
-{=/s/patronym +/s/name :schema
-  name: "Patronym"
-  family: /schema/document
 }
 
 ; Profile schema.
-{=/s/profile +knowledge :schema
+{=profile +knowledge :schema
   name: "Profile"
   family: /schema/document
 
-  role: {=/s/profile/mid :slot
-    name: "MID"
-    description: "Freebase MID identifier"
-    source: /s/profile
-    target: string
-  }
-
-  role: {=/s/profile/disambiguation :slot
-    name: "disambiguation"
-    description: "Name disambiguation"
-    source: /s/profile
-    target: string
-  }
-
-  role: {=/s/profile/alias :slot
+  role: {=alias :slot
     name: "alias"
     description: "Entity name"
-    source: /s/profile
-    target: /s/alias
+    source: profile
+    target: alias
     multi: 1
   }
 }
 
-{=/s/alias +named :schema
+# TODO: 'alias' conflicts with profile.alias
+{=alias +named :schema
   name: "Alias"
   family: /schema/document
 
-  role: {=/s/alias/sources :slot
+  role: {=sources :slot
     name: "Alias sources"
     description: "Bitmask for sources of alias"
-    source: /s/profile
+    source: profile
     target: int
   }
 
-  role: {=/s/alias/count :slot
+  role: {=count :slot
     name: "Alias count"
     description: "Number of alias occurences"
-    source: /s/profile
+    source: profile
     target: int
-  }
-}
-
-{=/s/measure/type +/s/concept :schema
-  name: "Measurement Type"
-  family: /schema/document
-  simple: 1
-
-  value: {=/s/measure/none :/s/measure/type name: "None"}
-  value: {=/s/measure/area :/s/measure/type name: "Area" qua: /m/0n0j}
-  value: {=/s/measure/length :/s/measure/type name: "Length"  qua: /m/04psy}
-  value: {=/s/measure/mass :/s/measure/type name: "Mass"  qua: /m/04t9l}
-  value: {=/s/measure/temperature :/s/measure/type
-    name: "Temperature"  qua: /m/07gr_
-  }
-  value: {=/s/measure/volume :/s/measure/type name: "Volume"  qua: /m/07zn0}
-  value: {=/s/measure/angle :/s/measure/type name: "Angle"  qua: /m/0mwc}
-  value: {=/s/measure/brightness :/s/measure/type
-    name: "Brightness"  qua: /m/01thsn
-  }
-  value: {=/s/measure/charge :/s/measure/type name: "Charge"  qua: /m/02nxz}
-  value: {=/s/measure/data :/s/measure/type name: "Data"  qua: /m/06y17h}
-  value: {=/s/measure/date_rate :/s/measure/type
-    name: "Data Rate"  qua: /m/06y17h
-  }
-  value: {=/s/measure/duration :/s/measure/type name: "Duration"}
-  value: {=/s/measure/energy :/s/measure/type name: "Energy"  qua: /m/02mm_}
-  value: {=/s/measure/frequency :/s/measure/type
-    name: "Frequency"  qua: /m/02x93
-  }
-  value: {=/s/measure/fuel_efficiency :/s/measure/type
-    name: "Fuel efficiency"  qua: /m/03jz58h
-  }
-  value: {=/s/measure/power :/s/measure/type name: "Power"  qua: /m/061ln}
-  value: {=/s/measure/pressure :/s/measure/type
-    name: "Pressure"  qua: /m/05wnx
-  }
-  value: {=/s/measure/speed :/s/measure/type name: "Speed"  qua: /m/073s_}
-  value: {=/s/measure/voltage :/s/measure/type name: "Voltage"  qua: /m/067yp}
-  value: {=/s/measure/resistance :/s/measure/type
-    name: "Electrical resistance"  qua: /m/0gp12
-  }
-  value: {=/s/measure/force :/s/measure/type name: "Force"  qua: /m/02yc2}
-  value: {=/s/measure/compound_domain :/s/measure/type
-    name: "Compound measurement"
-  }
-  value: {=/s/measure/amount_of_substance :/s/measure/type
-    name: "Amount of Substance"  qua: /m/038zyj
-  }
-}
-
-; Schema for measures.
-{=/s/measure +/s/thing :schema
-  name: "Measure"
-  family: /schema/document
-
-  role: {=/s/measure/domain :slot
-    name: "domain"
-    description: "Domain of the measurement"
-    source: /s/measure
-    target: /s/measure/type
-  }
-
-  role: {=/s/measure/value :slot
-    name: "value"
-    description: "Value of the measure in the text"
-    source: /s/measure
-    target: float
-  }
-
-  role: {=/s/measure/unit :slot
-    name: "unit"
-    description: "Measurement unit in the text"
-    source: /s/measure
-    target: string
-  }
-
-  role: {=/s/measure/canonical :slot
-    name: "canonical value"
-    description: "Normalized value of the measure"
-    source: /s/measure
-    target: /s/measure
-  }
-}
-
-{=/s/date +/s/thing :schema
-  name: "Date"
-  family: /schema/document
-
-  role: {=/s/date/year :slot
-    name: "year"
-    description: "Four digit year"
-    source: /s/date
-    target: int
-  }
-
-  role: {=/s/date/month :slot
-    name: "month"
-    description: "1-based month number"
-    source: /s/date
-    target: int
-  }
-
-  role: {=/s/date/day :slot
-    name: "day"
-    description: "1-based day of month"
-    source: /s/date
-    target: int
-  }
-
-  role: {=/s/date/day_of_week :slot
-    name: "day of week"
-    description: "Day of week (Sunday=1, ..., Saturday=7)"
-    source: /s/date
-    target: int
-  }
-
-  role: {=/s/date/bc :slot
-    name: "BC"
-    description: "Before current era"
-    source: /s/date
-    target: bool
-  }
-}
-
-{=/s/time +/s/thing :schema
-  name: "Time"
-  family: /schema/document
-
-  role: {=/s/time/hour :slot
-    name: "hour"
-    description: "0-based hour"
-    source: /s/time
-    target: int
-  }
-
-  role: {=/s/time/minute :slot
-    name: "minute"
-    description: "1-based minute"
-    source: /s/time
-    target: int
-  }
-
-  role: {=/s/time/second :slot
-    name: "second"
-    description: "1-based second"
-    source: /s/time
-    target: int
-  }
-
-  role: {=/s/time/fraction_second :slot
-    name: "fraction of a second"
-    description: "fraction of a second"
-    source: /s/time
-    target: float
-  }
-
-  role: {=/s/time/timezone :slot
-    name: "timezone"
-    description: "Timezone"
-    source: /s/time
-    target: string
-  }
-
-  role: {=/s/time/utc_offset :slot
-    name: "timezone offset"
-    description: "Offset in minutes (only valid if the timezone is UTC)"
-    source: /s/time
-    target: int
-  }
-}
-
-{=/s/datetime +/s/thing :schema
-  name: "Date/Time"
-  description: "Top-level date/time schema"
-  family: /schema/document
-
-  role: {=/s/datetime/date :slot
-    name: "date"
-    description: "Date component of date/time"
-    source: /s/datetime
-    target: /s/date
-  }
-
-  role: {=/s/datetime/time :slot
-    name: "time"
-    description: "Time component of date/time"
-    source: /s/datetime
-    target: /s/time
-  }
-}
-
-{=/s/timerange +/s/thing :schema
-  name: "Time range"
-  description: "Time range for time interval"
-  family: /schema/document
-
-  role: {=/s/timerange/begin :slot
-    name: "begin"
-    description: "Begining of time range"
-    source: /s/timerange
-    target: /s/datetime
-  }
-
-  role: {=/s/timerange/end :slot
-    name: "end"
-    description: "End of time range"
-    source: /s/timerange
-    target: /s/datetime
-  }
-}
-
-{=/s/number +/s/thing :schema
-  name: "Number"
-  family: /schema/document
-
-  role: {=/s/number/value :slot
-    name: "numeric value"
-    source: /s/number
-    target: number
-  }
-}
-
-{=/s/price +/s/thing :schema
-  name: "Price"
-  family: /schema/document
-
-  role: {=/s/price/amount :slot
-    name: "amount"
-    source: /s/price
-    target: number
-  }
-
-  role: {=/s/price/currency :slot
-    name: "currency"
-    source: /s/price
-    ;target: /finance/currency
   }
 }
 
@@ -616,46 +156,11 @@
   name: "Document schemas"
   precompute_ancestors: 1
 
-  member_schema: /s/document
-  member_schema: /s/token
-  member_schema: /s/phrase
+  member_schema: document
+  member_schema: token
+  member_schema: phrase
 
-  member_schema: /s/np
-  member_schema: /s/pronoun
-  member_schema: /s/nominal
-  member_schema: /s/proper
-
-  member_schema: /s/thing
-  member_schema: /s/entity
-  member_schema: /s/concept
-  member_schema: /s/event
-  member_schema: /s/person
-  member_schema: /s/gender
-  member_schema: /s/title
-  member_schema: /s/position
-  member_schema: /s/organization
-  member_schema: /s/location
-
-  member_schema: /s/name
-  member_schema: /s/person_name
-  member_schema: /s/first_name
-  member_schema: /s/middle_name
-  member_schema: /s/last_name
-  member_schema: /s/name_prefix
-  member_schema: /s/name_suffix
-  member_schema: /s/auxiliary_name
-  member_schema: /s/patronym
-
-  member_schema: /s/profile
-  member_schema: /s/alias
-
-  member_schema: /s/measure/type
-  member_schema: /s/measure
-  member_schema: /s/date
-  member_schema: /s/time
-  member_schema: /s/datetime
-  member_schema: /s/timerange
-  member_schema: /s/number
-  member_schema: /s/price
+  member_schema: profile
+  member_schema: alias
 }
 

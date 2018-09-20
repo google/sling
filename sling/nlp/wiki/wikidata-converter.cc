@@ -174,8 +174,8 @@ Frame WikidataConverter::Convert(const Frame &item) {
           Builder alias(store);
           alias.Add(n_name_, label.GetHandle(s_value_));
           alias.Add(n_lang_, it.second.language);
-          alias.Add(n_alias_sources_, 1 << SRC_WIKIDATA_LABEL);
-          builder.Add(n_profile_alias_, alias.Create());
+          alias.Add(n_sources_, 1 << SRC_WIKIDATA_LABEL);
+          builder.Add(n_alias_, alias.Create());
         }
       }
 
@@ -189,8 +189,8 @@ Frame WikidataConverter::Convert(const Frame &item) {
             Builder alias(store);
             alias.Add(n_name_, name);
             alias.Add(n_lang_, it.second.language);
-            alias.Add(n_alias_sources_, 1 << SRC_WIKIDATA_ALIAS);
-            builder.Add(n_profile_alias_, alias.Create());
+            alias.Add(n_sources_, 1 << SRC_WIKIDATA_ALIAS);
+            builder.Add(n_alias_, alias.Create());
           }
         }
       }

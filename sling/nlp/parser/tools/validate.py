@@ -134,7 +134,7 @@ class Results:
   # Returns whether there were no errors.
   def ok(self):
     return len(self.error_counts) == 0
-    
+
   # Creates and adds an error with the specified code and context.
   def error(self, code, args):
     document = args[0]
@@ -218,9 +218,8 @@ def _validate_frame(document, mention, frame, options, results):
     if role is not None and type(role) is sling.Frame and role.islocal():
       results.error(Error.ROLE_IS_LOCAL, [document, frame, role])
     # TODO: Add support to see if certain slots (e.g. /pb/ARG0) should always
-    # have local values, while others (e.g. /s/measure/domain) should always
-    # have global values. This can be read from the schema or specified in
-    # 'options'.
+    # have local values, while others (e.g. measure) should always have global
+    # values. This can be read from the schema or specified in 'options'.
 
 
 # Validates 'document' against common errors.
@@ -259,7 +258,7 @@ def _validate(document, options):
     _validate_frame(document, None, frame, options, results)
 
   return results
-  
+
 
 # Main entry point.
 # Checks the corpora in 'recordio_filename' for errors.

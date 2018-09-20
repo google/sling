@@ -237,9 +237,9 @@ void FrameEvaluation::Benchmark::ToText(const string &name,
 void FrameEvaluation::GetMentionMap(
     const Frame &frame, MentionMap *mentions) {
   Store *store = frame.store();
-  Handle n_mention = store->Lookup("/s/document/mention");
-  Handle n_begin = store->Lookup("/s/phrase/begin");
-  Handle n_length = store->Lookup("/s/phrase/length");
+  Handle n_mention = store->Lookup("mention");
+  Handle n_begin = store->Lookup("begin");
+  Handle n_length = store->Lookup("length");
 
   for (const Slot &slot : frame) {
     if (slot.name ==  n_mention) {
@@ -273,7 +273,7 @@ void FrameEvaluation::AlignMentions(const MentionMap &source,
 void FrameEvaluation::AlignEvokes(Store *store,
                                   const Alignment &mentions,
                                   Alignment *alignment) {
-  Handle n_evokes = store->Lookup("/s/phrase/evokes");
+  Handle n_evokes = store->Lookup("evokes");
   for (const auto &m : mentions) {
     if (m.second != Handle::nil()) {
       // Align source and target mentions.

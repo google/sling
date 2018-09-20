@@ -63,7 +63,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
 
     // Add aliases.
     for (const Slot &s : frame) {
-      if (s.name == n_profile_alias_) {
+      if (s.name == n_alias_) {
         // Check language.
         Frame alias(frame.store(), s.value);
         if (alias.GetHandle(n_lang_) != language_) continue;
@@ -71,7 +71,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
 
         // Compute phrase fingerprint.
         Text name = alias.GetText(n_name_);
-        int count = alias.GetInt(n_alias_count_, 1);
+        int count = alias.GetInt(n_count_, 1);
         uint64 fp = tokenizer_.Fingerprint(name);
         if (fp == 1) continue;
 
@@ -190,8 +190,8 @@ class PhraseTableBuilder : public task::FrameProcessor {
   // Symbols.
   Name n_lang_{names_, "lang"};
   Name n_name_{names_, "name"};
-  Name n_profile_alias_{names_, "/s/profile/alias"};
-  Name n_alias_count_{names_, "/s/alias/count"};
+  Name n_alias_{names_, "alias"};
+  Name n_count_{names_, "count"};
 
   // Language for aliases.
   Handle language_;

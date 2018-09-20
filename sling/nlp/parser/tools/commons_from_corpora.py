@@ -27,7 +27,7 @@ def build(recordio_filenames, output_filename):
   commons.freeze()
 
   symbol_names = {}
-  symbol_names["/s/thing"] = 1
+  symbol_names["thing"] = 1
 
   # Adds handle's id to 'symbol_names' if it is already not in 'commons'.
   def add(handle):

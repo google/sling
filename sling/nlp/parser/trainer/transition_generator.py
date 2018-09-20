@@ -50,7 +50,7 @@ class TransitionGenerator:
     self.commons = commons
     self._id = commons["id"]
     self._isa = commons["isa"]
-    self._thing = commons["/s/thing"]  # fallback type
+    self._thing = commons["thing"]  # fallback type
     assert self._thing.isglobal()
 
 

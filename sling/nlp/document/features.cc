@@ -27,7 +27,7 @@ void DocumentFeatures::Extract(const Document &document, int begin, int end) {
   features_.resize(length);
   bool in_quote = false;
   for (int i = 0; i < length; ++i) {
-    const string &word = document.token(begin + i).text();
+    const string &word = document.token(begin + i).word();
     TokenFeatures &f = features_[i];
 
     // Look up token word in lexicon and get word features.

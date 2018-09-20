@@ -695,7 +695,6 @@ Prefix     | Schema domain
 /nc/       | Noun compounds
 /proto/    | Protocol buffer message types
 /pb/       | PropBank
-/s/        | SLING document
 /saft/     | Entity types
 /schema/   | Schema families
 /vn/       | VerbNet

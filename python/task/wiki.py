@@ -60,10 +60,10 @@ class WikiWorkflow:
         :/w/item
         name: "..."
         description: "..."
-        /s/profile/alias: {
+        alias: {
           name: "..."
           lang: /lang/<lang>
-          /s/alias/sources: ...
+          sources: ...
         }
         ...
         /w/wikipedia: {
@@ -206,17 +206,16 @@ class WikiWorkflow:
         lang: /lang/<lang>
         /wp/page/text: "<Wikipedia page in wiki markup format>"
         /wp/page/qid: <qid>
-        :/s/document
-        /s/document/url: "http://<lang>.wikipedia.org/wiki/<name>"
-        /s/document/title: "..."
-        /s/document/text: "<clear text extracted from wiki markup>"
-        /s/document/tokens: [...]
-        /s/document/mention: {
+        :document
+        url: "http://<lang>.wikipedia.org/wiki/<name>"
+        title: "..."
+        text: "<clear text extracted from wiki markup>"
+        tokens: [...]
+        mention: {
           :/wp/link
-          /s/phrase/begin: ...
-          /s/phrase/length: ...
-          name: "..."
-          /s/phrase/evokes: <qid>
+          begin: ...
+          length: ...
+          evokes: <qid>
         }
         ...
         /wp/page/category: <qid>
@@ -241,11 +240,11 @@ class WikiWorkflow:
     Wiipedia pages from anchors, redirects, disambiguation pages etc. This is
     a set of record files with a SLING frame record for each item:
       <qid>: {
-        /s/profile/alias: {
+        alias: {
           name: "<alias>"
           lang: /lang/<lang>
-          /s/alias/sources: ...
-          /s/alias/count: ...
+          sources: ...
+          count: ...
         }
         ...
       }
@@ -412,7 +411,8 @@ class WikiWorkflow:
                                output=self.wikipedia_members(),
                                mapper="category-inverter",
                                reducer="category-member-merger",
-                               format="message/string")
+                               format="message/string",
+                               params={"threshold": 100000})
 
   #---------------------------------------------------------------------------
   # Fused items
@@ -498,11 +498,11 @@ class WikiWorkflow:
     """Resource for item names in language. This is a set of record files with
     one SLING frame per item.
       <qid>: {
-        /s/profile/alias: {
+        alias: {
           name: "<alias>"
           lang: /lang/<lang>
-          /s/alias/sources: ...
-          /s/alias/count: ...
+          sources: ...
+          count: ...
         }
         ...
       }

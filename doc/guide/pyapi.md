@@ -57,7 +57,7 @@ store = sling.Store(commons)
 ```
 Frames in the global store are now accessible from the local store:
 ```
-doc = store['/s/document']
+doc = store['document']
 ```
 Role values for frames can be accessed as attributes:
 ```
@@ -83,7 +83,7 @@ for f in store: print f.id
 ```
 The `parse()` method can be used for adding new frames to the store:
 ```
-f = store.parse('{a:10 b:10.5 c:"hello" d:{:/s/thing} e:[1,2,3]}')
+f = store.parse('{a:10 b:10.5 c:"hello" d:{:thing} e:[1,2,3]}')
 ```
 The `frame()` method can be used to create a new frame from a dictionary:
 ```
@@ -254,36 +254,33 @@ The `RecordDatabase` class has the following methods:
 ## Documents
 
 A _SLING document_ is a SLING frame formatted according to the
-[/s/document](../../data/nlp/schemas/document-schema.sling) schema. A document
+[document](../../data/nlp/schemas/document-schema.sling) schema. A document
 has the raw text of the document as well as the tokens, mentions, and thematic
 frames:
 ```
 {
-  :/s/document
-  /s/document/text: "John loves Mary"
-  /s/document/tokens: [
-    {:/s/token /s/token/index: 0 /s/token/text: "John" /s/token/start: 0 /s/token/length: 4 /s/token/break: 0},
-    {:/s/token /s/token/index: 1 /s/token/text: "loves" /s/token/start: 5 /s/token/length: 5},
-    {:/s/token /s/token/index: 2 /s/token/text: "Mary" /s/token/start: 11 /s/token/length: 4}
+  :document
+  text: "John loves Mary"
+  tokens: [
+    {word: "John" start: 0 size: 4},
+    {word: "loves" start: 5 size: 5},
+    {word: "Mary" start: 11 size: 4}
   ]
-  /s/document/mention: {
-    :/s/phrase
-    /s/phrase/begin: 0
-    /s/phrase/evokes: {=#1 :/saft/person}
+  mention: {
+    begin: 0
+    evokes: {=#1 :/saft/person}
   }
-  /s/document/mention: {
-    :/s/phrase
-    /s/phrase/begin: 1
-    /s/phrase/evokes: {
+  mention: {
+    begin: 1
+    evokes: {
       :/pb/love-01
       /pb/arg0: #1
       /pb/arg1: #2
     }
   }
-  /s/document/mention: {
-    :/s/phrase
-    /s/phrase/begin: 2
-    /s/phrase/evokes: {=#2 :/saft/person}
+  mention: {
+    begin: 2
+    evokes: {=#2 :/saft/person}
   }
 }
 ```
