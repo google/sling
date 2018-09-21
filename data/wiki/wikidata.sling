@@ -25,6 +25,13 @@
     source: /w/item
     target: /w/item
   }
+
+  role: {=/w/item/member :slot
+    name: "category member"
+    description: "Member of Wikipedia category"
+    source: /w/item
+    target: /w/item
+  }
 }
 
 {=/w/property +slot +/w/entity :schema

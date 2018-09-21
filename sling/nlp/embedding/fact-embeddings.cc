@@ -65,7 +65,7 @@ class FactLexiconExtractor : public Process {
     Name n_item(names, "/w/item");
     Name p_instance_of(names, "P31");
     Name n_wikimedia_category(names, "Q4167836");
-    Name n_wikimedia_disambiguation(names, "Q4167836");
+    Name n_wikimedia_disambiguation(names, "Q4167410");
 
     names.Bind(&commons);
 

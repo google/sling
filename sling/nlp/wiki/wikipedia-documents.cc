@@ -277,7 +277,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
 
   // Output alias for article title.
   void OutputTitleAlias(const Document &document) {
-    string qid = document.top().Id().str();
+    string qid = document.top().GetFrame(n_page_item_).Id().str();
     string title = document.top().GetString(n_page_title_);
     string name;
     string disambiguation;

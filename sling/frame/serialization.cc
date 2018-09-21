@@ -93,13 +93,19 @@ string Encode(const Object &object) {
 
 void LoadStore(const string &filename, Store *store) {
   if (store->Pristine() && Snapshot::Valid(filename)) {
-    CHECK(Snapshot::Read(store, filename));
-  } else {
-    FileDecoder decoder(store, filename);
-    store->LockGC();
-    decoder.DecodeAll();
-    store->UnlockGC();
+    Status st = Snapshot::Read(store, filename);
+    if (st.ok()) {
+      VLOG(1) << "Loaded " << filename << " from snapshot";
+      return;
+    } else {
+      VLOG(1) << "Cannot load " << filename << " from snapshot: " << st;
+    }
   }
+
+  FileDecoder decoder(store, filename);
+  store->LockGC();
+  decoder.DecodeAll();
+  store->UnlockGC();
 }
 
 }  // namespace sling
