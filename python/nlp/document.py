@@ -56,7 +56,14 @@ class Token(object):
 
   @property
   def word(self):
-    return self.frame[self.schema.token_word]
+    text = self.frame[self.schema.token_word]
+    if text == None:
+      start = self.frame[self.schema.token_start]
+      if start != None:
+        size = self.frame[self.schema.token_size]
+        if size == None: size = 1
+        text = self.document._text[start : start + size]
+    return text
 
   @word.setter
   def word(self, value):
@@ -149,6 +156,7 @@ class Document(object):
     # Initialize document from frame.
     self.frame = frame
     self.schema = schema
+    self._text = frame[schema.document_text]
     self.tokens = []
     self.mentions = []
     self.themes = []
@@ -237,10 +245,11 @@ class Document(object):
 
   @property
   def text(self):
-    return self.frame[self.schema.document_text]
+    return self._text
 
   @text.setter
   def text(self, value):
+    self._text = value
     self.frame[self.schema.document_text] = value
 
   def phrase(self, begin, end):
