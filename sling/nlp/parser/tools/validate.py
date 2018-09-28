@@ -63,17 +63,21 @@ class Error:
     for index, token in enumerate(self.document.tokens):
       if max_tokens >= 0 and index >= max_tokens: break
       if token.brk == 0 and len(s) > 0:
-        s[-1] = s[-1] + token.text
+        s[-1] = s[-1] + token.word
       else:
-        s.append(token.text)
+        s.append(token.word)
     if max_tokens >= 0 and len(self.document.tokens) > max_tokens:
       s.append(" ...")
     return ' '.join(s)
 
   # Returns a string reprsentation of the error.
   def tostr(self, indent=0):
+    self.document.decorate()
     output = []
     output.extend(["Document: " + self._document_text()])
+    docid = self.document.frame.id
+    if docid is not None:
+      output.extend(["DocumentId: " + str(docid)])
     output.extend(["DocumentLength: " + str(len(self.document.tokens))])
     if type(self.args[0]) is sling.Mention:
       output.extend(["Mention: " + self.args[0].frame.data(binary=False)])
@@ -142,7 +146,8 @@ class Results:
     if code not in self.error_counts:
       self.error_counts[code] = 0
     self.error_counts[code] += 1
-    if self.error_counts[code] <= self.options.max_error_examples:
+    if self.options.max_error_examples >= 0 and \
+      self.error_counts[code] <= self.options.max_error_examples:
       error = Error(code, document, args)
       if code not in self.error_examples:
         self.error_examples[code] = []
@@ -158,7 +163,8 @@ class Results:
 
       num = len(other.error_examples[code])
       current = len(self.error_examples[code])
-      if num + current > self.options.max_error_examples:
+      if self.options.max_error_examples >= 0 and \
+        num + current > self.options.max_error_examples:
         num = self.options.max_error_examples - current
       if num > 0:
         self.error_examples[code].extend(other.error_examples[code][0:num])
@@ -310,6 +316,11 @@ if __name__ == "__main__":
                default="",
                type=str,
                metavar='COMMONS')
+  flags.define('--max_examples',
+               help='Max number of examples per error type',
+               default=3,
+               type=int,
+               metavar='MAX_ERROR_EXAMPLES')
   flags.define('--output',
                help='Output recordio file name for valid documents',
                default="",
@@ -317,8 +328,10 @@ if __name__ == "__main__":
                metavar='OUTPUT_RECORDIO')
   flags.parse()
 
+  options = Options()
+  options.max_error_examples = flags.arg.max_examples
   results, total, written = validate(
-      flags.arg.commons, flags.arg.input, flags.arg.output)
+      flags.arg.commons, flags.arg.input, flags.arg.output, options)
   print "Went over", total, "documents"
   if flags.arg.output:
     print "Wrote", written, "valid documents to", flags.arg.output

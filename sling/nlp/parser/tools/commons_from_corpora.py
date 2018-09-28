@@ -21,7 +21,10 @@
 
 import sling
 
-def build(recordio_filenames, output_filename):
+# Builds a store from file(s) in 'recordio_filenames', saves it
+# in 'output_filename' (in text form if 'text' is True, else binary).
+# Returns (built store, names of symbols added to the store).
+def build(recordio_filenames, output_filename, text=False):
   commons = sling.Store()
   schema = sling.DocumentSchema(commons)
   commons.freeze()
@@ -62,7 +65,7 @@ def build(recordio_filenames, output_filename):
   for name, count in symbol_names.iteritems():
     output.frame({"id": name})
   output.freeze()
-  output.save(output_filename, binary=True)
+  output.save(output_filename, binary=not text)
   return output, symbol_names
 
 
@@ -74,15 +77,19 @@ if __name__ == "__main__":
                default="",
                type=str,
                metavar='COMMA_SEPARATED_RECORDIOS')
-
   flags.define('--output',
                help='Output commons file name',
                default="/tmp/commons.sling",
                type=str,
                metavar='OUTPUT_COMMONS_FILENAME')
+  flags.define('--text',
+               help='Text store format or not',
+               default=False,
+               action='store_true')
 
   flags.parse()
-  _, symbols = build(flags.arg.input.split(","), flags.arg.output)
+  inputs = flags.arg.input.split(",")
+  _, symbols = build(inputs, flags.arg.output, flags.arg.text)
   print "Commons written to", flags.arg.output, "with", len(symbols), "symbols"
 
 

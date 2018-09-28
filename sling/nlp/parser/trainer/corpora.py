@@ -30,8 +30,8 @@ def mention_comparator(x, y):
 # Stores a document and its gold transitions.
 class AnnotatedDocument(sling.Document):
   def __init__(self, commons, schema, encoded):
-    self.store = sling.Store(commons)
-    self.object = self.store.parse(encoded, binary=True)
+    self._store = sling.Store(commons)
+    self.object = self._store.parse(encoded, binary=True)
     super(AnnotatedDocument, self).__init__(frame=self.object, schema=schema)
     self.mentions.sort(cmp=mention_comparator)
     self.gold = []  # sequence of gold transitions

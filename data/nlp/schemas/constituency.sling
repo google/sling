@@ -1,0 +1,8 @@
+; Schema for constituency parse information
+
+{=/constituency/constituents name: "constituents"}
+{=/constituency/constituent name: "constituent"}
+{=/constituency/tag name: "constituency-tag"}
+{=/constituency/parent name: "constituency-parent"}
+{=/constituency/children name: "constituency-children"}
+{=/constituency/head name: "constituency-head"}

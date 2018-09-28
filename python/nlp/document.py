@@ -40,11 +40,14 @@ class DocumentSchema:
     self.token_start = store['start']
     self.token_size = store['size']
     self.token_break = store['break']
+    self.token_pos = store['postag']
 
     self.phrase = store['phrase']
     self.phrase_begin = store['begin']
     self.phrase_length = store['length']
     self.phrase_evokes = store['evokes']
+
+    self.thing = store['thing']
 
 
 class Token(object):
@@ -271,7 +274,7 @@ class Document(object):
       if t.frame.word == None: t.word = self.text[t.start:t.end]
       index += 1
     for m in self.mentions:
-      if m.frame.name == None:
+      if m.frame.name is None:
         m.frame.name = self.phrase(m.begin, m.end)
 
   def remove_annotations(self):

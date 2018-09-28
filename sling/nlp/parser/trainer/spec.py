@@ -313,7 +313,7 @@ class Spec:
     corpora.set_gold(False)   # No need to compute gold transitions yet
     for document in corpora:
       for token in document.tokens:
-        word = token.text
+        word = token.word
         self.words.add(word)
         for s in self.get_suffixes(word):
           self.suffix.add(s)
@@ -394,7 +394,7 @@ class Spec:
     chars = []
     categories = []
     for token in document.tokens:
-      decoding = list(token.text.decode("utf-8"))
+      decoding = list(token.word.decode("utf-8"))
       chars.append(decoding)
       categories.append([unicodedata.category(ch) for ch in decoding])
 
@@ -403,10 +403,10 @@ class Spec:
       output.append(features)
       if f.name == "word":
         for token in document.tokens:
-          features.add(self.words.index(token.text))
+          features.add(self.words.index(token.word))
       elif f.name == "suffix":
         for index, token in enumerate(document.tokens):
-          suffixes = self.get_suffixes(token.text, chars[index])
+          suffixes = self.get_suffixes(token.word, chars[index])
           ids = [self.suffix.index(s) for s in suffixes]
           ids = [i for i in ids if i is not None]  # ignore unknown suffixes
           features.add(ids)
@@ -468,9 +468,9 @@ class Spec:
               value = Spec.UNKNOWN_QUOTE
           if value != Spec.NO_QUOTE:
             token = document.tokens[index]
-            if token.text == "``":
+            if token.word == "``":
               value = Spec.OPEN_QUOTE
-            elif token.text == "''":
+            elif token.word == "''":
               value = Spec.CLOSE_QUOTE
             if value == Spec.UNKNOWN_QUOTE:
               value = Spec.CLOSE_QUOTE if in_quote else Spec.OPEN_QUOTE
@@ -563,7 +563,7 @@ class Spec:
     for fidx, f in enumerate(self.lstm_features):
       assert len(document.tokens) == len(features[fidx].indices)
       for i, vals in enumerate(features[fidx].indices):
-        text = "(" + document.tokens[i].text + ")"
+        text = "(" + document.tokens[i].word + ")"
         if type(vals) is int:
           last = str(vals)
           # For suffixes, also print the feature string.
