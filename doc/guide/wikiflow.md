@@ -38,7 +38,9 @@ First, the Wikipedia and Wikidata dumps need to be downloaded:
 ```
 ./run.sh --download_wikidata --download_wikipedia
 ```
-These dumps are large, so it might take a while to download. You can control
+These dumps are large, so it might take a while to download.
+For example, Wikidata and just the English Wikipedia dumps together take up ~70GB space, so make
+sure that you have enough disk space. Additionally, you can control
 the download with the following flags:
 
   * `--wikipedia YYYYMMDD`
@@ -75,6 +77,14 @@ This is equivalent to running each of the step separately:
          --build_phrasetab
 ```
 
+Note: The `build_wiki` pipeline needs a lot of temporary disk space to store intermediate outputs.
+By default it uses the `TMPDIR` environment variable, defaulting to `/tmp`. So please ensure that
+this folder is on a partition with enough space.
+```
+export TMPDIR=<folder on partition with lots of space>
+./run.sh --build_wiki
+```
+
 ## Wikidata import
 
 The Wikidata dump contains _entities_ for all the items in the knowledge base
@@ -83,7 +93,7 @@ The `wikidata-import` task reads these and convert them into SLING frame format
 and stores these in a record file set. This also outputs the [schema](https://www.mediawiki.org/wiki/Wikibase/DataModel)
 for the Wikidata properties in SLING frame schema format. After this, the
 `wikipedia-mapping` task produces a frame store that maps from Wikipedia article
-idsto Wikidata ids.
+ids to Wikidata ids.
 
 This is an example of the SLING frame for Wikidata item [Q2534120](https://www.wikidata.org/wiki/Q2534120):
 ```
