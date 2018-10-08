@@ -54,6 +54,11 @@ class WikidataConverter {
     return store->Lookup(StrCat("L", id));
   }
 
+  // Return symbol for Wikidata form.
+  static Handle Form(Store *store, Text id) {
+    return store->Lookup(id);
+  }
+
   // Return symbol for Wikidata property.
   static Handle Property(Store *store, int id) {
     return store->Lookup(StrCat("P", id));

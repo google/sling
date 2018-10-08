@@ -53,6 +53,9 @@ void PhraseTable::Lookup(uint64 fp, Handles *matches) {
         if (handle.IsNil()) {
           const EntityItem *entity = entity_index_.GetEntity(index);
           handle = store_->LookupExisting(entity->id());
+          if (handle.IsNil()) {
+            VLOG(1) << "Cannot resolve " << entity->id() << " in phrase table";
+          }
           (*entity_table_)[index] = handle;
         }
         matches->push_back(handle);
@@ -78,6 +81,9 @@ void PhraseTable::Lookup(uint64 fp, MatchList *matches) {
         if (handle.IsNil()) {
           const EntityItem *entity = entity_index_.GetEntity(index);
           handle = store_->LookupExisting(entity->id());
+          if (handle.IsNil()) {
+            VLOG(1) << "Cannot resolve " << entity->id() << " in phrase table";
+          }
           (*entity_table_)[index] = handle;
         }
         matches->emplace_back(handle, count);

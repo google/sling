@@ -135,7 +135,6 @@ class WikidataImporter : public task::Processor {
   Names names_;
   Name n_lexeme_{names_, "/w/lexeme"};
   Name n_property_{names_, "/w/property"};
-
 };
 
 REGISTER_TASK_PROCESSOR("wikidata-importer", WikidataImporter);

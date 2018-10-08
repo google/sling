@@ -42,6 +42,7 @@ class NameTableBuilder : public task::FrameProcessor {
     num_aliases_ = task->GetCounter("aliases");
     num_names_ = task->GetCounter("names");
     num_entities_ = task->GetCounter("entities");
+    num_instances_ = task->GetCounter("instances");
   }
 
   void Process(Slice key, const Frame &frame) override {
@@ -83,6 +84,7 @@ class NameTableBuilder : public task::FrameProcessor {
 
         // Add alias count to entity frequency.
         entity_table_[index].count += count;
+        num_instances_->Increment(count);
       }
     }
   }
@@ -202,6 +204,7 @@ class NameTableBuilder : public task::FrameProcessor {
   task::Counter *num_names_ = nullptr;
   task::Counter *num_entities_ = nullptr;
   task::Counter *num_aliases_ = nullptr;
+  task::Counter *num_instances_ = nullptr;
 
   // Mutex for serializing access to repository.
   Mutex mu_;
