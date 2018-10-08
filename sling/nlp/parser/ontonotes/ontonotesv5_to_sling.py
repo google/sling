@@ -35,8 +35,10 @@ By default, the script performs a series of span normalization steps.
 These can be disabled by passing:
   --no_drop_leading_articles \
   --no_descend_prepositions \
+  --no_particles_in_verbs \
   --no_shrink_using_heads \
-  --no_particles_in_verbs
+  --no_reduce_to_head \
+  --no_np_expansion
 
 See the Options class below for a complete list of options.
 """
@@ -77,9 +79,23 @@ class Options:
     # E.g. to travel -> travel.
     self.descend_prepositions = True
 
-    # Whether to shrink SRL arguments and Coref spans to NER and SRL predicates
-    # with the same heads (excluding conjunctions).
+    # Whether or not to shrink a span to another one with the same head.
     self.shrink_using_heads = True
+
+    # Whether or not to reduce an unshrinkable span to its head.
+    self.reduce_to_head = True
+
+    # Whether or not to expand a span currently reduced to its head to cover
+    # the full noun phrase.
+    self.np_expansion = True
+
+    # When head information can't be computed for a span's normalization,
+    # whether or not to use its last token as a proxy for the head.
+    self.last_token_as_fallback_head = True
+
+    # Apply shrink/reduce/expansion based heuristics to conjunctions too.
+    # E.g. "John and Mary" would normalize to the head "Mary".
+    self.normalize_conjunctions = True
 
     # Whether or not to include particles in SRL predicates.
     self.particles_in_verbs = True
@@ -117,6 +133,9 @@ class Summary:
       self.constituents = section.histogram("Constituent Tags")
       self.constituents.set_output_options(extremas=True)
 
+      # Pos tag histogram.
+      self.postag = section.histogram("Token POS Tags")
+
       # NER Span histogram (by type).
       self.ner = section.histogram("NER Spans")
 
@@ -126,6 +145,10 @@ class Summary:
       # Coref cluster size.
       self.coref_size = section.histogram('Coref Cluster Size')
       self.coref_size.set_output_options(sort_by='key', max_output_bins=20)
+
+      # Spans not matching any constituents.
+      self.no_matching_constituents = section.histogram(\
+        "Spans not matching constituents", max_examples_per_bin=3)
 
       # Span length histograms.
       section = statistics.section("Input Span Lengths")
@@ -144,13 +167,12 @@ class Summary:
         "Exact Input Span Overlaps", max_examples_per_bin=5)
       self.exact_overlaps.set_output_options(sort_by='key')
 
+
   # Normalization statistics.
   class Normalization:
     def __init__(self, statistics):
       # Basic counts.
       section = statistics.section("Normalization")
-      self.changed = section.counter("Total Spans Normalized")
-      self.unchanged = section.counter("Total Spans Unchanged")
       self.ner = section.counter("NER Spans Normalized")
       self.predicates = section.counter("SRL Predicate Spans Normalized")
       self.arguments = section.counter("SRL Argument Spans Normalized")
@@ -159,7 +181,15 @@ class Summary:
       # Drill-down into individual normalization steps.
       self.articles = section.histogram("Drop Articles", max_examples_per_bin=3)
       self.prep = section.histogram("Prep. Object", max_examples_per_bin=3)
-      self.head = section.histogram("Head Heuristic", max_examples_per_bin=3)
+      self.head = section.histogram("Shrunk via Head", max_examples_per_bin=3)
+      self.reduced = section.histogram(\
+        "Reduced to Head", max_examples_per_bin=3)
+      self.np_expansion = section.histogram(\
+        "NP Expansion (Original -> Final Length)", max_examples_per_bin=3)
+      self.none = section.histogram("No normalization", max_examples_per_bin=3)
+      for h in [self.head, self.reduced, self.np_expansion, self.none]:
+        h.set_output_options(max_output_bins=20)
+
       self.particles = section.histogram("Verb Particle Inclusion")
       self.particles.set_output_options(max_output_bins=20)
 
@@ -174,11 +204,16 @@ class Summary:
       self.frames = section.counter("Frames")
       self.constituents = section.counter("Constituents")
       self.cluster_size = section.histogram("Coref Cluster Size")
+      self.nesting = section.histogram("Span Nesting Depth", \
+        max_examples_per_bin=30)
 
       section = statistics.section("Output Span Lengths")
+      self.thing_length = section.histogram("Spans evoking 'thing'",\
+        max_examples_per_bin=3)
+      self.non_thing_length = section.histogram("Spans not evoking 'thing'")
       self.all_length = section.histogram("Spans evoking any frame")
-      self.all_length.set_output_options(
-        sort_by='key', max_output_bins=30, extremas=True)
+      for h in [self.all_length, self.thing_length, self.non_thing_length]:
+        h.set_output_options(max_output_bins=20, extremas=True)
 
       section = statistics.section("Output Frames")
       self.num_evokes = \
@@ -246,12 +281,25 @@ class Converter:
 
     return documents
 
+  # Returns the POS sequence for the tokens in 'mention'.
+  # Multiple consecutive tokens with the same tag T are represented as T+.
+  def _pos_sequence(self, document, mention):
+    seq = []
+    for i in xrange(mention.begin, mention.end):
+      pos = document.tokens[i].frame[document.schema.token_pos].id
+      if pos.startswith('/postag/'): pos = pos[8:]
+      if len(seq) == 0 or (seq[-1] != pos and seq[-1] != pos + '+'):
+        seq.append(pos)
+      elif not seq[-1].endswith('+'):
+        seq[-1] = seq[-1] + '+'
+    return ' '.join(seq)
 
   # Computes output statistics from 'document'.
   def _add_output_statistics(self, document):
     docid = document.frame.id
-
     output = self.summary.output
+
+    # Basic counters.
     output.docs.increment()
     output.tokens.increment(len(document.tokens))
     output.mentions.increment(len(document.mentions))
@@ -269,28 +317,73 @@ class Converter:
 
     frame_counts = {}
     for m in document.mentions:
-      length = m.end - m.begin
-      output.all_length.increment(length)
-
+      # Histogram of evoked types. 
       num = len([_ for _ in m.evokes()])
       types = [f[self.schema.isa].id for f in m.evokes()]
       types.sort()
       types = ', '.join(types)
       output.types_evoked.increment(types)
 
+      # Histogram of number of evoked frames per mention.
       example=None
       if num > 1:
         example = (docid, document.phrase(m.begin, m.end), types)
       output.num_evokes.increment(num, example=example)
+
+      # Histogram of span lengths.
+      length = m.end - m.begin
+      output.all_length.increment(length)
+
+      if types == self.options.backoff_type:
+        # Histogram of lengths of spans that only evoke the backoff type.
+        example=None
+        bucket = str(length)
+        if length > 1:
+          example = (docid, document.phrase(m.begin, m.end))
+          bucket += ": " + self._pos_sequence(document, m)
+        output.thing_length.increment(bucket, example=example)
+      else:
+        # Histogram of lengths of all other spans.
+        output.non_thing_length.increment(length)
 
       for f in m.evokes():
         if f not in frame_counts:
           frame_counts[f] = 0
         frame_counts[f] += 1
 
+    # Histogram of coref cluster sizes.
     for _, count in frame_counts.iteritems():
       output.cluster_size.increment(count)
 
+    # Histogram of span nesting depth.
+    # Crossing spans are denoted via a special bucket.
+    mentions = [m for m in document.mentions]
+    mentions.sort(key=lambda m: -m.length)   # longer spans first
+    covered = [None] * len(document.tokens)  # token -> deepest span over it
+    depths = {}                              # span -> depth
+    for mention in mentions:
+      depth = 0
+      key = (mention.begin, mention.end)
+      parent = covered[mention.begin]
+
+      # Since we are iterating over spans in decreasing order of length,
+      # all tokens in [begin, end) should be covered by the same span (if any).
+      # Otherwise [begin, end) represents a crossing span.
+      for token in xrange(mention.begin, mention.end):
+        if covered[token] != parent:
+          other = parent if parent is not None else covered[token]
+          example = (docid, document.phrase(mention.begin, mention.end), \
+            document.phrase(other.begin, other.end))
+          output.nesting.increment("CROSSING SPAN", example=example)
+          break
+      if parent is not None:
+        depth = 1 + depths[(parent.begin, parent.end)]
+      depths[key] = depth
+      for i in xrange(mention.begin, mention.end):
+        covered[i] = mention
+
+    for _, depth in depths.iteritems():
+      output.nesting.increment(depth)
 
 
 # Returns true if 'filename' appears in the list of ids in 'allowed_ids'.

@@ -34,7 +34,9 @@ class Span:
     # Only for constituency spans.
     self.parent = None   # parent span
     self.children = []   # children spans in left->right order
-    self.head = None     # head token index
+
+    # Head token index.
+    self.head = None
 
   # Returns whether this is a leaf span.
   def leaf(self):
@@ -167,6 +169,23 @@ class Mentions:
   def has(self, span):
     assert isinstance(span, Span)
     return (span.begin, span.end) in self.mentions
+
+
+# Stores the end token of the spans.
+class SpanEnds:
+  def __init__(self, size):
+    self.end = [False] * size   # i -> whether a span ends at i
+
+  # Add an end token.
+  def add(self, end):
+    self.end[end] = True
+
+  # Returns the last end token strictly before 'index'.
+  def last_end_before(self, index):
+    for i in xrange(index - 1, -1, -1):
+      if self.end[i]:
+        return i
+    return -1
 
 
 # Collection of CONLL annotations for a document.
@@ -420,7 +439,7 @@ class Annotations:
           children.append(s)
           s.parent = constituent
         children.append(child)
-        begin = constituent.end
+        begin = child.end
       for i in xrange(begin, constituent.end):
         s = self.tokens.spans[i]
         children.append(s)
@@ -480,31 +499,61 @@ class Annotations:
       histogram = None
       if self.options.drop_leading_articles and \
         tokens[begin].label == 'DT' and \
-        not tokens[begin].text[0].isupper():
+        begin != span.head:
           histogram = norm_summary.articles
           changed = True
+          begin += 1
       elif self.options.descend_prepositions:
         lowest = constituents.get((begin, end), None)
-        if lowest is not None and lowest.label == 'PP' and \
+        if lowest is not None and \
           lowest.head == begin and tokens[begin].label in ['IN', 'TO'] and \
           (begin + 1, end) in constituents:
             histogram = norm_summary.prep
             changed = True
+            begin += 1
       if changed:
+        # Record the change in the corresponding histogram.
         if key is None: key = span.label
         e = None
         if example: e = self._context(begin, end, window=0)
         histogram.increment(key, example=e)
-        begin += 1
+
+        # Recompute the head of the span.
+        lowest = constituents.get((begin, end), None)
+        if lowest is not None:
+          span.head = lowest.head
  
     # Set new span boundaries.
     span.begin = begin
     span.end = end
-    if changed:
-      norm_summary.changed.increment()
-    else:
-      norm_summary.unchanged.increment()
     return changed
+
+
+  # Computes heads of all spans using constituency information.
+  def _compute_span_heads(self, constituents):
+    spans = [span for span in self.ner.spans]
+    spans.extend(self.coref.spans)
+    for srl in self.srl:
+      spans.extend(srl.spans)
+
+    for span in spans:
+      span.head = None
+      lowest = constituents.get((span.begin, span.end), None)
+      if lowest is not None and lowest.head is not None:
+        span.head = lowest.head
+
+
+  # Returns a head token -> span mapping from NER and SRL Predicate spans.
+  def _head_to_span(self):
+    heads = {}
+    for span in self.ner.spans:
+      if span.head is not None:
+        heads[span.head] = (span, "NER")
+    for srl in self.srl:
+      for span in srl.spans:
+        if span.is_predicate() and span.head is not None:
+          heads[span.head] = (span, "PRED")
+    return heads
 
 
   # Normalizes all spans.
@@ -513,10 +562,17 @@ class Annotations:
     constituents = self._constituency_map()
     tokens = self.tokens.spans
 
+    # Populate span heads.
+    self._compute_span_heads(constituents)
+
+    # Collect end tokens of spans.
+    span_ends = SpanEnds(len(tokens))
+
     # Normalize NER spans.
     for span in self.ner.spans:
       if self._normalize_span(span, constituents, example=True):
         norm_summary.ner.increment()
+      span_ends.add(span.end - 1)
 
     # Normalize SRL spans.
     for srl in self.srl:
@@ -525,6 +581,7 @@ class Annotations:
         if self._normalize_span(span, constituents, example=example):
           if span.is_predicate():
             norm_summary.predicates.increment()
+            span_ends.add(span.end - 1)
           else:
             norm_summary.arguments.increment()
     
@@ -533,55 +590,93 @@ class Annotations:
       if self._normalize_span(span, constituents, key="Coref", example=False):
           norm_summary.coref.increment()
 
-    # Shrink-using-head heuristic.
-    if self.options.shrink_using_heads:
-      # Collect head -> span mapping for NER and SRL predicate spans.
-      heads = {}
-      for span in self.ner.spans:
-        lowest = constituents.get((span.begin, span.end), None)
-        if lowest is None or lowest.head is None:
+    # Shrink the spans further.
+    # Collect head -> span mapping for NER and SRL predicate spans.
+    heads = self._head_to_span()
+
+    # Collect spans to be normalized and sort them by length.
+    spans = []
+    for srl in self.srl:
+      spans.extend([(s, "ARG") for s in srl.spans if not s.is_predicate()])
+    spans.extend([(s, "COREF") for s in self.coref.spans])
+    spans.sort(key=lambda s: s[0].length())
+
+    # Normalize spans.
+    for span, source in spans:
+      orig_start = span.begin
+      orig_end = span.end
+      lowest = constituents.get((span.begin, span.end), None)
+
+      # Skip if we shouldn't normalize conjunctions.
+      if lowest is not None:
+        assert lowest.head == span.head, (lowest.head, span.head)
+        if lowest.is_conjunction() and not self.options.normalize_conjunctions:
           continue
-        heads[lowest.head] = (span, "NER")
-      for srl in self.srl:
-        for span in srl.spans:
-          if not span.is_predicate(): continue
-          lowest = constituents.get((span.begin, span.end), None)
-          if lowest is None or lowest.head is None:
-            continue
-          heads[lowest.head] = (span, "PRED")
 
-      # Try to align SRL argument spans to other spans with the same head.
-      for srl in self.srl:
-        for span in srl.spans:
-          if span.is_predicate():
-            continue
-          lowest = constituents.get((span.begin, span.end), None)
+      # Last ditch effort to set the span head.
+      if span.head is None and self.options.last_token_as_fallback_head:
+        span.head = span.end - 1
 
-          # Only normalize if this span is not a conjunction and the matching
-          # span is shorter.
-          if lowest is None or lowest.head is None or lowest.is_conjunction():
-            continue
-          if lowest.head in heads:
-            match = heads[lowest.head][0]
-            if match.length() < span.length():
-              span.begin = match.begin
-              span.end = match.end
-              norm_summary.head.increment("ARG -> " + heads[lowest.head][1])
-          else:
-            heads[lowest.head] = (span, "ARG")
+      shrunk_bin = None
+      reduced_bin = None
+      expanded_bin = None
 
-      # Try to align coref spans to other spans with the same head.
-      for span in self.coref.spans:
-        lowest = constituents.get((span.begin, span.end), None)
-        if lowest is None or lowest.head is None or lowest.is_conjunction():
-          continue
-        if lowest.head in heads:
-          match = heads[lowest.head][0]
-          if match.length() < span.length():
-            span.begin = match.begin
-            span.end = match.end
-            norm_summary.head.increment("COREF -> " + heads[lowest.head][1])
-           
+      # Try to shrink the span so that it matches an existing span
+      # with the same head.
+      if self.options.shrink_using_heads:
+        match = heads.get(span.head, None)
+        if match is not None and match[0].length() <= span.length():
+          span.begin = match[0].begin
+          span.end = match[0].end
+          shrunk_bin = source + " -> " + heads[span.head][1]
+
+      # If shrinking fails, then reduce the span to its head token.
+      if shrunk_bin is None and span.head is not None \
+        and self.options.reduce_to_head:
+        span.begin = span.head
+        span.end = span.head + 1
+        postag = self.tokens.spans[span.head].label
+        reduced_bin = source + " (" + postag + ")"
+
+      # If the span was reduced to its head, try NP expansion to expand
+      # it again.
+      if reduced_bin is not None and self.options.np_expansion:
+        # Allowed set of POS tags for NP expansion.
+        allowed = ['NNS', 'NN']
+        begin = span.end - 1
+
+        # Don't expand beyond the original start of the span, and don't cross
+        # any existing span.
+        left_limit = max(orig_start, span_ends.last_end_before(begin) + 1)
+        while True:
+          if self.tokens.spans[begin].label not in allowed:
+            break
+          begin -= 1
+          if begin < left_limit:
+            break
+        begin += 1
+
+        # If we could expand, then reset the span boundaries.
+        if begin < span.end - 1:
+          span.begin = begin
+          if begin != orig_start:
+            expanded_bin = str(orig_end - orig_start) + " -> " + \
+              str(span.end - span.begin)
+
+      example = (self.docid, self._phrase(orig_start, orig_end), \
+          self._phrase(span))
+
+      if expanded_bin:
+        norm_summary.np_expansion.increment(expanded_bin, example=example)
+      elif reduced_bin:
+        norm_summary.reduced.increment(reduced_bin, example=example)
+      elif shrunk_bin:
+        norm_summary.head.increment(shrunk_bin, example=example)
+      else:
+        # Couldn't normalize span with any heuristic.
+        example = (example[0], example[1])
+        norm_summary.none.increment(orig_end - orig_start, example=example)
+
     # Coref spans in the same cluster can be nested, e.g. [this [itself]].
     # After normalization, they can create duplicates, e.g. [[itself]].
     # Remove those now.
@@ -618,9 +713,30 @@ class Annotations:
   def _summarize_input(self):
     input_stats = self.summary.input
     input_stats.tokens.increment(len(self.tokens.spans))
+
+    # Constituency histogram.
     for c in self.constituents.spans:
       if len(c.children) > 0:  # ignore leaves (=token constituents)
         input_stats.constituents.increment(c.label)
+
+    # POS tag histogram.
+    for s in self.tokens.spans:
+      input_stats.postag.increment(s.label)
+
+    # Spans not matching any constituents.
+    constituents = self._constituency_map()
+    spans = [(s, "NER") for s in self.ner.spans]
+    spans.extend([(s, "COREF") for s in self.coref.spans])
+    for srl in self.srl:
+      for span in srl.spans:
+        label = "ARG"
+        if span.is_predicate(): label = "PRED"
+        spans.append((span, label))
+    for (span, label) in spans:
+      match = constituents.get((span.begin, span.end))
+      if match is None:
+        input_stats.no_matching_constituents.increment(label,\
+          example=(self.docid, self._phrase(span)))
 
     # Span -> Type(s).
     span_labels = {}
@@ -791,13 +907,19 @@ class Annotations:
   # Adds frames using the following heuristic.
   #
   # Notation:
+  # - 'Normalizing' a span means:
+  #   - Drop leading articles, if enabled.
+  #   - Follow prepositions to objects, if enabled.
+  #   - For every SRL Arg and Coref span s:
+  #     - Skip s if s is a conjunction and conjunctions are to be skipped.
+  #     - [shrink_using_heads]: If s has the same head as a previously
+  #       normalized span s' and s' is shorter than s, then s = s'
+  #     - [reduce_to_head]: Otherwise s = head(s)
+  #     - [np_expansion]: If s was shrunk to its head above, expand it to cover
+  #       the full noun phrase (if one exists).
+  #   - Expand predicates to include particles, if enabled.
+  #
   # - Let 'frame_types' be a map: span -> set of frame type(s) for that span.
-  # - 'Normalizing' means:
-  #   - Dropping leading articles, if enabled.
-  #   - Following prepositions to objects, if enabled.
-  #   - Expanding predicates to include particles, if enabled.
-  #   - Aligning SRL Arg and Coref spans to other spans with the same head,
-  #     if enabled (with the exception of conjunctions).
   #
   # 1. Normalize all spans.
   # 2. For each NER span s:
