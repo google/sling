@@ -29,12 +29,12 @@ flags.define("--languages",
 
 flags.define("--wikidata",
              help="wikidata version",
-             default="20180806",
+             default="20181001",
              metavar="YYYYMMDD")
 
 flags.define("--wikipedia",
              help="wikipedia version",
-             default="20180801",
+             default="20181001",
              metavar="YYYYMMDD")
 
 def post_process_flags(arg):
