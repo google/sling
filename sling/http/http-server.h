@@ -88,6 +88,9 @@ struct HTTPBuffer {
   // Clear buffer and allocate space.
   void reset(int size);
 
+  // Flush buffer by moving the used part to the beginning of the buffer.
+  void flush();
+
   // Make room in buffer.
   void ensure(int minfree);
 
@@ -250,18 +253,8 @@ class HTTPConnection {
   HTTPConnection(HTTPServer *server, int sock);
   ~HTTPConnection();
 
-  // Check if the connection awaits input.
-  bool AwaitsInput() const {
-    return state_ >= HTTP_STATE_IDLE && state_ <= HTTP_STATE_READ_BODY;
-  }
-
-  // Check if the connection has output.
-  bool HasOutput() const {
-    return state_ >= HTTP_STATE_WRITE_HEADER && state_ <= HTTP_STATE_WRITE_FILE;
-  }
-
   // Process I/O for connection.
-  Status Process(int events);
+  Status Process();
 
   // Parse header. Returns true when header has been parsed.
   bool ParseHeader();
@@ -288,8 +281,11 @@ class HTTPConnection {
   void SendFile(File *file) { file_ = file; }
 
   // Request and response body buffers.
-  HTTPBuffer *request_buffer() { return &request_body_; }
+  HTTPBuffer *request_buffer() { return &input_; }
   HTTPBuffer *response_buffer() { return &response_body_; }
+
+  // Return connection state name.
+  const char *State() const;
 
  private:
   // Receive data into buffer until it is full or all data that can be received
@@ -322,9 +318,11 @@ class HTTPConnection {
   // Current HTTP response for connection.
   HTTPResponse *response_;
 
+  // HTTP input buffer.
+  HTTPBuffer input_;
+
   // Buffers for request/response header/body.
   HTTPBuffer request_header_;
-  HTTPBuffer request_body_;
   HTTPBuffer response_header_;
   HTTPBuffer response_body_;
 

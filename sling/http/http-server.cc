@@ -113,20 +113,6 @@ bool DecodeURLComponent(const char *url, string *output) {
   return DecodeURLComponent(url, strlen(url), output);
 }
 
-void HTTPBuffer::reset(int size) {
-  if (size != capacity()) {
-    if (size == 0) {
-      free(floor);
-      floor = ceil = start = end = nullptr;
-    } else {
-      floor = static_cast<char *>(realloc(floor, size));
-      CHECK(floor != nullptr) << "Out of memory, " << size << " bytes";
-      ceil = floor + size;
-    }
-  }
-  start = end = floor;
-}
-
 string HTMLEscape(const char *text, int size) {
   string escaped;
   const char *p = text;
@@ -143,6 +129,29 @@ string HTMLEscape(const char *text, int size) {
     }
   }
   return escaped;
+}
+
+void HTTPBuffer::reset(int size) {
+  if (size != capacity()) {
+    if (size == 0) {
+      free(floor);
+      floor = ceil = start = end = nullptr;
+    } else {
+      floor = static_cast<char *>(realloc(floor, size));
+      CHECK(floor != nullptr) << "Out of memory, " << size << " bytes";
+      ceil = floor + size;
+    }
+  }
+  start = end = floor;
+}
+
+void HTTPBuffer::flush() {
+  if (start > floor) {
+    int size = end - start;
+    memcpy(floor, start, size);
+    start = floor;
+    end = start + size;
+  }
 }
 
 void HTTPBuffer::ensure(int minfree) {
@@ -366,39 +375,40 @@ void HTTPServer::Worker() {
         AcceptConnection();
       } else {
         // Check if connection has been closed.
-        if (ev->events & EPOLLHUP) {
+        if (ev->events & (EPOLLHUP | EPOLLERR)) {
           // Detach socket from poll descriptor.
+          if (ev->events & EPOLLERR) {
+            VLOG(5) << "Error polling socket " << conn->sock_;
+          }
           rc = epoll_ctl(pollfd_, EPOLL_CTL_DEL, conn->sock_, ev);
           if (rc < 0) {
             VLOG(2) << Error("epoll_ctl");
           } else {
             // Delete client connection.
-            VLOG(3) << "Close HTTP connection";
+            VLOG(3) << "Close HTTP connection " << conn->sock_;
             RemoveConnection(conn);
             delete conn;
           }
         } else {
           // Process connection data.
-          VLOG(5) << "Process in state " << conn->state_;
-          Status s = conn->Process(ev->events);
-          if (!s.ok()) {
-            LOG(ERROR) << "HTTP error: " << s;
-            conn->state_ = HTTP_STATE_TERMINATE;
-          }
+          VLOG(5) << "Begin " << conn->sock_ << " in state " << conn->State();
+          do {
+            Status s = conn->Process();
+            if (!s.ok()) {
+              LOG(ERROR) << "HTTP error: " << s;
+              conn->state_ = HTTP_STATE_TERMINATE;
+            }
+            if (conn->state_ == HTTP_STATE_IDLE) {
+              VLOG(5) << "Process " << conn->sock_ << " again";
+            }
+          } while (conn->state_ == HTTP_STATE_IDLE);
+          VLOG(5) << "End " << conn->sock_ << " in state " << conn->State();
 
           if (conn->state_ == HTTP_STATE_TERMINATE) {
             conn->Shutdown();
             VLOG(5) << "Shutdown HTTP connection";
           } else {
-            // Update expected events.
-            ev->events = 0;
-            if (conn->AwaitsInput()) ev->events |= EPOLLIN;
-            if (conn->HasOutput()) ev->events |= EPOLLOUT;
-            rc = epoll_ctl(pollfd_, EPOLL_CTL_MOD, conn->sock_, ev);
-            if (rc < 0) LOG(ERROR) << Error("epoll_ctl");
             conn->last_ = time(0);
-            VLOG(5) << "Done processing in state " << conn->state_
-                    << ", events " << ev->events;
           }
         }
       }
@@ -438,13 +448,13 @@ void HTTPServer::AcceptConnection() {
   if (rc < 0) LOG(WARNING) << Error("fcntl");
 
   // Create new connection.
-  VLOG(3) << "New HTTP connection";
+  VLOG(3) << "New HTTP connection " << sock;
   HTTPConnection *conn = new HTTPConnection(this, sock);
   AddConnection(conn);
 
   // Add new connection to poll descriptor.
   struct epoll_event ev;
-  ev.events = EPOLLIN | EPOLLOUT;
+  ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
   ev.data.ptr = conn;
   rc = epoll_ctl(pollfd_, EPOLL_CTL_ADD, sock, &ev);
   if (rc < 0) LOG(WARNING) << Error("epoll_ctl");
@@ -483,7 +493,7 @@ void HTTPServer::ShutdownIdleConnections() {
 void HTTPServer::HelpHandler(HTTPRequest *req, HTTPResponse *rsp) {
   MutexLock lock(&mu_);
   rsp->SetContentType("text/html");
-  rsp->set_status(404);
+  rsp->set_status(200);
   rsp->Append("<html><head><title>helpz</title></head><body>\n");
   rsp->Append("Contexts:<ul>\n");
   for (const Context &c : contexts_) {
@@ -502,11 +512,6 @@ void HTTPServer::HelpHandler(HTTPRequest *req, HTTPResponse *rsp) {
 }
 
 void HTTPServer::ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp) {
-  static const char *state_name[] = {
-    "IDLE", "READ_HEADER", "READ_BODY", "PROCESSING",
-    "WRITE_HEADER", "WRITE_BODY", "WRITE_FILE",
-    "TERMINATE",
-  };
   static const char *header_state_name[] = {
     "FIRSTWORD", "FIRSTWS", "SECONDWORD", "SECONDWS", "THIRDWORD",
     "LINE", "LF", "CR", "CRLF", "CRLFCR", "DONE", "BOGUS",
@@ -514,7 +519,7 @@ void HTTPServer::ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp) {
 
   MutexLock lock(&mu_);
   rsp->SetContentType("text/html");
-  rsp->set_status(404);
+  rsp->set_status(200);
   rsp->Append("<html><head><title>connz</title></head><body>\n");
   rsp->Append("<table border=\"1\"><tr>\n");
   rsp->Append("<td>Socket</td>");
@@ -564,7 +569,7 @@ void HTTPServer::ConnectionHandler(HTTPRequest *req, HTTPResponse *rsp) {
 
     // Connection state.
     rsp->Append("<td>");
-    rsp->Append(state_name[conn->state_]);
+    rsp->Append(conn->State());
     rsp->Append("</td>");
 
     // Header parsing state.
@@ -625,13 +630,17 @@ HTTPConnection::~HTTPConnection() {
   delete response_;
 }
 
-Status HTTPConnection::Process(int events) {
+Status HTTPConnection::Process() {
   MutexLock lock(&mu_);
   bool done;
+  char *start;
+  char *end;
   switch (state_) {
     case HTTP_STATE_IDLE:
-      // Allocate request header buffer.
-      request_header_.reset(server_->options().initial_bufsiz);
+      // Allocate input buffer.
+      if (input_.empty()) {
+        input_.reset(server_->options().initial_bufsiz);
+      }
 
       // Prepare for receiving HTTP header.
       state_ = HTTP_STATE_READ_HEADER;
@@ -640,62 +649,75 @@ Status HTTPConnection::Process(int events) {
       // Fall through
 
     case HTTP_STATE_READ_HEADER:
-      if ((events & EPOLLIN) == 0) return Status::OK;
-      while (1) {
-        // Expand request header buffer.
-        request_header_.ensure(1);
+      // Keep reading until input is exhausted.
+      done = false;
+      while (!done) {
+        // Expand input buffer to ensure we have room to read data.
+        input_.ensure(1);
 
         // Receive more data.
-        Status st = Recv(&request_header_, &done);
+        Status st = Recv(&input_, &done);
         if (!st.ok()) return st;
-        if (done) return Status::OK;
+        if (state_ == HTTP_STATE_TERMINATE) return Status::OK;
+      }
 
-        // Parse HTTP header.
-        if (ParseHeader()) {
-          break;
-        } else if (header_state_ == HDR_STATE_BOGUS) {
+      // Parse header and check if we have received a complete HTTP header.
+      if (!ParseHeader()) {
+        if (header_state_ == HDR_STATE_BOGUS) {
           return Status(1, "Invalid HTTP header");
+        } else {
+          return Status::OK;
         }
       }
 
       // Create HTTP request from header.
+      request_header_.append(input_.floor, input_.start - input_.floor);
       delete request_;
       request_ = new HTTPRequest(this, &request_header_);
       if (!request_->valid()) return Status(1, "Bad HTTP header");
-
-      // Move unused portion of request header to request body.
-      if (request_header_.remaining() > 0) {
-        // Allocate response buffer.
-        int n = server_->options().initial_bufsiz;
-        if (n < request_header_.remaining()) n = request_header_.remaining();
-        if (n < request_->content_length()) n = request_->content_length();
-        request_body_.reset(n);
-        request_body_.start = request_body_.floor;
-        request_body_.end = request_body_.floor + n;
-        memcpy(request_body_.start, request_header_.end, n);
-        request_header_.end -= n;
-      }
       state_ = HTTP_STATE_READ_BODY;
       // Fall through
 
     case HTTP_STATE_READ_BODY:
-      // Check if any input data is ready.
-      if ((events & EPOLLIN) == 0) return Status::OK;
-      while (request_body_.size() < request_->content_length()) {
-        // Receive more data.
-        Status st = Recv(&request_body_, &done);
-        if (!st.ok()) return st;
-        if (done) return Status::OK;
+      // Read request body.
+      if (request_->content_length() > 0) {
+        // Keep reading until input is exhausted.
+        done = false;
+        while (!done) {
+          // Expand input buffer to ensure we have room to read data.
+          input_.ensure(1);
+
+          // Receive more data.
+          Status st = Recv(&input_, &done);
+          if (!st.ok()) return st;
+          if (state_ == HTTP_STATE_TERMINATE) return Status::OK;
+        }
+
+        // Check if we have received the complete HTTP request body.
+        if (input_.size() < request_->content_length()) return Status::OK;
+
+        // Set request body content.
+        request_->set_content(input_.start, request_->content_length());
       }
+
       state_ = HTTP_STATE_PROCESSING;
       // Fall through
 
     case HTTP_STATE_PROCESSING:
-      // Set request body content.
-      request_->set_content(request_body_.start, request_body_.size());
+      // Set up input buffer to cover request body.
+      start = input_.start;
+      end = input_.end;
+      if (request_->content_length() > 0) {
+        input_.end = start + request_->content_length();
+      } else {
+        input_.end = start;
+      }
 
       // Dispatch request to handler.
       Dispatch();
+
+      // Skip past request body in input.
+      input_.start = input_.end = end;
 
       state_ = HTTP_STATE_WRITE_HEADER;
       // Fall through
@@ -725,40 +747,43 @@ Status HTTPConnection::Process(int events) {
     case HTTP_STATE_WRITE_FILE:
       // Send file data.
       while (file_ != nullptr) {
-        // Read next chunk from file.
-        uint64 read;
-        response_body_.reset(server_->options().file_bufsiz);
-        Status st = file_->Read(response_body_.start,
-                                response_body_.remaining(),
-                                &read);
-        response_body_.end = response_body_.start + read;
+        if (response_body_.empty()) {
+          // Read next chunk from file.
+          uint64 read;
+          response_body_.reset(server_->options().file_bufsiz);
+          Status st = file_->Read(response_body_.start,
+                                  response_body_.remaining(),
+                                  &read);
+          response_body_.end = response_body_.start + read;
 
-        if (!st.ok()) {
-          // Error reading file.
-          file_->Close();
-          file_ = nullptr;
-          return st;
+          if (!st.ok()) {
+            // Error reading file.
+            LOG(ERROR) << "HTTP file read error: " << st;
+            file_->Close();
+            file_ = nullptr;
+            return st;
+          }
+
+          if (read == 0) {
+            // End of file.
+            file_->Close();
+            file_ = nullptr;
+          }
         }
 
-        if (read == 0) {
-          // End of file.
-          file_->Close();
-          file_ = nullptr;
-        } else {
-          // Send next file chunk.
-          while (response_body_.size() > 0) {
-            Status st = Send(&response_body_, &done);
-            if (!st.ok()) return st;
-            if (done) return Status::OK;
-          }
+        // Send next file chunk.
+        while (response_body_.size() > 0) {
+          Status st = Send(&response_body_, &done);
+          if (!st.ok()) return st;
+          if (done) return Status::OK;
         }
       }
 
       // Check for persistent connection.
       if (keep_) {
         // Clear buffers.
+        input_.flush();
         request_header_.clear();
-        request_body_.clear();
         response_header_.clear();
         response_body_.clear();
 
@@ -789,12 +814,15 @@ Status HTTPConnection::Recv(HTTPBuffer *buffer, bool *done) {
       return Status::OK;
     } else if (errno == EAGAIN) {
       // No more data available for now.
+      VLOG(6) << "Recv " << sock_ << " again";
       return Status::OK;
     } else {
       // Receive error.
+      VLOG(6) << "Recv " << sock_ << " error";
       return Error("recv");
     }
   }
+  VLOG(6) << "Recv " << sock_ << ", " << rc << " bytes";
   buffer->end += rc;
   return Status::OK;
 }
@@ -806,16 +834,20 @@ Status HTTPConnection::Send(HTTPBuffer *buffer, bool *done) {
     *done = true;
     if (rc == 0) {
       // Connection closed.
+      VLOG(6) << "Send " << sock_ << " closed";
       state_ = HTTP_STATE_TERMINATE;
       return Status::OK;
     } else if (errno == EAGAIN) {
       // Output queue full.
+      VLOG(6) << "Send " << sock_ << " again";
       return Status::OK;
     } else {
       // Send error.
+      VLOG(6) << "Send " << sock_ << " done";
       return Error("send");
     }
   }
+  VLOG(6) << "Send " << sock_ << ", " << rc << " bytes";
   buffer->start += rc;
   return Status::OK;
 }
@@ -864,8 +896,8 @@ void HTTPConnection::Dispatch() {
 }
 
 bool HTTPConnection::ParseHeader() {
-  while (request_header_.start < request_header_.end) {
-    char c = *request_header_.start++;
+  while (input_.start < input_.end) {
+    char c = *input_.start++;
     switch (header_state_) {
       case HDR_STATE_FIRSTWORD:
         switch (c) {
@@ -1037,10 +1069,21 @@ void HTTPConnection::AppendResponse(const char *data, int size) {
   response_body_.append(data, size);
 }
 
-HTTPRequest::HTTPRequest(HTTPConnection *conn, HTTPBuffer *hdr) : conn_(conn) {
-  // Initialize request buffer.
-  hdr->start = hdr->floor;
+const char *HTTPConnection::State() const {
+  switch (state_) {
+    case HTTP_STATE_IDLE: return "IDLE";
+    case HTTP_STATE_READ_HEADER: return "READ HDR";
+    case HTTP_STATE_READ_BODY: return "READ BODY";
+    case HTTP_STATE_PROCESSING: return "PROCESSING";
+    case HTTP_STATE_WRITE_HEADER: return "WRITE HDR";
+    case HTTP_STATE_WRITE_BODY: return "WRITE BODY";
+    case HTTP_STATE_WRITE_FILE: return "WRITE FILE";
+    case HTTP_STATE_TERMINATE: return "TERMINATE";
+  }
+  return "???";
+}
 
+HTTPRequest::HTTPRequest(HTTPConnection *conn, HTTPBuffer *hdr) : conn_(conn) {
   // Get HTTP line.
   char *s = hdr->gets();
   if (!s) return;
