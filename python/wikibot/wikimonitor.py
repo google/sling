@@ -38,7 +38,7 @@ class WikiMonitor:
     self.site = pywikibot.Site("wikidata", "wikidata")
     self.repo = self.site.data_repository()
 
-    self.path = "local/data/e/wikibot/"
+    self.path = "local/logs/"
     test = ""
     if flags.arg.test: test = "test-"
     self.pattern = self.path + "wikibotlog-" + test + "20*.rec"

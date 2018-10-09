@@ -56,8 +56,7 @@ class StoreFactsBot:
       time_str = "test-" + time_str
     else:
       record_file_name = "local/data/e/wikibot/birth-dates.rec"
-    status_file_name = "local/data/e/wikibot/wikibotlog-"+time_str+".rec"
-
+    status_file_name = "local/logs/wikibotlog-" + time_str + ".rec"
     self.record_file = sling.RecordReader(record_file_name)
     self.status_file = sling.RecordWriter(status_file_name)
 
@@ -128,14 +127,15 @@ class StoreFactsBot:
     })
     self.status_file.write(str(item), status_record.data(binary=True))
 
-
   def store_records(self, records, batch_size=3):
     updated = 0
     recno = 0
     for item_str, record in records:
-      if recno < flags.arg.first: continue
-      if recno > flags.arg.last: break
       recno += 1
+      if recno < flags.arg.first:
+        print "Skipping record number", recno
+        continue
+      if recno > flags.arg.last: break
       if updated >= batch_size:
         print "Hit batch size of", batch_size
         break
@@ -181,11 +181,12 @@ class StoreFactsBot:
         claim.addSources(self.get_sources(cat_str))
         self.log_status_stored(item, fact, rev_id)
         updated += 1
-      print item
-    print "Last record.", updated, "records updated."
+      print item, recno
+    print "Last record:", recno, "Total:", updated, "records updated."
+
 
   def run(self):
-    self.store_records(self.record_file, batch_size=2)
+    self.store_records(self.record_file, batch_size=100)
 
 if __name__ == '__main__':
   flags.parse()
