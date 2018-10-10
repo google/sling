@@ -1248,6 +1248,42 @@ Builder &Builder::Add(const char *value) {
   return *this;
 }
 
+Builder &Builder::Add(Handle name, const Handles &value) {
+  Slot *slot = NewSlot();
+  slot->name = name;
+  const Handle *begin = value.data();
+  const Handle *end = begin + value.size() ;
+  slot->value = store_->AllocateArray(begin, end);
+  return *this;
+}
+
+Builder &Builder::Add(const Object &name, const Handles &value) {
+  Slot *slot = NewSlot();
+  slot->name = name.handle();
+  const Handle *begin = value.data();
+  const Handle *end = begin + value.size() ;
+  slot->value = store_->AllocateArray(begin, end);
+  return *this;
+}
+
+Builder &Builder::Add(const Name &name, const Handles &value) {
+  Slot *slot = NewSlot();
+  slot->name = name.Lookup(store_);
+  const Handle *begin = value.data();
+  const Handle *end = begin + value.size() ;
+  slot->value = store_->AllocateArray(begin, end);
+  return *this;
+}
+
+Builder &Builder::Add(Text name, const Handles &value) {
+  Slot *slot = NewSlot();
+  slot->name = store_->Lookup(name);
+  const Handle *begin = value.data();
+  const Handle *end = begin + value.size() ;
+  slot->value = store_->AllocateArray(begin, end);
+  return *this;
+}
+
 Builder &Builder::AddLink(Handle name, Text symbol) {
   Slot *slot = NewSlot();
   slot->name = name;

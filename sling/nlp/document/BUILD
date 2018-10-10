@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+load("//tools:embed.bzl", "embed_data")
+
 cc_library(
   name = "token-breaks",
   hdrs = ["token-breaks.h"],
@@ -161,3 +163,43 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "document-service",
+  srcs = ["document-service.cc"],
+  hdrs = ["document-service.h"],
+  deps = [
+    "//sling/base",
+    "//sling/frame",
+    "//sling/nlp/document",
+  ],
+)
+
+embed_data(
+  name = "corpus-app",
+  srcs = [
+    "app/corpus.html",
+    "app/corpus.js",
+    "app/corpus.css",
+  ],
+)
+
+cc_binary(
+  name = "corpus-browser",
+  srcs = ["corpus-browser.cc"],
+  deps = [
+    ":corpus-app",
+    ":document-service",
+    "//app",
+    "//sling/base",
+    "//sling/file",
+    "//sling/file:embed",
+    "//sling/file:posix",
+    "//sling/file:recordio",
+    "//sling/frame",
+    "//sling/http:http-server",
+    "//sling/http:static-content",
+    "//sling/http:web-service",
+    "//sling/nlp/document",
+    "//sling/util:mutex",
+  ],
+)

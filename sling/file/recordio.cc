@@ -472,8 +472,17 @@ RecordDatabase::~RecordDatabase() {
 bool RecordDatabase::Lookup(const Slice &key, Record *record) {
   // Compute key fingerprint and shard number.
   uint64 fp = Fingerprint(key.data(), key.size());
-  int shard = fp % shards_.size();
-  return shards_[shard]->Lookup(key, record, fp);
+  current_shard_ = fp % shards_.size();
+  return shards_[current_shard_]->Lookup(key, record, fp);
+}
+
+bool RecordDatabase::Next(Record *record) {
+  while (current_shard_ < shards_.size()) {
+    RecordReader *reader = shards_[current_shard_]->reader();
+    if (!reader->Done() && reader->Read(record)) return true;
+    current_shard_++;
+  }
+  return false;
 }
 
 RecordWriter::RecordWriter(File *file, const RecordFileOptions &options)

@@ -819,6 +819,12 @@ class Builder : public External {
   Builder &Add(Text name, const char *value);
   Builder &Add(const char *value);
 
+  // Adds array slot to frame.
+  Builder &Add(Handle name, const Handles &value);
+  Builder &Add(const Object &name, const Handles &value);
+  Builder &Add(const Name &name, const Handles &value);
+  Builder &Add(Text name, const Handles &value);
+
   // Adds slot with symbol link to frame. This will link to a proxy if the
   // symbol is not already defined.
   Builder &AddLink(Handle name, Text symbol);

@@ -314,8 +314,15 @@ class RecordDatabase {
   // Look up record by key. Returns false if no matching record is found.
   bool Lookup(const Slice &key, Record *record);
 
+  // Retrieve the next record from the current shard.
+  bool Next(Record *record);
+
  private:
+  // Shards in record database.
   std::vector<RecordIndex *> shards_;
+
+  // Current shard for retrieving the next document.
+  int current_shard_ = 0;
 };
 
 // Writer for writing records to record file.

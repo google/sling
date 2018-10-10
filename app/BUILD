@@ -11,5 +11,9 @@ embed_data(
     "external/material-icons.woff2",
     "external/preact.js",
     "image/appicon.ico",
+    "lib/docview.js",
+    "lib/mdl.js",
+    "lib/util.js",
+    "style/docview.css",
   ],
 )

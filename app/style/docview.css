@@ -1,0 +1,233 @@
+.docviewer {
+  width: 100%;
+  height: 100%;
+  padding: 0px 0px 0px 0px;
+}
+
+.themes {
+  display: flex;
+  background: #eeeeee;
+}
+
+.text-and-panels {
+  display: flex;
+  height: 100%;
+  background: #eeeeee;
+}
+
+.doctext {
+  flex: 1;
+  overflow-x: auto;
+  margin: 10px 5px 10px 10px;
+  background: white;
+  border: 2px solid #cccccc;
+  font: 13pt lora, georgia, serif;
+  padding: 10px;
+}
+
+.docpanels {
+  flex: 1;
+  overflow-x: auto;
+  margin: 10px 10px 10px 5px;
+}
+
+.panel {
+  margin: 0px 5px 10px 5px;
+  padding: 5px;
+  box-shadow: 1px 1px 1px 0px #808080;
+  background: white;
+}
+
+.panel-titlebar {
+  text-align: left;
+  font:  bold 11pt arial;
+  padding: 3px;
+}
+
+.panel-title {
+  width: 100%;
+  text-align: left;
+  padding: 3px;
+}
+
+.panel-icon {
+  text-align: center;
+  float: right;
+  cursor: default;
+}
+
+.panel-content {
+  padding: 10px;
+}
+
+.chip {
+  text-align: center;
+  padding: 5px;
+  margin: 4px;
+  border-radius: 10px;
+  background-color: #E0E0E0;
+  box-shadow: 1px 1px 1px 0px #808080;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.type-label {
+  font: bold 8pt arial;
+  margin: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  background-color: #909090;
+  color: white;
+  vertical-align: baseline;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.boxed {
+  border: 1px solid black;
+  text-align: center;
+  font-size: 7pt;
+  line-height: 1;
+  padding: 1px 1px 1px 1px;
+  margin-right: 5px;
+  cursor: pointer;
+}
+
+.tfs {
+  position: relative;
+  margin-right: 3px;
+}
+
+.tfs:before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 0;
+  border: 1px solid #e0e0e0;
+  border-right: 0px;
+  width: 5px;
+  height: 100%;
+}
+
+.tfs:after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 0;
+  border: 1px solid #e0e0e0;
+  border-left: 0px;
+  width: 5px;
+  height: 100%;
+}
+
+.tfs td {
+  font-family: arial;
+  font-size: 10pt;
+  text-align: left;
+  white-space:nowrap;
+}
+
+.tfs th {
+  font-family: arial;
+  font-size: 10pt;
+  font-weight: bold;
+  text-align: left;
+  padding-bottom: 5px;
+  line-height: 18pt;
+}
+
+.tfs-collapsed {
+  font-weight:bold;
+  font-style:italic;
+  color: #909090;
+}
+
+.tfs-collapsed:after {
+  content: " ...";
+  color: #909090;
+  font-weight:bold;
+  font-style:italic;
+}
+
+.label {
+  color: white;
+  font-size: 8pt;
+  line-height: 90%;
+  white-space:nowrap;
+  overflow: hidden;
+  background:rgba(120,120,120,0.75);
+  position: absolute;
+  top: -10px;
+  left: -1px;
+  padding: 1px;
+  border: 1px solid #808080;
+  border-radius: 3px;
+  z-index: 10;
+}
+
+.b1 {
+  background-color: #F8F8F8;
+  border: 1px solid #D0D0D0;
+  border-radius: 4px;
+  margin: 1px;
+  display: inline-block;
+  position: relative;
+  padding: 0px 2px 0px 2px;
+  cursor: pointer;
+}
+
+.b2 {
+  background-color: #F0F0F0;
+  border: 1px solid #D0D0D0;
+  border-radius: 4px;
+  margin: 1px;
+  display: inline-block;
+  position: relative;
+  padding: 0px 2px 0px 2px;
+  cursor: pointer;
+}
+
+.b3 {
+  background-color: #E8E8E8;
+  border: 1px solid #D0D0D0;
+  border-radius: 4px;
+  margin: 1px;
+  display: inline-block;
+  position: relative;
+  padding: 0px 2px 0px 2px;
+  cursor: pointer;
+}
+
+.callout {
+  display: inline;
+  z-index: 20;
+  padding: 10px 10px;
+
+  position: fixed;
+  border:1px solid #dca;
+  background: #fffAF0;
+  border-radius: 4px;
+  box-shadow: 5px 5px 8px #ccc;
+}
+
+.notch {
+  width: 12px;
+  height: 22px;
+  position: absolute;
+  top: 20px;
+  left: -12px;
+}
+
+span[tooltip]:hover:before {
+  content: attr(tooltip);
+  font:  11pt arial;
+  position: absolute;
+  color: #fff;
+  padding: 8px;
+  border-radius: 5px;
+  z-index: 1;
+  margin-top: 25px;
+  background: #666;
+  white-space: pre-wrap;
+}
+

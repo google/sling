@@ -170,12 +170,8 @@ void JSONWriter::WriteArray(const ArrayDatum *array) {
 }
 
 void JSONWriter::WriteSymbol(const SymbolDatum *symbol) {
-  if (symbol->name.IsRef()) {
-    const StringDatum *name = store_->GetString(symbol->name);
-    WriteString(name);
-  } else {
-    Write(symbol->name);
-  }
+  const StringDatum *name = store_->GetString(symbol->name);
+  WriteString(name);
 }
 
 void JSONWriter::WriteLink(Handle handle, bool reference) {
