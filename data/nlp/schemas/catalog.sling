@@ -4,14 +4,7 @@
   name: "Global catalog"
   catalog_schema_family: /schema/meta
   catalog_schema_family: /schema/document
-  catalog_schema_family: /schema/wordnet
-  catalog_schema_family: /schema/pb_meta
-  catalog_schema_family: /schema/propbank
-  catalog_schema_family: /schema/vn_meta
-  catalog_schema_family: /schema/verbnet
-  catalog_schema_family: /schema/saft
   catalog_schema_family: /schema/lang
   catalog_schema_family: /schema/wikidata
   catalog_schema_family: /schema/wikipedia
 }
-

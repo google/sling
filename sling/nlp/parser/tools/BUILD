@@ -29,15 +29,3 @@ cc_binary(
     "//third_party/zlib",
   ],
 )
-
-cc_binary(
-  name = "build-store",
-  srcs = ["build-store.cc"],
-  deps = [
-    "//sling/base",
-    "//sling/file:posix",
-    "//sling/frame:object",
-    "//sling/frame:serialization",
-  ],
-)
-
