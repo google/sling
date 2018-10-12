@@ -32,25 +32,24 @@
 set -eu
 
 TEMP_RECORDIO=/tmp/output.rec
-SUMMARY=/tmp/summary.txt
-COMMONS=/tmp/commons
+TEMP_COMMONS=/tmp/commons
 
 echo
 echo "Converting Ontonotes to SLING..."
 python sling/nlp/parser/ontonotes/ontonotesv5_to_sling.py \
-  --input=$1  --summary=$SUMMARY --output=$TEMP_RECORDIO "${@:3}"
+  --input=$1 --output=$TEMP_RECORDIO "${@:3}"
 
 echo
 echo "Creating commons..."
 python sling/nlp/parser/tools/commons_from_corpora.py \
-  --input=$TEMP_RECORDIO --output=$COMMONS
+  --input=$TEMP_RECORDIO --output=$TEMP_COMMONS
 
 echo
 echo "Validating converted documents..."
 python sling/nlp/parser/tools/validate.py \
-  --input=$TEMP_RECORDIO --commons=$COMMONS --output=$2
+  --input=$TEMP_RECORDIO --commons=$TEMP_COMMONS --output=$2
 
 echo
-echo "Written converted documents to $2, summary to ${SUMMARY}."
+echo "Written converted documents to $2"
 echo "Success!"
 

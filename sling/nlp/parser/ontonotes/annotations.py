@@ -35,6 +35,9 @@ class Span:
     self.parent = None   # parent span
     self.children = []   # children spans in left->right order
 
+    # Only true for SRL predicate spans.
+    self.predicate = False
+
     # Head token index.
     self.head = None
 
@@ -54,10 +57,6 @@ class Span:
   def length(self):
     assert self.end is not None, str(self)
     return self.end - self.begin
-
-  # Whether the span is an SRL predicate.
-  def is_predicate(self):
-    return self.label.startswith("/pb/pred/")
 
   # Whether the constituent span represents a conjunction.
   def is_conjunction(self):
@@ -188,6 +187,14 @@ class SpanEnds:
     return -1
 
 
+# Span types.
+NER = 1
+PRED = 2
+ARG = 4
+COREF = 8
+ALL = NER | PRED | ARG | COREF
+
+
 # Collection of CONLL annotations for a document.
 class Annotations:
   CONSTITUENCY_BEGIN = True
@@ -200,6 +207,31 @@ class Annotations:
 
     # Current sentence index.
     self.sentence = None
+
+
+  # Generator that returns spans of specified type(s).
+  def spans(self, types_mask, label=False):
+    if types_mask & NER > 0:
+      for s in self.ner.spans:
+        yield (s, "NER") if label else s
+
+    if types_mask & (PRED | ARG) > 0:
+      for srl in self.srl:
+        for s in srl.spans:
+          if s.predicate and (types_mask & PRED > 0):
+            yield (s, "PRED") if label else s
+          elif not s.predicate and (types_mask & ARG > 0):
+            yield (s, "ARG") if label else s
+
+    if types_mask & COREF > 0:
+      for s in self.coref.spans:
+        yield (s, "COREF") if label else s
+
+
+  # Returns part-of-speech for the specified token.
+  def pos(self, index):
+    return self.tokens.spans[index].label
+
 
   # Processes 'line' which should be in the CONLL format.
   # - either '#begin document', signifying the start of a document part.
@@ -330,17 +362,21 @@ class Annotations:
         if beginning and ending:  # e.g. (V*) or (ARGM-TMP*)
           assert srl[-2] == '*'
           label = srl[1:-2]
+          predicate = False
           if label == 'V':
+            predicate = True
             assert fields[6] != '-'
-            label = "/pb/pred/" + fields[6]  # predicate prefix, e.g. 'live'
+            label = fields[6]                # predicate prefix, e.g. 'live'
             if fields[7] != "-":
               label += "-" + fields[7]       # predicate suffix, e.g. '01'
-          srl_annotation.singleton(token_index, label)
+          srl_annotation.singleton(token_index, '/pb/' + label)
+          if predicate:
+            srl_annotation.spans[-1].predicate = True
         elif beginning:           # e.g. (ARG2*
           assert srl[-1] == '*'
           label = srl[1:-1]
           assert label != 'V'     # predicates can't be multi-token
-          srl_annotation.start(token_index, label)
+          srl_annotation.start(token_index, '/pb/' + label)
         else:                     # e.g. *)
           assert ending
           assert srl == '*)'
@@ -447,6 +483,103 @@ class Annotations:
       constituent.children = children
 
 
+  # Performs NP-expansion of 'span' beginning from its head.
+  # Expansion stop if it encounters a token that is disallowed.
+  # Returns the new span boundaries.
+  def _expand(self, span, disallowed):
+    assert span.head is not None
+
+    allowed_tags = ['NNS', 'NN', 'NNP', 'NNPS', 'HYPH']
+    begin = span.head
+    while True:
+      if begin < span.begin or disallowed[begin]:
+        break
+      if self.pos(begin) not in allowed_tags:
+         break
+      begin -= 1
+    begin += 1
+
+    # First word in an expanded noun phrase can't be a hyphen.
+    if begin < span.head and self.pos(begin) == 'HYPH':
+      begin += 1
+    return (begin, span.head + 1)
+
+
+  # Generates noun phrases using constituency information and adds them
+  # as extra named entities. Uses the following heuristic:
+  # - Makes all existing NER and predicate spans off-limits.
+  # - Each NML constituent that (a) only has has token children and (b) doesn't
+  #   have a conjunction is added as a noun phrase if it doesn't overlap with
+  #   an off-limit span. This added NML span also becomes off-limits.
+  # - Each base (i.e. non-recursive) NP is expanded, respecting the off-limit
+  #   tokens, and added as a noun phrase, and made off-limit.
+  def _add_noun_phrases(self):
+    # Disallow existing NER spans.
+    disallowed = [False] * len(self.tokens.spans)
+    for span in self.ner.spans:
+      for i in xrange(span.begin, span.end):
+        disallowed[i] = True
+
+    # Also disallow predicates, since we also have nominal predicates in
+    # the corpus.
+    for srl in self.srl:
+      for span in srl.spans:
+        if span.predicate:
+          for i in xrange(span.begin, span.end):
+            disallowed[i] = True
+
+    norm_summary = self.summary.normalization
+
+    # Sort in ascending order of constituent lengths.
+    # This way we will process base NML spans, disallow their token ranges,
+    # and automatically skip recursive NMLs.
+    spans = [span for span in self.constituents.spans]
+    spans.sort(key=lambda s:s.length())
+    for span in self.constituents.spans:
+      if span.label ==  'NML':
+        conjunction = False
+        allowed = True
+        for i in xrange(span.begin, span.end):
+          conjunction |= self.pos(i) == 'CC'
+          allowed &= not disallowed[i]
+        if allowed and not conjunction:
+          # NML span should only have token children.
+          leaf = True
+          for c in span.children:
+            if c.end > c.begin + 1 or len(c.children) > 0:
+              leaf = False
+              break
+
+          # Add a noun phrase.
+          if leaf:
+            self.ner.start(span.begin, self.options.backoff_type)
+            self.ner.finish(span.end)
+            added = self.ner.spans[-1]
+            example = (self.docid, self._phrase(added))
+            bucket = span.end - span.begin
+            norm_summary.np_via_nml.increment(bucket, example=example)
+
+        # Irrespective of whether we added the span or not, mark its tokens
+        # as disallowed for future consideration.
+        for i in xrange(span.begin, span.end):
+          disallowed[i] = True
+
+    # Output noun phrases for base NPs. We exploit the sortedness trick again.
+    for span in spans:
+      if span.label == 'NP' and span.head is not None:
+        (begin, end) = self._expand(span, disallowed)
+        if end > begin:
+          self.ner.start(begin, self.options.backoff_type)
+          self.ner.finish(end)
+          added = self.ner.spans[-1]
+          example = (self.docid, self._phrase(added))
+          norm_summary.np.increment(end - begin, example=example)
+
+          # Skip any ancestor NPs by disallowing the tokens of this NP.
+          for i in xrange(added.begin, added.end):
+            disallowed[i] = True
+
+
   # Returns a list of beginning and ending constituent spans from 'parse_bit'.
   # Examples:
   # (S(VP*  : S and VP spans begin here.
@@ -494,36 +627,45 @@ class Annotations:
     tokens = self.tokens.spans
     norm_summary = self.summary.normalization
 
-    while changed and begin < end - 1:
-      changed = False
+    while end > begin + 1:  # can't normalize single word spans
       histogram = None
-      if self.options.drop_leading_articles and \
-        tokens[begin].label == 'DT' and \
-        begin != span.head:
-          histogram = norm_summary.articles
-          changed = True
-          begin += 1
+      original = (begin, end)
+      if self.options.trim_trailing_possessives and \
+        span.head == end - 1 and tokens[span.head].label == 'POS' and \
+        (begin, end - 1) in constituents:
+        histogram = norm_summary.possessives
+        end -= 1
+      elif self.options.drop_leading_articles and \
+        tokens[begin].label == 'DT' and begin != span.head:
+        histogram = norm_summary.articles
+        begin += 1
       elif self.options.descend_prepositions:
         lowest = constituents.get((begin, end), None)
         if lowest is not None and \
           lowest.head == begin and tokens[begin].label in ['IN', 'TO'] and \
           (begin + 1, end) in constituents:
             histogram = norm_summary.prep
-            changed = True
             begin += 1
-      if changed:
-        # Record the change in the corresponding histogram.
-        if key is None: key = span.label
-        e = None
-        if example: e = self._context(begin, end, window=0)
-        histogram.increment(key, example=e)
 
-        # Recompute the head of the span.
+      if (begin, end) == original:
+        break
+      else:
+        # Record the change in the corresponding histogram.
+        if histogram is not None:
+          if key is None: key = span.label
+          e = None
+          if example: e = self._context(original[0], original[1], window=0)
+          histogram.increment(key, example=e)
+
+        # Recompute head.
         lowest = constituents.get((begin, end), None)
-        if lowest is not None:
+        if lowest is not None and lowest.head is not None:
           span.head = lowest.head
- 
+        elif span.head is not None and (span.head < begin or span.head >= end):
+          span.head = None
+
     # Set new span boundaries.
+    changed = (span.begin, span.end) != (begin, end)
     span.begin = begin
     span.end = end
     return changed
@@ -531,29 +673,31 @@ class Annotations:
 
   # Computes heads of all spans using constituency information.
   def _compute_span_heads(self, constituents):
-    spans = [span for span in self.ner.spans]
-    spans.extend(self.coref.spans)
-    for srl in self.srl:
-      spans.extend(srl.spans)
-
-    for span in spans:
+    for span in self.spans(ALL):
       span.head = None
       lowest = constituents.get((span.begin, span.end), None)
       if lowest is not None and lowest.head is not None:
         span.head = lowest.head
+      elif self.options.last_token_as_fallback_head:
+        span.head = span.end - 1
 
 
-  # Returns a head token -> span mapping from NER and SRL Predicate spans.
+  # Returns a head token -> span mapping for NER and SRL Predicate spans.
   def _head_to_span(self):
     heads = {}
-    for span in self.ner.spans:
-      if span.head is not None:
-        heads[span.head] = (span, "NER")
-    for srl in self.srl:
-      for span in srl.spans:
-        if span.is_predicate() and span.head is not None:
-          heads[span.head] = (span, "PRED")
+    for (span, label) in self.spans(NER | PRED, label=True):
+      heads[span.head] = (span, label)
     return heads
+
+  
+  # Returns the POS sequence string for the span's token range.
+  def _pos_sequence(self, span):
+    seq = []
+    for i in xrange(span.begin, span.end):
+      pos = self.pos(i)
+      if i == span.head: pos = '[' + pos + ']'
+      seq.append(pos)
+    return ' '.join(seq)
 
 
   # Normalizes all spans.
@@ -562,10 +706,10 @@ class Annotations:
     constituents = self._constituency_map()
     tokens = self.tokens.spans
 
-    # Populate span heads.
+    # Populate span heads for NER and predicate spans.
     self._compute_span_heads(constituents)
 
-    # Collect end tokens of spans.
+    # Token -> Span that ends there (or None).
     span_ends = SpanEnds(len(tokens))
 
     # Normalize NER spans.
@@ -575,30 +719,25 @@ class Annotations:
       span_ends.add(span.end - 1)
 
     # Normalize SRL spans.
-    for srl in self.srl:
-      for span in srl.spans:
-        example = not span.is_predicate()
-        if self._normalize_span(span, constituents, example=example):
-          if span.is_predicate():
-            norm_summary.predicates.increment()
-            span_ends.add(span.end - 1)
-          else:
-            norm_summary.arguments.increment()
+    for span in self.spans(PRED | ARG):
+      if self._normalize_span(span, constituents, example=not span.predicate):
+        if span.predicate:
+          norm_summary.predicates.increment()
+          span_ends.add(span.end - 1)
+        else:
+          norm_summary.arguments.increment()
     
     # Normalize Coref spans.
-    for span in self.coref.spans:
-      if self._normalize_span(span, constituents, key="Coref", example=False):
-          norm_summary.coref.increment()
+    for span in self.spans(COREF):
+      if self._normalize_span(span, constituents, key="COREF", example=False):
+        norm_summary.coref.increment()
 
     # Shrink the spans further.
     # Collect head -> span mapping for NER and SRL predicate spans.
     heads = self._head_to_span()
 
     # Collect spans to be normalized and sort them by length.
-    spans = []
-    for srl in self.srl:
-      spans.extend([(s, "ARG") for s in srl.spans if not s.is_predicate()])
-    spans.extend([(s, "COREF") for s in self.coref.spans])
+    spans = list(self.spans(ARG | COREF, label=True))
     spans.sort(key=lambda s: s[0].length())
 
     # Normalize spans.
@@ -619,56 +758,28 @@ class Annotations:
 
       shrunk_bin = None
       reduced_bin = None
-      expanded_bin = None
 
       # Try to shrink the span so that it matches an existing span
       # with the same head.
       if self.options.shrink_using_heads:
         match = heads.get(span.head, None)
-        if match is not None and match[0].length() <= span.length():
+        if match is not None:
           span.begin = match[0].begin
           span.end = match[0].end
           shrunk_bin = source + " -> " + heads[span.head][1]
 
       # If shrinking fails, then reduce the span to its head token.
       if shrunk_bin is None and span.head is not None \
-        and self.options.reduce_to_head:
+        and self.options.reduce_to_head and \
+        (span.begin != span.head or span.end != span.head + 1):
         span.begin = span.head
         span.end = span.head + 1
-        postag = self.tokens.spans[span.head].label
-        reduced_bin = source + " (" + postag + ")"
-
-      # If the span was reduced to its head, try NP expansion to expand
-      # it again.
-      if reduced_bin is not None and self.options.np_expansion:
-        # Allowed set of POS tags for NP expansion.
-        allowed = ['NNS', 'NN']
-        begin = span.end - 1
-
-        # Don't expand beyond the original start of the span, and don't cross
-        # any existing span.
-        left_limit = max(orig_start, span_ends.last_end_before(begin) + 1)
-        while True:
-          if self.tokens.spans[begin].label not in allowed:
-            break
-          begin -= 1
-          if begin < left_limit:
-            break
-        begin += 1
-
-        # If we could expand, then reset the span boundaries.
-        if begin < span.end - 1:
-          span.begin = begin
-          if begin != orig_start:
-            expanded_bin = str(orig_end - orig_start) + " -> " + \
-              str(span.end - span.begin)
+        reduced_bin = source + " (" + self.pos(span.head) + ")"
 
       example = (self.docid, self._phrase(orig_start, orig_end), \
           self._phrase(span))
 
-      if expanded_bin:
-        norm_summary.np_expansion.increment(expanded_bin, example=example)
-      elif reduced_bin:
+      if reduced_bin:
         norm_summary.reduced.increment(reduced_bin, example=example)
       elif shrunk_bin:
         norm_summary.head.increment(shrunk_bin, example=example)
@@ -693,20 +804,26 @@ class Annotations:
   def _include_particles(self):
     tokens = self.tokens.spans
     end = len(tokens) - 1
+    ends = set()
     for srl in self.srl:
       covered = set()
       for span in srl.spans:
-        if not span.is_predicate():
+        if not span.predicate:
           for t in xrange(span.begin, span.end):
             covered.add(t)
       for span in srl.spans:
-        if span.is_predicate():
+        if span.predicate and tokens[span.begin].label.startswith('VB'):
           i = span.end   # token index of the particle, if present
           if i < end and i not in covered and tokens[i].label == 'RP':
+            ends.add(span.end)
             span.end += 1
             key = tokens[i - 1].text + '_' + tokens[i].text
             key = key.lower()
             self.summary.normalization.particles.increment(key)
+
+    for s in self.spans(PRED | ARG | COREF):
+      if s.end in ends and s.begin == s.end - 1:
+        s.end += 1
 
  
   # Summarizes CONLL annotation statistics for the current document.
@@ -725,14 +842,7 @@ class Annotations:
 
     # Spans not matching any constituents.
     constituents = self._constituency_map()
-    spans = [(s, "NER") for s in self.ner.spans]
-    spans.extend([(s, "COREF") for s in self.coref.spans])
-    for srl in self.srl:
-      for span in srl.spans:
-        label = "ARG"
-        if span.is_predicate(): label = "PRED"
-        spans.append((span, label))
-    for (span, label) in spans:
+    for (span, label) in self.spans(ALL, label=True):
       match = constituents.get((span.begin, span.end))
       if match is None:
         input_stats.no_matching_constituents.increment(label,\
@@ -753,32 +863,29 @@ class Annotations:
       input_stats.all_length.increment(span.length())
 
     # Summarize NER spans.
-    for span in self.ner.spans:
+    for span, source in self.spans(NER, label=True):
       input_stats.ner.increment(span.label)
       input_stats.ner_length.increment(span.length())
       _record_length(span)
-      _add_label(span, 'NER')
+      _add_label(span, source)
 
     # Summarize SRL spans.
-    for srl in self.srl:
-      for span in srl.spans:
-        if span.is_predicate():
-          input_stats.predicates.increment()
-          input_stats.srl_predicate_length.increment(span.length())
-          _record_length(span)
-          _add_label(span, 'Pred')
-        else:
-          input_stats.arguments.increment(span.label)
-          input_stats.srl_argument_length.increment(span.length())
-          _record_length(span)
-          _add_label(span, 'Arg')
+    for span, source in self.spans(PRED | ARG, label=True):
+      _record_length(span)
+      _add_label(span, source)
+      if span.predicate:
+        input_stats.predicates.increment()
+        input_stats.srl_predicate_length.increment(span.length())
+      else:
+        input_stats.arguments.increment(span.label)
+        input_stats.srl_argument_length.increment(span.length())
 
     # Summarize coref spans.
     input_stats.coref.increment(len(self.coref.spans))
     clusters = {}
-    for span in self.coref.spans:
+    for span, source in self.spans(COREF, label=True):
       _record_length(span)
-      _add_label(span, 'Coref')
+      _add_label(span, source)
       input_stats.coref_length.increment(span.length())
       clusters.setdefault(span.label, []).append(span)
     input_stats.clusters.increment(len(clusters))
@@ -794,11 +901,11 @@ class Annotations:
       t.sort()
       example = None
       mark = False
-      if len(t) == 2 and t[0] == 'NER' and t[1] == 'Pred':
+      if len(t) == 2 and t[0] == 'NER' and t[1] == 'PRED':
         example = self._context(span[0], span[1])
         mark = True
       key = ', '.join(t)
-      key = re.sub(r"Arg,.* Arg", ">1 Args", key)
+      key = re.sub(r"ARG,.* ARG", ">1 ARGS", key)
       input_stats.exact_overlaps.increment(key, example=example)
       if mark:
         input_stats.exact_overlaps.mark(key)
@@ -891,7 +998,17 @@ class Annotations:
   def _phrase(self, begin, end=None):
     return self._context(begin, end, window=0)
 
-  
+
+  # Returns a span's text with the head marked with brackets.
+  def _phrase_with_head(self, s):
+    result = []
+    for i in xrange(s.begin, s.end):
+      word = self.tokens.spans[i].text
+      if i == s.head: word = '[' + word + ']'
+      result.append(word)
+    return ' '.join(result)
+
+
   # Stores a particular frame type to be evoked for a span.
   class FrameType:
     def __init__(self, span, type, refer=None):
@@ -908,6 +1025,7 @@ class Annotations:
   #
   # Notation:
   # - 'Normalizing' a span means:
+  #   - Drop trailing possessive if it is the head, if enabled.
   #   - Drop leading articles, if enabled.
   #   - Follow prepositions to objects, if enabled.
   #   - For every SRL Arg and Coref span s:
@@ -915,12 +1033,11 @@ class Annotations:
   #     - [shrink_using_heads]: If s has the same head as a previously
   #       normalized span s' and s' is shorter than s, then s = s'
   #     - [reduce_to_head]: Otherwise s = head(s)
-  #     - [np_expansion]: If s was shrunk to its head above, expand it to cover
-  #       the full noun phrase (if one exists).
   #   - Expand predicates to include particles, if enabled.
   #
   # - Let 'frame_types' be a map: span -> set of frame type(s) for that span.
   #
+  # 0. Add noun phrases as NER spans using NML and NP constituents, if enabled.
   # 1. Normalize all spans.
   # 2. For each NER span s:
   #      frame_types[s].add(s.label)
@@ -959,7 +1076,7 @@ class Annotations:
     docid = self.docid + ':' + str(self.part)
     if self.options.doc_per_sentence:
       docid += '_s' + str(self.sentence)
-    document.frame.extend({'id': docid})
+    document.frame.extend({'/ontonotes/docid': docid})
 
     # Write tokens.
     for t in self.tokens.spans:
@@ -970,8 +1087,13 @@ class Annotations:
     if not self.options.omit_constituents:
       self._write_constituents(document)
 
+    # Add more noun phrases as extra named entities.
+    if self.options.extra_noun_phrases:
+      self._add_noun_phrases()
+
     # Normalize all spans.
     self._normalize()
+
     mentions = Mentions(document)
 
     # Span -> list of FrameType objects.
@@ -996,13 +1118,11 @@ class Annotations:
       _add_type(span, span.label)
 
     # Record SRL predicate types.
-    for srl in self.srl:
-      for span in srl.spans:
-        if span.is_predicate():
-          label = span.label
-          if self.options.one_predicate_type:
-            label = self.options.generic_predicate_type
-          _add_type(span, label)
+    for span in self.spans(PRED):
+      label = span.label
+      if self.options.one_predicate_type:
+        label = self.options.generic_predicate_type
+      _add_type(span, label)
 
     # Record coref span types. A coref span takes an existing type
     # from 'frame_types', failing which it takes a generic type.
@@ -1042,7 +1162,7 @@ class Annotations:
     # use existing non-generic frame types wherever possible.
     for srl in self.srl:
       for span in srl.spans:
-        if not span.is_predicate():
+        if not span.predicate:
           key = (span.begin, span.end)
           if key not in frame_types:
             _add_type(span, self.options.backoff_type)
@@ -1078,7 +1198,7 @@ class Annotations:
     for srl in self.srl:
       predicate_frame = None
       for span in srl.spans:
-        if span.is_predicate():
+        if span.predicate:
           _evoke(span)
 
           # Get the predicate frame.
@@ -1093,7 +1213,7 @@ class Annotations:
 
       # Link predicate frame to argument frames.
       for span in srl.spans:
-        if not span.is_predicate():
+        if not span.predicate:
           _evoke(span)
           frame = frame_types[(span.begin, span.end)][0].frame
           predicate_frame.extend({span.label: frame})

@@ -33,12 +33,13 @@ python path/to/this/script.py --allowed_ids_file=/path/to/ids
 
 By default, the script performs a series of span normalization steps.
 These can be disabled by passing:
+  --no_trim_trailing_possessives \
   --no_drop_leading_articles \
   --no_descend_prepositions \
   --no_particles_in_verbs \
   --no_shrink_using_heads \
   --no_reduce_to_head \
-  --no_np_expansion
+  --no extra_noun_phrases
 
 See the Options class below for a complete list of options.
 """
@@ -72,6 +73,9 @@ class Options:
     self.doc_per_sentence = True
 
     # Span construction and normalization options.
+    # Remove trailing possessives, e.g. "China 's" is normalized to "China".
+    self.trim_trailing_possessives = True
+
     # Whether or not to drop leading articles, e.g. the incident -> incident.
     self.drop_leading_articles = True
 
@@ -85,9 +89,8 @@ class Options:
     # Whether or not to reduce an unshrinkable span to its head.
     self.reduce_to_head = True
 
-    # Whether or not to expand a span currently reduced to its head to cover
-    # the full noun phrase.
-    self.np_expansion = True
+    # Whether or not to generate extra noun phrases using constituency info.
+    self.extra_noun_phrases = True
 
     # When head information can't be computed for a span's normalization,
     # whether or not to use its last token as a proxy for the head.
@@ -119,6 +122,7 @@ class Summary:
   class Input:
     def __init__(self, statistics):
       # Basic counts.
+      self.statistics = statistics
       section = statistics.section("Input Statistics")
       self.files = section.counter("Files Converted")
       self.files_skipped = section.counter("Files Skipped")
@@ -172,6 +176,7 @@ class Summary:
   class Normalization:
     def __init__(self, statistics):
       # Basic counts.
+      self.statistics = statistics
       section = statistics.section("Normalization")
       self.ner = section.counter("NER Spans Normalized")
       self.predicates = section.counter("SRL Predicate Spans Normalized")
@@ -179,16 +184,22 @@ class Summary:
       self.coref = section.counter("Coreference Spans Normalized")
 
       # Drill-down into individual normalization steps.
+      self.possessives = section.histogram("Drop Trailing Possessives",\
+        max_examples_per_bin=3)
       self.articles = section.histogram("Drop Articles", max_examples_per_bin=3)
       self.prep = section.histogram("Prep. Object", max_examples_per_bin=3)
-      self.head = section.histogram("Shrunk via Head", max_examples_per_bin=3)
+      self.head = section.histogram("Shrunk via Head", max_examples_per_bin=20)
       self.reduced = section.histogram(\
         "Reduced to Head", max_examples_per_bin=3)
-      self.np_expansion = section.histogram(\
-        "NP Expansion (Original -> Final Length)", max_examples_per_bin=3)
       self.none = section.histogram("No normalization", max_examples_per_bin=3)
-      for h in [self.head, self.reduced, self.np_expansion, self.none]:
-        h.set_output_options(max_output_bins=20)
+      for h in [self.head, self.reduced, self.none]:
+        h.set_output_options(max_output_bins=50)
+
+      # Noun phrases added, by length.
+      self.np = section.histogram("Noun Phrases Added via Base NPs",\
+        max_examples_per_bin=10)
+      self.np_via_nml = section.histogram("Noun Phrases Added via Base NMLs",\
+        max_examples_per_bin=10)
 
       self.particles = section.histogram("Verb Particle Inclusion")
       self.particles.set_output_options(max_output_bins=20)
@@ -196,6 +207,7 @@ class Summary:
   # Statistics computed on output SLING documents.
   class Output:
     def __init__(self, statistics):
+      self.statistics = statistics
       section = statistics.section("Output Counts")
       self.docs = section.counter("Documents")
       self.tokens = section.counter("Tokens")
@@ -296,7 +308,7 @@ class Converter:
 
   # Computes output statistics from 'document'.
   def _add_output_statistics(self, document):
-    docid = document.frame.id
+    docid = document.frame["/ontonotes/docid"]
     output = self.summary.output
 
     # Basic counters.

@@ -100,7 +100,11 @@ def collins_head_table():
     ('NP', RIGHTDIS, '$,ADJP,PRN'),
     ('NP', RIGHT, 'CD'),
     ('NP', RIGHTDIS, 'JJ,JJS,RB,QP'),
-    ('NML', RIGHTDIS, 'NN,NNP,NNPS,NNS,NX,POS,JJR,NML')
+    ('NML', RIGHTDIS, 'NN,NNP,NNPS,NNS,NX,NML,POS,JJR'),
+    ('NML', LEFT, 'NP,PRP'),
+    ('NML', RIGHTDIS, '$,ADJP,JJP,PRN'),
+    ('NML', RIGHT, 'CD'),
+    ('NML', RIGHTDIS, 'JJ,JJS,RB,QP,DT,WDT,RBR,ADVP')
   ]
   rules = RulesTable()
   rules.default(LEFT)
