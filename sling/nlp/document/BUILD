@@ -200,6 +200,7 @@ cc_binary(
     "//sling/http:static-content",
     "//sling/http:web-service",
     "//sling/nlp/document",
+    "//sling/nlp/kb:knowledge-service",
     "//sling/util:mutex",
   ],
 )

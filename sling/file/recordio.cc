@@ -276,8 +276,9 @@ Status RecordReader::Read(Record *record) {
       continue;
     } else {
       input_.consumed(hdrsize);
-      position_ += hdrsize;
+      record->position = position_;
       record->type = hdr.record_type;
+      position_ += hdrsize;
     }
 
     // Read record into input buffer.
@@ -467,6 +468,12 @@ RecordDatabase::~RecordDatabase() {
     delete s->reader();
     delete s;
   }
+}
+
+bool RecordDatabase::Read(int shard, int64 position, Record *record) {
+  RecordReader *reader = shards_[shard]->reader();
+  current_shard_ = shard;
+  return reader->Seek(position) && reader->Read(record);
 }
 
 bool RecordDatabase::Lookup(const Slice &key, Record *record) {

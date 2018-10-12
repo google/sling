@@ -4,7 +4,7 @@ import {stylesheet} from "/common/lib/util.js";
 
 stylesheet("/common/style/docview.css");
 
-let kb_url = '/kb?id=';
+let kb_url = '/kb/?id=';
 
 let type_color = {
   '/s': '#0B5394',
@@ -21,6 +21,8 @@ let notchgif = 'data:image/gif;base64,R0lGODlhDAAWAJEAAP/68NK8jv///' +
 
 let next_panel = 1;
 let next_docno = 1;
+let text_encoder = new TextEncoder("utf-8");
+let text_decoder = new TextDecoder("utf-8");
 
 // Token break types.
 const NO_BREAK = 0;
@@ -36,8 +38,10 @@ export class Document {
   constructor(data) {
     this.data = data;
     this.docno = next_docno++;
-    this.text = data.text
-    this.tokens = data.tokens
+    this.title = data.title;
+    this.url = data.url;
+    this.text = text_encoder.encode(data.text);
+    this.tokens = data.tokens || [];
     this.frames = data.frames
     this.spans = data.spans
     this.themes = data.themes
@@ -62,9 +66,9 @@ export class Document {
     } else {
       let start = token.start;
       if (start === undefined) start = 0;
-      let length = token.length;
-      if (length === undefined) length = 1;
-      return this.text(start, start + length);
+      let size = token.size;
+      if (size === undefined) size = 1;
+      return text_decoder.decode(this.text.slice(start, start + size));
     }
   }
 
@@ -99,7 +103,7 @@ export class DocumentViewer extends Component {
   render(props) {
     // Get document for rendering.
     this.document = props.document;
-    if (!this.document) return h(Grid, {"class": "docviewer"});
+    if (!this.document) return h(Grid, {class: "docviewer"});
 
     // Render document text.
     let doc = this.document;
@@ -107,6 +111,25 @@ export class DocumentViewer extends Component {
     let nesting = [];
     let next = 0;
     let elements = [];
+    if (doc.title) {
+      if (doc.url) {
+        elements.push(
+          h("h3", {class: "title"},
+            h("a", {href: doc.url}, doc.title)
+           )
+         );
+      } else {
+        elements.push(h("h3", {class: "title"}, doc.title));
+      }
+    } else if (doc.url) {
+      elements.push(
+        h("div", {class: "title"},
+          "url: ",
+          h("a", {href: doc.url}, doc.url),
+          h("br"),
+        )
+      );
+    }
     for (let index = 0; index < doc.tokens.length; ++index) {
       // Render token break.
       let token = doc.tokens[index];
@@ -119,7 +142,7 @@ export class DocumentViewer extends Component {
         } else if (brk >= SECTION_BREAK) {
           elements.push(h("center", null, "***"));
         } else if (brk >= PARAGRAPH_BREAK) {
-          elements.push("<p>");
+          elements.push(h("p"));
         } else if (brk >= SENTENCE_BREAK) {
           elements.push("	 ");
         } else if (brk >= SPACE_BREAK) {
@@ -142,7 +165,7 @@ export class DocumentViewer extends Component {
       } else if (word == "''") {
         word = "”";
       } else if (word == "--") {
-        word = "—";
+        word = "–";
       } else if (word == "...") {
         word = "…";
       }
@@ -162,7 +185,7 @@ export class DocumentViewer extends Component {
         let attrs = {
           id: "s" + this.docno() + "-" + fidx,
           frame: fidx,
-          "class": "b" + depth,
+          class: "b" + depth,
           phrase: text
         };
         elements.push(h("span", attrs, subelements));
@@ -173,13 +196,13 @@ export class DocumentViewer extends Component {
     // and themes above.
     let key = "doc-" + this.docno();
     return (
-      h(Grid, {"class": "docviewer", key},
-        h("div", {id: "themes" + this.docno(), "class": "themes"}),
-        h("div", {"class": "text-and-panels"}),
-          h("div", {id: "text" + this.docno(),  "class": "doctext", key},
+      h(Grid, {class: "docviewer", key},
+        h("div", {id: "themes" + this.docno(), class: "themes"}),
+        h("div", {class: "text-and-panels"}),
+          h("div", {id: "text" + this.docno(),  class: "doctext", key},
             elements
           ),
-          h("div", {id: "panels" + this.docno(), "class": "docpanels"})
+          h("div", {id: "panels" + this.docno(), class: "docpanels"})
       )
     );
   }
@@ -257,6 +280,18 @@ export class DocumentViewer extends Component {
     return name;
   }
 
+  IsExternal(f) {
+    if (typeof f == "number") f = this.document.frames[f];
+    for (let t = 0; t < f.types.length; ++t) {
+      let type = f.types[t];
+      if (typeof type == "number") {
+        let schema = this.document.frames[type];
+        if (schema.id == "/w/item") return true;
+      }
+    }
+    return false;
+  }
+
   BuildBox(index, collapsed) {
     let box = document.createElement("div");
     box.className = "boxed";
@@ -322,7 +357,7 @@ export class DocumentViewer extends Component {
       if (frame.name) {
         let name = document.createTextNode(frame.name);
         if (frame.id) {
-          if (frame.id.startsWith('Q') || frame.id.startsWith('P')) {
+          if (this.IsExternal(frame)) {
             let a = document.createElement("a");
             a.href = kb_url + frame.id;
             a.appendChild(name);
@@ -351,7 +386,6 @@ export class DocumentViewer extends Component {
         let box = document.createElement("td");
         let val = document.createElement("td");
 
-        let link = false;
         if (typeof n == "number") {
           let span = document.createElement("span");
           let f = this.document.frames[n];
@@ -365,8 +399,6 @@ export class DocumentViewer extends Component {
             role = this.document.frames[n].id;
           }
           if (!role) role = '(' + n + ')';
-          if (role == 'MID' || role == '/s/profile/mid') link = true;
-
           span.appendChild(document.createTextNode(role + ':'));
           label.appendChild(span);
         } else {
@@ -386,7 +418,7 @@ export class DocumentViewer extends Component {
             }
           }
         } else {
-          if (link || v.startsWith('Q') || v.startsWith('P')) {
+          if (this.IsExternal(v)) {
             let a = document.createElement("a");
             a.href = kb_url + v;
             a.appendChild(document.createTextNode(v));
@@ -460,6 +492,7 @@ export class DocumentViewer extends Component {
   AddPanel(phrase, fidx) {
     let panel = this.BuildPanel(phrase, fidx);
     document.getElementById("panels" + this.docno()).appendChild(panel);
+    panel.scrollIntoView();
   }
 
   OpenPanel(e) {

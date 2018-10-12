@@ -15,6 +15,7 @@
 #include "sling/base/flags.h"
 #include "sling/base/init.h"
 #include "sling/base/logging.h"
+#include "sling/frame/serialization.h"
 #include "sling/http/http-server.h"
 #include "sling/nlp/kb/knowledge-service.h"
 
@@ -28,14 +29,19 @@ using namespace sling::nlp;
 int main(int argc, char *argv[]) {
   InitProgram(&argc, &argv);
 
+  LOG(INFO) << "Loading knowledge base from " << FLAGS_kb;
+  Store commons;
+  LoadStore(FLAGS_kb, &commons);
+
   LOG(INFO) << "Start HTTP server on port " << FLAGS_port;
   HTTPServerOptions options;
   HTTPServer http(options, FLAGS_port);
 
   KnowledgeService kb;
-  kb.Load(FLAGS_kb, FLAGS_names);
-  kb.Register(&http);
+  kb.Load(&commons, FLAGS_names);
+  commons.Freeze();
 
+  kb.Register(&http);
   http.Register("/", [](HTTPRequest *req, HTTPResponse *rsp) {
     rsp->RedirectTo("/kb");
   });

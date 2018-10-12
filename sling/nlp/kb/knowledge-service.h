@@ -46,8 +46,8 @@ class KnowledgeService {
     Handle alternate_image;
   };
 
-  // Load knowledge base.
-  void Load(const string &knowledge_base, const string &name_table);
+  // Load and initialize knowledge base.
+  void Load(Store *kb, const string &name_table);
 
   // Register knowledge base service.
   void Register(HTTPServer *http);
@@ -85,7 +85,7 @@ class KnowledgeService {
   };
 
   // Knowledge base store.
-  Store kb_;
+  Store *kb_ = nullptr;
 
   // Property map.
   HandleMap<Property> properties_;

@@ -15,6 +15,22 @@
   background: #eeeeee;
 }
 
+.title {
+  font: 20pt bold arial, helvetica;
+}
+
+a {
+  color: black;
+}
+
+a:link {
+  text-decoration: none;
+}
+
+a:visited {
+  text-decoration: none;
+}
+
 .doctext {
   flex: 1;
   overflow-x: auto;

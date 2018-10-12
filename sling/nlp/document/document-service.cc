@@ -89,8 +89,10 @@ Frame DocumentService::Convert(const Document &document) {
     }
   }
 
-  // Set document text and tokens.
+  // Add basic document info.
   Builder b(store);
+  b.Add(n_title_, document.top().GetHandle(n_title_));
+  b.Add(n_url_, document.top().GetHandle(n_url_));
   b.Add(n_text_, document.text());
   b.Add(n_tokens_, document.top().GetHandle(n_tokens_));
 

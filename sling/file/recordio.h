@@ -39,6 +39,7 @@ struct Record {
 
   Slice key;
   Slice value;
+  int64 position = -1;
   RecordType type = DATA_RECORD;
 };
 
@@ -311,11 +312,17 @@ class RecordDatabase {
                  const RecordFileOptions &options);
   ~RecordDatabase();
 
+  // Read record from shard at some position.
+  bool Read(int shard, int64 position, Record *record);
+
   // Look up record by key. Returns false if no matching record is found.
   bool Lookup(const Slice &key, Record *record);
 
   // Retrieve the next record from the current shard.
   bool Next(Record *record);
+
+  // Current shard.
+  int current_shard() const { return current_shard_; }
 
  private:
   // Shards in record database.

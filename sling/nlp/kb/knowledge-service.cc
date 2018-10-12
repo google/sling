@@ -61,20 +61,15 @@ static string ConvertGeoCoord(double coord, bool latitude) {
   return StrCat(degrees, "°", minutes, "'", seconds, "\"", sign);
 }
 
-void KnowledgeService::Load(const string &knowledge_base,
-                            const string &name_table) {
-  // Load knowledge base into the commons store.
-  LOG(INFO) << "Loading knowledge base from " << knowledge_base;
-  LoadStore(knowledge_base, &kb_);
-
+void KnowledgeService::Load(Store *kb, const string &name_table) {
   // Bind names and freeze store.
-  CHECK(names_.Bind(&kb_));
-  kb_.Freeze();
+  kb_ = kb;
+  CHECK(names_.Bind(kb_));
 
   // Get meta data for properties.
-  for (const Slot &s : Frame(&kb_, kb_.Lookup("/w/entity"))) {
+  for (const Slot &s : Frame(kb, kb->Lookup("/w/entity"))) {
     if (s.name != n_role_) continue;
-    Frame property(&kb_, s.value);
+    Frame property(kb, s.value);
     Property p;
 
     // Get property id and name.
@@ -86,8 +81,8 @@ void KnowledgeService::Load(const string &knowledge_base,
 
     // Get URL formatter for property.
     Handle formatter = property.Resolve(n_formatter_url_);
-    if (kb_.IsString(formatter)) {
-      p.url = String(&kb_, formatter).value();
+    if (kb->IsString(formatter)) {
+      p.url = String(kb, formatter).value();
     }
 
     // Check if property is a representative image for the item.
@@ -108,11 +103,13 @@ void KnowledgeService::Load(const string &knowledge_base,
   }
 
   // Initialize calendar.
-  calendar_.Init(&kb_);
+  calendar_.Init(kb);
 
   // Load name table.
-  LOG(INFO) << "Loading name table from " << name_table;
-  aliases_.Load(name_table);
+  if (!name_table.empty()) {
+    LOG(INFO) << "Loading name table from " << name_table;
+    aliases_.Load(name_table);
+  }
 }
 
 void KnowledgeService::Register(HTTPServer *http) {
@@ -124,7 +121,7 @@ void KnowledgeService::Register(HTTPServer *http) {
 
 void KnowledgeService::HandleQuery(HTTPRequest *request,
                                    HTTPResponse *response) {
-  WebService ws(&kb_, request, response);
+  WebService ws(kb_, request, response);
 
   // Get query
   Text query = ws.Get("q");
@@ -141,9 +138,9 @@ void KnowledgeService::HandleQuery(HTTPRequest *request,
 
   // Check for exact match with id.
   Handles results(ws.store());
-  Handle idmatch = kb_.Lookup(query);
+  Handle idmatch = kb_->Lookup(query);
   if (!idmatch.IsNil()) {
-    Frame item(&kb_, idmatch);
+    Frame item(kb_, idmatch);
     if (item.valid()) {
       Builder match(ws.store());
       GetStandardProperties(item, &match);
@@ -155,7 +152,7 @@ void KnowledgeService::HandleQuery(HTTPRequest *request,
   Builder b(ws.store());
   for (Text id : matches) {
     if (results.size() >= limit) break;
-    Frame item(&kb_, kb_.Lookup(id));
+    Frame item(kb_, kb_->Lookup(id));
     if (item.invalid()) continue;
     Builder match(ws.store());
     GetStandardProperties(item, &match);
@@ -169,12 +166,12 @@ void KnowledgeService::HandleQuery(HTTPRequest *request,
 
 void KnowledgeService::HandleGetItem(HTTPRequest *request,
                                      HTTPResponse *response) {
-  WebService ws(&kb_, request, response);
+  WebService ws(kb_, request, response);
 
   // Look up item in knowledge base.
   Text itemid = ws.Get("id");
   LOG(INFO) << "Look up item '" << itemid << "'";
-  Handle handle = kb_.LookupExisting(itemid);
+  Handle handle = kb_->LookupExisting(itemid);
   if (handle.IsNil()) {
     response->SendError(404, nullptr, "Item not found");
     return;
@@ -255,8 +252,8 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
       // Resolve value.
       Handle value = h;
       bool qualified = false;
-      if (kb_.IsFrame(h)) {
-        Handle qua = Frame(&kb_, h).GetHandle(Handle::is());
+      if (kb_->IsFrame(h)) {
+        Handle qua = Frame(kb_, h).GetHandle(Handle::is());
         if (!qua.IsNil()) {
           value = qua;
           qualified = true;
@@ -267,17 +264,17 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
       Builder v(item.store());
       if (property.datatype == n_item_type_) {
         // Add reference to other item.
-        Frame ref(&kb_, value);
+        Frame ref(kb_, value);
         if (ref.valid()) {
           GetStandardProperties(ref, &v);
         }
       } else if (property.datatype == n_xref_type_) {
         // Add external reference.
-        String identifier(&kb_, value);
+        String identifier(kb_, value);
         v.Add(n_text_, identifier);
       } else if (property.datatype == n_property_type_) {
         // Add reference to property.
-        Frame ref(&kb_, value);
+        Frame ref(kb_, value);
         if (ref.valid()) {
           GetStandardProperties(ref, &v);
         }
@@ -304,7 +301,7 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
         }
       } else if (property.datatype == n_geo_type_) {
         // Add coordinate value.
-        Frame coord(&kb_, value);
+        Frame coord(kb_, value);
         double lat = coord.GetFloat(n_lat_);
         double lng = coord.GetFloat(n_lng_);
         v.Add(n_text_, StrCat(ConvertGeoCoord(lat, true), ", ",
@@ -314,8 +311,8 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
       } else if (property.datatype == n_quantity_type_) {
         // Add quantity value.
         string text;
-        if (kb_.IsFrame(value)) {
-          Frame quantity(&kb_, value);
+        if (kb_->IsFrame(value)) {
+          Frame quantity(kb_, value);
           text = AsText(quantity.GetHandle(n_amount_));
 
           // Get unit symbol, preferably in latin script.
@@ -328,13 +325,13 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
         v.Add(n_text_, text);
       } else if (property.datatype == n_time_type_) {
         // Add time value.
-        Object time(&kb_, value);
+        Object time(kb_, value);
         v.Add(n_text_, calendar_.DateAsString(time));
       }
 
       // Add URL if property has URL formatter.
-      if (!property.url.empty() && kb_.IsString(value)) {
-        String identifier(&kb_, value);
+      if (!property.url.empty() && kb_->IsString(value)) {
+        String identifier(kb_, value);
         string url = property.url;
         int pos = url.find("$1");
         if (pos != -1) {
@@ -381,7 +378,7 @@ void KnowledgeService::GetStandardProperties(const Frame &item,
 }
 
 string KnowledgeService::AsText(Handle value) {
-  value = kb_.Resolve(value);
+  value = kb_->Resolve(value);
   if (value.IsInt()) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%d", value.AsInt());
@@ -398,7 +395,7 @@ string KnowledgeService::AsText(Handle value) {
     }
     return buf;
   } else {
-    return ToText(&kb_, value);
+    return ToText(kb_, value);
   }
 }
 
@@ -411,7 +408,7 @@ string KnowledgeService::UnitName(const Frame &unit) {
   Handle fallback = Handle::nil();
   for (const Slot &s : unit) {
     if (s.name != n_unit_symbol_) continue;
-    Frame symbol(&kb_, s.value);
+    Frame symbol(kb_, s.value);
     if (!symbol.valid()) {
       if (fallback.IsNil()) fallback = s.value;
       continue;
@@ -435,9 +432,9 @@ string KnowledgeService::UnitName(const Frame &unit) {
 
   // Try to get name of best unit symbol.
   if (!best.IsNil()) {
-    Handle unit_name = kb_.Resolve(best);
-    if (kb_.IsString(unit_name)) {
-      return String(&kb_, unit_name).value();
+    Handle unit_name = kb_->Resolve(best);
+    if (kb_->IsString(unit_name)) {
+      return String(kb_, unit_name).value();
     }
   }
 
@@ -447,18 +444,18 @@ string KnowledgeService::UnitName(const Frame &unit) {
 
 void KnowledgeService::HandleGetFrame(HTTPRequest *request,
                                       HTTPResponse *response) {
-  WebService ws(&kb_, request, response);
+  WebService ws(kb_, request, response);
 
   // Look up frame in knowledge base.
   Text id = ws.Get("id");
-  Handle handle = kb_.LookupExisting(id);
+  Handle handle = kb_->LookupExisting(id);
   if (handle.IsNil()) {
     response->SendError(404, nullptr, "Frame not found");
     return;
   }
 
   // Return frame as response.
-  ws.set_output(Object(&kb_, handle));
+  ws.set_output(Object(kb_, handle));
 }
 
 }  // namespace nlp

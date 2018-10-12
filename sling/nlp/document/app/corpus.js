@@ -34,8 +34,12 @@ class App extends Component {
     }
   }
 
-  next(e) {
-    this.update("/next?fmt=cjson");
+  forward(e) {
+    this.update("/forward?fmt=cjson");
+  }
+
+  back(e) {
+    this.update("/back?fmt=cjson");
   }
 
   render(props, state) {
@@ -52,8 +56,11 @@ class App extends Component {
                 type: "search",
                 onsearch: e => this.search(e),
               }),
-              h(Button, {icon: true, onclick: e => this.next(e)},
-                h(Icon, {icon: "skip_next"})
+              h(Button, {icon: true, onclick: e => this.back(e)},
+                h(Icon, {icon: "arrow_backward"})
+              ),
+              h(Button, {icon: true, onclick: e => this.forward(e)},
+                h(Icon, {icon: "arrow_forward"})
               ),
             ),
           ),
