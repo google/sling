@@ -23,9 +23,11 @@ from functools import partial
 
 sys.path.insert(0, "sling/nlp/parser/trainer")
 import commons_from_corpora as commons_builder
+from corpora import Corpora
 from pytorch_modules import Caspar
-from train_util import Resources, setup_training_flags
+from spec import Spec
 from trainer import Hyperparams, Trainer, dev_accuracy
+from train_util import mem, setup_training_flags
 
 
 # Checks that all arguments in 'ls' are set in 'args'.
@@ -46,11 +48,9 @@ def train(args):
   # Make commons store if needed.
   if args.commons == '' or not os.path.exists(args.commons):
     if args.commons == '':
-      import tempfile
-      f = tempfile.NamedTemporaryFile(delete=False)
-      print "Will create a commons store at", f.name
-      args.commons = f.name
-      f.close()
+      fname = os.path.join(args.output_folder, "commons")
+      print "Will create a commons store at", fname
+      args.commons = fname
     else:
       print "No commons found at", args.commons, ", creating it..."
     _, symbols = commons_builder.build(
@@ -58,13 +58,17 @@ def train(args):
     print "Commons created at", args.commons, "with", len(symbols), \
       "symbols besides the usual ones."
 
-  resources = Resources()
-  resources.load(commons_path=args.commons,
-                 train_path=args.train_corpus,
-                 word_embeddings_path=args.word_embeddings,
-                 small_spec=args.small)
+  # Make the training spec.
+  spec = Spec(args.small)
+  spec.build(args.commons, args.train_corpus)
 
-  caspar = Caspar(resources.spec)
+  # Load word embeddings.
+  if args.word_embeddings != "" and args.word_embeddings is not None:
+    spec.load_word_embeddings(args.word_embeddings)
+    print "After loading pre-trained word embeddings", mem()
+
+  # Initialize the model with the spec.
+  caspar = Caspar(spec)
   caspar.initialize()
 
   tmp_folder = os.path.join(args.output_folder, "tmp")
@@ -72,10 +76,8 @@ def train(args):
     os.makedirs(tmp_folder)
 
   evaluator = partial(dev_accuracy,
-                      resources.commons_path,
-                      resources.commons,
+                      args.commons,
                       args.dev_corpus,
-                      resources.schema,
                       tmp_folder)
 
   output_file_prefix = os.path.join(args.output_folder, "caspar")
@@ -83,7 +85,8 @@ def train(args):
   print "Using hyperparameters:", hyperparams
 
   trainer = Trainer(caspar, hyperparams, evaluator, output_file_prefix)
-  trainer.train(resources.train)
+  train = Corpora(args.train_corpus, spec.commons, gold=True)
+  trainer.train(train)
 
 
 if __name__ == '__main__':
@@ -91,6 +94,6 @@ if __name__ == '__main__':
   flags.define('--small',
                help='Small dimensions (for testing)',
                default=False,
-               type=bool)
+               action='store_true')
   flags.parse()
   train(flags.arg)

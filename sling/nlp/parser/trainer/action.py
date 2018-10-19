@@ -77,7 +77,7 @@ class Action:
         if s != "":
           s = s + ", "
         s = s + k + ": " + str(v)
-    return s
+    return "(" + s + ")"
 
   # Returns frame representation of the action.
   def as_frame(self, store, slot_prefix="/table/action/"):

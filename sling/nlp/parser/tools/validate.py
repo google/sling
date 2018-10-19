@@ -28,6 +28,7 @@ class Options:
   def __init__(self):
     self.stop_on_first_bad_document = False
     self.allow_mentions_without_frames = False
+    self.allow_duplicate_evokes = False
     self.allow_nil_roles = False
     self.allow_nil_values = False
     self.max_error_examples = 3
@@ -46,9 +47,12 @@ class Error:
   ROLE_IS_LOCAL = 8            # frame with a role that is a local symbol
   VALUE_NOT_A_FRAME = 9        # frame with a slot value that is not a frame
   FRAME_NOT_LOCAL = 10         # expected a local frame but didn't get one
+  DUPLICATE_EVOKED_FRAMES = 11 # >1 frames evoked from a mention with same type
+  DUPLICATE_SPANS = 12         # >1 spans covering exactly the same tokens
 
-  def __init__(self, code, document, args):
+  def __init__(self, code, doc_index, document, args):
     self.code = code
+    self.doc_index = doc_index
 
     # Document where the error occurs.
     self.document = document
@@ -74,10 +78,11 @@ class Error:
   def tostr(self, indent=0):
     self.document.decorate()
     output = []
+    output.extend(["Document Index: " + str(self.doc_index)])
     output.extend(["Document: " + self._document_text()])
-    docid = self.document.frame.id
-    if docid is not None:
-      output.extend(["DocumentId: " + str(docid)])
+    frame_id = self.document.frame.id
+    if frame_id is not None:
+      output.extend(["Document FrameId: " + str(frame_id)])
     output.extend(["DocumentLength: " + str(len(self.document.tokens))])
     if type(self.args[0]) is sling.Mention:
       output.extend(["Mention: " + self.args[0].frame.data(binary=False)])
@@ -112,6 +117,12 @@ class Error:
     elif self.code == Error.FRAME_NOT_LOCAL:
       f = self.args[1]
       output.extend(["NonLocalFrame: " + f.data(binary=False)])
+    elif self.code == Error.DUPLICATE_EVOKED_FRAMES:
+      t = self.args[1]
+      output.extend(["TypeEvokedAgain: " + t.id])
+    elif self.code == Error.DUPLICATE_SPANS:
+      m2 = self.args[1]
+      output.extend(["AnotherSpanOverSameInterval: " + m2.frame.data()])
 
     if indent > 0:
       prefix = ' ' * indent
@@ -141,14 +152,16 @@ class Results:
 
   # Creates and adds an error with the specified code and context.
   def error(self, code, args):
-    document = args[0]
-    args = args[1:]
+    doc_index = args[0]
+    document = args[1]
+    assert isinstance(document, sling.Document)
+    args = args[2:]
     if code not in self.error_counts:
       self.error_counts[code] = 0
     self.error_counts[code] += 1
     if self.options.max_error_examples >= 0 and \
       self.error_counts[code] <= self.options.max_error_examples:
-      error = Error(code, document, args)
+      error = Error(code, doc_index, document, args)
       if code not in self.error_examples:
         self.error_examples[code] = []
       self.error_examples[code].append(error)
@@ -197,13 +210,13 @@ class Results:
 # Validates 'frame', which is expected to be a local frame, for errors.
 # If 'mention' is not None, then 'frame' is one of the evoked frames from it.
 # Validation results are added to 'results'
-def _validate_frame(document, mention, frame, options, results):
+def _validate_frame(index, document, mention, frame, options, results):
   if type(frame) is not sling.Frame:
-    results.error(Error.VALUE_NOT_A_FRAME, [document, mention, frame])
+    results.error(Error.VALUE_NOT_A_FRAME, [index, document, mention, frame])
     return
 
   if not frame.islocal():
-    results.error(Error.FRAME_NOT_LOCAL, [document, mention, frame])
+    results.error(Error.FRAME_NOT_LOCAL, [index, document, mention, frame])
     return
 
   commons = document.store.globals()
@@ -211,57 +224,77 @@ def _validate_frame(document, mention, frame, options, results):
   # Check that the frame type is valid.
   t = frame[document.schema.isa]
   if t is None:
-    results.error(Error.UNTYPED_EVOKED_FRAME, [document, mention, frame])
+    results.error(Error.UNTYPED_EVOKED_FRAME, [index, document, mention, frame])
   elif t.islocal():
-    results.error(Error.FRAME_TYPE_NOT_GLOBAL, [document, mention, frame, t])
+    results.error(Error.FRAME_TYPE_NOT_GLOBAL, \
+        [index, document, mention, frame, t])
 
   # Check that frame slots are valid.
   for role, value in frame:
     if not options.allow_nil_roles and role is None:
-      results.error(Error.ROLE_IS_NONE, [document, frame])
+      results.error(Error.ROLE_IS_NONE, [index, document, frame])
     if not options.allow_nil_values and value is None:
-      results.error(Error.VALUE_IS_NONE, [document, frame])
+      results.error(Error.VALUE_IS_NONE, [index, document, frame])
     if role is not None and type(role) is sling.Frame and role.islocal():
-      results.error(Error.ROLE_IS_LOCAL, [document, frame, role])
+      results.error(Error.ROLE_IS_LOCAL, [index, document, frame, role])
     # TODO: Add support to see if certain slots (e.g. /pb/ARG0) should always
     # have local values, while others (e.g. measure) should always have global
     # values. This can be read from the schema or specified in 'options'.
 
 
 # Validates 'document' against common errors.
-def _validate(document, options):
+def _validate(index, document, options):
   results = Results(options)
   length = len(document.tokens)
+  isa = document.schema.isa
+  spans = {}
   for mention in document.mentions:
     begin = mention.begin
     end = mention.end
 
+    # Check for duplicate spans.
+    k = (begin, end)
+    if k in spans:
+      results.error(Error.DUPLICATE_SPANS, [index, document, mention, spans[k]])
+    else:
+      spans[k] = mention
+
     # Check span offsets.
     if begin < 0 or begin >= length:
-      results.error(Error.BAD_SPAN_BEGIN, [document, mention])
+      results.error(Error.BAD_SPAN_BEGIN, [index, document, mention])
     if end < 0 or end > length:
-      results.error(Error.BAD_SPAN_END, [document, mention])
+      results.error(Error.BAD_SPAN_END, [index, document, mention])
 
     # Check for crossing spans.
     for m2 in document.mentions:
       if m2.begin < begin: continue  # don't double count crossing spans
-      if m2.begin >= end: break   # mentions are sorted
+      if m2.begin >= end: break      # mentions are sorted
       if m2.begin < begin and m2.end > begin and m2.end < end:
-        results.error(Error.CROSSING_SPAN, [document, mention, m2])
+        results.error(Error.CROSSING_SPAN, [index, document, mention, m2])
       if m2.begin > begin and m2.end > end:
-        results.error(Error.CROSSING_SPAN, [document, mention, m2])
+        results.error(Error.CROSSING_SPAN, [index, document, mention, m2])
+
+    # Check for duplicate frames.
+    if not options.allow_duplicate_evokes:
+      seen = {}
+      for frame in mention.evokes():
+        t = frame[isa]
+        if t in seen:
+          results.error(Error.DUPLICATE_EVOKED_FRAMES, \
+              [index, document, mention, t])
+        seen[t] = True
 
     # Check valid evoked frames.
     num_evoked = 0
     for frame in mention.evokes():
       num_evoked += 1
-      _validate_frame(document, mention, frame, options, results)
+      _validate_frame(index, document, mention, frame, options, results)
 
     if not options.allow_mentions_without_frames and num_evoked == 0:
-      results.error(Error.MENTION_WITHOUT_FRAME, [document, mention])
+      results.error(Error.MENTION_WITHOUT_FRAME, [index, document, mention])
 
   for frame in document.themes:
-    _validate_frame(document, None, frame, options, results)
+    _validate_frame(index, document, None, frame, options, results)
 
   return results
 
@@ -270,7 +303,7 @@ def _validate(document, options):
 # Checks the corpora in 'recordio_filename' for errors.
 def validate(commons, recordio_filename, output_recordio='', options=Options()):
   schema = None
-  if type(commons) is not sling.Store:
+  if not isinstance(commons, sling.Store):
     assert type(commons) is str
     filename = commons
     commons = sling.Store()
@@ -288,12 +321,12 @@ def validate(commons, recordio_filename, output_recordio='', options=Options()):
   if output_recordio != '':
     writer = sling.RecordWriter(output_recordio)
   for document in corpus:
-    count += 1
-    results = _validate(document, options)
+    results = _validate(count, document, options)
     aggregate.add(results)
     if not results.ok() and options.stop_on_first_bad_document:
       print "Stopping after first bad document as requested"
       break
+    count += 1
     if writer and results.ok():
       writer.write('', document.frame.data(binary=True))
       written += 1

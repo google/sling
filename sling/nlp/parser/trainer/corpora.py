@@ -46,10 +46,24 @@ class AnnotatedDocument(sling.Document):
 # the corpus, and compute transition sequences for the existing frames in the
 # document.
 class Corpora:
-  def __init__(self, recordio, commons, schema, gold=False, loop=False):
+  def __init__(self, recordio, commons, schema=None, gold=False, loop=False):
     self.filename = recordio
-    self.commons = commons
+    self.commons_owned = False
+    if isinstance(commons, str):
+      self.commons = sling.Store()
+      self.commons.load(commons)
+      self.commons_owned = True
+    else:
+      assert isinstance(commons, sling.Store)
+      self.commons = commons
+
+    if schema is None or self.commons_owned:
+      schema = sling.DocumentSchema(self.commons)
+      if self.commons_owned:
+        self.commons.freeze()
+    assert schema is not None
     self.schema = schema
+
     self.reader = sling.RecordReader(recordio)
     self.generator = None
     self.loop = loop
@@ -66,10 +80,12 @@ class Corpora:
     return self
 
 
+  # Sets if the corpora should automatically loop at the end of the corpus.
   def set_loop(self, val):
     self.loop = val
 
 
+  # Sets if the gold transitions should be added to the document at hand.
   def set_gold(self, gold):
     if gold and self.generator is None:
       self.generator = TransitionGenerator(self.commons)
@@ -77,6 +93,7 @@ class Corpora:
       self.generator = None
 
 
+  # Returns the next document.
   def next(self):
     if self.reader.done():
       if self.loop:
@@ -90,7 +107,8 @@ class Corpora:
       document.gold = self.generator.generate(document)
     return document
 
-
+  
+  # Rewinds to the beginning of the corpus.
   def rewind(self):
     self.reader.rewind()
 

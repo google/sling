@@ -19,9 +19,6 @@ import subprocess
 
 from datetime import datetime
 
-from corpora import Corpora
-from spec import Spec
-
 # Evaluates gold vs test documents, which are assumed to be aligned,
 # and returns a dict of their results.
 def frame_evaluation(gold_corpus_path, test_corpus_path, commons_path):
@@ -149,48 +146,4 @@ def setup_training_flags(flags):
                default=0.0001,
                type=float,
                metavar='L2')
-
-
-# Wrapper around training resources.
-class Resources:
-  def __init__(self):
-    self.commons_path = None
-    self.commons = None
-    self.schema = None
-    self.train = None
-    self.spec = None
-
-
-  # Loads the common store, an iterator over a recordio training corpus,
-  # computes the Spec from the corpus, and loads any optional word embeddings.
-  def load(self,
-           commons_path,
-           train_path,
-           word_embeddings_path=None,
-           small_spec=False):
-    print "Loading training resources"
-    print "Initial memory usage", mem()
-    self.commons_path = commons_path
-    self.commons = sling.Store()
-    self.commons.load(commons_path)
-    self.schema = sling.DocumentSchema(self.commons)
-    self.commons.freeze()
-
-    self.train = Corpora(
-        train_path, self.commons, self.schema, gold=True, loop=False)
-    print "Pointed to training corpus in", train_path, mem()
-
-    self.spec = Spec(small_spec)
-    self.spec.build(commons_path, self.train)
-    print "After building spec", mem()
-
-    # Use the commons in spec to reopen the corpora.
-    self.commons = self.spec.commons
-    self.schema = sling.DocumentSchema(self.commons)
-    self.train = Corpora(
-        train_path, self.commons, self.schema, gold=True, loop=False)
-
-    if word_embeddings_path != "" and word_embeddings_path is not None:
-      self.spec.load_word_embeddings(word_embeddings_path)
-      print "After loading pre-trained word embeddings", mem()
 

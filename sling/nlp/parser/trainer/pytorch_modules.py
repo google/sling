@@ -452,15 +452,15 @@ class Caspar(nn.Module):
 
       # Figure out where we need to pick the activations from.
       activations = ff_activations
-      if f.name == "lr" or f.name == "frame-end-lr":
+      if f.name in ["lr", "frame-end-lr"]:
         activations = lr_lstm_output
-      elif f.name == "rl" or f.name == "frame-end-rl":
+      elif f.name in ["rl" , "frame-end-rl"]:
         activations = rl_lstm_output
 
       # Get indices into the activations. Recall that missing indices are
       # indicated via None and they will map to an OOV vector.
       indices = self.spec.translated_ff_link_features(f, state)
-      assert len(indices) == f.num
+      assert len(indices) == f.num, (f.num, len(indices))
 
       for index in indices:
         activation = None

@@ -439,18 +439,21 @@ class ShiftEvokeCascade(Cascade):
 
 """Prints softmax computation cost estimates of a bunch of cascades."""
 def print_cost_estimates(commons_path, corpora_path):
-  import train_util as utils
   from corpora import Corpora
-  resources = utils.Resources()
-  resources.load(commons_path, corpora_path)
-  resources.train.rewind()
-  resources.train.set_gold(True)
 
-  actions = resources.spec.actions
+  train = Corpora(corpora_path, commons_path, gold=True)
+  actions = Actions()
+  for document in train:
+    for action in document.gold:
+      actions.add(action)
+
+  train.rewind()
+
   cascades = [cascade_class(actions) for cascade_class in \
     [FlatCascade, ShiftCascade, ShiftPropbankEvokeCascade, ShiftEvokeCascade]]
   costs = [0] * len(cascades)
-  for document in resources.train:
+  counts = [[0] * cascade.size() for cascade in cascades]
+  for document in train:
     gold = document.gold
     for index, cascade in enumerate(cascades):
       cascade_gold_sequence = cascade.translate(gold)
@@ -458,11 +461,26 @@ def print_cost_estimates(commons_path, corpora_path):
       cost = 0
       for cascade_gold in cascade_gold_sequence:
         cost += cascade.delegates[delegate].size()
+        counts[index][delegate] += 1
         if cascade_gold.is_cascade():
           delegate = cascade_gold.delegate
         else:
           delegate = 0
       costs[index] += cost
+  for c, cost, cascade in zip(counts, costs, cascades):
+    print "\n", cascade.__class__.__name__, "cost =", cost, "\n", \
+      "Delegate invocations:", c, "\n", cascade
 
-  for cost, cascade in zip(costs, cascades):
-    print "\n", cascade.__class__.__name__, "cost =", cost, "\n", cascade
+if __name__ == '__main__':
+  import sling.flags as flags
+  flags.define('--commons',
+               help='Commons store',
+               default='',
+               type=str)
+  flags.define('--input',
+               help='Input corpora',
+               default='',
+               type=str)
+  flags.parse()
+  print_cost_estimates(flags.arg.commons, flags.arg.input)
+

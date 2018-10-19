@@ -77,9 +77,9 @@ class ParserState:
            " (" + str(len(f.spans)) + " spans) "
       if len(f.spans) > 0:
         for span in f.spans:
-          words = self.document.tokens[span.start].text
+          words = self.document.tokens[span.start].word
           if span.end > span.start + 1:
-            words += ".." + self.document.tokens[span.end - 1].text
+            words += ".." + self.document.tokens[span.end - 1].word
           s += words + " = [" + str(span.start) + ", " + str(span.end) + ") "
     return s
 
@@ -212,6 +212,8 @@ class ParserState:
   def frame_end_inclusive(self, index):
     if index >= len(self.attention) or index < 0:
       return -1
+    elif self.attention[index].end == -1:
+      return -1
     else:
       return self.attention[index].end - 1
 
@@ -274,7 +276,7 @@ class ParserState:
     self.steps += 1
     if action.type != Action.SHIFT and action.type != Action.STOP:
       # Recompute the role graph because we modified the attention buffer.
-      self.compute_role_graph()
+      if self.spec: self.compute_role_graph()
 
 
   # Write the frame graph to 'document', which should be a SLING Document.

@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import tempfile
+
 import builder
 import nn
 
@@ -37,9 +40,15 @@ class LexicalEncoder:
       fin.close()
       return data
 
+    f = tempfile.NamedTemporaryFile(delete=False)
+    fname = f.name
+    spec.commons.save(fname, binary=True)
+    f.close()
+
     commons = flow.blob("commons")
     commons.type = "frames"
-    commons.data = read_file(spec.commons_path)
+    commons.data = read_file(fname)
+    os.unlink(fname)
     self.commons_blob = commons
 
     suffix = flow.blob("suffixes")

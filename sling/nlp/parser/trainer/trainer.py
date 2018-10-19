@@ -31,9 +31,9 @@ from train_util import now
 Var = torch.autograd.Variable
 
 
-# Computes accuracy on the given dev set, using the given PyTorch Caspar module.
-def dev_accuracy(commons_path, commons, dev_path, schema, tmp_folder, caspar):
-  dev = Corpora(dev_path, commons, schema, gold=False, loop=False)
+# Computes accuracy on the given dev set, using the given Caspar module.
+def dev_accuracy(commons_path, dev_path, tmp_folder, caspar):
+  dev = Corpora(dev_path, caspar.spec.commons)
   print "Annotating dev documents", now(), mem()
   test_path = os.path.join(tmp_folder, "dev.annotated.rec")
   writer = sling.RecordWriter(test_path)

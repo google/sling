@@ -162,6 +162,7 @@ class Spec:
   # Builds an action table from 'corpora'.
   def _build_action_table(self, corpora):
     corpora.rewind()
+    corpora.set_gold(True)
     self.actions = Actions()
     self.actions.frame_limit = self.frame_limit
     for document in corpora:
@@ -287,11 +288,16 @@ class Spec:
       self.add_ff_fixed("labeled-roles", dim, num_roles * fl * fl, num)
       self.add_ff_fixed("unlabeled-roles", dim, fl * fl, num)
 
-    self.add_ff_link("frame-creation-steps", self.link_dim_non_lstm, self.ff_hidden_dim, fl)
-    self.add_ff_link("frame-focus-steps", self.link_dim_non_lstm, self.ff_hidden_dim, fl)
-    self.add_ff_link("frame-end-lr", self.link_dim_lstm, self.lstm_hidden_dim, fl)
-    self.add_ff_link("frame-end-rl", self.link_dim_lstm, self.lstm_hidden_dim, fl)
-    self.add_ff_link("history", self.link_dim_non_lstm, self.ff_hidden_dim, self.history_limit)
+    self.add_ff_link("frame-creation-steps", \
+      self.link_dim_non_lstm, self.ff_hidden_dim, fl)
+    self.add_ff_link("frame-focus-steps", \
+      self.link_dim_non_lstm, self.ff_hidden_dim, fl)
+    self.add_ff_link("frame-end-lr", \
+      self.link_dim_lstm, self.lstm_hidden_dim, fl)
+    self.add_ff_link("frame-end-rl", \
+      self.link_dim_lstm, self.lstm_hidden_dim, fl)
+    self.add_ff_link("history", \
+      self.link_dim_non_lstm, self.ff_hidden_dim, self.history_limit)
     self.add_ff_link("lr", self.link_dim_lstm, self.lstm_hidden_dim, 1)
     self.add_ff_link("rl", self.link_dim_lstm, self.lstm_hidden_dim, 1)
 
@@ -302,15 +308,16 @@ class Spec:
     assert self.ff_input_dim > 0
 
 
-  # Builds the spec using 'corpora'.
-  def build(self, commons_path, corpora):
+  # Builds the spec using the specified corpora.
+  def build(self, commons_path, corpora_path):
     # Prepare lexical dictionaries.
-    # For compatibility with DRAGNN, suffixes don't have an OOV item.
     self.words = Lexicon(self.words_normalize_digits)
     self.suffix = Lexicon(self.words_normalize_digits, oov_item=None)
 
-    corpora.rewind()
-    corpora.set_gold(False)   # No need to compute gold transitions yet
+    # Initialize training corpus.
+    corpora = Corpora(corpora_path, commons_path)
+
+    # Collect word and affix lexicons.
     for document in corpora:
       for token in document.tokens:
         word = token.word
@@ -320,26 +327,23 @@ class Spec:
     print "Words:", self.words.size(), "items in lexicon, including OOV"
     print "Suffix:", self.suffix.size(), "items in lexicon"
 
-    # Prepare action table.
-    corpora.set_gold(True)
-
+    # Load common store, but not freeze it yet. We will add the action table
+    # and cascade specification to it.
     self.commons_path = commons_path
     self.commons = sling.Store()
     self.commons.load(commons_path)
-    _ = sling.DocumentSchema(self.commons)
-    # Note: 'commons' is not frozen since we will add actions & cascade to it.
- 
-    # Build actions table and cascade.
+    schema = sling.DocumentSchema(self.commons)
+
+    # Prepare action table and cascade.
     self._build_action_table(corpora)
-    self.cascade = cascade.ShiftPropbankEvokeCascade(self.actions)
+    self.cascade = cascade.ShiftCascade(self.actions)
     print self.cascade
 
     # Save cascade specification in commons.
     _ = self.cascade.as_frame(self.commons, delegate_cell_prefix="delegate")
 
-    # Freeze the commons store and save its final version.
+    # Freeze the common store.
     self.commons.freeze()
-    self.commons.save(self.commons_path, binary=True)
 
     # Add feature specs.
     self._specify_features()
@@ -517,24 +521,12 @@ class Spec:
     if name == "history":
       for i in xrange(num):
         output.append(None if i >= state.steps else state.steps - i - 1)
-    elif name == "lr":
+    elif name in ["lr", "rl"]:
       index = None
       if state.current < state.end:
         index = state.current - state.begin
       output.append(index)
-    elif name == "rl":
-      index = None
-      if state.current < state.end:
-        index = state.current - state.begin
-      output.append(index)
-    elif name == "frame-end-lr":
-      for i in xrange(num):
-        index = None
-        end = state.frame_end_inclusive(i)
-        if end != -1:
-          index = end - state.begin
-        output.append(index)
-    elif name == "frame-end-rl":
+    elif name in ["frame-end-lr", "frame-end-rl"]:
       for i in xrange(num):
         index = None
         end = state.frame_end_inclusive(i)
@@ -556,30 +548,10 @@ class Spec:
 
 
   # Debugging methods.
-  # Prints raw lstm features with a special prefix so that they can be grepped
-  # and compared with another set of feature strings.
-  def print_lstm_features(self, document, features):
-    assert len(features) == len(self.lstm_features)
-    for fidx, f in enumerate(self.lstm_features):
-      assert len(document.tokens) == len(features[fidx].indices)
-      for i, vals in enumerate(features[fidx].indices):
-        text = "(" + document.tokens[i].word + ")"
-        if type(vals) is int:
-          last = str(vals)
-          # For suffixes, also print the feature string.
-          if f.name == "suffix":
-            last = last + " Value=(" + self.suffix.value(vals) + ")"
-          print "LEXDEBUG", f.name, "token", i, text, "=", last
-        else:
-          for v in vals:
-            last = str(v)
-            if f.name == "suffix":
-              last = last + " Value=(" + self.suffix.value(v) + ")"
-            print "LEXDEBUG", f.name, "token", i, text, "=", last
-
 
   # Returns feature strings for FF feature indices provided in 'indices'.
-  # All indices are assumed to a single feature whose spec is in 'feature_spec'.
+  # All indices are assumed to belong to a single feature whose spec is in
+  # 'feature_spec'.
   def ff_fixed_feature_strings(self, feature_spec, indices):
     limit = self.frame_limit
     roles = self.actions.roles
