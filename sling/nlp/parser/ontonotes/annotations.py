@@ -45,6 +45,13 @@ class Span:
   def leaf(self):
     return len(self.children) == 0
 
+  # Returns whether this only has token constituents as children.
+  def leaf_constituent(self):
+    for c in self.children:
+      if len(c.children) > 0 or c.end > c.begin + 1:
+        return False
+    return True
+
   # Returns if the span is complete, i.e. has an end token.
   def ended(self):
     return self.end is not None
@@ -482,102 +489,197 @@ class Annotations:
         s.parent = constituent
       constituent.children = children
 
+  # Returns phrase(s) from 'span' that are comprised entirely of
+  # allowed tokens as per 'disallowed'. Also, if 'pos_tags' is set to a list
+  # of POS tags,  then each returned phrase's tokens need to have a POS in
+  # that list.
+  def _split_noun_phrases(self, span, disallowed, \
+    pos_tags=['NNS', 'NN', 'NNP', 'NNPS', 'HYPH']):
+    allowed = lambda i: (disallowed is None or not disallowed[i]) and \
+      (pos_tags is None or self.pos(i) in pos_tags)
 
-  # Performs NP-expansion of 'span' beginning from its head.
-  # Expansion stop if it encounters a token that is disallowed.
-  # Returns the new span boundaries.
-  def _expand(self, span, disallowed):
-    assert span.head is not None
-
-    allowed_tags = ['NNS', 'NN', 'NNP', 'NNPS', 'HYPH']
-    begin = span.head
-    while True:
-      if begin < span.begin or disallowed[begin]:
-        break
-      if self.pos(begin) not in allowed_tags:
-         break
-      begin -= 1
-    begin += 1
-
-    # First word in an expanded noun phrase can't be a hyphen.
-    if begin < span.head and self.pos(begin) == 'HYPH':
-      begin += 1
-    return (begin, span.head + 1)
-
+    output = []
+    begin = span.begin
+    end = begin
+    while end < span.end:
+      while end < span.end and allowed(end):
+        end += 1
+      if end > begin:
+        # Remove trailing and leading hyphens.
+        right = end - 1
+        while right >= begin and self.pos(right) == 'HYPH': right -= 1
+        left = begin
+        while left <= right and self.pos(left) == 'HYPH': left += 1
+        if right >= left:
+          output.append((left, right + 1))
+      while end < span.end and not allowed(end):
+        end += 1
+      begin = end
+    return output
 
   # Generates noun phrases using constituency information and adds them
-  # as extra named entities. Uses the following heuristic:
-  # - Makes all existing NER and predicate spans off-limits.
-  # - Each NML constituent that (a) only has has token children and (b) doesn't
-  #   have a conjunction is added as a noun phrase if it doesn't overlap with
-  #   an off-limit span. This added NML span also becomes off-limits.
-  # - Each base (i.e. non-recursive) NP is expanded, respecting the off-limit
-  #   tokens, and added as a noun phrase, and made off-limit.
+  # as extra named entities.
+  # - Marks [NML HYPH PP] spans as noun phrases, e.g. [Commander - in - chief],
+  #   or [right - of - way]. The inner NML is not processed as a nested span.
+  #
+  # - Each base NML span (i.e. only has token children) is split into noun
+  #   phrases, such that each phrase:
+  #   - doesn't overlap with an existing NER/PRED/noun-phrase span, AND
+  #   - doesn't contain any conjunction (CC) token, AND
+  #   - doesn't begin or end in a HYPH token
+  #
+  # - Each base NP (i.e. with no NP descendants) is split into noun phrase(s)
+  #   using the same heuristic as above for NML spans, with an additional
+  #   restriction that each phrase token have a noun/hyphen part-of-speech tag.
+  #
+  # - Each recursive NP of the form [NP ending in POS, <token constituents>]
+  #   yields noun phrase(s) from the token constituents portion. For example,
+  #   the NP "Japan's economy and development" would yield 'economy' and
+  #   'development' phrases. We need this where the token constituents are
+  #   not covered by base NP(s).
+  #
+  # - Marks each pronoun as a noun-phrase (of type PERSON for some pronouns).
   def _add_noun_phrases(self):
+    # Setup token ranges from which we won't generate new noun phrases.
     # Disallow existing NER spans.
     disallowed = [False] * len(self.tokens.spans)
     for span in self.ner.spans:
       for i in xrange(span.begin, span.end):
         disallowed[i] = True
 
-    # Also disallow predicates, since we also have nominal predicates in
-    # the corpus.
+    # Also disallow predicates, since we also have nominal predicates.
     for srl in self.srl:
       for span in srl.spans:
         if span.predicate:
           for i in xrange(span.begin, span.end):
             disallowed[i] = True
 
-    norm_summary = self.summary.normalization
+    # Break noun phrase expansion at conjunctions and commas.
+    for token in self.tokens.spans:
+      if token.label == 'CC' or token.label == ',':
+        disallowed[token.begin] = True
 
     # Sort in ascending order of constituent lengths.
-    # This way we will process base NML spans, disallow their token ranges,
-    # and automatically skip recursive NMLs.
     spans = [span for span in self.constituents.spans]
     spans.sort(key=lambda s:s.length())
-    for span in self.constituents.spans:
-      if span.label ==  'NML':
-        conjunction = False
-        allowed = True
-        for i in xrange(span.begin, span.end):
-          conjunction |= self.pos(i) == 'CC'
-          allowed &= not disallowed[i]
-        if allowed and not conjunction:
-          # NML span should only have token children.
-          leaf = True
-          for c in span.children:
-            if c.end > c.begin + 1 or len(c.children) > 0:
-              leaf = False
-              break
+    norm_summary = self.summary.normalization
 
-          # Add a noun phrase.
-          if leaf:
-            self.ner.start(span.begin, self.options.backoff_type)
-            self.ner.finish(span.end)
+    # Get NML spans that decompose as [NML HYPH PP].
+    for span in spans:
+      ch = span.children
+      if span.label == 'NML' and len(ch) == 3 and \
+        ch[0].label == 'NML' and ch[1].label == 'HYPH' and ch[2].label == 'PP':
+          self.ner.start(span.begin, self.options.backoff_type)
+          self.ner.finish(span.end)
+          added = self.ner.spans[-1]
+          example = (self.docid, self._phrase(added), self._pos_sequence(added))
+          norm_summary.nml_titles.increment(\
+            self._child_sequence(span), example=example)
+          for i in xrange(added.begin, added.end):
+            disallowed[i] = True
+        
+    # Get noun phrase(s) from each base NML span.
+    base = {}  # NML span boundaries -> base NML or not
+    for span in spans:
+      if span.label != 'NML':
+        continue
+
+      key = (span.begin, span.end)
+      if key not in base:
+        # Leaf NML span. Additionally check if all children are tokens.
+        base[key] = span.leaf_constituent()
+
+        # Split this span into allowed portions. Each portion becomes a
+        # named entity.
+        if base[key]:
+          phrases = self._split_noun_phrases(span, disallowed, pos_tags=None)
+          for (begin, end) in phrases:
+            self.ner.start(begin, self.options.backoff_type)
+            self.ner.finish(end)
             added = self.ner.spans[-1]
             example = (self.docid, self._phrase(added))
-            bucket = span.end - span.begin
-            norm_summary.np_via_nml.increment(bucket, example=example)
+            norm_summary.base_nml.increment(end - begin, example=example)
 
-        # Irrespective of whether we added the span or not, mark its tokens
-        # as disallowed for future consideration.
-        for i in xrange(span.begin, span.end):
-          disallowed[i] = True
+        # Mark all NML ancestors as recursive so they won't be processed.
+        p = span.parent
+        while p is not None:
+          if p.label == 'NML':
+            base[(p.begin, p.end)] = False
+          p = p.parent
 
-    # Output noun phrases for base NPs. We exploit the sortedness trick again.
+      # An NML span should be off-limits upon during subsequent NP-span
+      # processing, so mark each NML span (base or recursive) as disallowed.
+      for i in xrange(span.begin, span.end):
+        disallowed[i] = True
+
+    # Output noun phrase(s) from each base NP.
+    processed_np = set()
     for span in spans:
-      if span.label == 'NP' and span.head is not None:
-        (begin, end) = self._expand(span, disallowed)
-        if end > begin:
+      if span.label != 'NP': continue
+
+      key = (span.begin, span.end)
+      if key not in processed_np:
+        processed_np.add(key)
+
+        # Mark ancestor NPs as processed.
+        p = span.parent
+        while p is not None:
+          if p.label == 'NP':
+            processed_np.add((p.begin, p.end))
+          p = p.parent
+
+        phrases = self._split_noun_phrases(span, disallowed)
+        for (begin, end) in phrases:
           self.ner.start(begin, self.options.backoff_type)
           self.ner.finish(end)
           added = self.ner.spans[-1]
           example = (self.docid, self._phrase(added))
-          norm_summary.np.increment(end - begin, example=example)
+          norm_summary.base_np.increment(end - begin, example=example)
 
-          # Skip any ancestor NPs by disallowing the tokens of this NP.
+          # Disallow the range of the added NP.
           for i in xrange(added.begin, added.end):
             disallowed[i] = True
+
+    # Handle NPs of the form [Base NP ending in POS, token constituents].
+    for span in spans:
+      if span.label != 'NP' or len(span.children) < 2 or \
+        span.children[0].label != 'NP' or \
+        self.pos(span.children[0].end - 1) != 'POS' or \
+        not span.children[0].leaf_constituent():
+        continue
+
+      other_children_tokens = True
+      for i in xrange(0, len(span.children)):
+        if i > 0 and len(span.children[i].children) > 0:
+          other_children_tokens = False
+          break
+      if not other_children_tokens:
+        continue
+
+      boundary = Span(span.children[0].end, '')
+      boundary.end = span.end
+      phrases = self._split_noun_phrases(span, disallowed, \
+        pos_tags=['NN', 'NNS', 'HYPH'])
+      child_seq = self._child_sequence(span)
+      for (begin, end) in phrases:
+        self.ner.start(begin, self.options.backoff_type)
+        self.ner.finish(end)
+        added = self.ner.spans[-1]
+        pos_seq = ' '.join([self.pos(i) for i in xrange(begin, end)])
+        example = (self.docid, \
+          self._phrase(span) + " -> " + self._phrase(added), child_seq)
+        norm_summary.recursive_np.increment(pos_seq, example=example)
+        for i in xrange(begin, end):
+          disallowed[i] = True
+
+    # Mark pronouns.
+    person_pronouns = ['he', 'she', 'him', 'her', 'himself', 'herself']
+    for span in self.tokens.spans:
+      if span.label in ['PRP', 'PRP$']:
+        label = self.options.backoff_type
+        if span.text.lower() in person_pronouns:
+          label = "PERSON"
+        self.ner.singleton(span.begin, label)
 
 
   # Returns a list of beginning and ending constituent spans from 'parse_bit'.
@@ -698,6 +800,11 @@ class Annotations:
       if i == span.head: pos = '[' + pos + ']'
       seq.append(pos)
     return ' '.join(seq)
+
+
+  # Returns the label sequence string for the span's children.
+  def _child_sequence(self, span):
+    return ' '.join([c.label for c in span.children])
 
 
   # Normalizes all spans.

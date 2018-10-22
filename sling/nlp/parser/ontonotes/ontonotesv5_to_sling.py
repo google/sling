@@ -195,11 +195,15 @@ class Summary:
       for h in [self.head, self.reduced, self.none]:
         h.set_output_options(max_output_bins=50)
 
-      # Noun phrases added, by length.
-      self.np = section.histogram("Noun Phrases Added via Base NPs",\
+      # Noun phrases added.
+      self.base_np = section.histogram("Noun Phrases Added via Base NPs",\
         max_examples_per_bin=10)
-      self.np_via_nml = section.histogram("Noun Phrases Added via Base NMLs",\
+      self.recursive_np = section.histogram(\
+        "Noun Phrases Added via Recursive NPs", max_examples_per_bin=30)
+      self.base_nml = section.histogram("Noun Phrases Added via Base NMLs",\
         max_examples_per_bin=10)
+      self.nml_titles = section.histogram("Noun Phrases Added via NML Titles",\
+        max_examples_per_bin=30)
 
       self.particles = section.histogram("Verb Particle Inclusion")
       self.particles.set_output_options(max_output_bins=20)
