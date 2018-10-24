@@ -363,12 +363,17 @@ class Caspar(nn.Module):
 
     # Initialize the LSTM and FF parameters with gaussian(mean=0, stddev=1e-4).
     params = [self.ff_layer.weight]
-    params += [head.softmax.weight for head in self.ff_heads]
     params += [p for p in self.lr_lstm.parameters()]
     params += [p for p in self.rl_lstm.parameters()]
     for p in params:
-      p.data.normal_()
-      p.data.mul_(1e-4)
+      if len(p.shape) >= 2:
+        nn.init.orthogonal(p.data)
+      else:
+        nn.init.normal(p.data, mean=0, stddev=1e-4)
+
+    # Initialize output layer weights.
+    for head in self.ff_heads:
+      nn.init.xavier_normal(head.softmax.weight.data)
 
     # Positive bias for the hidden layer, and zero bias for the output layers.
     self.ff_layer.bias.data.fill_(0.2)
