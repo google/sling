@@ -15,8 +15,13 @@
 #ifndef SLING_PYAPI_PYBASE_H_
 #define SLING_PYAPI_PYBASE_H_
 
+#ifdef SLING_GOOGLE3
+#include <Python.h>
+#include <structmember.h>
+#else
 #include <python2.7/Python.h>
 #include <python2.7/structmember.h>
+#endif
 #include <vector>
 
 #include "sling/string/text.h"
