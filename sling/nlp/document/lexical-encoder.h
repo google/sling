@@ -121,6 +121,10 @@ class LexicalFeatures {
   friend class LexicalFeatureLearner;
 };
 
+// Callback for tracing extracted features.
+typedef std::function<
+  void(int token, const string &feature, int value)> LexicalFeatureTrace;
+
 // Lexical feature extractor for extracting features from document tokens and
 // mapping these though feature embeddings.
 class LexicalFeatureExtractor {
@@ -139,9 +143,17 @@ class LexicalFeatureExtractor {
   // Data instance for feature extraction.
   myelin::Instance *data() { return &data_; }
 
+  // Set trace callback.
+  void set_trace(LexicalFeatureTrace trace) { trace_ = trace; }
+
  private:
+   // Call trace function for extracted feature values for current token.
+  void OutputTrace(int token);
+  void OutputTrace(int token, myelin::Tensor *feature);
+
   const LexicalFeatures &lex_;
   myelin::Instance data_;
+  LexicalFeatureTrace trace_;
 };
 
 // Lexical feature learner for training feature embeddings.

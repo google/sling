@@ -392,6 +392,26 @@ void LexicalFeatureExtractor::Extract(const Document &document,
   for (int i = 0; i < length; ++i) {
     float *f = reinterpret_cast<float *>(fv->at(i));
     Compute(features, i, f);
+    if (trace_) OutputTrace(i);
+  }
+}
+
+void LexicalFeatureExtractor::OutputTrace(int token) {
+  OutputTrace(token, lex_.word_feature_);
+  OutputTrace(token, lex_.prefix_feature_);
+  OutputTrace(token, lex_.suffix_feature_);
+  OutputTrace(token, lex_.hyphen_feature_);
+  OutputTrace(token, lex_.caps_feature_);
+  OutputTrace(token, lex_.punct_feature_);
+  OutputTrace(token, lex_.quote_feature_);
+  OutputTrace(token, lex_.digit_feature_);
+}
+
+void LexicalFeatureExtractor::OutputTrace(int token, myelin::Tensor *feature) {
+  if (feature == nullptr) return;
+  const int *values = data_.Get<int>(feature);
+  for (int i = 0; i < feature->elements(); ++i) {
+    if (values[i] != -1) trace_(token, feature->name(), values[i]);
   }
 }
 
