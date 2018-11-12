@@ -14,7 +14,6 @@
 
 #include "sling/nlp/parser/parser-action.h"
 
-#include "sling/frame/object.h"
 #include "sling/string/strcat.h"
 
 namespace sling {
@@ -29,6 +28,7 @@ string ParserAction::TypeName(Type type) {
     case ParserAction::EMBED: return "EMBED";
     case ParserAction::ELABORATE: return "ELABORATE";
     case ParserAction::CASCADE: return "CASCADE";
+    case ParserAction::MARK: return "MARK";
     case ParserAction::SHIFT: return "SHIFT";
     case ParserAction::STOP: return "STOP";
   }
@@ -38,6 +38,25 @@ string ParserAction::TypeName(Type type) {
 
 string ParserAction::TypeName() const {
   return TypeName(type);
+}
+
+Frame ParserAction::AsFrame(Store *store, const string &prefix) const {
+  Builder builder(store);
+  builder.Add(prefix + "type", type);
+  if (length != 0) builder.Add(prefix + "length", length);
+  if (!label.IsNil()) builder.Add(prefix + "label", label);
+  if (!role.IsNil()) builder.Add(prefix + "role", role);
+  if (type == REFER || type == CONNECT || type == EMBED) {
+    builder.Add(prefix + "target", target);
+  }
+  if (type == ASSIGN || type == CONNECT || type == ELABORATE) {
+    builder.Add(prefix + "source", source);
+  }
+  if (type == CASCADE) {
+    builder.Add(prefix + "delegate", delegate);
+  }
+  builder.Add(prefix + "_str", ToString(store));
+  return builder.Create();
 }
 
 string ParserAction::ToString(Store *store) const {
@@ -70,6 +89,7 @@ string ParserAction::ToString(Store *store) const {
       StrAppend(&s, "(delegate=", delegate, ")");
       break;
     case ParserAction::SHIFT:
+    case ParserAction::MARK:
     case ParserAction::STOP:
     default:
       s.pop_back();

@@ -64,11 +64,25 @@ cc_library(
   deps = [
     ":action-table",
     ":parser-state",
+    ":trace",
     "//sling/base",
     "//sling/frame:serialization",
     "//sling/frame:store",
     "//sling/myelin:compute",
     "//sling/myelin:flow",
+  ],
+)
+
+cc_library(
+  name = "trace",
+  srcs = ["trace.cc"],
+  hdrs = ["trace.h"],
+  deps = [
+    ":parser-action",
+    "//sling/base",
+    "//sling/frame:object",
+    "//sling/frame:store",
+    "//sling/nlp/document:document",
   ],
 )
 
@@ -81,6 +95,7 @@ cc_library(
     ":cascade",
     ":parser-state",
     ":roles",
+    ":trace",
     "//sling/base",
     "//sling/frame:serialization",
     "//sling/frame:store",

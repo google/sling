@@ -17,6 +17,7 @@
 import os
 import sling
 import sling.flags as flags
+from sling.myelin.flow import Flow
 import sys
 import torch
 from functools import partial
@@ -27,16 +28,7 @@ from corpora import Corpora
 from pytorch_modules import Caspar
 from spec import Spec
 from trainer import Hyperparams, Trainer, dev_accuracy
-from train_util import mem, setup_training_flags
-
-
-# Checks that all arguments in 'ls' are set in 'args'.
-def check_present(args, ls):
-  for x in ls:
-    val = getattr(args, x, None)
-    assert val is not None, "%r should be present" % x
-    if type(val) is str:
-      assert val != "", "%r should be set" % x
+from train_util import *
 
 
 def train(args):
@@ -59,17 +51,14 @@ def train(args):
       "symbols besides the usual ones."
 
   # Make the training spec.
-  spec = Spec(args.small)
+  spec = Spec()
   spec.build(args.commons, args.train_corpus)
 
-  # Load word embeddings.
-  if args.word_embeddings != "" and args.word_embeddings is not None:
-    spec.load_word_embeddings(args.word_embeddings)
-    print "After loading pre-trained word embeddings", mem()
-
-  # Initialize the model with the spec.
+  # Initialize the model with the spec and any word embeddings.
   caspar = Caspar(spec)
-  caspar.initialize()
+  embeddings_file = args.word_embeddings
+  if embeddings_file == '': embeddings_file = None
+  caspar.initialize(embeddings_file)
 
   tmp_folder = os.path.join(args.output_folder, "tmp")
   if not os.path.exists(tmp_folder):
@@ -91,9 +80,5 @@ def train(args):
 
 if __name__ == '__main__':
   setup_training_flags(flags)
-  flags.define('--small',
-               help='Small dimensions (for testing)',
-               default=False,
-               action='store_true')
   flags.parse()
   train(flags.arg)

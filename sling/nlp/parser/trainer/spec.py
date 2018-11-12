@@ -13,8 +13,11 @@
 # limitations under the License.
 
 import cascade
+import os
+import pickle
 import sling
 import struct
+import tempfile
 import unicodedata
 
 from action_table import Actions
@@ -56,7 +59,7 @@ class FeatureSpec:
     self.dim = dim                     # embedding dimensionality
     self.vocab_size = vocab            # vocabulary size (fixed features only)
     self.activation_size = activation  # activation size (link features only)
-    self.num = num                     # no. of links / no. of fixed feature ids
+    self.num = num                     # no. of links / fixed feature ids
 
 
 # Training specification.
@@ -89,9 +92,7 @@ class Spec:
   ALL_DIGIT = 2
   DIGIT_CARDINALITY = 3
 
-  def __init__(self, small=False):
-    self.small = small
-
+  def __init__(self):
     # Lexicon generation settings.
     self.words_normalize_digits = True
     self.suffixes_max_length = 3
@@ -99,48 +100,29 @@ class Spec:
     # Action table percentile.
     self.actions_percentile = 99
 
-    if small:
-      # Network dimensionalities.
-      self.lstm_hidden_dim = 6
-      self.ff_hidden_dim = 12
+    # Network dimensionalities.
+    self.lstm_hidden_dim = 256
+    self.ff_hidden_dim = 128
 
-      # Fixed feature dimensionalities.
-      self.oov_features = False
-      self.words_dim = 4
-      self.suffixes_dim = 2
-      self.fallback_dim = 2  # dimensionality of each fallback feature
-      self.roles_dim = 2
+    # Fixed feature dimensionalities.
+    self.oov_features = True
+    self.words_dim = 32
+    self.suffixes_dim = 16
+    self.fallback_dim = 8  # dimensionality of each fallback feature
+    self.roles_dim = 16
 
-      # History feature size.
-      self.history_limit = 2
+    # History feature size.
+    self.history_limit = 5
 
-      # Frame limit for other link features.
-      self.frame_limit = 2
+    # Frame limit for other link features.
+    self.frame_limit = 5
 
-      # Link feature dimensionalities.
-      self.link_dim_lstm = 8
-      self.link_dim_non_lstm = 10
-    else:
-      # Network dimensionalities.
-      self.lstm_hidden_dim = 256
-      self.ff_hidden_dim = 128
+    # Link feature dimensionalities.
+    self.link_dim_lstm = 32
+    self.link_dim_ff = 64
 
-      # Fixed feature dimensionalities.
-      self.oov_features = True
-      self.words_dim = 32
-      self.suffixes_dim = 16
-      self.fallback_dim = 8  # dimensionality of each fallback feature
-      self.roles_dim = 16
-
-      # History feature size.
-      self.history_limit = 4
-
-      # Frame limit for other link features.
-      self.frame_limit = 5
-
-      # Link feature dimensionalities.
-      self.link_dim_lstm = 32
-      self.link_dim_non_lstm = 64
+    # Bins for distance from the current token to the topmost marked token.
+    self.distance_bins = [0, 1, 2, 3, 6, 10, 15, 20]
 
     # Resources.
     self.commons = None
@@ -148,8 +130,6 @@ class Spec:
     self.actions = None
     self.words = None
     self.suffix = None
-    self.word_embeddings = None
-    self.word_embedding_indices = None
 
     # To be determined.
     self.num_actions = None
@@ -187,6 +167,101 @@ class Spec:
     print len(self.actions.roles), "unique roles in action table"
   
 
+  # Writes parts of the spec to a flow blob.
+  def to_flow(self, fl):
+    blob = fl.blob("spec")
+
+    # Separately write some fields for the convenience of the Myelin runtime.
+    blob.add_attr("frame_limit", self.frame_limit)
+    bins = [str(d) for d in self.distance_bins]
+    blob.add_attr("mark_distance_bins", ' '.join(bins))
+
+    # Temporarily remove fields that can't or don't need to be pickled.
+    fields_to_ignore = [
+      'commons', 'commons_path', 'actions', 'words', 'suffix', 'cascade']
+    cache = {}
+    for k, v in self.__dict__.iteritems():
+      if k in fields_to_ignore:
+        cache[k] = v
+
+    for k in fields_to_ignore:
+      delattr(self, k)
+    blob.data = pickle.dumps(self.__dict__)
+
+    # Resurrect deleted fields.
+    for k, v in cache.iteritems():
+      setattr(self, k, v)
+
+
+  # Reads spec from a flow.
+  def from_flow(self, fl):
+    blob = fl.blob("spec")
+    temp_dict = pickle.loads(blob.data)
+    self.__dict__.update(temp_dict)
+
+    # Read non-pickled fields.
+    # Read common store.
+    self.commons = sling.Store()
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    filename = temp_file.name
+    with open(filename, "wb") as f:
+      f.write(fl.blob("commons").data)
+    temp_file.close()
+    self.commons.load(filename)
+    _ = sling.DocumentSchema(self.commons)
+    self.commons.freeze()
+    os.unlink(filename)
+
+    # Read action table from the commons.
+    self.actions = Actions()
+    self.actions.decode(self.commons["/table"])
+
+    # Read cascade specification. This is done by calling eval()
+    # on the class constructor. The classname is stored in the cascade frame.
+    frame = self.commons["/cascade"]
+    self.cascade = eval(frame["name"])(self.actions)
+    print self.cascade
+
+    # Read word lexicon.
+    blob = fl.blob("lexicon")
+    self.words = Lexicon(self.words_normalize_digits)
+    self.words.read(blob.data.tobytes(), chr(int(blob.get_attr("delimiter"))))
+    print self.words.size(), "words read from flow's lexicon"
+
+    # Read suffix table.
+    self.suffix = Lexicon(self.words_normalize_digits, oov_item=None)
+    data = fl.blob("suffixes").data
+    def read_int(mview):
+      output = 0
+      shift_bits = 0
+      index = 0
+      while index < len(mview):
+        part = ord(mview[index])
+        index += 1
+        output |= (part & 127) << shift_bits
+        shift_bits += 7
+        if part & 128 == 0:
+          break
+      return output, mview[index:]
+
+    affix_type, data = read_int(data)                # affix type
+    assert affix_type == 1
+
+    max_length, data = read_int(data)                # max length
+    assert max_length == self.suffixes_max_length
+
+    num, data = read_int(data)                       # num affixes
+    for _ in xrange(num):
+      num_bytes, data = read_int(data)
+      word = data[0:num_bytes].tobytes()
+      self.suffix.add(word)
+      data = data[num_bytes:]
+      num_chars, data = read_int(data)
+      if num_chars > 0:
+        shorter_index, data = read_int(data)
+    print self.suffix.size(), "suffixes read from flow's affix table"
+
+
   # Returns suffix(es) of 'word'.
   def get_suffixes(self, word, unicode_chars=None):
     if unicode_chars is None:
@@ -194,7 +269,7 @@ class Spec:
     output = []
     end = min(self.suffixes_max_length, len(unicode_chars))
     for start in xrange(end, 0, -1):
-      output.append("".join(unicode_chars[-start:]))
+      output.append("".join(unicode_chars[-start:]).encode('utf-8'))
     output.append("")  # empty suffix
 
     return output
@@ -222,19 +297,16 @@ class Spec:
     for i in xrange(self.suffix.size()):
       v = self.suffix.value(i)
 
-      if type(v) is unicode:
-        v_str = v.encode("utf-8")
-      else:
-        assert type(v) is str, type(v)
-        v_str = v
+      assert type(v) is str, type(v)
+      v_unicode = v.decode('utf-8')
 
-      writeint(len(v_str), buf)       # number of bytes
-      for x in v_str: buf.append(x)   # the bytes themselves
-      writeint(len(v), buf)           # number of characters
-      if len(v) > 0:
-        shorter = v[1:]
+      writeint(len(v), buf)           # number of bytes
+      for x in v: buf.append(x)       # the bytes themselves
+      writeint(len(v_unicode), buf)   # number of code points
+      if len(v_unicode) > 0:
+        shorter = v_unicode[1:].encode('utf-8')
         shorter_idx = self.suffix.index(shorter)
-        assert shorter_idx is not None, shorter
+        assert shorter_idx is not None, (shorter, v, v_unicode)
         writeint(shorter_idx, buf)    # id of the shorter suffix
 
     return buf
@@ -251,10 +323,18 @@ class Spec:
         FeatureSpec(name, dim=dim, vocab=vocab, num=num))
 
 
-  # Adds link feature to the specification.
-  def add_ff_link(self, name, dim, activation, num):
+  # Adds recurrent link feature from the FF unit to the specification.
+  def add_ff_link(self, name, num):
     self.ff_link_features.append(
-        FeatureSpec(name, dim=dim, activation=activation, num=num))
+        FeatureSpec(name, dim=self.link_dim_ff, \
+        activation=self.ff_hidden_dim, num=num))
+
+
+  # Adds link feature from the LSTMs to the FF unit to the specification.
+  def add_lstm_link(self, name, num):
+    self.ff_link_features.append(
+        FeatureSpec(name, dim=self.link_dim_lstm, \
+        activation=self.lstm_hidden_dim, num=num))
 
 
   # Specifies all fixed and link features.
@@ -288,18 +368,23 @@ class Spec:
       self.add_ff_fixed("labeled-roles", dim, num_roles * fl * fl, num)
       self.add_ff_fixed("unlabeled-roles", dim, fl * fl, num)
 
-    self.add_ff_link("frame-creation-steps", \
-      self.link_dim_non_lstm, self.ff_hidden_dim, fl)
-    self.add_ff_link("frame-focus-steps", \
-      self.link_dim_non_lstm, self.ff_hidden_dim, fl)
-    self.add_ff_link("frame-end-lr", \
-      self.link_dim_lstm, self.lstm_hidden_dim, fl)
-    self.add_ff_link("frame-end-rl", \
-      self.link_dim_lstm, self.lstm_hidden_dim, fl)
-    self.add_ff_link("history", \
-      self.link_dim_non_lstm, self.ff_hidden_dim, self.history_limit)
-    self.add_ff_link("lr", self.link_dim_lstm, self.lstm_hidden_dim, 1)
-    self.add_ff_link("rl", self.link_dim_lstm, self.lstm_hidden_dim, 1)
+    # Distance to the top of the mark stack.
+    self.add_ff_fixed("mark-distance", 32, len(self.distance_bins) + 1, 1)
+
+    # Link features.
+    self.add_ff_link("frame-creation-steps", fl)
+    self.add_ff_link("frame-focus-steps", fl)
+    self.add_lstm_link("frame-end-lr", fl)
+    self.add_lstm_link("frame-end-rl", fl)
+    self.add_ff_link("history", self.history_limit)
+    self.add_lstm_link("lr", 1)
+    self.add_lstm_link("rl", 1)
+
+    # Link features that look at the stack of marked tokens.
+    mark_depth = 1   # 1 = use only the top of the stack
+    self.add_lstm_link("mark-lr", mark_depth)
+    self.add_lstm_link("mark-rl", mark_depth)
+    self.add_ff_link("mark-step", mark_depth)
 
     self.ff_input_dim = sum([f.dim for f in self.ff_fixed_features])
     self.ff_input_dim += sum(
@@ -323,6 +408,7 @@ class Spec:
         word = token.word
         self.words.add(word)
         for s in self.get_suffixes(word):
+          assert type(s) is str
           self.suffix.add(s)
     print "Words:", self.words.size(), "items in lexicon, including OOV"
     print "Suffix:", self.suffix.size(), "items in lexicon"
@@ -336,7 +422,7 @@ class Spec:
 
     # Prepare action table and cascade.
     self._build_action_table(corpora)
-    self.cascade = cascade.ShiftCascade(self.actions)
+    self.cascade = cascade.ShiftMarkCascade(self.actions)
     print self.cascade
 
     # Save cascade specification in commons.
@@ -351,7 +437,7 @@ class Spec:
 
   # Loads embeddings for words in the lexicon.
   def load_word_embeddings(self, embeddings_file):
-    self.word_embeddings = [None] * self.words.size()
+    word_embeddings = [None] * self.words.size()
     f = open(embeddings_file, 'rb')
 
     # Read header.
@@ -377,19 +463,19 @@ class Spec:
       assert ch == "\n", "%r" % ch     # end of line expected
 
       index = self.words.index(word)
-      if index != oov and self.word_embeddings[index] is None:
-        self.word_embeddings[index] = vector
+      if index != oov and word_embeddings[index] is None:
+        word_embeddings[index] = vector
         count += 1
 
     f.close()
-
-    self.word_embedding_indices =\
-        [i for i, v in enumerate(self.word_embeddings) if v is not None]
-    self.word_embeddings = [v for v in self.word_embeddings if v is not None]
+    word_embedding_indices =\
+        [i for i, v in enumerate(word_embeddings) if v is not None]
+    word_embeddings = [v for v in word_embeddings if v is not None]
 
     print "Loaded", count, "pre-trained embeddings from file with", size, \
         "vectors. Vectors for remaining", (self.words.size() - count), \
         "words will be randomly initialized."
+    return word_embeddings, word_embedding_indices
 
 
   # Returns raw indices of LSTM features for all tokens in 'document'.
@@ -484,7 +570,14 @@ class Spec:
         raise ValueError("LSTM feature '", f.name, "' not implemented")
     return output
 
-
+  # Returns the index of the bin corresponding to the distance of the topmost
+  # marked token from the current token.
+  def _mark_distance(self, t1, t2):
+    d = t2 - t1
+    for i, x in enumerate(self.distance_bins):
+      if d <= x: return i
+    return len(self.distance_bins)
+  
   # Returns raw indices of all fixed FF features for 'state'.
   def raw_ff_fixed_features(self, feature_spec, state):
     role_graph = state.role_graph()
@@ -506,6 +599,10 @@ class Spec:
       for e in role_graph:
         if e[2] is not None and e[2] < fl and e[2] >= 0:
           raw_features.append(e[0] * fl * num_roles + e[2] * num_roles + e[1])
+    elif feature_spec.name == "mark-distance":
+      if len(state.marks) > 0:
+        d = self._mark_distance(state.marks[-1].token, state.current)
+        raw_features.append(d)
     else:
       raise ValueError("FF feature '", feature_spec.name, "' not implemented")
 
@@ -541,6 +638,18 @@ class Spec:
       for i in xrange(num):
         step = state.focus_step(i)
         output.append(None if step == -1 else step)
+    elif name in ["mark-lr", "mark-rl"]:
+      for i in xrange(num):
+        index = None
+        if len(state.marks) > i:
+          index = state.marks[-1 - i].token - state.begin
+        output.append(index)
+    elif name == "mark-step":
+      for i in xrange(num):
+        index = None
+        if len(state.marks) > i:
+          index = state.marks[-1 - i].step
+        output.append(index)
     else:
       raise ValueError("Link feature not implemented:" + name)
 

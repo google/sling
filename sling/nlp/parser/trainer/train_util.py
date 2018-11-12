@@ -19,6 +19,15 @@ import subprocess
 
 from datetime import datetime
 
+# Checks that all arguments in 'ls' are set in 'args'.
+def check_present(args, ls):
+  for x in ls:
+    val = getattr(args, x, None)
+    assert val is not None, "%r should be present" % x
+    if type(val) is str:
+      assert val != "", "%r should be set" % x
+
+
 # Evaluates gold vs test documents, which are assumed to be aligned,
 # and returns a dict of their results.
 def frame_evaluation(gold_corpus_path, test_corpus_path, commons_path):
@@ -67,24 +76,24 @@ def setup_training_flags(flags):
                metavar='DIR')
   flags.define('--commons',
                help='Path to the commons store file',
-               default="local/data/corpora/sempar/commons.sling",
+               default="",
                type=str,
-               metavar='COMMONS_FILE')
+               metavar='FILE')
   flags.define('--train_corpus', '--train',
                help='Path to the train corpus recordio',
                default="local/data/corpora/sempar/train.rec",
                type=str,
-               metavar='TRAIN_RECORDIO')
+               metavar='FILE')
   flags.define('--dev_corpus', '--dev',
                help='Path to the dev corpus recordio',
                default="local/data/corpora/sempar/dev.rec",
                type=str,
-               metavar='DEV_RECORDIO')
+               metavar='FILE')
   flags.define('--word_embeddings',
                help='(Optional) Path to the word embeddings file',
                default="local/data/corpora/sempar/word2vec-32-embeddings.bin",
                type=str,
-               metavar='WORD_EMBEDDINGS_FILE')
+               metavar='FILE')
 
   # Training hyperparameters.
   # Notable omissions: decay_steps, dropout_rate.
@@ -92,22 +101,22 @@ def setup_training_flags(flags):
                help='Number of training batches to use',
                default=100000,
                type=int,
-               metavar='NUM_BATCHES')
+               metavar='NUM')
   flags.define('--report_every',
                help='Checkpoint interval in number of batches',
                default=3000,
                type=int,
-               metavar='NUM_BATCHES_BEFORE_CHECKPOINTING')
+               metavar='NUM')
   flags.define('--batch_size', '--batch',
                help='Batch size',
                default=8,
                type=int,
-               metavar='BATCH_SIZE')
+               metavar='NUM')
   flags.define('--learning_method', '--optimizer',
                help='Optimizer to use: adam or sgd',
                default='adam',
                type=str,
-               metavar='OPTIMIZER')
+               metavar='STR')
   flags.define('--use_moving_average',
                help='Whether or not to use exponential moving averaging',
                default=True,
@@ -116,34 +125,62 @@ def setup_training_flags(flags):
                help='Exponential moving coefficient to use',
                default=0.9999,
                type=float,
-               metavar='MOVING_AVERAGE_COEFFICIENT')
+               metavar='FLOAT')
   flags.define('--gradient_clip_norm', '--gradient-clip',
                help='Gradient clip norm to use (0.0 to disable clipping)',
                default=1.0,
-               type=float)
+               type=float,
+               metavar='FLOAT')
   flags.define('--learning_rate', '--alpha',
                help='Learning rate for the optimizer',
                default=0.0005,
                type=float,
-               metavar='ALPHA')
+               metavar='FLOAT')
   flags.define('--adam_beta1',
                help='beta1 hyperparameter for the Adam optimizer',
                default=0.01,
                type=float,
-               metavar='BETA1')
+               metavar='FLOAT')
   flags.define('--adam_beta2',
                help='beta2 hyperparameter for the Adam optimizer',
                default=0.999,
                type=float,
-               metavar='BETA2')
+               metavar='FLOAT')
   flags.define('--adam_eps',
                help='epsilon hyperparameter for the Adam optimizer',
                default=1e-5,
                type=float,
-               metavar='EPSILON')
+               metavar='FLOAT')
   flags.define('--l2_coeff', '-l2',
                help='L2 regularization coefficient',
                default=0.0001,
                type=float,
-               metavar='L2')
+               metavar='FLOAT')
 
+
+# Sets up commonly used runtime flags.
+def setup_runtime_flags(flags):
+  flags.define('--parser',
+               help='Parser flow file',
+               default="",
+               type=str,
+               metavar='FILE')
+  flags.define('--input',
+               help='Path to the input recordio file',
+               default="",
+               type=str,
+               metavar='FILE')
+  flags.define('--output',
+               help='Path to the output recordio file',
+               default="",
+               type=str,
+               metavar='FILE')
+  flags.define('--evaluate',
+               help='Whether to evaluate against input documents',
+               default=False,
+               action='store_true')
+  flags.define('--trace',
+               help='Whether to write tracing information in documents',
+               default=False,
+               action='store_true')
+ 

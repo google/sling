@@ -249,6 +249,11 @@ class Document {
                 int begin = -1, int end = -1,
                 BreakType brk = SPACE_BREAK);
 
+  // Returns the small enclosing span for [begin, end). If no such span exists,
+  // then returns nullptr. If a crossing span exists, then returns nullptr and
+  // sets 'crossing' to true.
+  Span *EnclosingSpan(int begin, int end, bool *crossing);
+
   // Add new span to the document. The span is initialized with a mention frame
   // for the span. If the span already exists, the type is added to the mention
   // and the existing span is returned. Spans can be nested but are not allowed

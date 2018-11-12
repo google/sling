@@ -16,14 +16,14 @@
 # PyTorch module implementations for Caspar.
 
 import math
-#import sys
+import numpy as np
 import torch
 import torch.nn as nn
 
-#sys.path.insert(0, "sling/nlp/parser/trainer")
 from cascade import Delegate
 from cascade import SoftmaxDelegate
 from parser_state import ParserState
+from trace import Trace
 
 from sling.myelin.lexical_encoder import LexicalEncoder
 import sling
@@ -46,6 +46,13 @@ def fstr(var, fmt="%.9f"):
   ls = [fmt % x for x in ls]
   return "[" + ",".join(ls) + "]"
 
+
+# Reads the parameter 'param' from a flow variable 'var'.
+def parameter_from_flow(var, param):
+  shape = list(param.data.shape)   # from torch.Size to python list
+  numpy_array = np.frombuffer(bytearray(var.data), dtype=np.float32)
+  numpy_array = numpy_array.reshape(shape)
+  param.data = torch.from_numpy(numpy_array)
 
 # Projects input x to xA + b. This is in contrast to nn.Linear which does Ax + b
 # and consequently has different parameter dimensionalities.
@@ -187,6 +194,16 @@ class DragnnLSTM(nn.Module):
       getattr(flow_lstm, p).data = getattr(self, "_" + p).data.numpy()
 
 
+  # Copies parameters from Myelin flow.
+  def copy_from_flow(self, fl, func_name):
+    for p in ["x2i", "h2i", "c2i", "bi", \
+              "x2o", "h2o", "c2o", "bo", "x2c", "h2c", "bc"]:
+      assert hasattr(self, "_" + p), p
+      var = fl.var(func_name + "/" + p)
+      param = getattr(self, "_" + p)
+      parameter_from_flow(var, param)
+    
+    
   # Returns a string specification of the module.
   def __repr__(self):
     return self.__class__.__name__ + "(in=" + str(self.input_dim) + \
@@ -329,9 +346,24 @@ class Caspar(nn.Module):
     self.regularized_params = [self.ff_layer.weight]
     print "Caspar:", self
 
+  
+  # Prints the first and last few elements of each parameter.
+  def print_parameters(self):
+    for name, p in self.named_parameters():
+      tensor = p.data.view([-1]).numpy()
+      s1 = ["%.3f" % f for f in tensor[0:5]]
+      s2 = ["%.3f" % f for f in tensor[-5:]]
+      print name, ' '.join(s1), "...", ' '.join(s2)
+
 
   # Initializes various module parameters.
-  def initialize(self):
+  def initialize(self, word_embeddings_file):
+    word_embeddings = None
+    word_embedding_indices = None
+    if word_embeddings_file is not None:
+      word_embeddings, word_embedding_indices = \
+        self.spec.load_word_embeddings(word_embeddings_file)
+
     # Initialize the embeddings to gaussian(mean=0, stddev=1/sqrt(dim)),
     # where 'dim' is the dimensionality of the embedding.
     for f in self.spec.lstm_features:
@@ -341,16 +373,16 @@ class Caspar(nn.Module):
       matrix.mul_(coeff)
 
       # Override with pre-trained word embeddings, if provided.
-      if f.name == "word" and self.spec.word_embeddings is not None:
-        indices = torch.LongTensor(self.spec.word_embedding_indices)
-        data = torch.Tensor(self.spec.word_embeddings)
+      if f.name == "word" and word_embeddings is not None:
+        indices = torch.LongTensor(word_embedding_indices)
+        data = torch.Tensor(word_embeddings)
 
         # Separately normalize each embedding row
         data = torch.nn.functional.normalize(data)
 
         # Copy the normalized embeddings at appropriate indices.
         matrix.index_copy_(0, indices, data)
-        print "Overwrote", len(self.spec.word_embeddings), f.name, \
+        print "Overwrote", len(word_embeddings), f.name, \
             "embedding vectors with normalized pre-trained vectors."
 
     # Initialize the FF's fixed and link embeddings like those in the LSTMs.
@@ -457,9 +489,9 @@ class Caspar(nn.Module):
 
       # Figure out where we need to pick the activations from.
       activations = ff_activations
-      if f.name in ["lr", "frame-end-lr"]:
+      if f.name in ["lr", "frame-end-lr", "mark-lr"]:
         activations = lr_lstm_output
-      elif f.name in ["rl" , "frame-end-rl"]:
+      elif f.name in ["rl" , "frame-end-rl", "mark-rl"]:
         activations = rl_lstm_output
 
       # Get indices into the activations. Recall that missing indices are
@@ -491,9 +523,9 @@ class Caspar(nn.Module):
 
 
   # Makes a forward pass over 'document'.
-  def forward(self, document, train=False):
+  def forward(self, document, train=False, debug=False):
     # Compute LSTM outputs for all tokens.
-    lr_out, rl_out, _ = self._lstm_outputs(document)
+    lr_out, rl_out, lstm_features = self._lstm_outputs(document)
 
     # Run FF unit.
     state = ParserState(document, self.spec)
@@ -523,7 +555,6 @@ class Caspar(nn.Module):
           if gold.is_cascade():
             delegate_index = gold.delegate
           else:
-            # Not a CASCADE action. Apply it to the state and move on.
             state.advance(gold)
             cascading = False
           gold_index += 1
@@ -536,21 +567,23 @@ class Caspar(nn.Module):
       stop = actions.action(actions.stop())
       disallowed_counts = [0] * cascade.size()
       total_counts = [0] * cascade.size()
+      trace = Trace(self.spec, state, lstm_features) if debug else None
       while not state.done:
         # Compute the FF activation once for all cascade delegates.
-        ff_activation, _ = self._ff_activation(
-            lr_out, rl_out, ff_activations, state)
-        cascading = True
-        delegate_index = 0
+        ff_activation, ff_features = self._ff_activation(
+            lr_out, rl_out, ff_activations, state, debug=debug)
+        if trace:
+          trace.start_step(state, ff_features)
 
         # Store the last CASCADE action in a cascade.
+        delegate_index = 0
         last = None
-        while cascading:
+        while True:
           # Get the highest scoring action from the cascade delegate.
           # Note: We don't have to do any filtering or checking here, we
           # can just return the top-scoring action.
           best = cascade.predict(delegate_index, state, last, ff_activation)
-
+          final = best
           if best.is_cascade():
             delegate_index = best.delegate
             last = best
@@ -561,23 +594,71 @@ class Caspar(nn.Module):
             total_counts[delegate_index] += 1
             if actions.disallowed[index] or not state.is_allowed(index):
               disallowed_counts[delegate_index] += 1
-              best = shift
-              if state.current == state.end: best = stop
-
+              final = shift
+              if state.current == state.end:
+                final = stop
+                
+          if trace:
+            trace.action(best, final)
+          if not final.is_cascade():
             # Apply the action and stop the cascade.
-            state.advance(best)
-            cascading = False
+            state.advance(final)
+            break
 
-      return state, disallowed_counts, total_counts
+      return state, disallowed_counts, total_counts, trace
+
+
+  # Reads the model from the specified flow.
+  # Assumes that the spec has already been read from the flow.
+  def from_flow(self, fl):
+    # Read LSTM embeddings.
+    for index, f in enumerate(self.spec.lstm_features):
+      param = self.lstm_embeddings[index].weight
+      var = fl.var("features/" + f.name + "_embeddings")
+      parameter_from_flow(var, param)
+      assert [f.vocab_size, f.dim] == list(param.shape)
+
+    # Read LSTM weights.
+    self.lr_lstm.copy_from_flow(fl, "lstm/lr")
+    self.rl_lstm.copy_from_flow(fl, "lstm/rl")
+
+    # Read FF fixed feature embeddings.
+    for f in self.spec.ff_fixed_features:
+      param = f.bag.weight
+      var = fl.var("ff_trunk/" + f.name + "_embedding")
+      parameter_from_flow(var, param)
+
+    # Read FF link transforms.
+    for f in self.spec.ff_link_features:
+      param = f.transform.projection.weight
+      var = fl.var("ff_trunk/" + f.name + "/transform")
+      parameter_from_flow(var, param)
+
+      param = f.transform.oov
+      var = fl.var("ff_trunk/" + f.name + "/Gather/oov")
+      parameter_from_flow(var, param)
+
+    # Read FF hidden layer.
+    parameter_from_flow(fl.var("ff_trunk/W0"), self.ff_layer.weight)
+    parameter_from_flow(fl.var("ff_trunk/b0"), self.ff_layer.bias)
+
+    # Read softmax head(s).
+    prefix = "delegate"
+    for i, head in enumerate(self.ff_heads):
+      parameter_from_flow(fl.var(prefix + str(i) + "/W"), head.softmax.weight)
+      parameter_from_flow(fl.var(prefix + str(i) + "/b"), head.softmax.bias)
 
 
   # Writes model as a Myelin flow to 'fl'.
-  def write_flow(self, fl):
+  def to_flow(self, fl):
     spec = self.spec
 
     # Specify the encoder.
     lstm_embeddings = [e.weight.data.numpy() for e in self.lstm_embeddings]
     lex = LexicalEncoder(fl, spec, lstm_embeddings, self.lr_lstm, self.rl_lstm)
+
+    # Write the specification to the flow.
+    spec.to_flow(fl)
 
     # Adds a flow variable that will store raw indices for the given feature.
     def index_vars(bldr, feature_spec):
@@ -641,11 +722,12 @@ class Caspar(nn.Module):
 
       activations = None
       n = feature.name
-      if n == "frame-end-lr" or n == "lr":
+      if n == "frame-end-lr" or n == "lr" or n == "mark-lr":
         activations = ff_lr
-      elif n == "frame-end-rl" or n == "rl":
+      elif n == "frame-end-rl" or n == "rl" or n == "mark-rl":
         activations = ff_rl
-      elif n in ["frame-creation-steps", "frame-focus-steps", "history"]:
+      elif n in ["frame-creation-steps", "frame-focus-steps", \
+        "history", "mark-step"]:
         activations = ff_steps
       else:
         raise ValueError("Unknown feature %r" % n)

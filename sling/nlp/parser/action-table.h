@@ -179,9 +179,10 @@ class ActionTable {
   // Maximum number of actions taken per token.
   int max_actions_per_token_ = -1;
 
-  // Indices of STOP and SHIFT.
+  // Indices of STOP, SHIFT, and MARK.
   int stop_index_ = 0;
   int shift_index_ = 0;
+  int mark_index_ = 0;
 };
 
 }  // namespace nlp

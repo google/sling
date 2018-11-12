@@ -177,9 +177,6 @@ class ShiftOrNotDelegate(SoftmaxDelegate):
 
 """Delegate that decides only among non-SHIFT actions."""
 class NotShiftDelegate(SoftmaxDelegate):
-  def __init__(self):
-    super(NotShiftDelegate, self).__init__()
-
   def build(self, cascade, actions):
     self.shift = actions.shift()
     self.actions = actions
@@ -198,19 +195,78 @@ class NotShiftDelegate(SoftmaxDelegate):
     return self.actions.action(index)
 
 
+"""Delegate that decides whether to SHIFT or MARK or neither. Non SHIFT/MARK
+decisions are delegated to the next delegate."""
+class ShiftMarkDelegate(SoftmaxDelegate):
+  def build(self, cascade, actions):
+    self.softmax_size = 3
+    self.shift = Action(Action.SHIFT)
+    self.mark = Action(Action.MARK)
+    self.neither = Action(Action.CASCADE)
+    assert self is cascade.delegates[0]  # Should be the top delegate
+
+    # Assume we will always cascade to the next delegate.
+    assert cascade.size() > 1
+    self.neither.delegate = 1
+
+  def translate(self, action, output):
+    if action.type == Action.SHIFT:
+      output.append(self.shift)
+    elif action.type == Action.MARK:
+      output.append(self.mark)
+    else:
+      output.append(self.neither)
+      
+  def index(self, action):
+    if action.type == Action.SHIFT: return 0
+    if action.type == Action.MARK: return 1
+    return 2
+    
+  def action(self, index, previous_action):
+    if index == 0: return self.shift
+    if index == 1: return self.mark
+    return self.neither
+
+
+"""Delegate that decides only among non-SHIFT/MARK actions."""
+class NotShiftOrMarkDelegate(SoftmaxDelegate):
+  def build(self, cascade, actions):
+    self.first = min(actions.shift(), actions.mark())
+    self.second = max(actions.shift(), actions.mark())
+    self.actions = actions
+    self.softmax_size = self.actions.size() - 2  # except SHIFT, MARK
+
+  def translate(self, action, output):
+    output.append(action)
+
+  def index(self, action):
+    i = self.actions.index(action)
+    if i < self.first: return i
+    if i < self.second: return i - 1
+    return i - 2
+
+  def action(self, index, previous_action):
+    if index >= self.first and index < self.second - 1:
+      index += 1
+    elif index >= self.second - 1:
+      index += 2
+    return self.actions.action(index)
+
+
 """Returns whether 'action' EVOKEs a PropBank frame."""
 def is_pbevoke(action):
   return action.type == Action.EVOKE and action.label.id.startswith("/pb/")
 
 
-"""Delegate that decides among non-SHIFT and non-PropBank EVOKE actions.
+"""Delegate that decides among non-SHIFT/MARK and non-PropBank EVOKE actions.
 PropBank EVOKE actions are delegated further."""
 class ExceptPropbankEvokeDelegate(SoftmaxDelegate):
   def build(self, cascade, actions):
     """Build table of actions handled by the delegate."""
     self.table = Actions()
     for action in actions.table:
-      if action.type != Action.SHIFT and not is_pbevoke(action):
+      if action.type != Action.SHIFT and \
+        action.type != Action.MARK and not is_pbevoke(action):
         self.table.add(action)
     self.softmax_size = self.table.size() + 1  # +1 for CASCADE action
     self.pb_index = self.table.size()          # last action is CASCADE
@@ -252,67 +308,6 @@ class PropbankEvokeDelegate(SoftmaxDelegate):
 
   def action(self, index, previous_action):
     return self.table.action(index)
-
-
-"""Handles all non-EVOKE actions and only the 'length' field of EVOKE actions.
-The decision on the 'type' field is delegated to EvokeTypeDelegate."""
-class EvokeLengthDelegate(SoftmaxDelegate):
-  def build(self, cascade, actions):
-    self.table = Actions()
-    self.cascade_actions = {}  # integer length -> EVOKE(len=length)
-    evoke_type_delegate = cascade.index_of("EvokeTypeDelegate")
-    for action in actions.table:
-      if action.type == Action.EVOKE:
-        if action.length not in self.cascade_actions:
-          cascade_action = Action(Action.CASCADE)
-          cascade_action.delegate = evoke_type_delegate
-          cascade_action.length = action.length
-          self.cascade_actions[action.length] = cascade_action
-        else:
-          cascade_action = self.cascade_actions[action.length]
-        action = cascade_action
-      self.table.add(action)
-    self.softmax_size = self.table.size()
-
-  def translate(self, action, output):
-    if action.type == Action.EVOKE:
-      output.append(self.cascade_actions[action.length])
-    else:
-      output.append(action)
-
-  def index(self, action):
-    return self.table.index(action)
-
-  def action(self, index, previous_action):
-    return self.table.action(index)
-
-
-"""Handles only the 'type' field of EVOKE actions."""
-class EvokeTypeDelegate(SoftmaxDelegate):
-  def build(self, cascade, actions):
-    self.types = {}
-    self.index_to_types = []
-    for action in actions.table:
-      if action.type != Action.EVOKE: continue
-      if action.label not in self.types:
-        index = len(self.types)
-        self.index_to_types.append(action.label)
-        self.types[action.label] = index
-    self.softmax_size = len(self.types)
-
-  def translate(self, action, output):
-    assert action.type == Action.EVOKE
-    output.append(action)
-
-  def index(self, action):
-    return self.types[action.label]
-
-  def action(self, index, previous_action):
-    action = Action(Action.EVOKE)
-    action.label = self.index_to_types[index]
-    if previous_action is not None:
-      action.length = previous_action.length
-    return action
 
 
 """Cascade interface."""
@@ -389,7 +384,8 @@ class Cascade(object):
 
   """Saves the cascade specificaton to a frame in 'store'."""
   def as_frame(self, store, delegate_cell_prefix):
-    frame = store.frame({"id": "/cascade", "name": self.__class__.__name__})
+    name = self.__module__ + "." + self.__class__.__name__
+    frame = store.frame({"id": "/cascade", "name": name})
     delegates = store.array(self.size())
     for index, delegate in enumerate(self.delegates):
       d = store.frame({"name": delegate.__class__.__name__, "index": index})
@@ -414,27 +410,21 @@ class ShiftCascade(Cascade):
     super(ShiftCascade, self).__init__(actions)
     self.initialize([ShiftOrNotDelegate, NotShiftDelegate])
 
+"""Cascade that decides on SHIFT/MARK vs all other actions."""
+class ShiftMarkCascade(Cascade):
+  def __init__(self, actions):
+    super(ShiftMarkCascade, self).__init__(actions)
+    self.initialize([ShiftMarkDelegate, NotShiftOrMarkDelegate])
 
 """Cascade that decides via separate delegates:
-a) Whether to SHIFT or not,
+a) Whether to SHIFT/MARK or not,
 b) If not, whether to output a non-PropBank EVOKE action or not,
 c) If not, which PropBank EVOKE action to output."""
 class ShiftPropbankEvokeCascade(Cascade):
   def __init__(self, actions):
     super(ShiftPropbankEvokeCascade, self).__init__(actions)
     self.initialize(
-      [ShiftOrNotDelegate, ExceptPropbankEvokeDelegate, PropbankEvokeDelegate])
-
-
-"""Cascades that decides via separate delegates:
-a) Whether to SHIFT or not,
-b) If not, whether to output non-EVOKE actions or just EVOKE length.
-c) For EVOKE actions, the type of the EVOKE."""
-class ShiftEvokeCascade(Cascade):
-  def __init__(self, actions):
-    super(ShiftEvokeCascade, self).__init__(actions)
-    self.initialize(
-      [ShiftOrNotDelegate, EvokeLengthDelegate, EvokeTypeDelegate])
+      [ShiftMarkDelegate, ExceptPropbankEvokeDelegate, PropbankEvokeDelegate])
 
 
 """Prints softmax computation cost estimates of a bunch of cascades."""
@@ -450,7 +440,7 @@ def print_cost_estimates(commons_path, corpora_path):
   train.rewind()
 
   cascades = [cascade_class(actions) for cascade_class in \
-    [FlatCascade, ShiftCascade, ShiftPropbankEvokeCascade, ShiftEvokeCascade]]
+    [FlatCascade, ShiftCascade, ShiftMarkCascade, ShiftPropbankEvokeCascade]]
   costs = [0] * len(cascades)
   counts = [[0] * cascade.size() for cascade in cascades]
   for document in train:

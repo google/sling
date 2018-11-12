@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <functional>
+#include <iostream>
 #include <math.h>
 
 #include "sling/nlp/parser/parser.h"
@@ -20,6 +22,9 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/features.h"
 #include "sling/nlp/document/lexicon.h"
+#include "sling/string/strcat.h"
+
+using namespace std::placeholders;
 
 namespace sling {
 namespace nlp {
@@ -37,7 +42,8 @@ void Parser::Load(Store *store, const string &model) {
   encoder_.LoadLexicon(&flow);
 
   // Initialize feed-forward trunk.
-  InitFF("ff_trunk", &ff_);
+  myelin::Flow::Blob *spec = flow.DataBlock("spec");
+  InitFF("ff_trunk", spec, &ff_);
 
   // Load commons and action stores.
   myelin::Flow::Blob *commons = flow.DataBlock("commons");
@@ -58,7 +64,7 @@ void Parser::Load(Store *store, const string &model) {
   roles_.Init(actions_);
 }
 
-void Parser::InitFF(const string &name, FF *ff) {
+void Parser::InitFF(const string &name, myelin::Flow::Blob *spec, FF *ff) {
   // Get cell.
   ff->cell = GetCell(name);
 
@@ -70,6 +76,10 @@ void Parser::InitFF(const string &name, FF *ff) {
   ff->frame_create_feature = GetParam(name + "/frame-creation-steps", true);
   ff->frame_focus_feature = GetParam(name + "/frame-focus-steps", true);
   ff->history_feature = GetParam(name + "/history", true);
+  ff->mark_lr_feature = GetParam(name + "/mark-lr", true);
+  ff->mark_rl_feature = GetParam(name + "/mark-rl", true);
+  ff->mark_step_feature = GetParam(name + "/mark-step", true);
+  ff->mark_distance_feature = GetParam(name + "/mark-distance", true);
   ff->out_roles_feature = GetParam(name + "/out-roles", true);
   ff->in_roles_feature = GetParam(name + "/in-roles", true);
   ff->unlabeled_roles_feature = GetParam(name + "/unlabeled-roles", true);
@@ -107,7 +117,42 @@ void Parser::InitFF(const string &name, FF *ff) {
   if (ff->labeled_roles_feature != nullptr) {
     ff->labeled_roles_size = ff->labeled_roles_feature->elements();
   }
-
+  if (ff->mark_lr_feature != nullptr) {
+    ff->mark_depth = ff->mark_lr_feature->elements();
+  }
+  if (ff->mark_rl_feature != nullptr) {
+    if (ff->mark_depth == 0) {
+      ff->mark_depth = ff->mark_rl_feature->elements();
+    } else {
+      CHECK_EQ(ff->mark_depth, ff->mark_rl_feature->elements());
+    }
+  }
+  if (ff->mark_distance_feature != nullptr) {
+    CHECK(spec != nullptr);
+    string bins_str = spec->GetAttr("mark_distance_bins");
+    std::vector<int> bins;
+    int start = 0;
+    while (true) {
+      ssize_t index = bins_str.find(' ', start);
+      if (index != string::npos) {
+        string s = bins_str.substr(start, index - start);
+        bins.push_back(std::stoi(s));
+        start = index + 1;
+      } else {
+        bins.push_back(std::stoi(bins_str.substr(start)));
+        break;
+      }
+    }
+    int distance = 0;
+    for (int i = 0; i < bins.size(); ++i) {
+      while (distance <= bins[i]) {
+        ff->mark_distance_bins.push_back(i);
+        distance++;
+      }
+    }
+    ff->mark_distance_bins.push_back(bins.size());
+  }
+  
   // Get links.
   ff->lr_lstm = GetParam(name + "/link/lr_lstm");
   ff->rl_lstm = GetParam(name + "/link/rl_lstm");
@@ -147,7 +192,8 @@ void Parser::Parse(Document *document) const {
 
       // Apply the cascade.
       ParserAction action;
-      data.cascade_.Compute(&data.ff_step_, step, &state, &action);
+      data.cascade_.Compute(
+        &data.ff_step_, step, &state, &action, data.trace_);
       state.Apply(action);
 
       // Update state.
@@ -164,7 +210,12 @@ void Parser::Parse(Document *document) const {
           LOG(FATAL) << "CASCADE action should not reach ParserState.";
           break;
 
+        case ParserAction::MARK:
+          data.marks_.emplace_back(state.current(), step);
+          break;
+
         case ParserAction::EVOKE:
+          if (action.length == 0) data.marks_.pop_back();
         case ParserAction::REFER:
         case ParserAction::CONNECT:
         case ParserAction::ASSIGN:
@@ -172,13 +223,9 @@ void Parser::Parse(Document *document) const {
         case ParserAction::ELABORATE:
           steps_since_shift++;
           if (state.AttentionSize() > 0) {
-            int focus = state.Attention(0);
-            if (data.create_step_.size() < focus + 1) {
-              data.create_step_.resize(focus + 1);
+            Handle focus = state.Attention(0);
+            if (data.create_step_.find(focus) == data.create_step_.end()) {
               data.create_step_[focus] = step;
-            }
-            if (data.focus_step_.size() < focus + 1) {
-              data.focus_step_.resize(focus + 1);
             }
             data.focus_step_[focus] = step;
           }
@@ -187,9 +234,7 @@ void Parser::Parse(Document *document) const {
       // Next step.
       step += 1;
     }
-
-    // Add frames for sentence to the document.
-    state.AddParseToDocument(document);
+    if (data.trace_ != nullptr) data.trace_->Write(document);
   }
 }
 
@@ -213,13 +258,20 @@ ParserInstance::ParserInstance(const Parser *parser, Document *document,
                                int begin, int end)
     : parser_(parser),
       encoder_(parser->encoder()),
-      state_(document->store(), begin, end),
+      state_(document, begin, end),
       ff_(parser->ff_.cell),
       ff_step_(parser->ff_.hidden),
-      cascade_(&parser->cascade_) {
+      cascade_(&parser->cascade_),
+      trace_(nullptr) {
   // Reserve two transitions per token.
   int length = end - begin;
   ff_step_.reserve(length * 2);
+  if (parser->trace()) {
+    trace_ = new Trace();
+    trace_->begin = begin;
+    trace_->end = end;
+    encoder_.set_trace(std::bind(&Trace::AddLSTM, trace_, _1, _2, _3));
+  }
 }
 
 void ParserInstance::AttachFF(int output, const myelin::BiChannel &bilstm) {
@@ -227,6 +279,33 @@ void ParserInstance::AttachFF(int output, const myelin::BiChannel &bilstm) {
   ff_.Set(parser_->ff_.rl_lstm, bilstm.rl);
   ff_.Set(parser_->ff_.steps, &ff_step_);
   ff_.Set(parser_->ff_.hidden, &ff_step_, output);
+}
+
+void ParserInstance::TraceFFFeatures() {
+  trace_->steps.emplace_back();
+  auto &step = trace_->steps.back();
+  step.current = state_.current();
+
+  const Parser::FF &ff = parser_->ff_;
+  step.Add(GetFF(ff.lr_focus_feature), 1, "lr");
+  step.Add(GetFF(ff.rl_focus_feature), 1, "rl");
+  step.Add(GetFF(ff.mark_lr_feature), ff.mark_depth, "mark-lr");
+  step.Add(GetFF(ff.mark_rl_feature), ff.mark_depth, "mark-rl");
+  step.Add(GetFF(ff.mark_step_feature), ff.mark_depth, "mark-step");
+
+  int depth = ff.attention_depth;
+  step.Add(GetFF(ff.lr_attention_feature), depth, "frame-end-lr");
+  step.Add(GetFF(ff.rl_attention_feature), depth, "frame-end-rl");
+  step.Add(GetFF(ff.frame_create_feature), depth, "frame-creation-steps");
+  step.Add(GetFF(ff.frame_focus_feature), depth, "frame-focus-steps");
+  step.Add(GetFF(ff.history_feature), ff.history_size, "history");
+  step.Add(GetFF(ff.mark_distance_feature), 1, "mark-distance");
+  step.Add(GetFF(ff.out_roles_feature), ff.out_roles_size, "out-roles");
+  step.Add(GetFF(ff.in_roles_feature), ff.in_roles_size, "in-roles");
+  step.Add(GetFF(ff.unlabeled_roles_feature),
+    ff.unlabeled_roles_size, "unlabeled-roles");
+  step.Add(GetFF(ff.labeled_roles_feature),
+    ff.labeled_roles_size, "labeled-roles");
 }
 
 void ParserInstance::ExtractFeaturesFF(int step) {
@@ -238,6 +317,31 @@ void ParserInstance::ExtractFeaturesFF(int step) {
   int *rl_focus = GetFF(ff.rl_focus_feature);
   if (lr_focus != nullptr) *lr_focus = current;
   if (rl_focus != nullptr) *rl_focus = current;
+
+  // Extract features from the mark stack.
+  int *lr_mark = GetFF(ff.mark_lr_feature);
+  int *rl_mark = GetFF(ff.mark_rl_feature);
+  int *mark_step = GetFF(ff.mark_step_feature);
+  for (int d = 0; d < ff.mark_depth; ++d) {
+    const auto *m =
+      (d < marks_.size()) ? &marks_[marks_.size() - 1 - d] : nullptr;
+    int token = (m != nullptr) ? (m->token - state_.begin()) : -1;
+    if (lr_mark != nullptr) lr_mark[d] = token;
+    if (rl_mark != nullptr) rl_mark[d] = token;
+    if (mark_step != nullptr) mark_step[d] = (m != nullptr) ? m->step : -1;
+  }
+
+  int *mark_distance = GetFF(ff.mark_distance_feature);
+  if (mark_distance != nullptr) {
+    *mark_distance = -2;
+    if (marks_.size() > 0) {
+      int distance = state_.current() - marks_[marks_.size() - 1].token;
+      *mark_distance = ff.mark_distance_bins.back();
+      if (distance < ff.mark_distance_bins.size()) {
+        *mark_distance = ff.mark_distance_bins[distance];
+      }
+    }
+  }
 
   // Extract frame attention, create, and focus features.
   if (ff.attention_depth > 0) {
@@ -251,10 +355,10 @@ void ParserInstance::ExtractFeaturesFF(int step) {
       int focused = -1;
       if (d < state_.AttentionSize()) {
         // Get frame from attention buffer.
-        int frame = state_.Attention(d);
+        Handle frame = state_.Attention(d);
 
         // Get end token for phrase that evoked frame.
-        att = state_.FrameEvokeEnd(frame);
+        att = state_.FrameEvokeEnd(d);
         if (att != -1) att -= state_.begin() + 1;
 
         // Get the step numbers that created and focused the frame.
@@ -323,6 +427,8 @@ void ParserInstance::ExtractFeaturesFF(int step) {
       while (labeled < end) *labeled++ = -2;
     }
   }
+
+  if (trace_ != nullptr) TraceFFFeatures();
 }
 
 }  // namespace nlp

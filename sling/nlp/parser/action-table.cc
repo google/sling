@@ -71,6 +71,7 @@ void ActionTable::Add(const ParserAction &action) {
     }
     case ParserAction::SHIFT:
     case ParserAction::STOP:
+    case ParserAction::MARK:
     default:
       break;
   }
@@ -166,9 +167,8 @@ void ActionTable::Init(Store *store) {
       }
     }
 
-    if (action.type == ParserAction::EVOKE ||
-        action.type == ParserAction::REFER) {
-      if (action.length == 0) action.length = 1;
+    if ((action.type == ParserAction::REFER) && (action.length == 0)) {
+      action.length = 1;
     }
 
     actions_.emplace_back(action);
@@ -177,6 +177,7 @@ void ActionTable::Init(Store *store) {
     // Get the indices of SHIFT and STOP actions.
     if (action.type == ParserAction::SHIFT) shift_index_ = actions_.size() - 1;
     if (action.type == ParserAction::STOP) stop_index_ = actions_.size() - 1;
+    if (action.type == ParserAction::MARK) mark_index_ = actions_.size() - 1;
   }
 
   beyond_bounds_.resize(actions_.size());
@@ -251,7 +252,7 @@ string ActionTable::Serialize(const Store *global, int percentile) const {
     b.Add(action_type, static_cast<int>(type));
 
     if (type == ParserAction::REFER || type == ParserAction::EVOKE) {
-      if (action.length > 1) {
+      if (action.length > 0) {
         b.Add(action_length, static_cast<int>(action.length));
       }
     }

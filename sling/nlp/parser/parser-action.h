@@ -18,6 +18,7 @@
 #include <string>
 
 #include "sling/base/types.h"
+#include "sling/frame/object.h"
 #include "sling/frame/store.h"
 #include "sling/util/fingerprint.h"
 
@@ -66,10 +67,13 @@ struct ParserAction {
 
     // Delegate to another member (specified by 'delegate') of the cascade.
     CASCADE,
+
+    // Mark the current token as the beginning of a span.
+    MARK,
   };
 
   // Number of action types.
-  static const int kNumActionTypes = CASCADE + 1;
+  static const int kNumActionTypes = MARK + 1;
 
   // Type of the action.
   Type type;
@@ -128,6 +132,9 @@ struct ParserAction {
 
   // Returns a human-readable representation of the action.
   string ToString(Store *store) const;
+
+  // Returns a frame representation of the action.
+  Frame AsFrame(Store *store, const string &prefix) const;
 
   // Returns a SHIFT action.
   static ParserAction Shift() {

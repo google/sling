@@ -264,6 +264,10 @@ class Blob:
       elif value == False: value = 0
     self.attrs[name] = str(value)
 
+  def get_attr(self, name):
+    """Get blob attribute as a string or None."""
+    return self.attrs.get(name, None)
+    
 class Flow:
   """Flow with variables, operations, and functions."""
 

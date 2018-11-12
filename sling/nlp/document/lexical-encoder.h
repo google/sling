@@ -239,6 +239,9 @@ class LexicalEncoderInstance {
   // hidden state of the LSTMs.
   myelin::BiChannel Compute(const Document &document, int begin, int end);
 
+  // Sets feature extraction tracing callback.
+  void set_trace(LexicalFeatureTrace trace) { features_.set_trace(trace); }
+
  private:
   const LexicalEncoder &encoder_;
   LexicalFeatureExtractor features_;

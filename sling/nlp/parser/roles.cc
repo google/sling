@@ -41,12 +41,12 @@ void RoleGraph::Compute(const ParserState &state,
   edges_.clear();
   if (k > state.AttentionSize()) k = state.AttentionSize();
   for (int source = 0; source < k; ++source) {
-    Handle handle = state.frame(state.Attention(source));
+    Handle handle = state.Attention(source);
     const FrameDatum *frame = state.store()->GetFrame(handle);
     for (const Slot *slot = frame->begin(); slot < frame->end(); ++slot) {
       int target = -1;
-      if (slot->value.IsIndex()) {
-        target = state.AttentionIndex(slot->value.AsIndex(), k);
+      if (slot->value.IsLocalRef()) {
+        target = state.AttentionIndex(slot->value, k);
         if (target == -1) continue;
       }
 

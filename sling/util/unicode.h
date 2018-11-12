@@ -104,7 +104,6 @@ enum UnicodeCategoryMask {
     (1 << CHARCAT_OTHER_PUNCTUATION) |
     (1 << CHARCAT_INITIAL_QUOTE_PUNCTUATION) |
     (1 << CHARCAT_FINAL_QUOTE_PUNCTUATION) |
-    (1 << CHARCAT_MODIFIER_SYMBOL) |
     (1 << CHARCAT_OTHER_SYMBOL),
 
   // Letters and digits.

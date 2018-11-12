@@ -18,6 +18,7 @@
 #include <limits>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "sling/base/logging.h"
@@ -34,6 +35,7 @@
 #include "sling/nlp/parser/cascade.h"
 #include "sling/nlp/parser/parser-state.h"
 #include "sling/nlp/parser/roles.h"
+#include "sling/nlp/parser/trace.h"
 
 namespace sling {
 namespace nlp {
@@ -55,6 +57,12 @@ class Parser {
   // Return the lexical encoder.
   const LexicalEncoder &encoder() const { return encoder_; }
 
+  // Returns whether tracing is enabled.
+  bool trace() const { return trace_; }
+
+  // Sets tracing to 'trace'.
+  void set_trace(bool trace) { trace_ = trace; }
+
  private:
   // Feed-forward trunk cell.
   struct FF {
@@ -72,17 +80,24 @@ class Parser {
 
     myelin::Tensor *history_feature;          // history feature
 
+    myelin::Tensor *mark_lr_feature;          // LR LSTM mark-token feature
+    myelin::Tensor *mark_rl_feature;          // RL LSTM mark-token feature
+    myelin::Tensor *mark_step_feature;        // mark token step feature
+    myelin::Tensor *mark_distance_feature;    // mark token distance feature
+
     myelin::Tensor *out_roles_feature;        // out roles feature
     myelin::Tensor *in_roles_feature;         // in roles feature
     myelin::Tensor *unlabeled_roles_feature;  // unlabeled roles feature
     myelin::Tensor *labeled_roles_feature;    // labeled roles feature
 
+    int mark_depth = 0;                       // mark stack depth to use
     int attention_depth = 0;                  // number of attention features
     int history_size = 0;                     // number of history features
     int out_roles_size = 0;                   // max number of out roles
     int in_roles_size = 0;                    // max number of in roles
     int labeled_roles_size = 0;               // max number of unlabeled roles
     int unlabeled_roles_size = 0;             // max number of labeled roles
+    std::vector<int> mark_distance_bins;      // distance->bin for mark tokens
 
     // Links.
     myelin::Tensor *lr_lstm;                  // link to LR LSTM hidden layer
@@ -93,7 +108,7 @@ class Parser {
   };
 
   // Initialize FF trunk cell.
-  void InitFF(const string &name, FF *ff);
+  void InitFF(const string &name, myelin::Flow::Blob *spec, FF *ff);
 
   // Lookup cells and parameters.
   myelin::Cell *GetCell(const string &name);
@@ -126,13 +141,21 @@ class Parser {
   // Set of roles considered.
   RoleSet roles_;
 
+  // Whether tracing is enabled.
+  bool trace_;
+
   friend class ParserInstance;
 };
 
 // Parser state for running an instance of the parser on a document.
 class ParserInstance {
  public:
-  ParserInstance(const Parser *parser, Document *document, int begin, int end);
+  ParserInstance(
+    const Parser *parser, Document *document, int begin, int end);
+
+  ~ParserInstance() {
+    delete trace_;
+  }
 
   // Attach channel for FF.
   void AttachFF(int output, const myelin::BiChannel &bilstm);
@@ -141,6 +164,17 @@ class ParserInstance {
   void ExtractFeaturesFF(int step);
 
  private:
+  // Represents a token pushed on the MARK stack.
+  struct Mark {
+    Mark(int t, int s) : token(t), step(s) {}
+
+    int token;
+    int step;
+  };
+
+  // Adds FF feature values to the trace.
+  void TraceFFFeatures();
+
   // Get feature vector for FF.
   int *GetFF(myelin::Tensor *type) {
     return type ? ff_.Get<int>(type) : nullptr;
@@ -165,8 +199,14 @@ class ParserInstance {
   CascadeInstance cascade_ = nullptr;
 
   // Frame creation and focus steps.
-  std::vector<int> create_step_;
-  std::vector<int> focus_step_;
+  HandleMap<int> create_step_;
+  HandleMap<int> focus_step_;
+
+  // Tokens pushed by MARK actions.
+  std::vector<Mark> marks_;
+
+  // Trace information.
+  Trace *trace_;
 
   friend class Parser;
 };

@@ -16,24 +16,41 @@ import sling
 
 # Represents a single transition.
 class Action:
-  SHIFT = 0
-  STOP = 1
-  EVOKE = 2
-  REFER = 3
-  CONNECT = 4
-  ASSIGN = 5
-  EMBED = 6
-  ELABORATE = 7
-  CASCADE = 8
-  NUM_ACTIONS = 9
+  SHIFT = 0              # shift to the next token
+  STOP = 1               # stop processing
+  EVOKE = 2              # make a span and evoke a frame
+  REFER = 3              # make a span and re-evoke an existing frame
+  CONNECT = 4            # link two frames
+  ASSIGN = 5             # assign a constant slot to a frame 
+  EMBED = 6              # create a new frame and link it to an existing frame
+  ELABORATE = 7          # create a new frame and link an existing frame to it
+  CASCADE = 8            # cascade to another delegate
+  MARK = 9               # mark the current token as the beginning of a span
+  NUM_ACTIONS = 10
 
   def __init__(self, t=None):
+    # Action type.
     self.type = None
+
+    # Length for REFER, and EVOKE. Note that while EVOKE with length > 1 is
+    # supported, multi-token spans are generated via MARK and EVOKE pairs, and
+    # singleton spans are generated via EVOKE(length = 1) (i.e. without MARK).
     self.length = None
+
+    # Source frame for CONNECT, ELABORATE, ASSIGN.
     self.source = None
+
+    # Target frame for CONNECT, EMBED, REFER.
     self.target = None
+
+    # Role for CONNECT, EMBED, ELABORATE, ASSIGN.
     self.role = None
+
+    # Type/constant label for EVOKE, ELABORATE, EMBED, ASSIGN.
     self.label = None
+
+    # Delegate index for CASCADE. Note that CASCADE actions can also use
+    # other fields in the action.
     self.delegate = None
 
     if t is not None:
@@ -68,7 +85,8 @@ class Action:
       Action.ASSIGN: "ASSIGN",
       Action.EMBED: "EMBED",
       Action.ELABORATE: "ELABORATE",
-      Action.CASCADE: "CASCADE"
+      Action.CASCADE: "CASCADE",
+      Action.MARK: "MARK"
     }
 
     s = names[self.type]
@@ -92,9 +110,9 @@ class Action:
     return frame
 
   # Reads the action from 'frame'.
-  def from_frame(self, frame):
+  def from_frame(self, frame, slot_prefix="/table/action/"):
     for s in self.__dict__.keys():
-      name = "/table/action/" + s
+      name = slot_prefix + s
       setattr(self, s, frame[name])
 
   # Returns whether the action is a cascade.
@@ -106,3 +124,6 @@ class Action:
 
   def is_stop(self):
     return self.type == Action.STOP
+
+  def is_mark(self):
+    return self.type == Action.MARK

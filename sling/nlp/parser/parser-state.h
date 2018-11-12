@@ -31,10 +31,10 @@ namespace nlp {
 class ParserState {
  public:
   // Initializes parse state.
-  ParserState(Store *store, int begin, int end);
-
-  // Clones parse state.
-  ParserState(const ParserState &other);
+  ParserState(Document *document, int begin, int end);
+  
+  // Returns the underlying document.
+  Document *document() const { return document_; }
 
   // Returns first token to be parsed.
   int begin() const { return begin_; }
@@ -49,29 +49,19 @@ class ParserState {
   // ensure that 'action' is applicable using CanApply().
   void Apply(const ParserAction &action);
 
-  // Returns the length of the longest span that can be evoked starting at the
-  // current token. This length is capped by the smallest of:
-  // - 'max_length'.
-  // - the length of the remaining input.
-  // - the end of any existing span that covers the current token.
-  int MaxEvokeLength(int max_length) const;
-
-  // Returns frame in frame buffer.
-  Handle frame(int index) const { return frames_[index]; }
-
   // Returns the first type for a frame in the attention buffer. This will be
   // the type specified when the frame was created with EVOKE/EMBED/ELABORATE.
   Handle type(int index) const;
 
-  // Gets the indices of the k frames that are closest to the center of
+  // Gets the handles of the k frames that are closest to the center of
   // attention in the order of attention. There might be less than k frames if
   // there are fewer elements in the attention buffer.
-  void GetFocus(int k, std::vector<int> *center) const;
+  void GetFocus(int k, Handles *center) const;
 
-  // Return the position in the attention buffer of a frame in the frame index
-  // or -1 if the frame is not in the attention buffer. The search can be
+  // Return the position in the attention buffer of a frame or -1 if the
+  // frame is not in the attention buffer. The search can be
   // limited to the top-k frames that are closest to the center of attention.
-  int AttentionIndex(int index, int k = -1) const;
+  int AttentionIndex(Handle handle, int k = -1) const;
 
   // Creates final set of frames that the parse has generated.
   void GetFrames(Handles *frames);
@@ -82,9 +72,9 @@ class ParserState {
   // The parse is done when we have performed the first STOP action.
   bool done() const { return done_; }
 
-  // Returns element in attention buffer. The elements are numbered so the
-  // frame at the center of attention has index 0.
-  int Attention(int index) const {
+  // Returns handle of the frame in attention buffer. The center of attention
+  // has index 0.
+  Handle Attention(int index) const {
     return attention_[attention_.size() - index - 1];
   }
 
@@ -98,31 +88,21 @@ class ParserState {
   string DebugString() const;
 
   // Returns the underlying store.
-  Store *store() const { return store_; }
+  Store *store() const { return document_->store(); }
 
-  // Returns the start token (if any, else -1) for frame with absolute index
-  // of 'frame_index'.
-  int FrameEvokeBegin(int frame_index) const {
-    if (frame_index >= frame_to_mention_.size()) return -1;
-    int m = frame_to_mention_[frame_index];
-    return (m < 0) ? -1 : mentions_[m].begin;
-  }
+  // Returns the start token of the first span (if any) that evokes the
+  // frame at the specified attention buffer index, -1 otherwise.
+  int FrameEvokeBegin(int attention_index) const;
 
-  // Returns the end token (if any, else -1) for frame with absolute index
-  // of 'frame_index'.
-  int FrameEvokeEnd(int frame_index) const {
-    if (frame_index >= frame_to_mention_.size()) return -1;
-    int m = frame_to_mention_[frame_index];
-    return (m < 0) ? -1 : mentions_[m].end;
-  }
-
-  // Number of spans covering the current token.
-  int NestingLevel() const { return nesting_.NestingLevel(); }
+  // Returns the end token of the first span (exclusive; if any) that evokes
+  // the frame at the specified attention buffer index, -1 otherwise.
+  int FrameEvokeEnd(int attention_index) const;
 
  private:
   // Applies individual actions, which are assumed to be applicable.
   void Shift();
   void Stop();
+  void Mark();
   void Evoke(int length, Handle type);
   void Refer(int length, int frame);
   void Connect(int source, Handle role, int target);
@@ -130,86 +110,14 @@ class ParserState {
   void Embed(int frame, Handle role, Handle type);
   void Elaborate(int frame, Handle role, Handle type);
 
-  // Returns true if the frame at the given absolute index has the given type.
-  bool FrameHasType(int index, Handle type) const {
-    return Frame(store_, frame(index)).GetHandle(Handle::isa()) == type;
-  }
-
-  // Adds frame to attention buffer. The frame will become the new center of
-  // attention.
-  void Add(int frame) { attention_.push_back(frame); }
+  // Adds frame to attention buffer, making it the new center of attention.
+  void Add(Handle handle) { attention_.push_back(handle); }
 
   // Moves element in attention buffer to the center of attention.
   void Center(int index);
 
-  // Mention evoking a frame.
-  struct Mention {
-    Mention(int b, int e, int f) : begin(b), end(e), frame(f) {}
-
-    // Phrase boundary (semi-open interval).
-    int begin;
-    int end;
-
-    // Index of frame in the frame buffer that this phrase evokes.
-    int frame;
-  };
-
-  // Stack for tracking span nesting. This is only populated when some spans
-  // are currently open. Spans are stored ordered by nesting level, so the top
-  // of the stack is the innermost nested span currently open.
-  struct Nesting {
-    // Constructors.
-    explicit Nesting(int begin) { current = begin; }
-    Nesting(const Nesting &n) : spans(n.spans), current(n.current) {}
-
-    // (End position (exclusive), mention index).
-    std::vector<std::pair<int, int>> spans;
-
-    // Current input buffer position.
-    int current = 0;
-
-    // Moves the current position ahead and pops relevant nesting information.
-    void Advance() {
-      current++;
-      while (!spans.empty()) {
-        DCHECK_GE(spans.back().first, current);
-        if (spans.back().first == current) {
-          spans.pop_back();
-        } else {
-          break;
-        }
-      }
-    }
-
-    // Returns true if a span can be added with the current position as the
-    // start and 'end' as the end.
-    bool Valid(int end) const {
-      // Span is valid if it doesn't go beyond the innermost span.
-      return spans.empty() || (spans.back().first >= end);
-    }
-
-    // Returns the maximum end of a span that can start at the current position.
-    int MaxEnd(int default_end) const {
-      return spans.empty() ? default_end : spans.back().first;
-    }
-
-    // Adds a span to the nesting.
-    void Add(int end, int index) {
-      DCHECK(Valid(end));
-      spans.emplace_back(end, index);
-    }
-
-    // Number of spans covering the current token.
-    int NestingLevel() const { return spans.size(); }
-
-    // Iterator that begins from the innermost mention.
-    typedef std::vector<std::pair<int, int>>::const_reverse_iterator iterator;
-    iterator begin() const { return spans.rbegin(); }
-    iterator end() const { return spans.rend(); }
-  };
-
-  // SLING store for allocating frames.
-  Store *store_;
+  // SLING document underlying the parser state.
+  Document *document_;
 
   // Token range to be parsed.
   int begin_;
@@ -221,29 +129,16 @@ class ParserState {
   // When we have performed the first STOP action, the parse is done.
   bool done_;
 
-  // List of all evoked frames. References between frames are encoded using
-  // index handles (@n) into this array. Frames are modified using copy-on-write
-  // so it is safe to copy the handles when cloning a parse state.
-  Handles frames_;
+  // Attention buffer. This contains handles of frames in order of attention.
+  Handles attention_;
 
-  // List of mentions evoking frames.
-  std::vector<Mention> mentions_;
+  // Token index for marked tokens.
+  std::vector<int> marks_;
 
-  // Absolute frame index -> Index of mention that evoked it (or -1).
-  std::vector<int> frame_to_mention_;
-
-  // Center of attention. This contains indices of frames in order of attention.
-  // The last frame in the attention vector is the frame closest to the center
-  // of attention.
-  std::vector<int> attention_;
-
-  // Span nesting information.
-  Nesting nesting_;
-
-  // (Source/Target frame index, Frame type) for frames embedded or elaborated
+  // (Source/Target frame handle, Frame type) for frames embedded or elaborated
   // at the current position. This is cleared once the position advances.
-  std::vector<std::pair<int, Handle>> embed_;
-  std::vector<std::pair<int, Handle>> elaborate_;
+  std::vector<std::pair<Handle, Handle>> embed_;
+  std::vector<std::pair<Handle, Handle>> elaborate_;
 };
 
 }  // namespace nlp

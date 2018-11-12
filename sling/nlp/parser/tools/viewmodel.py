@@ -26,6 +26,18 @@ import sys
 sys.path.insert(0, 'sling/nlp/parser/trainer')
 import trainer as trainer
 
+
+# Prints evaluation metrics.
+def print_metrics(header, metrics):
+  print "\n", header, "metrics"
+  print "-" * (len(header) + len("metrics") + 1)
+  for metric in ['SPAN', 'FRAME', 'TYPE', 'ROLE', 'SLOT']:
+    for name in ['Precision', 'Recall', 'F1']:
+      key = metric + "_" + name
+      print "  %s: %f" % (key, metrics[key])
+    print
+
+
 if __name__ == '__main__':
   flags.define('--flow',
                help='Flow file',
@@ -36,7 +48,7 @@ if __name__ == '__main__':
                help='Output flow file which drops "dev" blobs',
                default='',
                type=str,
-               metavar='OUTPUT_FLOW')
+               metavar='FLOW')
   flags.define('--training_details',
                help='Print training details or not',
                default=False,
@@ -45,7 +57,7 @@ if __name__ == '__main__':
                help='Output file to store commons',
                default='',
                type=str,
-               metavar='STORE')
+               metavar='FILE')
   flags.parse()
   assert os.path.exists(flags.arg.flow), flags.arg.flow
  
@@ -64,10 +76,15 @@ if __name__ == '__main__':
       (final_loss, final_count) = dictionary['losses'][-1]['total']
       print 'Final loss', (final_loss / final_count)
 
-      final_metrics = dictionary['checkpoint_metrics'][-1]
-      for metric in ['SPAN_F1', 'FRAME_F1', 'ROLE_F1', 'TYPE_F1', 'SLOT_F1']:
-        print 'Final', metric, ':', final_metrics[metric]
-      
+      metrics = dictionary['checkpoint_metrics']
+      slot_f1 = [metric["SLOT_F1"] for metric in metrics]
+      best_index = max(enumerate(slot_f1), key=lambda x:x[1])[0]
+      if best_index == len(slot_f1) - 1:
+        print_metrics('Best (= final)', metrics[best_index])
+      else:
+        print_metrics('Final', metrics[-1])
+        print_metrics('Best', metrics[best_index])
+
   if flags.arg.output_commons:
     data = f.blobs['commons'].data
     with open(flags.arg.output_commons, 'wb') as outfile:

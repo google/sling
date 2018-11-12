@@ -423,10 +423,10 @@ string Document::PhraseText(int begin, int end) const {
   return phrase;
 }
 
-Span *Document::Insert(int begin, int end) {
-  // Find smallest non-crossing enclosing span.
+Span *Document::EnclosingSpan(int begin, int end, bool *crossing) {
   Span *enclosing = nullptr;
   Span *prev = nullptr;
+  *crossing = false;
   for (int t = begin; t < end; ++t) {
     Span *s = tokens_[t].span_;
 
@@ -443,7 +443,10 @@ Span *Document::Insert(int begin, int end) {
       if (delta_b == 0 && delta_e == 0) return s;
 
       // Check for crossing span.
-      if (delta_b * delta_e > 0) return nullptr;
+      if (delta_b * delta_e > 0) {
+        *crossing = true;
+        return nullptr;
+      }
 
       // Check for enclosing span.
       if (delta_b >= 0 && delta_e <= 0) {
@@ -453,6 +456,21 @@ Span *Document::Insert(int begin, int end) {
 
       s = s->parent_;
     }
+  }
+
+  return enclosing;
+}
+
+Span *Document::Insert(int begin, int end) {
+  // Find smallest non-crossing enclosing span.
+  bool crossing = false;
+  Span *enclosing = EnclosingSpan(begin, end, &crossing);
+  if (crossing) return nullptr;
+  
+  // Check if span already exists.
+  if (enclosing != nullptr && enclosing->begin() == begin &&
+      enclosing->end() == end) {
+    return enclosing;
   }
 
   // Add new span and update span tree.

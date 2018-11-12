@@ -340,25 +340,25 @@ def validate(commons, recordio_filename, output_recordio='', options=Options()):
 if __name__ == "__main__":
   import sling.flags as flags
   flags.define('--input',
-               help='Input recordio',
+               help='Input recordio file',
                default="",
                type=str,
-               metavar='CORPUS_RECORDIO')
+               metavar='FILE')
   flags.define('--commons',
                help='Commons file name',
                default="",
                type=str,
-               metavar='COMMONS')
+               metavar='FILE')
   flags.define('--max_examples',
                help='Max number of examples per error type',
                default=3,
                type=int,
-               metavar='MAX_ERROR_EXAMPLES')
+               metavar='NUM')
   flags.define('--output',
                help='Output recordio file name for valid documents',
                default="",
                type=str,
-               metavar='OUTPUT_RECORDIO')
+               metavar='FILE')
   flags.parse()
 
   options = Options()

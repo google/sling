@@ -76,12 +76,12 @@ if __name__ == "__main__":
                help='Comma separated list of recordio files',
                default="",
                type=str,
-               metavar='COMMA_SEPARATED_RECORDIOS')
+               metavar='FILES')
   flags.define('--output',
                help='Output commons file name',
                default="/tmp/commons.sling",
                type=str,
-               metavar='OUTPUT_COMMONS_FILENAME')
+               metavar='FILE')
   flags.define('--text',
                help='Text store format or not',
                default=False,

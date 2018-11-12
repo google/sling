@@ -35,6 +35,7 @@
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
 #include "sling/base/flags.h"
+#include "sling/file/recordio.h"
 #include "sling/frame/object.h"
 #include "sling/frame/serialization.h"
 #include "sling/myelin/compiler.h"
@@ -47,9 +48,11 @@
 
 DEFINE_string(parser, "", "Input file with flow model");
 DEFINE_string(text, "", "Text to parse");
+DEFINE_string(output, "", "Output filename");
 DEFINE_int32(indent, 2, "Indentation for SLING output");
 DEFINE_string(corpus, "", "Input corpus");
 DEFINE_bool(parse, false, "Parse input corpus");
+DEFINE_bool(trace, false, "Trace or not");
 DEFINE_bool(benchmark, false, "Benchmark parser");
 DEFINE_bool(evaluate, false, "Evaluate parser");
 DEFINE_int32(maxdocs, -1, "Maximum number of documents to process");
@@ -132,6 +135,7 @@ int main(int argc, char *argv[]) {
   Store commons;
   Parser parser;
   parser.Load(&commons, FLAGS_parser);
+  parser.set_trace(FLAGS_trace);
   commons.Freeze();
   clock.stop();
   LOG(INFO) << clock.ms() << " ms loading parser";
@@ -160,20 +164,30 @@ int main(int argc, char *argv[]) {
   if (FLAGS_parse) {
     CHECK(!FLAGS_corpus.empty());
     LOG(INFO) << "Parse " << FLAGS_corpus;
+    if (FLAGS_trace) LOG(INFO) << "Tracing on";
     DocumentSource *corpus = DocumentSource::Create(FLAGS_corpus);
     int num_documents = 0;
+    RecordWriter *writer = nullptr;
+    if (!FLAGS_output.empty()) {
+      writer = new RecordWriter(FLAGS_output);
+    }
     for (;;) {
       if (FLAGS_maxdocs != -1 && num_documents >= FLAGS_maxdocs) break;
 
       Store store(&commons);
       Document *document = corpus->Next(&store);
+
       if (document == nullptr) break;
       num_documents++;
 
       document->ClearAnnotations();
       parser.Parse(document);
       document->Update();
-      std::cout << ToText(document->top(), FLAGS_indent) << "\n";
+      if (writer != nullptr) {
+        writer->Write(std::to_string(num_documents), Encode(document->top()));
+      } else {
+        std::cout << ToText(document->top(), FLAGS_indent) << "\n";
+      }
 
       delete document;
     }

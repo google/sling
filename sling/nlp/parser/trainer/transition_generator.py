@@ -23,7 +23,9 @@ class TransitionGenerator:
       self.handle = handle
       self.type = None
       self.edges = []
-      self.mention = None
+      self.from_mention = False
+
+      # Whether this frame has been evoked.
       self.output = False
 
 
@@ -137,10 +139,10 @@ class TransitionGenerator:
   # Updates frame indices in 'attention' as a result of the action 'simple'.
   def _update(self, attention, simple):
     t = simple.action.type
-    if t == Action.EVOKE or t == Action.EMBED or t == Action.ELABORATE:
+    if t in [Action.EVOKE, Action.EMBED, Action.ELABORATE]:
       # Insert a new frame at the center of attention.
       attention.insert(0, simple.info.handle)
-    elif t == Action.REFER or t == Action.ASSIGN or t == Action.CONNECT:
+    elif t in [Action.REFER, Action.ASSIGN, Action.CONNECT]:
       # Promote an existing frame to the center of attention.
       attention.remove(simple.info.handle)
       attention.insert(0, simple.info.handle)
@@ -151,53 +153,140 @@ class TransitionGenerator:
     return TransitionGenerator.SimpleAction(type)
 
 
+  # Stores mentions starting or ending or both at a given token. 
+  class TokenToMentions:
+    def __init__(self):
+      self.starting = []
+      self.ending = []
+      self.singletons = []
+
+    # Record 'mention' at starting at this token.
+    def start(self, mention):
+      if len(self.starting) > 0:
+        # Check that the mention respects nesting.
+        assert self.starting[-1].end >= mention.end
+      self.starting.append(mention)
+
+    # Record 'mention' as ending at this token.
+    def end(self, mention):
+      if len(self.ending) > 0:
+        # Check that the mention respects nesting.
+        assert self.ending[0].begin <= mention.begin
+      self.ending.insert(0, mention)  # most-nested is at the front
+
+    # Record 'mention' as starting and ending at this token.
+    def singleton(self, mention):
+      self.singletons.append(mention)
+
+    # Returns if there are no mentions starting/ending at this token.
+    def empty(self):
+      return len(self.starting) + len(self.ending) + len(self.singletons) == 0
+
+    # Returns a string representation of the object.
+    def __repr__(self):
+      return "Starting:" + str(self.starting) + ", Ending:" + \
+        str(self.ending) + ", Singletons:" + str(self.singletons)
+
+
   # Generates transition sequence for 'document' which should be an instance of
   # AnnotatedDocument.
   def generate(self, document):
-    frame_info = {}
-    initialized = {}
+    frame_info = {}    # frame -> whether it is evoked from a span
+    initialized = {}   # frame -> whether the frame's book-keeping is done
 
     # Initialize book-keeping for all evoked frames.
     for m in document.mentions:
       for evoked in m.evokes():
         self._init_info(evoked, frame_info, initialized)
-        frame_info[evoked].mention = m
+        frame_info[evoked].from_mention = True
 
     # Initialize book-keeping for all thematic frames.
     for theme in document.themes:
       self._init_info(theme, frame_info, initialized)
 
-    simple_actions = []
-    start = 0
-    evoked = {}
+    # Record start/end boundaries of all mentions.
+    token_to_mentions = []
+    for _ in xrange(len(document.tokens)):
+      token_to_mentions.append(TransitionGenerator.TokenToMentions())
+
     for m in document.mentions:
-      # Insert SHIFT actions between evoked frames.
-      for i in xrange(start, m.begin):
-        simple_actions.append(self._simple_action(Action.SHIFT))
-      start = m.begin
+      if m.length == 1:
+        token_to_mentions[m.begin].singleton(m)
+      else:
+        token_to_mentions[m.begin].start(m)
+        token_to_mentions[m.end - 1].end(m)
 
-      for frame in m.evokes():
-        simple_action = self._simple_action()
-        simple_action.action.length = m.length
-        simple_action.info = frame_info[frame]
+    # Single token mentions are handled via EVOKE(length=1), and others
+    # are handled via MARK at the beginning token and EVOKE(length=None)
+    # at the end token.
 
-        # See if we are evoking a new or an existing frame.
-        # Output an appropriate EVOKE/REFER action respectively.
-        if frame not in evoked:
-          simple_action.action.type = Action.EVOKE
+    simple_actions = []
+    marked = {}   # frames for which we have output a MARK
+    evoked = {}   # frames for which we have output an EVOKE
+    for index in xrange(len(document.tokens)):
+      t2m = token_to_mentions[index]
+
+      # First evoke/refer the singleton mentions.
+      for singleton in t2m.singletons:
+        for frame in singleton.evokes():
+          # If the frame is already evoked, refer to it.
+          if frame in marked:
+            assert frame in evoked, "Referring to marked but not evoked frame"
+          if frame in evoked:
+            refer = self._simple_action(Action.REFER)
+            refer.info = frame_info[frame]
+            refer.action.length = singleton.length  # should be 1
+            simple_actions.append(refer)
+            continue
+
+          # Otherwise evoke a new frame.
+          evoke = self._simple_action(Action.EVOKE)
+          evoke.action.length = singleton.length  # should be 1
+          evoke.info = frame_info[frame]
+          evoke.action.label = evoke.info.type
+          simple_actions.append(evoke)
+          marked[frame] = True
           evoked[frame] = True
-        else:
-          simple_action.action.type = Action.REFER
-        simple_actions.append(simple_action)
 
-    # Output SHIFT actions after the last evoked frame.
-    for index in xrange(start, document.size()):
+      # Output EVOKE for any frames whose spans end here.
+      for mention in t2m.ending:
+        assert mention.length > 1, mention.length  # singletons already handled
+        for frame in mention.evokes():
+          assert frame in marked   # frame should be already MARKed
+          if frame in evoked:
+            # Already handled via REFER at mention.begin.
+            continue
+
+          evoke = self._simple_action(Action.EVOKE)
+          evoke.info = frame_info[frame]
+          evoke.action.label = evoke.info.type
+          simple_actions.append(evoke)
+          evoked[frame] = True
+
+      # Output MARK for any frames whose spans begin here.
+      for mention in t2m.starting:
+        assert mention.length > 1, mention.length  # singletons already handled
+        for frame in mention.evokes():
+          # Check if this is a fresh frame or a refer.
+          if frame in marked:
+            assert frame in evoked, "Referring to marked but not evoked frame"
+          if frame in evoked:
+            refer = self._simple_action(Action.REFER)
+            refer.info = frame_info[frame]
+            refer.action.length = mention.length
+            simple_actions.append(refer)
+            continue
+
+          mark = self._simple_action(Action.MARK)
+          mark.info = frame_info[frame]
+          simple_actions.append(mark)
+          marked[frame] = True
+
+      # Move to the next token.
       simple_actions.append(self._simple_action(Action.SHIFT))
-
-    # Generate the final STOP action.
     simple_actions.append(self._simple_action(Action.STOP))
 
-    # Recursively generate more actions (e.g. CONNECT, EMBED, ELABORATE, ASSIGN)
+    # Recursively output more actions (e.g. CONNECT, EMBED, ELABORATE, ASSIGN)
     # from the current set of EVOKE/REFER actions. Then translate each
     # action using final attention indices. This is done in reverse order
     # for convenience.
@@ -231,7 +320,7 @@ class TransitionGenerator:
           if e.used or not e.incoming: continue
 
           nb = frame_info.get(e.neighbor, None)
-          if nb is not None and not nb.output and nb.mention is None:
+          if nb is not None and not nb.output and not nb.from_mention:
             embed = self._simple_action(Action.EMBED)
             embed.action.role = e.role
             embed.info = nb
@@ -245,7 +334,7 @@ class TransitionGenerator:
           if e.used or e.incoming: continue
 
           nb = frame_info.get(e.neighbor, None)
-          if nb is not None and not nb.output and nb.mention is None:
+          if nb is not None and not nb.output and not nb.from_mention:
             elaborate = self._simple_action(Action.ELABORATE)
             elaborate.action.role = e.role
             elaborate.info = nb

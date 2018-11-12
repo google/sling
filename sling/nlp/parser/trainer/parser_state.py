@@ -25,6 +25,13 @@ class ParserState:
       self.end = start + length
       self.evoked = []   # frame(s) evoked by the span
 
+  
+  # Represents the beginning token of a span.
+  class Mark:
+    def __init__(self, token, step):
+      self.token = token
+      self.step = step
+
 
   # Represents a frame.
   class Frame:
@@ -51,18 +58,20 @@ class ParserState:
     self.spec = spec
     self.begin = 0
     self.end = len(document.tokens)
-    self.current = 0                               # current input position
-    self.frames = []                               # frames added so far
-    self.spans = []                                # spans added so far
-    self.steps = 0                                 # no. of steps taken so far
-    self.actions = []                              # actual steps taken so far
-    self.graph = []                                # edges in the frame graph
-    self.allowed = [False] * spec.actions.size()   # allowed actions bitmap
-    self.done = False                              # if the graph is complete
-    self.attention = []                            # frames in attention buffer
-    self.nesting = []                              # current nesting information
-    self.embed = []                                # current embedded frames
-    self.elaborate = []                            # current elaborated frames
+    self.current = 0                 # current input position
+    self.frames = []                 # frames added so far
+    self.spans = {}                  # spans added so far
+    self.steps = 0                   # no. of steps taken so far
+    self.actions = []                # actual steps taken so far
+    self.graph = []                  # edges in the frame graph
+    self.done = False                # if the graph is complete
+    self.attention = []              # frames in attention buffer
+    self.marks = []                  # marked (i.e. open) spans
+    self.embed = []                  # current embedded frames
+    self.elaborate = []              # current elaborated frames
+
+    # Token -> Spans over it.
+    self.token_to_spans = [[] for _ in xrange(len(document.tokens))]
 
 
   # Returns a string representation of the parser state.
@@ -116,6 +125,27 @@ class ParserState:
     return self.attention[index].focus
 
 
+  # Returns whether [start, end) crosses an existing span.
+  def _crosses(self, start, end):
+    for token in xrange(start, end):
+      for s in self.token_to_spans[token]:
+        if (s.start - start) * (s.end - end) > 0:
+          return True
+    return False
+
+
+  # Check fails if there is any crossing span in the parser state.
+  def check_spans(self):
+    spans = list(self.spans.keys())
+    spans.sort(key=lambda s: (s[0], s[0] - s[1]))
+    cover = [None] * len(self.document.tokens)
+    for s in spans:
+      c = cover[s[0]]
+      for i in xrange(s[0], s[1]):
+        assert c == cover[i], (c, cover[i], spans, self.actions)
+        cover[i] = s
+
+
   # Returns whether 'action_index' is allowed in the current state.
   def is_allowed(self, action_index):
     if self.done: return False
@@ -123,35 +153,38 @@ class ParserState:
     actions = self.spec.actions
     if action_index == actions.stop(): return self.current == self.end
     if action_index == actions.shift(): return self.current < self.end
+    if action_index == actions.mark(): return self.current < self.end
+
     action = actions.table[action_index]
+    if action.type == Action.REFER:
+      end = self.current + action.length
+      if end > self.end or \
+        action.target >= self.attention_size() or \
+        self._crosses(self.current, end):
+          return False
 
-    if action.type == Action.EVOKE or action.type == Action.REFER:
-      if self.current + action.length > self.end: return False
-      if action.type == Action.REFER and action.target >= self.attention_size():
-        return False
+      existing = self._get_span(self.current, end)
+      if existing is not None:
+        target = self.attention[action.target]
+        for f in existing.evoked:
+          if f is target: return False
+      return True
 
-      # No existing spans, so everything is allowed.
-      if len(self.nesting) == 0: return True
-
-      # Proposed span can't be longer than the most nested span.
-      outer = self.nesting[-1]
-      assert outer.start <= self.current
-      assert outer.end > self.current
-      gap = outer.end - self.current
-      if gap != action.length: return gap > action.length
-
-      if outer.start < self.current:
-        return True
+    if action.type == Action.EVOKE:
+      if action.length is None:
+        if len(self.marks) == 0 or self.marks[-1].token == self.current \
+          or self.current == self.end:
+          return False
+        return not self._crosses(self.marks[-1].token, self.current + 1)
       else:
-        if action.type == Action.EVOKE:
-          for f in outer.evoked:
+        end = self.current + action.length
+        if end > self.end or self._crosses(self.current, end):
+          return False
+        existing = self._get_span(self.current, end)
+        if existing is not None:
+          for f in existing.evoked:
             if f.type == action.label: return False
-          return True
-        else:
-          target = self.attention[action.target]
-          for f in outer.evoked:
-            if f is target: return False
-          return True
+        return True
     elif action.type == Action.CONNECT:
       s = self.attention_size()
       if action.source >= s or action.target >= s: return False
@@ -225,18 +258,22 @@ class ParserState:
       self.done = True
     elif action.type == Action.SHIFT:
       self.current += 1
-      while len(self.nesting) > 0:
-        if self.nesting[-1].end <= self.current:
-          self.nesting.pop()
-        else:
-          break
       del self.embed[:]
       del self.elaborate[:]
+    elif action.type == Action.MARK:
+      self.marks.append(ParserState.Mark(self.current, len(self.actions) - 1))
     elif action.type == Action.EVOKE:
-      s = self._make_span(action.length)
+      begin = self.current
+      end = self.current + 1
+      if action.length is None:
+        begin = self.marks.pop().token
+      else:
+        assert action.length > 0
+        end = self.current + action.length
+      s = self._make_span(begin, end)
       f = self._make_frame(action.label)
-      f.start = self.current
-      f.end = self.current + action.length
+      f.start = begin
+      f.end = end
       f.spans.append(s)
       s.evoked.append(f)
       self.frames.append(f)
@@ -244,7 +281,7 @@ class ParserState:
     elif action.type == Action.REFER:
       f = self.attention[action.target]
       f.focus = self.steps
-      s = self._make_span(action.length)
+      s = self._make_span(self.current, self.current + action.length)
       s.evoked.append(f)
       f.spans.append(s)
       self._refocus_attention(action.target)
@@ -257,12 +294,14 @@ class ParserState:
       target = self.attention[action.target]
       f = self._make_frame(action.label)
       f.edges.append((action.role, target))
+      self.frames.append(f)
       self._add_to_attention(f)
       self.embed.append((action.label, action.role, target))
     elif action.type == Action.ELABORATE:
       source = self.attention[action.source]
       f = self._make_frame(action.label)
       source.edges.append((action.role, f))
+      self.frames.append(f)
       self._add_to_attention(f)
       self.elaborate.append((action.label, action.role, source))
     elif action.type == Action.ASSIGN:
@@ -299,14 +338,14 @@ class ParserState:
       for role, value in f.edges:
         if isinstance(value, ParserState.Frame):
           # Add slot whose value is a reference to another frame.
-          assert value in frames
+          assert value in frames, str(value.__dict__)
           frame.append(role, frames[value])
         else:
           # Add slot whose value is a reference to a global frame (cf. ASSIGN).
           assert type(value) == sling.Frame, "%r" % value
           frame.append(role, value)
 
-    for s in self.spans:
+    for _, s in self.spans.iteritems():
       # Note: mention.frame is the actual mention frame.
       mention = document.add_mention(s.start, s.end)
       for f in s.evoked:
@@ -344,16 +383,22 @@ class ParserState:
     if index > 0: self.attention.insert(0, self.attention.pop(index))
 
 
-  # Creates and returns a span of length 'length'.
-  def _make_span(self, length):
+  # Gets and existing [begin, end) span or None.
+  def _get_span(self, begin, end):
+    key = (begin, end)
+    return self.spans.get(key, None)
+
+
+  # Creates and returns a [begin, end) span.
+  def _make_span(self, begin, end):
     # See if an existing span can be returned.
-    if len(self.nesting) > 0:
-      last = self.nesting[-1]
-      if last.start == self.current and last.end == self.current + length:
-        return last
-    s = ParserState.Span(self.current, length)
-    self.spans.append(s)
-    self.nesting.append(s)
+    key = (begin, end)
+    existing = self.spans.get(key, None)
+    if existing is not None: return existing
+    s = ParserState.Span(begin, end - begin)
+    self.spans[key] = s
+    for i in xrange(begin, end):
+      self.token_to_spans[i].append(s)
     return s
 
 

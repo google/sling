@@ -64,6 +64,19 @@ class Lexicon:
         index += 1
 
 
+  # Reads the lexicon from a delimited string.
+  def read(self, vocabstring, delimiter):
+    index = 0
+    lines = vocabstring.split(delimiter)
+    if lines[-1] == '': lines.pop()
+    for line in lines:
+      if line == self.oov_item:
+        assert index == self.oov_index, index
+      self.item_to_index[line] = index
+      self.index_to_item[index] = line
+      index += 1
+
+
   # Adds 'item' to the lexicon.
   def add(self, item):
     item = self._key(item)

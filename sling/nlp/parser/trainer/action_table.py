@@ -44,9 +44,10 @@ class Actions:
     self.max_elaborate_source = None
     self.frame_limit = None
 
-    # Short-cuts for ids of SHIFT and STOP actions.
+    # Short-cuts for ids of SHIFT, STOP, and MARK actions.
     self.shift_index = None
     self.stop_index = None
+    self.mark_index = None
 
 
   # Accessors.
@@ -56,6 +57,10 @@ class Actions:
 
   def shift(self):
     return self.shift_index
+
+
+  def mark(self):
+    return self.mark_index
 
 
   def size(self):
@@ -87,6 +92,8 @@ class Actions:
       self.shift_index = index
     if action.type == Action.STOP:
       self.stop_index = index
+    if action.type == Action.MARK:
+      self.mark_index = index
 
 
   # Returns the value of 'action_field' that covers 'percentile' amount

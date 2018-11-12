@@ -47,6 +47,7 @@ class FileParallelCorpus : public ParallelCorpus {
     *store = new Store(commons_);
     *golden = gold_corpus_->Next(*store);
     *predicted = test_corpus_->Next(*store);
+    count_++;
     if (*golden == nullptr) {
       CHECK(*predicted == nullptr);
       delete *store;
@@ -61,6 +62,7 @@ class FileParallelCorpus : public ParallelCorpus {
   Store *commons_;               // commons store for documents
   DocumentSource *gold_corpus_;  // corpus with gold annotations
   DocumentSource *test_corpus_;  // corpus with predicted annotations
+  int count_ = 0;
 };
 
 bool FrameEvaluation::Alignment::Map(Handle source, Handle target) {

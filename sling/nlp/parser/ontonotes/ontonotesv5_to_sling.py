@@ -401,7 +401,6 @@ class Converter:
     for _, depth in depths.iteritems():
       output.nesting.increment(depth)
 
-
 # Returns true if 'filename' appears in the list of ids in 'allowed_ids'.
 def file_allowed(allowed_ids, filename):
   if len(allowed_ids) == 0:
@@ -503,7 +502,7 @@ if __name__ == "__main__":
 
         documents = converter.tosling(fullname)
         for i, document in enumerate(documents):
-          docid = document.frame.id
+          docid = document.frame["/ontonotes/docid"]
           writer.write(docid, document.frame.data(binary=True))
         if summary.input.files.value % 200 == 0:
           print "Processed", summary.input.files.value, "files"
