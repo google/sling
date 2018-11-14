@@ -24,11 +24,11 @@ a {
 }
 
 a:link {
-  text-decoration: none;
+  text-decoration: underline;
 }
 
 a:visited {
-  text-decoration: none;
+  text-decoration: underline;
 }
 
 .doctext {
@@ -234,7 +234,7 @@ a:visited {
   left: -12px;
 }
 
-span[tooltip]:hover:before {
+a[tooltip]:hover:before, span[tooltip]:hover:before {
   content: attr(tooltip);
   font:  11pt arial;
   position: absolute;
@@ -246,4 +246,3 @@ span[tooltip]:hover:before {
   background: #666;
   white-space: pre-wrap;
 }
-

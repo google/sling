@@ -7,12 +7,11 @@ stylesheet("/common/style/docview.css");
 let kb_url = '/kb/?id=';
 
 let type_color = {
-  '/s': '#0B5394',
+  '/s': '#FF8000',
   '/saft': '#38761D',
   '/pb': '#990000',
   '/vn': '#8B4513',
-  '/f': '#FF8000',
-  '/cxn': '#630084',
+  '/w': '#0B5394',
 };
 
 let notchgif = 'data:image/gif;base64,R0lGODlhDAAWAJEAAP/68NK8jv///' +
@@ -54,7 +53,7 @@ export class Document {
       if (a.begin != b.begin) {
         return a.begin - b.begin;
       } else {
-        return a.end - b.end;
+        return b.end - a.end;
       }
     });
   }
@@ -262,7 +261,7 @@ export class DocumentViewer extends Component {
       text += "id: " + frame.id + '\n';
     }
     if (frame.description) {
-      text += "description: " + frame.description + '\n';
+      text += frame.description + '\n';
     }
     return text;
   }
@@ -282,11 +281,13 @@ export class DocumentViewer extends Component {
 
   IsExternal(f) {
     if (typeof f == "number") f = this.document.frames[f];
-    for (let t = 0; t < f.types.length; ++t) {
-      let type = f.types[t];
-      if (typeof type == "number") {
-        let schema = this.document.frames[type];
-        if (schema.id == "/w/item") return true;
+    if (typeof f == "object") {
+      for (let t = 0; t < f.types.length; ++t) {
+        let type = f.types[t];
+        if (typeof type == "number") {
+          let schema = this.document.frames[type];
+          if (schema.id == "/w/item") return true;
+        }
       }
     }
     return false;
@@ -360,6 +361,7 @@ export class DocumentViewer extends Component {
           if (this.IsExternal(frame)) {
             let a = document.createElement("a");
             a.href = kb_url + frame.id;
+            a.target = " _blank";
             a.appendChild(name);
             name = a
           } else {
@@ -367,7 +369,7 @@ export class DocumentViewer extends Component {
             s.appendChild(name);
             name = s;
           }
-          name.setAttribute("tooltip", frame.id);
+          name.setAttribute("tooltip", this.HoverText(frame));
         }
         title.appendChild(name);
       }
@@ -421,6 +423,7 @@ export class DocumentViewer extends Component {
           if (this.IsExternal(v)) {
             let a = document.createElement("a");
             a.href = kb_url + v;
+            a.target = "_blank";
             a.appendChild(document.createTextNode(v));
             val.appendChild(a);
           } else {

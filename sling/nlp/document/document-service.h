@@ -77,6 +77,9 @@ class DocumentService {
   Name n_begin_{names_, "begin"};
   Name n_end_{names_, "end"};
   Name n_frame_{names_, "frame"};
+
+  Name n_item_{names_, "/w/item"};
+  Name n_property_{names_, "/w/property"};
 };
 
 }  // namespace nlp

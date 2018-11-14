@@ -107,21 +107,21 @@
                 {{item.text}}
               </span>
               <span class="extref">
-                  (<a ng-href="https://www.wikidata.org/wiki/{{item.ref}}">{{item.ref}}</a>)
+                  (<a ng-href="https://www.wikidata.org/wiki/{{item.ref}}" target="_blank">{{item.ref}}</a>)
               </span>
               <span flex></span>
               <md-button class="md-icon-button">
-                <a ng-href="https://www.wikidata.org/wiki/Special:EntityData/{{item.ref}}.json">
+                <a ng-href="https://www.wikidata.org/wiki/Special:EntityData/{{item.ref}}.json" target="_blank">
                   <i class="material-icons">library_books</i>
                 </a>
               </md-button>
               <md-button class="md-icon-button">
-                <a ng-href="/kb/item?fmt=json&id={{item.ref}}">
+                <a ng-href="/kb/item?fmt=json&id={{item.ref}}" target="_blank">
                   <i class="material-icons">code</i>
                 </a>
               </md-button>
               <md-button class="md-icon-button">
-                <a ng-href="/kb/frame?fmt=txt&id={{item.ref}}">
+                <a ng-href="/kb/frame?fmt=txt&id={{item.ref}}" target="_blank">
                   <i class="material-icons">input</i>
                 </a>
               </md-button>
@@ -229,7 +229,7 @@
                 </td>
                 <td class="xref-values">
                   <div class="xref-value" ng-repeat="v in x.values">
-                    <a ng-href="{{v.url}}">{{v.text}}</a>
+                    <a ng-href="{{v.url}}" target="_blank">{{v.text}}</a>
                   </div>
                 </td>
               </tr>
