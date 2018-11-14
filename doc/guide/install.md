@@ -9,7 +9,7 @@ with Python 2.7 you can install a pre-built wheel:
 ```
 sudo pip install http://www.jbox.dk/sling/sling-2.0.0-cp27-none-linux_x86_64.whl
 ```
-and download the pre-trained model (NB: not yet available):
+and download the pre-trained model:
 ```
 wget http://www.jbox.dk/sling/caspar.flow
 ```
@@ -31,12 +31,11 @@ for m in doc.mentions:
 If you want to train a parser or use SLING for C++ development, you need to
 download the source code and build it.
 
-First, clone the GitHub repository and switch to the caspar branch.
+First, clone the GitHub repository.
 
 ```shell
 git clone https://github.com/google/sling.git
 cd sling
-git checkout caspar
 ```
 
 SLING uses [Bazel](https://bazel.build/) as the build system, so you need to
@@ -65,28 +64,22 @@ Languages: C++, Python 2.7, assembler<br>
 CPU: Intel x64 or compatible<br>
 Build system: Bazel<br>
 
-You can test your installation by building a few important targets. But first,
-remember to switch to the caspar branch since it implements the CASPAR
-functionality.
+You can use the `buildall.sh` script to build all the source code:
 
 ```shell
-git checkout caspar
-bazel build -c opt sling/nlp/parser sling/nlp/parser/tools:all
+tools/buildall.sh
 ```
 
-Next, build and link to the SLING Python module since it will be used by the
-trainer.
+You then need to link the sling Python module directly to the Python source
+directory to use it in "developer mode":
 
 ```shell
-git checkout caspar
-bazel build -c opt sling/pyapi:pysling.so
 sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
 ```
 
 **NOTE:**
 *  In case you are using an older version of GCC (< v5), you may want to comment
 out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
-* We currently do not support OSX, but you can check out [issue
-* #189](https://github.com/google/sling/issues/189) for help on 
-building on OSX.
-
+* We currently do not support OSX, but you can check out
+  [issue #189](https://github.com/google/sling/issues/189) for help on building
+  on OSX.

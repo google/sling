@@ -9,7 +9,7 @@ training.
 frames.
 * The action table with all the transition actions.
 
-A pre-trained model can be downloaded from [here](http://www.jbox.dk/sling/sempar.flow).
+A pre-trained model can be downloaded from [here](http://www.jbox.dk/sling/caspar.flow).
 The model can be loaded and initialized in the following way:
 
 ```c++
@@ -20,7 +20,7 @@ The model can be loaded and initialized in the following way:
 // Load parser model.
 sling::Store commons;
 sling::nlp::Parser parser;
-parser.Load(&commons, "/tmp/sempar.flow");
+parser.Load(&commons, "/tmp/caspar.flow");
 commons.Freeze();
 
 // Create document tokenizer.

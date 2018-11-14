@@ -2,11 +2,12 @@
 
 [![Build Status](https://travis-ci.org/google/sling.svg?branch=master)](https://travis-ci.org/google/sling)
 
-SLING is a parser for annotating text with frame semantic annotations. It is a general 
-transition-based frame semantic parser using bi-directional LSTMs for input encoding 
-and a Transition Based Recurrent Unit (TBRU) for output decoding. It is a jointly 
-trained model using only the text tokens as input and the transition system has been 
-designed to output frame graphs directly without any intervening symbolic representation.
+SLING is a parser for annotating text with frame semantic annotations. It is a
+general transition-based frame semantic parser using bi-directional LSTMs for
+input encoding and a Transition Based Recurrent Unit (TBRU) for output decoding.
+It is a jointly trained model using only the text tokens as input and the
+transition system has been designed to output frame graphs directly without any
+intervening symbolic representation.
 
 ![SLING neural network architecture.](./doc/report/network.svg)
 
@@ -37,4 +38,4 @@ Original authors of the code in this package include:
 
 *   Michael Ringgaard
 *   Rahul Gupta
-
+*   Anders Sandholm
