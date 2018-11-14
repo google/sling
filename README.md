@@ -1,18 +1,12 @@
 # SLING - A natural language frame semantics parser
 
-[![Build Status](https://travis-ci.org/google/sling.svg?branch=caspar)](https://travis-ci.org/google/sling)
+[![Build Status](https://travis-ci.org/google/sling.svg?branch=master)](https://travis-ci.org/google/sling)
 
-SLING CASPAR is a parser for annotating text with frame semantic annotations.
-This is the second generation of the SLING parser. The first generation, SEMPAR,
-can be found [here](https://github.com/google/sling). CASPAR is intended to
-parse using cascades which are handling different parts of the transition
-action space.
-
-The CASPAR parser is a general transition-based frame semantic parser
-using bi-directional LSTMs for input encoding and a Transition Based Recurrent
-Unit (TBRU) for output decoding. It is a jointly trained model using only the
-text tokens as input and the transition system has been designed to output frame
-graphs directly without any intervening symbolic representation.
+SLING is a parser for annotating text with frame semantic annotations. It is a general 
+transition-based frame semantic parser using bi-directional LSTMs for input encoding 
+and a Transition Based Recurrent Unit (TBRU) for output decoding. It is a jointly 
+trained model using only the text tokens as input and the transition system has been 
+designed to output frame graphs directly without any intervening symbolic representation.
 
 ![SLING neural network architecture.](./doc/report/network.svg)
 
