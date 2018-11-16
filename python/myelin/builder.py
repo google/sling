@@ -15,9 +15,6 @@
 
 """Myelin function builder and expression evaluator."""
 
-import math
-from struct import pack
-
 from flow import Variable
 from flow import Function
 from flow import Flow

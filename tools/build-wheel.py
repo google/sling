@@ -66,6 +66,13 @@ files = {
   'python/flags.py': '$DATA$/sling/flags.py',
   'python/log.py': '$DATA$/sling/log.py',
 
+  'python/myelin/__init__.py': '$DATA$/sling/myelin/__init__.py',
+  'python/myelin/builder.py': '$DATA$/sling/myelin/builder.py',
+  'python/myelin/flow.py': '$DATA$/sling/myelin/flow.py',
+  'python/myelin/lexical_encoder.py': '$DATA$/sling/myelin/lexical_encoder.py',
+  'python/myelin/nn.py': '$DATA$/sling/myelin/nn.py',
+  'python/myelin/tf.py': '$DATA$/sling/myelin/tf.py',
+
   'python/nlp/__init__.py': '$DATA$/sling/nlp/__init__.py',
   'python/nlp/document.py': '$DATA$/sling/nlp/document.py',
   'python/nlp/parser.py': '$DATA$/sling/nlp/parser.py',
