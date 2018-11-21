@@ -26,12 +26,13 @@ class Compiler {
  public:
   // Initialize compiler.
   Compiler();
+  ~Compiler();
 
   // Compile flow to network.
   void Compile(Flow *flow, Network *net);
 
   // Library with transformations and kernels for compilation.
-  Library *library() { return &library_; }
+  Library *library() { return library_; }
 
   // Custom runtime.
   Runtime *runtime() const { return runtime_; }
@@ -42,8 +43,13 @@ class Compiler {
   void set_perf_flopctr(bool enabled) { perf_flopctr_ = enabled; }
 
  private:
+  // Write graph to output as DOT and/or SVG file.
+  static void WriteGraph(const Flow &flow,
+                         const string &dot,
+                         const string &svg);
+
   // Compiler library with kernels, transformations, etc.
-  Library library_;
+  Library *library_ = nullptr;
 
   // Custom runtime for generated network.
   Runtime *runtime_ = nullptr;

@@ -29,8 +29,14 @@ struct PyDate : public PyBase {
   // Deallocate date wrapper.
   void Dealloc();
 
-  // Date in  ISO 8601 format.
+  // Convert date to string (YYYY-MM-DD).
+  PyObject *Str();
+
+  // Date in ISO 8601 format.
   PyObject *ISO();
+
+  // Convert date to string or integer value.
+  PyObject *Value();
 
   // Date object.
   nlp::Date date;
@@ -52,9 +58,6 @@ struct PyCalendar : public PyBase {
 
   // Convert date to human-readable string.
   PyObject *Str(PyObject *obj);
-
-  // Convert date to string or integer value.
-  PyObject *Value(PyObject *obj);
 
   // Return frames for date parts.
   PyObject *Day(PyObject *obj);

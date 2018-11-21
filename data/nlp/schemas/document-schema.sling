@@ -149,6 +149,13 @@
     source: profile
     target: int
   }
+
+  role: {=form :slot
+    name: "Case form"
+    description: "Most common case variant for alias"
+    source: profile
+    target: int
+  }
 }
 
 ; Document schema family

@@ -166,6 +166,7 @@ cc_library(
     "//sling/base:perf",
     "//sling/myelin/cuda:cuda-runtime",
     "//sling/myelin/kernel:cuda",
+    "//sling/myelin/kernel:dragnn",
     "//sling/myelin/kernel:tensorflow",
   ],
 )

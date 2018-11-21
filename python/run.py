@@ -60,6 +60,11 @@ flags.define("--invert_categories",
              default=False,
              action='store_true')
 
+flags.define("--compute_item_popularity",
+             help="compute item popularity from alias counts",
+             default=False,
+             action='store_true')
+
 flags.define("--fuse_items",
              help="fuse items from wikidata and wikipedia",
              default=False,
@@ -201,6 +206,13 @@ def fuse_items():
     wf.invert_wikipedia_categories()
     run_workflow(wf)
 
+  # Compute item popularity.
+  if flags.arg.compute_item_popularity:
+    log.info("Compute item popularity")
+    wf = wiki.WikiWorkflow("item-popularity")
+    wf.compute_item_popularity()
+    run_workflow(wf)
+
   # Fuse items.
   if flags.arg.fuse_items:
     log.info("Fuse items")
@@ -290,6 +302,7 @@ if __name__ == '__main__':
     flags.arg.parse_wikipedia = True
     flags.arg.merge_categories = True
     flags.arg.invert_categories = True
+    flags.arg.compute_item_popularity = True
     flags.arg.fuse_items = True
     flags.arg.build_kb = True
     flags.arg.extract_names = True

@@ -72,6 +72,9 @@ struct PyParser : public PyBase {
 // Return document frame in LEX-encoded format.
 PyObject *PyToLex(PyObject *self, PyObject *args);
 
+// Evaluate frame annotations.
+PyObject *PyEvaluateFrames(PyObject *self, PyObject *args);
+
 }  // namespace sling
 
 #endif  // SLING_PYAPI_PYPARSER_H_

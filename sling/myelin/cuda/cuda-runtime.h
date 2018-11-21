@@ -104,7 +104,6 @@ class CUDARuntime : public Runtime {
   InstanceFunc StopProfilerFunc() override { return StopProfiler; }
 
  private:
-
   // Instance data block.
   struct Block {
     size_t host_offset;

@@ -48,13 +48,39 @@ struct PyFactExtractor : public PyBase {
   void Dealloc();
 
   // Extract list of facts from item.
-  PyObject *ExtractFacts(PyObject *args, PyObject *kw);
+  PyObject *Facts(PyObject *args, PyObject *kw);
+
+  // Get types for item.
+  PyObject *Types(PyObject *args, PyObject *kw);
+
+  // Create new taxonomy based on type list.
+  PyObject *Taxonomy(PyObject *args, PyObject *kw);
 
   // Commons store for converter.
   PyStore *pycommons;
 
   // Fact extractor.
   nlp::FactCatalog *catalog;
+
+  // Registration.
+  static PyTypeObject type;
+  static PyMethodTable methods;
+  static void Define(PyObject *module);
+};
+
+// Python wrapper for taxonomy.
+struct PyTaxonomy : public PyBase {
+  int Init(PyFactExtractor *extractor, PyObject *typelist);
+  void Dealloc();
+
+  // Classify type for item according to taxonomy.
+  PyObject *Classify(PyObject *item);
+
+  // Fact extractor for taxonomy.
+  PyFactExtractor *pyextractor;
+
+  // Taxonomy.
+  nlp::Taxonomy *taxonomy;
 
   // Registration.
   static PyTypeObject type;

@@ -56,6 +56,7 @@ cc_library(
     ":text-tokenizer",
     "//sling/base",
     "//sling/string:text",
+    "//sling/util:unicode",
   ],
 )
 

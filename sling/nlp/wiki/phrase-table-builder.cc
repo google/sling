@@ -20,6 +20,7 @@
 #include "sling/base/types.h"
 #include "sling/file/repository.h"
 #include "sling/nlp/document/phrase-tokenizer.h"
+#include "sling/nlp/wiki/wiki.h"
 #include "sling/task/frames.h"
 #include "sling/task/task.h"
 #include "sling/util/mutex.h"
@@ -34,6 +35,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
     // Get language for names.
     string lang = task->Get("language", "en");
     language_ = commons_->Lookup("/lang/" + lang);
+    task->Fetch("noisy_alias_sources", &noisy_alias_sources_);
 
     // Set phrase normalization.
     tokenizer_.set_normalization(
@@ -43,6 +45,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
     num_aliases_ = task->GetCounter("aliases");
     num_phrases_ = task->GetCounter("phrases");
     num_entities_ = task->GetCounter("entities");
+    num_instances_ = task->GetCounter("instances");
   }
 
   void Process(Slice key, const Frame &frame) override {
@@ -72,19 +75,27 @@ class PhraseTableBuilder : public task::FrameProcessor {
         // Compute phrase fingerprint.
         Text name = alias.GetText(n_name_);
         int count = alias.GetInt(n_count_, 1);
+        int sources = alias.GetInt(n_sources_, 0);
+        int form = alias.GetInt(n_form_, 0);
         uint64 fp = tokenizer_.Fingerprint(name);
         if (fp == 1) continue;
 
-        // Add phrase for entity to phrase table.
+        // Look up or add phrase for entity to phrase table.
         Phrase *&phrase = phrase_table_[fp];
         if (phrase == nullptr) {
           phrase = new Phrase(fp);
           num_phrases_->Increment();
         }
-        phrase->entities.emplace_back(index, count);
+
+        // Add entity to phrase.
+        bool reliable = (sources & ~noisy_alias_sources_);
+        uint32 count_and_flags = count | (form << 29);
+        if (reliable) count_and_flags |= (1 << 31);
+        phrase->entities.emplace_back(index, count_and_flags);
 
         // Add alias count to entity frequency.
         entity_table_[index].count += count;
+        num_instances_->Increment(count);
       }
     }
   }
@@ -130,7 +141,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
       // Sort entities in decreasing order.
       std::sort(phrase->entities.begin(), phrase->entities.end(),
           [](const EntityPhrase &a, const EntityPhrase &b) {
-            return a.count > b.count;
+            return a.count() > b.count();
           });
     }
     repository.WriteMap("Phrase", &items, num_buckets);
@@ -157,11 +168,15 @@ class PhraseTableBuilder : public task::FrameProcessor {
     uint32 count = 0;
   };
 
-  // Entity phrase with index and frequency.
+  // Entity phrase with index and frequency. The count_and_flags field contains
+  // the count in the lower 29 bit. Bit 29 and 30 contain the case form, and
+  // bit 31 contains the reliable source flag.
   struct EntityPhrase {
-    EntityPhrase(int index, uint32 count) : index(index), count(count) {}
+    EntityPhrase(int index, uint32 count_and_flags)
+        : index(index), count_and_flags(count_and_flags) {}
     uint32 index;
-    uint32 count;
+    uint32 count_and_flags;
+    int count() const { return count_and_flags & ((1 << 29) - 1); }
   };
 
   // Phrase with fingerprint and entity distribution.
@@ -192,9 +207,17 @@ class PhraseTableBuilder : public task::FrameProcessor {
   Name n_name_{names_, "name"};
   Name n_alias_{names_, "alias"};
   Name n_count_{names_, "count"};
+  Name n_form_{names_, "form"};
+  Name n_sources_{names_, "sources"};
 
   // Language for aliases.
   Handle language_;
+
+  // Noisy alias sources. Aliases that are only backed by noisy alias sources
+  // are not marked as reliable.
+  int noisy_alias_sources_ =
+    (1 << SRC_WIKIPEDIA_ANCHOR) |
+    (1 << SRC_WIKIPEDIA_DISAMBIGUATION);
 
   // Phrase tokenizer.
   PhraseTokenizer tokenizer_;
@@ -212,6 +235,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
   task::Counter *num_phrases_ = nullptr;
   task::Counter *num_entities_ = nullptr;
   task::Counter *num_aliases_ = nullptr;
+  task::Counter *num_instances_ = nullptr;
 
   // Mutex for serializing access to repository.
   Mutex mu_;

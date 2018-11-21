@@ -48,6 +48,7 @@ static PyMethodDef py_funcs[] = {
   {"finalize_dashboard", (PyCFunction) PyFinalizeDashboard, METH_NOARGS, ""},
 #endif
   {"tolex", (PyCFunction) PyToLex, METH_VARARGS, ""},
+  {"evaluate_frames", (PyCFunction) PyEvaluateFrames, METH_VARARGS, ""},
   {nullptr, nullptr, 0, nullptr}
 };
 
@@ -60,6 +61,7 @@ static void RegisterPythonModule() {
   PyArray::Define(module);
   PyItems::Define(module);
   PyTokenizer::Define(module);
+  PyPhraseMatch::Define(module);
   PyPhraseTable::Define(module);
   PyParser::Define(module);
   PyRecordReader::Define(module);
@@ -69,6 +71,7 @@ static void RegisterPythonModule() {
   PyDate::Define(module);
   PyWikiConverter::Define(module);
   PyFactExtractor::Define(module);
+  PyTaxonomy::Define(module);
 #ifndef SLING_GOOGLE3
   PyJob::Define(module);
   PyResource::Define(module);

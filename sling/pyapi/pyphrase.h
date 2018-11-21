@@ -22,6 +22,34 @@
 
 namespace sling {
 
+// Python wrapper for phrase match.
+struct PyPhraseMatch : public PyBase {
+  // Initialize wrapper.
+  int Init(PyStore *pystore, const nlp::PhraseTable::Match &match);
+
+  // Deallocate wrapper.
+  void Dealloc();
+
+  // Field accessors.
+  PyObject *Id();
+  PyObject *Item();
+  PyObject *Form();
+  PyObject *Count();
+  PyObject *Reliable();
+
+  // Matched item.
+  PyObject *pyitem;
+
+  // Phrase match info.
+  nlp::PhraseTable::Match info;
+
+  // Registration.
+  static PyTypeObject type;
+  static PyMethodTable methods;
+  static void Define(PyObject *module);
+};
+
+
 // Python wrapper for phrase table.
 struct PyPhraseTable : public PyBase {
   // Initialize phrase table wrapper.

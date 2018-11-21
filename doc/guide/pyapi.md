@@ -547,11 +547,11 @@ for entity in names.lookup("Annette Stroyberg"):
   print entity.id, entity.name
 
 # Query all entities named 'Funen' with frequency counts.
-for entity, count in names.query("Funen"):
-  print count, entity.id, entity.name, "(", entity.description, ")"
+for m in names.query("Funen"):
+  print m.count(), m.id(), m.item().name, "(", m.item().description, ")"
 ```
 
-The `lookup()` and `query()` methods return the entities in decreasing
+The `lookup()` and `query()` methods return the matches in decreasing
 frequency order.
 
 ## Dates
@@ -580,7 +580,7 @@ dob = sling.Date(entity["P569"])
 print dob.year, dob.month, dob.day
 ```
 
-The `Date` class has the following properties:
+The `Date` class has the following properties and methods:
 * `year` (r/w int property)<br>
   Gets/sets year. Year is  0 if date is invalid. Dates BCE is represented with
   negative year numbers.
@@ -599,6 +599,11 @@ The `Date` class has the following properties:
     * `DAY` if date represents a day.
 * `iso()`<br>
   Returns date in ISO 8601 format.
+* `value()`<br>
+  Convert date to numeric format if the date can be encoded as an integer.
+  This can only be done for dates after 1000 AD. Otherwise the date is returned
+  in ISO 8601 format. This can be used for updating date properties in the
+  knowledge base.
 
 A `Calendar` object can be used for converting `Date` objects to text and
 backing off to more coarse-grained date representations. A `Calendar` object
@@ -613,10 +618,6 @@ The `Calendar` class has the following methods:
   Returns a human-readable representation of the date, e.g. `cal.str(dob)`
   returns "December 7, 1936". The primary language of the knowledge base is
   used for the conversion.
-* `value(date)`<br>
-  Converts date to numeric or string representation, e.g. 'cal.value(dob)`
-  returns 19361207. This can be used for updating date properties in the
-  knowledge base.
 * `day(date)`<br>
   Returns an item frame representing the day and month of the date, e.g.
   `cal.day(dob)` returns December 7

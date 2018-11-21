@@ -186,6 +186,17 @@ class Unicode {
    static int Normalize(int c) { return Normalize(c, NORMALIZE_DEFAULT); }
 };
 
+// Word case form.
+enum CaseForm {
+  CASE_INVALID = -1,  // unknown case
+  CASE_NONE    = 0,   // indeterminate or mixed case
+  CASE_UPPER   = 1,   // uppercase, e.g. abbreviation
+  CASE_LOWER   = 2,   // lowercase, e.g. common noun
+  CASE_CAPITAL = 3,   // capitalized, e.g. proper noun
+};
+
+static const int NUM_FORMS = 4;
+
 // UTF-8 string categorization and conversion.
 class UTF8 {
  public:
@@ -280,6 +291,12 @@ class UTF8 {
   }
   static bool IsSpace(const string &str) {
     return IsSpace(str.data(), str.size());
+  }
+
+  // Determine case for word. This ignores all non-letter characters.
+  static CaseForm Case(const char *s, int len);
+  static CaseForm Case(const string &str) {
+    return Case(str.data(), str.size());
   }
 };
 

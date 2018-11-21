@@ -29,6 +29,8 @@ PyTypeObject PyWikiConverter::type;
 PyMethodTable PyWikiConverter::methods;
 PyTypeObject PyFactExtractor::type;
 PyMethodTable PyFactExtractor::methods;
+PyTypeObject PyTaxonomy::type;
+PyMethodTable PyTaxonomy::methods;
 
 void PyWikiConverter::Define(PyObject *module) {
   InitType(&type, "sling.WikiConverter", sizeof(PyWikiConverter), true);
@@ -46,7 +48,7 @@ int PyWikiConverter::Init(PyObject *args, PyObject *kwds) {
   pycommons = nullptr;
   converter = nullptr;
   if (!PyArg_ParseTuple(args, "O", &pycommons)) return -1;
-  if (!PyObject_TypeCheck(pycommons, &PyStore::type)) return -1;
+  if (!PyStore::TypeCheck(pycommons)) return -1;
 
   // Initialize converter.
   Py_INCREF(pycommons);
@@ -66,7 +68,7 @@ PyObject *PyWikiConverter::ConvertWikidata(PyObject *args, PyObject *kw) {
   PyStore *pystore = nullptr;
   const char *json = nullptr;
   if (!PyArg_ParseTuple(args, "Os", &pystore, &json)) return nullptr;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return nullptr;
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
 
   // Parse JSON.
   ArrayInputStream stream(json, strlen(json));
@@ -94,7 +96,9 @@ void PyFactExtractor::Define(PyObject *module) {
   type.tp_init = method_cast<initproc>(&PyFactExtractor::Init);
   type.tp_dealloc = method_cast<destructor>(&PyFactExtractor::Dealloc);
 
-  methods.Add("extract_facts", &PyFactExtractor::ExtractFacts);
+  methods.Add("facts", &PyFactExtractor::Facts);
+  methods.Add("types", &PyFactExtractor::Types);
+  methods.Add("taxonomy", &PyFactExtractor::Taxonomy);
   type.tp_methods = methods.table();
 
   RegisterType(&type, module, "FactExtractor");
@@ -105,7 +109,7 @@ int PyFactExtractor::Init(PyObject *args, PyObject *kwds) {
   pycommons = nullptr;
   catalog = nullptr;
   if (!PyArg_ParseTuple(args, "O", &pycommons)) return -1;
-  if (!PyObject_TypeCheck(pycommons, &PyStore::type)) return -1;
+  if (!PyStore::TypeCheck(pycommons)) return -1;
 
   // Initialize fact extractor catalog.
   Py_INCREF(pycommons);
@@ -121,13 +125,13 @@ void PyFactExtractor::Dealloc() {
   Free();
 }
 
-PyObject *PyFactExtractor::ExtractFacts(PyObject *args, PyObject *kw) {
+PyObject *PyFactExtractor::Facts(PyObject *args, PyObject *kw) {
   // Get store and Wikidata item.
   PyStore *pystore = nullptr;
   PyFrame *pyitem = nullptr;
   if (!PyArg_ParseTuple(args, "OO", &pystore, &pyitem)) return nullptr;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return nullptr;
-  if (!PyObject_TypeCheck(pyitem, &PyFrame::type)) return nullptr;
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
+  if (!PyFrame::TypeCheck(pyitem)) return nullptr;
 
   // Extract facts.
   nlp::Facts facts(catalog, pystore->store);
@@ -137,6 +141,89 @@ PyObject *PyFactExtractor::ExtractFacts(PyObject *args, PyObject *kw) {
   const Handle *begin = facts.list().data();
   const Handle *end = begin + facts.list().size();
   return pystore->PyValue(pystore->store->AllocateArray(begin, end));
+}
+
+PyObject *PyFactExtractor::Types(PyObject *args, PyObject *kw) {
+  // Get store and Wikidata item.
+  PyStore *pystore = nullptr;
+  PyFrame *pyitem = nullptr;
+  if (!PyArg_ParseTuple(args, "OO", &pystore, &pyitem)) return nullptr;
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
+  if (!PyFrame::TypeCheck(pyitem)) return nullptr;
+
+  // Extract types.
+  nlp::Facts facts(catalog, pystore->store);
+  Handles types(pystore->store);
+  facts.ExtractItemTypes(pyitem->handle(), &types);
+
+  // Return array of types.
+  const Handle *begin = types.data();
+  const Handle *end = begin + types.size();
+  return pystore->PyValue(pystore->store->AllocateArray(begin, end));
+}
+
+PyObject *PyFactExtractor::Taxonomy(PyObject *args, PyObject *kw) {
+  // Get type list from arguments.
+  PyObject *pytypes = nullptr;
+  if (!PyArg_ParseTuple(args, "|O", &pytypes)) return nullptr;
+
+  // Return taxonomy.
+  PyTaxonomy *taxonomy = PyObject_New(PyTaxonomy, &PyTaxonomy::type);
+  taxonomy->Init(this, pytypes);
+  return taxonomy->AsObject();
+}
+
+void PyTaxonomy::Define(PyObject *module) {
+  InitType(&type, "sling.Taxonomy", sizeof(PyTaxonomy), false);
+  type.tp_dealloc = method_cast<destructor>(&PyTaxonomy::Dealloc);
+
+  methods.AddO("classify", &PyTaxonomy::Classify);
+  type.tp_methods = methods.table();
+
+  RegisterType(&type, module, "Taxonomy");
+}
+
+int PyTaxonomy::Init(PyFactExtractor *extractor, PyObject *typelist) {
+  // Keep reference to extractor to keep fact catalog alive.
+  Py_INCREF(extractor);
+  pyextractor = extractor;
+
+  if (typelist == nullptr) {
+    // Create default taxonomy.
+    taxonomy = pyextractor->catalog->CreateDefaultTaxonomy();
+  } else {
+    // Build type list.
+    if (!PyList_Check(typelist)) return -1;
+    int size = PyList_Size(typelist);
+    std::vector<Text> types;
+    for (int i = 0; i < size; ++i) {
+      PyObject *item = PyList_GetItem(typelist, i);
+      if (!PyString_Check(item)) return -1;
+      types.emplace_back(PyString_AsString(item));
+    }
+
+    // Create taxonomy from type list.
+    taxonomy = new nlp::Taxonomy(pyextractor->catalog, types);
+  }
+
+  return 0;
+}
+
+void PyTaxonomy::Dealloc() {
+  delete taxonomy;
+  if (pyextractor) Py_DECREF(pyextractor);
+  Free();
+}
+
+PyObject *PyTaxonomy::Classify(PyObject *item) {
+  // Get item frame.
+  if (!PyFrame::TypeCheck(item)) return nullptr;
+  PyFrame *pyframe = reinterpret_cast<PyFrame *>(item);
+
+  // Classify item.
+  Handle type = taxonomy->Classify(pyframe->AsFrame());
+
+  return pyframe->pystore->PyValue(type);
 }
 
 }  // namespace sling

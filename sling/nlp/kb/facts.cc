@@ -61,11 +61,10 @@ void FactCatalog::Init(Store *store) {
   static const char *baseids[] = {
     "Q215627",    // person
     "Q17334923",  // location
-    "Q41176",     // building
+    "Q811430",    // construction
     "Q43229",     // organization
     "Q2385804",   // educational institution
     "Q294163",    // public institution
-    "Q1935049",   // military school
     "Q15401930",  // product
     "Q12737077",  // occupation
     "Q192581",    // job
@@ -76,6 +75,65 @@ void FactCatalog::Init(Store *store) {
   for (const char **id = baseids; *id != nullptr; ++id) {
     base_items_.insert(store_->Lookup(*id));
   }
+}
+
+Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
+  static const char *default_taxonomy[] = {
+    "Q215627",     // person
+    "Q95074",      // fictional character
+    "Q729",        // animal
+    "Q4164871",    // position
+    "Q12737077",   // occupation
+    "Q216353",     // title
+    "Q618779",     // award
+    "Q27020041",   // sports season
+    "Q4438121",    // sports organization
+    "Q215380",     // band
+    "Q2385804",    // educational institution
+    "Q783794",     // company
+    "Q43229",      // organization
+    "Q15474042",   // MediaWiki page
+    "Q18616576",   // Wikidata property
+    "Q732577",     // publication
+    "Q11424",      // film
+    "Q15416",      // television program
+    "Q2188189",    // musical work
+    "Q12136",      // disease
+    "Q16521",      // taxon
+    "Q5058355",    // cellular component
+    "Q7187",       // gene
+    "Q11173",      // chemical compound
+    "Q811430",     // construction
+    "Q17334923",   // location
+    "Q618123",     // geographical object
+    "Q1656682",    // event
+    "Q101352",     // family name
+    "Q202444",     // given name
+    "Q577",        // year
+    "Q186081",     // time interval
+    "Q11563",      // number
+    "Q17376908",   // languoid
+    "Q2198779",    // unit
+    "Q39875001",   // measure
+    "Q3695082",    // sign
+    "Q2996394",    // biological process
+    "Q838948",     // work of art
+    "Q47461344",   // written work
+    "Q28877",      // goods
+    "Q15401930",   // product
+    "Q483394",     // genre
+    "Q121769",     // reference
+    "Q1047113",    // specialty
+    "Q1190554",    // occurrence
+    "Q151885",     // concept
+    "Q35120",      // entity
+    nullptr,
+  };
+  std::vector<Text> types;
+  for (const char **type = default_taxonomy; *type != nullptr; ++type) {
+    types.emplace_back(*type);
+  }
+  return new Taxonomy(this, types);
 }
 
 void Facts::Extract(Handle item) {
@@ -91,6 +149,38 @@ void Facts::Extract(Handle item) {
     push(s.name);
     (this->*extractor)(s.value);
     pop();
+  }
+}
+
+void Facts::ExtractItemTypes(Handle item, Handles *types) {
+  // Get types for item.
+  item = store_->Resolve(item);
+  for (const Slot &s : Frame(store_, item)) {
+    if (s.name == catalog_->p_instance_of_) {
+      Handle type = store_->Resolve(s.value);
+      types->push_back(type);
+    }
+  }
+
+  // Build type closure.
+  int current = 0;
+  while (current < types->size()) {
+    Frame f(store_, (*types)[current++]);
+    if (catalog_->IsBaseItem(f.handle())) continue;
+    for (const Slot &s : f) {
+      if (s.name != catalog_->p_subclass_of_) continue;
+
+      // Check if new item is already known.
+      Handle newitem = store_->Resolve(s.value);
+      bool known = false;
+      for (Handle h : *types) {
+        if (newitem == h) {
+          known = true;
+          break;
+        }
+      }
+      if (!known) types->push_back(newitem);
+    }
   }
 }
 
@@ -217,6 +307,65 @@ void Facts::AddFact(Handle value) {
   Handle fact = store_->AllocateArray(begin, end);
   list_.push_back(fact);
   pop();
+}
+
+Taxonomy::Taxonomy(const FactCatalog *catalog, const std::vector<Text> &types) {
+  catalog_ = catalog;
+  for (Text type : types) {
+    Handle t = catalog->store_->LookupExisting(type);
+    if (t.IsNil()) {
+      LOG(WARNING) << "Ignoring unknown type in taxonomy: " << type;
+      continue;
+    }
+    typemap_[t] = typemap_.size();
+  }
+}
+
+Handle Taxonomy::Classify(const Frame &item) {
+  // Get immediate types for item.
+  Handles types(item.store());
+  Store *store = item.store();
+  for (const Slot &s : item) {
+    if (s.name == catalog_->p_instance_of_) {
+      Handle type = store->Resolve(s.value);
+      types.push_back(type);
+    }
+  }
+
+  // Run over type closure to find the type with the lowest rank.
+  int rank = typemap_.size();
+  Handle best = Handle::nil();
+  int current = 0;
+  while (current < types.size()) {
+    // Check if type is the highest ranked type so far.
+    Frame type(store, types[current++]);
+    auto f = typemap_.find(type.handle());
+    if (f != typemap_.end()) {
+      if (f->second < rank) {
+        rank = f->second;
+        best = type.handle();
+      }
+      continue;
+    }
+
+    // Recurse into the subclass-of relation.
+    for (const Slot &s : type) {
+      if (s.name != catalog_->p_subclass_of_) continue;
+
+      // Check if new type is already known.
+      Handle newtype = store->Resolve(s.value);
+      bool known = false;
+      for (Handle h : types) {
+        if (newtype == h) {
+          known = true;
+          break;
+        }
+      }
+      if (!known) types.push_back(newtype);
+    }
+  }
+
+  return best;
 }
 
 }  // namespace nlp

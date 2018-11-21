@@ -193,19 +193,13 @@ std::vector<string> FrameEvaluation::EvaluateAndSummarize(
   Evaluate(&commons, gold_file_pattern, test_file_pattern, &eval);
 
   // Write output to output_file.
-  std::vector<string> lines;
-  eval.mention.ToText("SPAN", &lines);
-  eval.frame.ToText("FRAME", &lines);
-  eval.type.ToText("TYPE", &lines);
-  eval.role.ToText("ROLE", &lines);
-  eval.label.ToText("LABEL", &lines);
-  eval.slot.ToText("SLOT", &lines);
-  eval.combined.ToText("COMBINED", &lines);
-  lines.emplace_back(StrCat("#GOLDEN_SPANS\t", eval.num_golden_spans));
-  lines.emplace_back(StrCat("#PREDICTED_SPANS\t", eval.num_predicted_spans));
-  lines.emplace_back(StrCat("#GOLDEN_FRAMES\t", eval.num_golden_frames));
-  lines.emplace_back(StrCat("#PREDICTED_FRAMES\t", eval.num_predicted_frames));
+  Scores scores;
+  eval.GetScores(&scores);
 
+  std::vector<string> lines;
+  for (auto &score : scores) {
+    lines.emplace_back(StrCat(score.first, "\t", score.second));
+  }
   return lines;
 }
 
@@ -222,18 +216,32 @@ void FrameEvaluation::EvaluateAndWrite(const string &commons_file,
   f->Close();
 }
 
-void FrameEvaluation::Benchmark::ToText(const string &name,
-                                        std::vector<string> *lines) const {
+void FrameEvaluation::Benchmark::GetScores(const string &name,
+                                           Scores *scores) const {
   double p = precision.accuracy();
   double r = recall.accuracy();
   double f1 = fscore();
-  lines->emplace_back(StrCat(name, "_P+", "\t", precision.correct));
-  lines->emplace_back(StrCat(name, "_P-", "\t", precision.wrong));
-  lines->emplace_back(StrCat(name, "_R+", "\t", recall.correct));
-  lines->emplace_back(StrCat(name, "_R-", "\t", recall.wrong));
-  lines->emplace_back(StrCat(name, "_Precision", "\t", p * 100.0));
-  lines->emplace_back(StrCat(name, "_Recall", "\t", r * 100.0));
-  lines->emplace_back(StrCat(name, "_F1", "\t", f1 * 100.0));
+  scores->emplace_back(StrCat(name, "_P+"), precision.correct);
+  scores->emplace_back(StrCat(name, "_P-"), precision.wrong);
+  scores->emplace_back(StrCat(name, "_R+"), recall.correct);
+  scores->emplace_back(StrCat(name, "_R-"), recall.wrong);
+  scores->emplace_back(StrCat(name, "_Precision"), p * 100.0);
+  scores->emplace_back(StrCat(name, "_Recall"), r * 100.0);
+  scores->emplace_back(StrCat(name, "_F1"), f1 * 100.0);
+}
+
+void FrameEvaluation::Output::GetScores(Scores *scores) const {
+  mention.GetScores("SPAN", scores);
+  frame.GetScores("FRAME", scores);
+  type.GetScores("TYPE", scores);
+  role.GetScores("ROLE", scores);
+  label.GetScores("LABEL", scores);
+  slot.GetScores("SLOT", scores);
+  combined.GetScores("COMBINED", scores);
+  scores->emplace_back("#GOLDEN_SPANS", num_golden_spans);
+  scores->emplace_back("#PREDICTED_SPANS", num_predicted_spans);
+  scores->emplace_back("#GOLDEN_FRAMES", num_golden_frames);
+  scores->emplace_back("#PREDICTED_FRAMES", num_predicted_frames);
 }
 
 void FrameEvaluation::GetMentionMap(

@@ -44,6 +44,7 @@ cc_library(
     "//sling/nlp/kb:calendar",
     "//sling/nlp/kb:facts",
     "//sling/nlp/parser",
+    "//sling/nlp/parser/trainer:frame-evaluation",
     "//sling/nlp/wiki:wikidata-converter",
     "//sling/task:dashboard",
     "//sling/task:job",

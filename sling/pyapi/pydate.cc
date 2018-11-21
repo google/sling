@@ -38,9 +38,11 @@ void PyDate::Define(PyObject *module) {
   InitType(&type, "sling.Date", sizeof(PyDate), true);
   type.tp_init = method_cast<initproc>(&PyDate::Init);
   type.tp_dealloc = method_cast<destructor>(&PyDate::Dealloc);
+  type.tp_str = method_cast<reprfunc>(&PyDate::Str);
   type.tp_members = members;
 
   methods.Add("iso", &PyDate::ISO);
+  methods.Add("value", &PyDate::Value);
   type.tp_methods = methods.table();
 
   RegisterType(&type, module, "Date");
@@ -54,31 +56,42 @@ void PyDate::Define(PyObject *module) {
 }
 
 int PyDate::Init(PyObject *args, PyObject *kwds) {
-  // Get argument.
-  PyObject *time = nullptr;
-  if (!PyArg_ParseTuple(args, "|O", &time)) return -1;
-
-  if (time == Py_None) {
-    // Return empty date.
+  // Get arguments.
+  if (PyTuple_Size(args) > 1) {
     date.year = date.month = date.day = 0;
-    date.precision = nlp::Date::NONE;
-  } else if (PyObject_TypeCheck(time, &PyFrame::type)) {
-    // Parse date from object.
-    PyFrame *frame = reinterpret_cast<PyFrame *>(time);
-    Store *store = frame->pystore->store;
-    date.Init(Object(store, store->Resolve(frame->handle())));
-  } else if (PyString_Check(time)) {
-    // Parse date from string.
-    char *data;
-    Py_ssize_t length;
-    PyString_AsStringAndSize(time, &data, &length);\
-    date.ParseFromString(Text(data, length));
-  } else if (PyInt_Check(time)) {
-    // Parse date from number.
-    date.ParseFromNumber(PyInt_AsLong(time));
+    date.precision = nlp::Date::DAY;
+    if (!PyArg_ParseTuple(args, "ii|i", &date.year, &date.month, &date.day)) {
+      return -1;
+    }
+    if (date.day == 0) date.precision = nlp::Date::MONTH;
+    if (date.month == 0) date.precision = nlp::Date::YEAR;
+    if (date.year == 0) date.precision = nlp::Date::NONE;
   } else {
-    PyErr_SetString(PyExc_ValueError, "Cannot create date from value");
-    return -1;
+    PyObject *time = nullptr;
+    if (!PyArg_ParseTuple(args, "|O", &time)) return -1;
+
+    if (time == nullptr) {
+      // Return empty date.
+      date.year = date.month = date.day = 0;
+      date.precision = nlp::Date::NONE;
+    } else if (PyObject_TypeCheck(time, &PyFrame::type)) {
+      // Parse date from object.
+      PyFrame *frame = reinterpret_cast<PyFrame *>(time);
+      Store *store = frame->pystore->store;
+      date.Init(Object(store, store->Resolve(frame->handle())));
+    } else if (PyString_Check(time)) {
+      // Parse date from string.
+      char *data;
+      Py_ssize_t length;
+      PyString_AsStringAndSize(time, &data, &length);\
+      date.ParseFromString(Text(data, length));
+    } else if (PyInt_Check(time)) {
+      // Parse date from number.
+      date.ParseFromNumber(PyInt_AsLong(time));
+    } else {
+      PyErr_SetString(PyExc_ValueError, "Cannot create date from value");
+      return -1;
+    }
   }
 
   return 0;
@@ -88,9 +101,18 @@ void PyDate::Dealloc() {
   Free();
 }
 
+PyObject *PyDate::Str() {
+  return AllocateString(nlp::Calendar::DateString(date));
+}
+
+PyObject *PyDate::Value() {
+  int number = nlp::Calendar::DateNumber(date);
+  if (number != -1) return PyInt_FromLong(number);
+  return AllocateString(date.ISO8601());
+}
+
 PyObject *PyDate::ISO() {
-  string str = date.ISO8601();
-  return PyString_FromStringAndSize(str.data(), str.size());
+  return AllocateString(date.ISO8601());
 }
 
 void PyCalendar::Define(PyObject *module) {
@@ -98,8 +120,6 @@ void PyCalendar::Define(PyObject *module) {
   type.tp_init = method_cast<initproc>(&PyCalendar::Init);
   type.tp_dealloc = method_cast<destructor>(&PyCalendar::Dealloc);
 
-  methods.AddO("str", &PyCalendar::Str);
-  methods.AddO("value", &PyCalendar::Value);
   methods.AddO("day", &PyCalendar::Day);
   methods.AddO("month", &PyCalendar::Month);
   methods.AddO("year", &PyCalendar::Year);
@@ -115,7 +135,7 @@ int PyCalendar::Init(PyObject *args, PyObject *kwds) {
   // Get store argument.
   pystore = nullptr;
   if (!PyArg_ParseTuple(args, "O", &pystore)) return -1;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return -1;
+  if (!PyStore::TypeCheck(pystore)) return -1;
 
   // Initialize calendar.
   Py_INCREF(pystore);
@@ -135,18 +155,7 @@ PyObject *PyCalendar::Str(PyObject *obj) {
   PyDate *pydate = GetDate(obj);
   if (pydate == nullptr) return nullptr;
 
-  string str = calendar->DateAsString(pydate->date);
-  return PyString_FromStringAndSize(str.data(), str.size());
-}
-
-PyObject *PyCalendar::Value(PyObject *obj) {
-  PyDate *pydate = GetDate(obj);
-  if (pydate == nullptr) return nullptr;
-
-  int number = nlp::Calendar::DateNumber(pydate->date);
-  if (number != -1) return PyInt_FromLong(number);
-  string ts = nlp::Calendar::DateString(pydate->date);
-  return PyString_FromStringAndSize(ts.data(), ts.size());
+  return AllocateString(calendar->DateAsString(pydate->date));
 }
 
 PyObject *PyCalendar::Day(PyObject *obj) {

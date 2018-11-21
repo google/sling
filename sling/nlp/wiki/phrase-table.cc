@@ -39,6 +39,19 @@ void PhraseTable::Load(Store *store, const string &filename) {
   entity_table_->resize(entity_index_.size());
 }
 
+Handle PhraseTable::GetEntityHandle(int index) {
+  Handle handle = (*entity_table_)[index];
+  if (handle.IsNil()) {
+    const EntityItem *entity = entity_index_.GetEntity(index);
+    handle = store_->LookupExisting(entity->id());
+    if (handle.IsNil()) {
+      VLOG(1) << "Cannot resolve " << entity->id() << " in phrase table";
+    }
+    (*entity_table_)[index] = handle;
+  }
+  return handle;
+}
+
 void PhraseTable::Lookup(uint64 fp, Handles *matches) {
   matches->clear();
   int bucket = fp % phrase_index_.num_buckets();
@@ -49,15 +62,7 @@ void PhraseTable::Lookup(uint64 fp, Handles *matches) {
       const EntityPhrase *entities = phrase->entities();
       for (int i = 0; i < phrase->num_entities(); ++i) {
         int index = entities[i].index;
-        Handle handle = (*entity_table_)[index];
-        if (handle.IsNil()) {
-          const EntityItem *entity = entity_index_.GetEntity(index);
-          handle = store_->LookupExisting(entity->id());
-          if (handle.IsNil()) {
-            VLOG(1) << "Cannot resolve " << entity->id() << " in phrase table";
-          }
-          (*entity_table_)[index] = handle;
-        }
+        Handle handle = GetEntityHandle(index);
         matches->push_back(handle);
       }
       break;
@@ -76,17 +81,12 @@ void PhraseTable::Lookup(uint64 fp, MatchList *matches) {
       const EntityPhrase *entities = phrase->entities();
       for (int i = 0; i < phrase->num_entities(); ++i) {
         int index = entities[i].index;
-        int count = entities[i].count;
-        Handle handle = (*entity_table_)[index];
-        if (handle.IsNil()) {
-          const EntityItem *entity = entity_index_.GetEntity(index);
-          handle = store_->LookupExisting(entity->id());
-          if (handle.IsNil()) {
-            VLOG(1) << "Cannot resolve " << entity->id() << " in phrase table";
-          }
-          (*entity_table_)[index] = handle;
-        }
-        matches->emplace_back(handle, count);
+        Text id = entity_index_.GetEntityId(index);
+        Handle handle = GetEntityHandle(index);
+        int count = entities[i].count();
+        int form = entities[i].form();
+        bool reliable = entities[i].reliable();
+        matches->emplace_back(id, handle, count, form, reliable);
       }
       break;
     }
@@ -96,4 +96,3 @@ void PhraseTable::Lookup(uint64 fp, MatchList *matches) {
 
 }  // namespace nlp
 }  // namespace sling
-

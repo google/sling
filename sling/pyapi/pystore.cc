@@ -65,7 +65,7 @@ int PyStore::Init(PyObject *args, PyObject *kwds) {
   // Create new store.
   if (globals != nullptr) {
     // Check that argument is a store.
-    if (!PyObject_TypeCheck(globals, &type)) return -1;
+    if (!PyStore::TypeCheck(globals)) return -1;
 
     // Check that global has been frozen.
     if (!globals->store->frozen()) {
@@ -111,7 +111,7 @@ PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
   static const char *kwlist[] = {"file", "binary", "snapshot", nullptr};
   PyObject *file = nullptr;
   bool force_binary = false;
-  bool snapshot = false;
+  bool snapshot = true;
   bool ok = PyArg_ParseTupleAndKeywords(
                 args, kw, "O|bb", const_cast<char **>(kwlist),
                 &file, &force_binary, &snapshot);
@@ -630,27 +630,28 @@ void SerializationFlags::InitPrinter(Printer *printer) {
   printer->set_shallow(shallow);
   printer->set_global(global);
   printer->set_byref(byref);
+  printer->set_utf8(utf8);
 }
 
 PyObject *SerializationFlags::ParseArgs(PyObject *args, PyObject *kw) {
   static const char *kwlist[] = {
-    "file", "binary", "global", "shallow", "byref", "pretty", nullptr
+    "file", "binary", "global", "shallow", "byref", "pretty", "utf8", nullptr
   };
   PyObject *file = nullptr;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "O|bbbbb", const_cast<char **>(kwlist),
-                &file, &binary, &global, &shallow, &byref, &pretty);
+                args, kw, "O|bbbbbb", const_cast<char **>(kwlist),
+                &file, &binary, &global, &shallow, &byref, &pretty, &utf8);
   if (!ok) return nullptr;
   return file;
 }
 
 bool SerializationFlags::ParseFlags(PyObject *args, PyObject *kw) {
   static const char *kwlist[] = {
-    "binary", "global", "shallow", "byref", "pretty", nullptr
+    "binary", "global", "shallow", "byref", "pretty", "utf8", nullptr
   };
   return PyArg_ParseTupleAndKeywords(
-      args, kw, "|bbbbb", const_cast<char **>(kwlist),
-      &binary, &global, &shallow, &byref, &pretty);
+      args, kw, "|bbbbbb", const_cast<char **>(kwlist),
+      &binary, &global, &shallow, &byref, &pretty, &utf8);
 }
 
 }  // namespace sling

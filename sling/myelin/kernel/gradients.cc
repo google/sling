@@ -95,7 +95,7 @@ void div_grad(Flow::Operation *op, Gradients *g) {
   g->add(y, g->Mul(g->d(z), g->Div(g->Neg(g->v(z)), g->v(y))));
 }
 
-// y = x^ 2
+// y = x^2
 // dx = 2 * x * dy
 void square_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];

@@ -237,7 +237,9 @@ class Runtime {
   virtual int ExtraInstanceData(Cell *cell) { return 0; }
 
   // Copy constant tensor to device.
-  virtual DevicePtr CopyTensorToDevice(const Tensor *tensor) { return DEVICE_NULL; }
+  virtual DevicePtr CopyTensorToDevice(const Tensor *tensor) {
+    return DEVICE_NULL;
+  }
 
   // Remove constant tensor from device.
   virtual void RemoveTensorFromDevice(const Tensor *tensor) {}

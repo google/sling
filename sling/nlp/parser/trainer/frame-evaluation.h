@@ -50,6 +50,10 @@ class FrameEvaluation {
   // Pair of frames.
   typedef std::pair<Handle, Handle> FramePair;
 
+  // Named scores.
+  typedef std::pair<string, float> Score;
+  typedef std::vector<Score> Scores;
+
   // Hasher for Span.
   struct SpanHash {
     size_t operator()(const Span &span) const {
@@ -127,8 +131,8 @@ class FrameEvaluation {
     Metric recall;
     Metric precision;
 
-    // Textualizes benchmark in 'lines'.
-    void ToText(const string &name, std::vector<string> *lines) const;
+    // Get scores for benchmark.
+    void GetScores(const string &name, Scores *scores) const;
   };
 
   // Holds evaluation output.
@@ -147,6 +151,9 @@ class FrameEvaluation {
     int64 num_predicted_spans = 0;
     int64 num_golden_frames = 0;
     int64 num_predicted_frames = 0;
+
+    // Get evaluation scores.
+    void GetScores(Scores *scores) const;
   };
 
   // Evaluates parallel corpus (gold and test) and returns the evaluation in

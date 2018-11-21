@@ -482,5 +482,48 @@ bool UTF8::Any(const char *s, int len, int mask) {
   return false;
 }
 
-}  // namespace sling
+CaseForm UTF8::Case(const char *s, int len) {
+  // States:
+  //  0: no characters read.
+  //  1: first uppercase character read.
+  //  2: two or more uppercase letters read.
+  //  3: one or more lowercase letters read.
+  //  4: initial uppercase letter followed by lowercase letter(s) read.
+  //  5: mixed case.
+  static const int state_on_upper[] = {1, 2, 2, 5, 5, 5};
+  static const int state_on_lower[] = {3, 4, 5, 3, 4, 5};
+  static const CaseForm state_case[] = {
+    CASE_NONE, CASE_UPPER, CASE_UPPER, CASE_LOWER, CASE_CAPITAL, CASE_NONE
+  };
 
+  int state = 0;
+  const char *end = s + len;
+  while (s < end) {
+    uint8 c = *reinterpret_cast<const uint8 *>(s);
+    if (c & 0x80) break;
+    if (Unicode::IsLetter(c)) {
+      if (Unicode::IsUpper(c)) {
+        state = state_on_upper[state];
+      } else {
+        state = state_on_lower[state];
+      }
+    }
+    s++;
+  }
+
+  while (s < end) {
+    int code = Decode(s);
+    if (Unicode::IsLetter(code)) {
+      if (Unicode::IsUpper(code)) {
+        state = state_on_upper[state];
+      } else {
+        state = state_on_lower[state];
+      }
+    }
+    s = Next(s);
+  }
+
+  return state_case[state];
+}
+
+}  // namespace sling

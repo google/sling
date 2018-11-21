@@ -19,8 +19,63 @@
 namespace sling {
 
 // Python type declarations.
+PyTypeObject PyPhraseMatch::type;
+PyMethodTable PyPhraseMatch::methods;
 PyTypeObject PyPhraseTable::type;
 PyMethodTable PyPhraseTable::methods;
+
+void PyPhraseMatch::Define(PyObject *module) {
+  InitType(&type, "sling.api.PhraseMatch", sizeof(PyPhraseMatch), false);
+  type.tp_dealloc = method_cast<destructor>(&PyPhraseMatch::Dealloc);
+
+  methods.Add("id", &PyPhraseMatch::Id);
+  methods.Add("item", &PyPhraseMatch::Item);
+  methods.Add("form", &PyPhraseMatch::Form);
+  methods.Add("count", &PyPhraseMatch::Count);
+  methods.Add("reliable", &PyPhraseMatch::Reliable);
+  type.tp_methods = methods.table();
+
+  RegisterType(&type, module, "PhraseMatch");
+
+  RegisterEnum(module, "CASE_INVALID", CASE_INVALID);
+  RegisterEnum(module, "CASE_NONE", CASE_NONE);
+  RegisterEnum(module, "CASE_UPPER", CASE_UPPER);
+  RegisterEnum(module, "CASE_LOWER", CASE_LOWER);
+  RegisterEnum(module, "CASE_CAPITAL", CASE_CAPITAL);
+}
+
+int PyPhraseMatch::Init(PyStore *pystore,
+                        const nlp::PhraseTable::Match &match) {
+  pyitem = pystore->PyValue(match.item);
+  info = match;
+  return 0;
+}
+
+void PyPhraseMatch::Dealloc() {
+  Py_DECREF(pyitem);
+  Free();
+}
+
+PyObject *PyPhraseMatch::Id() {
+  return PyString_FromStringAndSize(info.id.data(), info.id.size());
+}
+
+PyObject *PyPhraseMatch::Item() {
+  Py_INCREF(pyitem);
+  return pyitem;
+}
+
+PyObject *PyPhraseMatch::Form() {
+  return PyInt_FromLong(info.form);
+}
+
+PyObject *PyPhraseMatch::Count() {
+  return PyInt_FromLong(info.count);
+}
+
+PyObject *PyPhraseMatch::Reliable() {
+  return PyBool_FromLong(info.reliable);
+}
 
 void PyPhraseTable::Define(PyObject *module) {
   InitType(&type, "sling.api.PhraseTable", sizeof(PyPhraseTable), true);
@@ -39,7 +94,7 @@ int PyPhraseTable::Init(PyObject *args, PyObject *kwds) {
   // Get store and phrase table file name.
   const char *filename = nullptr;
   if (!PyArg_ParseTuple(args, "Os", &pystore, &filename)) return -1;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return -1;
+  if (!PyStore::TypeCheck(pystore)) return -1;
   Py_INCREF(pystore);
 
   // Load phrase table.
@@ -57,7 +112,7 @@ int PyPhraseTable::Init(PyObject *args, PyObject *kwds) {
 void PyPhraseTable::Dealloc() {
   delete tokenizer;
   delete phrase_table;
-  Py_DECREF(pystore);
+  if (pystore) Py_DECREF(pystore);
   Free();
 }
 
@@ -97,14 +152,12 @@ PyObject *PyPhraseTable::Query(PyObject *obj) {
   // Create list of matching items.
   PyObject *result = PyList_New(matches.size());
   for (int i = 0; i < matches.size(); ++i) {
-    PyObject *match = PyTuple_New(2);
-    PyTuple_SetItem(match, 0, pystore->PyValue(matches[i].first));
-    PyTuple_SetItem(match, 1, PyInt_FromLong(matches[i].second));
-    PyList_SetItem(result, i, match);
+    PyPhraseMatch *match = PyObject_New(PyPhraseMatch, &PyPhraseMatch::type);
+    match->Init(pystore, matches[i]);
+    PyList_SetItem(result, i, match->AsObject());
   }
 
   return result;
 }
 
 }  // namespace sling
-

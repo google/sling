@@ -94,6 +94,11 @@ struct PyStore : public PyBase {
   // Global store or null if this is not a local store.
   PyStore *pyglobals;
 
+  // Type checking.
+  static bool TypeCheck(PyBase *object) {
+    return PyBase::TypeCheck(object, &type);
+  }
+
   // Registration.
   static PyTypeObject type;
   static PyMappingMethods mapping;
@@ -152,6 +157,7 @@ struct SerializationFlags {
   bool shallow = true;  // output frames with ids by reference
   bool byref = true;    // output anonymous frames by reference using index ids
   bool pretty = false;  // pretty print with indentation
+  bool utf8 = false;    // output strings in utf-8 encoding
 };
 
 }  // namespace sling

@@ -64,6 +64,27 @@ uint64 PhraseTokenizer::Fingerprint(Text text) const {
   return fp;
 }
 
+void PhraseTokenizer::FingerprintAndForm(Text text,
+                                         uint64 *fingerprint,
+                                         CaseForm *form) const {
+  *fingerprint = 1;
+  *form = CASE_INVALID;
+  Normalization normalization = normalization_;
+  tokenizer_.Tokenize(text,
+    [fingerprint, form, normalization](const Tokenizer::Token &t) {
+      uint64 fp = Fingerprinter::Fingerprint(t.text, normalization);
+      if (fp != 1) {
+        *fingerprint = Fingerprinter::Mix(fp, *fingerprint);
+        CaseForm token_form = UTF8::Case(t.text.data(), t.text.size());
+        if (*form == CASE_INVALID) {
+          *form = token_form;
+        } else if (*form != token_form) {
+          *form = CASE_NONE;
+        }
+      }
+    }
+  );
+}
+
 }  // namespace nlp
 }  // namespace sling
-

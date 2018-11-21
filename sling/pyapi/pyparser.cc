@@ -18,6 +18,7 @@
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/document/lex.h"
 #include "sling/nlp/parser/parser.h"
+#include "sling/nlp/parser/trainer/frame-evaluation.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/pyapi/pystore.h"
 
@@ -58,7 +59,7 @@ PyObject *PyTokenizer::Tokenize(PyObject *args) {
   PyStore *pystore;
   PyObject *text;
   if (!PyArg_ParseTuple(args, "OS", &pystore, &text)) return nullptr;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return nullptr;
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
   if (!pystore->Writable()) return nullptr;
 
   // Get text.
@@ -84,7 +85,7 @@ PyObject *PyTokenizer::Lex(PyObject *args) {
   PyStore *pystore;
   PyObject *lex;
   if (!PyArg_ParseTuple(args, "OS", &pystore, &lex)) return nullptr;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return nullptr;
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
   if (!pystore->Writable()) return nullptr;
 
   // Get text.
@@ -126,7 +127,7 @@ int PyParser::Init(PyObject *args, PyObject *kwds) {
   PyStore *pystore;
   char *filename;
   if (!PyArg_ParseTuple(args, "Os", &pystore, &filename)) return -1;
-  if (!PyObject_TypeCheck(pystore, &PyStore::type)) return -1;
+  if (!PyStore::TypeCheck(pystore)) return -1;
   if (!pystore->Writable()) return -1;
 
   // Save reference to store to keep it alive.
@@ -145,7 +146,7 @@ void PyParser::Dealloc() {
   delete parser;
 
   // Release reference to store.
-  Py_DECREF(pystore);
+  if (pystore) Py_DECREF(pystore);
 
   // Free object.
   Free();
@@ -155,7 +156,7 @@ PyObject *PyParser::Parse(PyObject *args) {
   // Get arguments.
   PyFrame *pyframe;
   if (!PyArg_ParseTuple(args, "O", &pyframe)) return nullptr;
-  if (!PyObject_TypeCheck(pyframe, &PyFrame::type)) return nullptr;
+  if (!PyFrame::TypeCheck(pyframe)) return nullptr;
   if (!pyframe->pystore->Writable()) return nullptr;
 
   // Initialize document.
@@ -173,7 +174,7 @@ PyObject *PyToLex(PyObject *self, PyObject *args) {
   // Get arguments.
   PyFrame *pyframe;
   if (!PyArg_ParseTuple(args, "O", &pyframe)) return nullptr;
-  if (!PyObject_TypeCheck(pyframe, &PyFrame::type)) return nullptr;
+  if (!PyFrame::TypeCheck(pyframe)) return nullptr;
 
   // Initialize document from frame.
   Frame top(pyframe->pystore->store, pyframe->handle());
@@ -184,6 +185,32 @@ PyObject *PyToLex(PyObject *self, PyObject *args) {
 
   // Return LEX representation.
   return PyString_FromStringAndSize(lex.data(), lex.size());
+}
+
+PyObject *PyEvaluateFrames(PyObject *self, PyObject *args) {
+  // Get arguments.
+  PyStore *pystore;
+  const char *golden;
+  const char *test;
+  if (!PyArg_ParseTuple(args, "Oss", &pystore, &golden, &test)) return nullptr;
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
+
+  // Run frame evaluation.
+  nlp::FrameEvaluation::Output eval;
+  nlp::FrameEvaluation::Evaluate(pystore->store, golden, test, &eval);
+  nlp::FrameEvaluation::Scores scores;
+  eval.GetScores(&scores);
+
+  // Return list of benchmark scores.
+  PyObject *result = PyList_New(scores.size());
+  for (int i = 0; i < scores.size(); ++i) {
+    PyObject *score = PyTuple_New(2);
+    PyTuple_SetItem(score, 0, PyBase::AllocateString(scores[i].first));
+    PyTuple_SetItem(score, 1, PyFloat_FromDouble(scores[i].second));
+    PyList_SetItem(result, i, score);
+  }
+
+  return result;
 }
 
 }  // namespace sling

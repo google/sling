@@ -16,6 +16,8 @@
 
 import sling
 
+evaluate_frames = sling.api.evaluate_frames
+
 # Global tokenizer.
 tokenizer = None
 

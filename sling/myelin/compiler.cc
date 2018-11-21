@@ -12,33 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+
 #include "sling/myelin/compiler.h"
 
 #include "sling/base/flags.h"
 #include "sling/base/logging.h"
 #include "sling/base/perf.h"
+#include "sling/file/file.h"
 #include "sling/myelin/compute.h"
 #include "sling/myelin/elf-linker.h"
 #include "sling/myelin/flow.h"
 #include "sling/myelin/graph.h"
 #include "sling/myelin/profile.h"
 #include "sling/myelin/cuda/cuda-runtime.h"
-#include "sling/myelin/kernel/tensorflow.h"
 #include "sling/myelin/kernel/cuda.h"
+#include "sling/myelin/kernel/dragnn.h"
+#include "sling/myelin/kernel/tensorflow.h"
 
 DEFINE_string(cpu, "", "Enable/disable CPU features");
 DEFINE_bool(gpu, false, "Run kernels on GPU");
 DEFINE_bool(profile, false, "Profile neural network computations");
 DEFINE_string(input_flow, "", "File for saving raw input flow");
 DEFINE_string(final_flow, "", "File for saving final analyzed flow");
-DEFINE_string(input_graph, "", "File for saving raw input flow as DOT file");
-DEFINE_string(final_graph, "", "File for saving analyzed flow as DOT file");
+DEFINE_string(input_dot, "", "File for saving raw input flow as DOT file");
+DEFINE_string(input_graph, "", "File for saving raw input flow as SVG file");
+DEFINE_string(final_graph, "", "File for saving analyzed flow as SVG file");
+DEFINE_string(final_dot, "", "File for saving analyzed flow as DOT file");
 DEFINE_string(jit_code, "", "File for saving JIT generated code");
 DEFINE_bool(dump_input_flow, false, "Dump raw input flow to log");
 DEFINE_bool(dump_final_flow, false, "Dump final analyzed flow to log");
 DEFINE_bool(dump_cells, false, "Dump cells after compilation");
+DEFINE_bool(dump_code, false, "Dump generated assembly code");
 DEFINE_bool(check_flow_consistency, false, "Check that flow is consistent");
 DEFINE_bool(dynamic_instance_allocation, false, "Dynamic instance allocation");
+DEFINE_bool(dragnn, false, "Use DRAGNN kernels");
 
 namespace sling {
 namespace myelin {
@@ -48,17 +58,27 @@ static myelin::CUDARuntime cudart;
 
 Compiler::Compiler() {
   // Register standard kernels.
-  RegisterTensorflowLibrary(&library_);
+  library_ = new Library();
+  RegisterTensorflowLibrary(library_);
 
   // Parse CPU feature flags and enable/disable CPU features.
   if (!FLAGS_cpu.empty()) SetCPUFeatures(FLAGS_cpu);
 
   // Initialize CUDA runtime and register CUDA kernels in GPU mode.
   if (FLAGS_gpu) {
-    RegisterCUDALibrary(&library_);
+    RegisterCUDALibrary(library_);
     cudart.Connect();
     runtime_ = &cudart;
   }
+
+  // Add extra kernels.
+  if (FLAGS_dragnn) RegisterDragnnLibrary(library_);
+}
+
+Compiler::~Compiler() {
+  // Kernel library cannot be deallocated when profiling is enabled since the
+  // profiler needs to be able to access the registered kernels.
+  if (!FLAGS_profile) delete library_;
 }
 
 void Compiler::Compile(Flow *flow, Network *net) {
@@ -73,13 +93,10 @@ void Compiler::Compile(Flow *flow, Network *net) {
   }
 
   // Optionally output DOT file for input.
-  if (!FLAGS_input_graph.empty()) {
-    GraphOptions opts;
-    FlowToDotGraphFile(*flow, opts, FLAGS_input_graph);
-  }
+  WriteGraph(*flow, FLAGS_input_dot, FLAGS_input_graph);
 
   // Analyze flow.
-  flow->Analyze(library_);
+  flow->Analyze(*library_);
 
   // Optionally dump final flow.
   if (FLAGS_dump_final_flow) {
@@ -91,11 +108,8 @@ void Compiler::Compile(Flow *flow, Network *net) {
     flow->Save(FLAGS_final_flow);
   }
 
-  // Optionally output DOT file for final flow.
-  if (!FLAGS_final_graph.empty()) {
-    GraphOptions opts;
-    FlowToDotGraphFile(*flow, opts, FLAGS_final_graph);
-  }
+  // Optionally output graph for final flow.
+  WriteGraph(*flow, FLAGS_final_dot, FLAGS_final_graph);
 
   // Optionally check flow consistency.
   if (FLAGS_check_flow_consistency) {
@@ -118,13 +132,13 @@ void Compiler::Compile(Flow *flow, Network *net) {
 
   // Compile flow to network.
   ElfLinker linker;
-  if (!FLAGS_jit_code.empty()) {
+  if (!FLAGS_jit_code.empty() || FLAGS_dump_code) {
     net->set_linker(&linker);
   }
   if (FLAGS_dynamic_instance_allocation) {
     net->options().dynamic_allocation = true;
   }
-  CHECK(net->Compile(*flow, library_));
+  CHECK(net->Compile(*flow, *library_));
 
   // Optionally dump cells to log.
   if (FLAGS_dump_cells) {
@@ -134,9 +148,64 @@ void Compiler::Compile(Flow *flow, Network *net) {
   }
 
   // Optionally output generated code to ELF file.
-  if (!FLAGS_jit_code.empty()) {
+  if (!FLAGS_jit_code.empty() || FLAGS_dump_code) {
+    // Link code.
     linker.Link();
-    linker.Write(FLAGS_jit_code.c_str());
+
+    if (!FLAGS_jit_code.empty()) {
+      // Write ELF object file.
+      linker.Write(FLAGS_jit_code.c_str());
+    } else {
+      // Output code to temporary file.
+      char tmpname[PATH_MAX];
+      const char *tmpdir = getenv("TMPDIR");
+      if (tmpdir == nullptr) tmpdir = "/tmp";
+      strcpy(tmpname, tmpdir);
+      strcat(tmpname, "/jitcode.XXXXXX");
+      int fd = mkstemp(tmpname);
+
+      // Write code to temporary file.
+      linker.Write(tmpname);
+
+      // Run objdump to output assembly.
+      fflush(stdout);
+      fflush(stderr);
+      string cmd = "objdump -xrtdw -C -M intel --no-show-raw-insn ";
+      cmd.append(tmpname);
+      int rc = system(cmd.c_str());
+      if (rc != 0) LOG(WARNING) << "Error dumping jit code";
+
+      // Remove temporary file.
+      close(fd);
+      unlink(tmpname);
+    }
+  }
+}
+
+void Compiler::WriteGraph(const Flow &flow,
+                          const string &dot,
+                          const string &svg) {
+  if (dot.empty() && svg.empty()) return;
+
+  // Generate GraphViz DOT script.
+  GraphOptions opts;
+  string graph = FlowToDotGraph(flow, opts);
+
+  // Write DOT file.
+  if (!dot.empty()) {
+    CHECK(File::WriteContents(dot, graph));
+  }
+
+  // Produce SVG by piping DOT script through dot program.
+  if (!svg.empty()) {
+    string cmd = "dot -T svg -o " + svg;
+    FILE *dotpgm = popen(cmd.c_str(), "w");
+    if (dotpgm == nullptr) {
+      LOG(WARNING) << "Error running dot program";
+    } else {
+      fwrite(graph.data(), graph.size(), 1, dotpgm);
+      pclose(dotpgm);
+    }
   }
 }
 
@@ -155,7 +224,7 @@ void LogProfile(const Network &net) {
 void SetCPUFeatures(const string &features) {
   const char *p = features.c_str();
 
-  if (*p == '0') {
+  if (*p != 0 && *p != '+' && *p != '-') {
     // Disable all features initially.
     jit::CPU::Disable(jit::SSE);
     jit::CPU::Disable(jit::SSE2);

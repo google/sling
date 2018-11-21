@@ -32,6 +32,13 @@
     source: /w/item
     target: /w/item
   }
+
+  role: {=/w/item/popularity :slot
+    name: "item popularity"
+    description: "Popularity of item"
+    source: /w/item
+    target: int
+  }
 }
 
 {=/w/property +slot +/w/entity :schema

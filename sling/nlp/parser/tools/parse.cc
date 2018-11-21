@@ -121,7 +121,7 @@ class ParserEvaulationCorpus : public ParallelCorpus {
  private:
   Store *commons_;           // commons store
   const Parser *parser_;     // parser being evaluated
-  DocumentSource *corpus_;   // evaulation corpus with golden annotations
+  DocumentSource *corpus_;   // evaluation corpus with golden annotations
   int num_documents_ = 0;    // number of documents processed
 };
 
@@ -233,16 +233,10 @@ int main(int argc, char *argv[]) {
     ParserEvaulationCorpus corpus(&commons, &parser, FLAGS_corpus);
     FrameEvaluation::Output eval;
     FrameEvaluation::Evaluate(&corpus, &eval);
-
-    std::vector<string> report;
-    eval.mention.ToText("SPAN", &report);
-    eval.frame.ToText("FRAME", &report);
-    eval.type.ToText("TYPE", &report);
-    eval.role.ToText("ROLE", &report);
-    eval.label.ToText("LABEL", &report);
-    eval.slot.ToText("SLOT", &report);
-    eval.combined.ToText("COMBINED", &report);
-    for (const auto &l : report) std::cout << l << "\n";
+    FrameEvaluation::Scores scores;
+    for (const auto &score : scores) {
+      std::cout << score.first << "=" << score.second << "\n";
+    }
   }
 
   // Output profile report.

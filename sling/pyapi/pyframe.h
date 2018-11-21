@@ -98,8 +98,19 @@ struct PyFrame : public PyBase, public Root {
   // Dereference frame reference.
   FrameDatum *frame() { return pystore->store->Deref(handle())->AsFrame(); }
 
+  // Return frame object.
+  Frame AsFrame() { return Frame(pystore->store, handle_); }
+
   // Store for frame.
   PyStore *pystore;
+
+  // Type checking.
+  static bool TypeCheck(PyBase *object) {
+    return PyBase::TypeCheck(object, &type);
+  }
+  static bool TypeCheck(PyObject *object) {
+    return PyBase::TypeCheck(object, &type);
+  }
 
   // Registration.
   static PyTypeObject type;
