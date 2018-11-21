@@ -78,8 +78,11 @@ sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
 ```
 
 **NOTE:**
-*  In case you are using an older version of GCC (< v5), you may want to comment
-out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
+* In case you are using an older version of GCC (< v5), you may want to comment
+  out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
 * We currently do not support OSX, but you can check out
   [issue #189](https://github.com/google/sling/issues/189) for help on building
   on OSX.
+* Similarly, we do not support Windows, but you can check out
+  [issue #296](https://github.com/google/sling/issues/296) for help on
+  building SLING on Windows Subsystem for Linux (WSL).
