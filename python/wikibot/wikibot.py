@@ -36,6 +36,17 @@ flags.define("--test",
              default=False,
              action='store_true')
 
+flags.define("--batch",
+             help="number of records to update",
+             default=3,
+             type=int)
+
+flags.define("--input",
+             help="File in 'local/data/e/wikibot/' to process",
+             default="birth-dates",
+             type=str)
+
+
 precision_map = {
   sling.MILLENNIUM: pywikibot.WbTime.PRECISION['millenia'],
   sling.CENTURY: pywikibot.WbTime.PRECISION['century'],
@@ -52,10 +63,10 @@ class StoreFactsBot:
 
     time_str = datetime.datetime.now().isoformat("-")[:19].replace(":","-")
     if flags.arg.test:
-      record_file_name = "local/data/e/wikibot/test-birth-dates.rec"
+      record_file_name = "local/data/e/wikibot/test-" + flags.arg.input + ".rec"
       time_str = "test-" + time_str
     else:
-      record_file_name = "local/data/e/wikibot/birth-dates.rec"
+      record_file_name = "local/data/e/wikibot/" + flags.arg.input + ".rec"
     status_file_name = "local/logs/wikibotlog-" + time_str + ".rec"
     self.record_file = sling.RecordReader(record_file_name)
     self.status_file = sling.RecordWriter(status_file_name)
@@ -186,7 +197,7 @@ class StoreFactsBot:
 
 
   def run(self):
-    self.store_records(self.record_file, batch_size=100)
+    self.store_records(self.record_file, flags.arg.batch)
 
 if __name__ == '__main__':
   flags.parse()

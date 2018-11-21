@@ -18,6 +18,7 @@ import pywikibot
 import sling
 import sling.flags as flags
 import glob
+import datetime
 
 flags.define("--test",
              help="use test record file",
@@ -60,12 +61,16 @@ class WikiMonitor:
     errors = 0
     deleted = 0
     changed = 0
+    redirected = 0
+    updates = {}
     for r_file in files:
       file_no += 1
       print "Processing file {:4d} of {} ({})".format(file_no,
                                                       no_of_files,
                                                       r_file)
+      print r_file
       reader = sling.RecordReader(r_file)
+      last_updated = updated
       for item_str, record in reader:
         rec = rs.parse(record)
         status = rec[self.n_status]
@@ -78,6 +83,9 @@ class WikiMonitor:
           continue
         updated += 1
         wd_item = pywikibot.ItemPage(self.repo, item_str)
+        if wd_item.isRedirectPage():
+          redirected += 1
+          continue
         wd_claims = wd_item.get().get('claims')
         facts = rec[self.n_facts]
         for prop, val in facts:
@@ -97,11 +105,26 @@ class WikiMonitor:
               print "Error: Unknown claim type", claim.type
               continue
             if not wd_claim.target_equals(target):
+              print item_str, target, wd_claim.target
               changed += 1
       reader.close()
+      print updated - last_updated
+      f = r_file.split("-")
+      date = int(f[1] + f[2] + f[3])
+      if date not in updates: updates[date] = 0
+      updates[date] += (updated - last_updated)
     print skipped, "skipped,", updated, "updated,", deleted, "deleted,", \
       changed, "changed,", errors, "error records in file"
     print "Done processing last file"
+    # Print number of accumulated updates over time
+    first = min(updates)
+    acc_upd = 0
+    d = datetime.date(first / 10000, (first % 10000) / 100, first % 100)
+    while d <= datetime.date.today():
+      num = d.year * 10000 + d.month * 100 + d.day
+      if num in updates: acc_upd += updates[num]
+      print d.strftime("%Y-%m-%d") + "," + str(acc_upd)
+      d += datetime.timedelta(days = 1)
 
   def run(self):
     self.process_log_data(glob.glob(self.pattern))
