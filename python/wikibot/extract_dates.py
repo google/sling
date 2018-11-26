@@ -56,7 +56,6 @@ class ExtractDates:
     self.category = self.kb["category"]
     self.method = self.kb["method"]
 
-    self.calendar = sling.Calendar(self.kb)
     self.names = sling.PhraseTable(self.kb,
                                    "local/data/e/wiki/en/phrase-table.repo")
     self.kb.freeze()
@@ -179,7 +178,7 @@ class ExtractDates:
       records += 1
 
       facts = store.frame({
-        self.inception: self.calendar.value(sling.Date(inc_date))
+        self.inception: sling.Date(inc_date).value()
       })
       provenance = store.frame({
         self.category: inc_cat,
@@ -217,7 +216,7 @@ class ExtractDates:
       records += 1
       store = sling.Store(self.kb)
       facts = store.frame({
-        self.date_of_death: self.calendar.value(sling.Date(death_date))
+        self.date_of_death: sling.Date(death_date).value()
       })
       provenance = store.frame({
         self.category: death_cat,
@@ -255,7 +254,7 @@ class ExtractDates:
       records += 1
       store = sling.Store(self.kb)
       facts = store.frame({
-        self.date_of_birth: self.calendar.value(sling.Date(birth_date))
+        self.date_of_birth: sling.Date(birth_date).value()
       })
       provenance = store.frame({
         self.category: birth_cat,
