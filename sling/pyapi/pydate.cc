@@ -102,13 +102,13 @@ void PyDate::Dealloc() {
 }
 
 PyObject *PyDate::Str() {
-  return AllocateString(nlp::Calendar::DateString(date));
+  return AllocateString(date.AsString());
 }
 
 PyObject *PyDate::Value() {
-  int number = nlp::Calendar::DateNumber(date);
+  int number = date.AsNumber();
   if (number != -1) return PyInt_FromLong(number);
-  return AllocateString(date.ISO8601());
+  return AllocateString(date.AsString());
 }
 
 PyObject *PyDate::ISO() {

@@ -159,6 +159,84 @@ string Date::ISO8601() const {
   return str;
 }
 
+int Date::AsNumber() const {
+  if (year < 1000 || year > 9999) return -1;
+  switch (precision) {
+    case NONE:
+      return -1;
+    case MILLENNIUM: {
+      int mille = year > 0 ? (year - 1) / 1000 : (year + 1) / 1000;
+      if (mille < 0) return -1;
+      return mille;
+    }
+    case CENTURY: {
+      int cent = (year - 1) / 100;
+      if (cent < 10) return -1;
+      return cent;
+    }
+    case DECADE:
+      return year / 10;
+    case YEAR:
+      return year;
+    case MONTH:
+      return year * 100 + month;
+    case DAY:
+      return year * 10000 + month * 100 + day;
+  }
+
+  return -1;
+}
+
+string Date::AsString() const {
+  char str[16];
+  *str = 0;
+  if (year >= -9999 && year <= 9999 && year != 0) {
+    switch (precision) {
+      case NONE: break;
+      case MILLENNIUM:
+        if (year > 0) {
+          int mille = (year - 1) / 1000;
+          CHECK_GE(mille, 0) << year;
+          CHECK_LE(mille, 9) << year;
+          sprintf(str, "+%01d***", mille);
+        } else {
+          int mille = (year + 1) / -1000;
+          CHECK_GE(mille, 0) << year;
+          CHECK_LE(mille, 9) << year;
+          sprintf(str, "-%01d***", mille);
+        }
+        break;
+      case CENTURY:
+        if (year > 0) {
+          int cent = (year - 1) / 100;
+          CHECK_GE(cent, 0) << year;
+          CHECK_LE(cent, 99) << year;
+          sprintf(str, "+%02d**", cent);
+        } else {
+          int cent = (year + 1) / -100;
+          CHECK_GE(cent, 0) << year;
+          CHECK_LE(cent, 99) << year;
+          sprintf(str, "-%02d**", cent);
+        }
+        break;
+      case DECADE:
+        sprintf(str, "%+04d*", year / 10);
+        break;
+      case YEAR:
+        sprintf(str, "%+05d", year);
+        break;
+      case MONTH:
+        sprintf(str, "%+05d-%02d", year, month);
+        break;
+      case DAY:
+        sprintf(str, "%+05d-%02d-%02d", year, month, day);
+        break;
+    }
+  }
+
+  return str;
+}
+
 void Calendar::Init(Store *store) {
   // Get symbols.
   store_ = store;
@@ -336,86 +414,6 @@ Text Calendar::ItemName(Handle item) const {
   if (!store_->IsString(name)) return "";
   StringDatum *str = store_->GetString(name);
   return str->str();
-}
-
-int Calendar::DateNumber(const Date &date) {
-  int year = date.year;
-  if (year < 1000 || year > 9999) return -1;
-  switch (date.precision) {
-    case Date::NONE:
-      return -1;
-    case Date::MILLENNIUM: {
-      int mille = year > 0 ? (year - 1) / 1000 : (year + 1) / 1000;
-      if (mille < 0) return -1;
-      return mille;
-    }
-    case Date::CENTURY: {
-      int cent = (year - 1) / 100;
-      if (cent < 10) return -1;
-      return cent;
-    }
-    case Date::DECADE:
-      return year / 10;
-    case Date::YEAR:
-      return year;
-    case Date::MONTH:
-      return date.year * 100 + date.month;
-    case Date::DAY:
-      return date.year * 10000 + date.month * 100 + date.day;
-  }
-
-  return -1;
-}
-
-string Calendar::DateString(const Date &date) {
-  char str[16];
-  *str = 0;
-  int year = date.year;
-  if (year >= -9999 && year <= 9999 && year != 0) {
-    switch (date.precision) {
-      case Date::NONE: break;
-      case Date::MILLENNIUM:
-        if (year > 0) {
-          int mille = (year - 1) / 1000;
-          CHECK_GE(mille, 0) << year;
-          CHECK_LE(mille, 9) << year;
-          sprintf(str, "+%01d***", mille);
-        } else {
-          int mille = (year + 1) / -1000;
-          CHECK_GE(mille, 0) << year;
-          CHECK_LE(mille, 9) << year;
-          sprintf(str, "-%01d***", mille);
-        }
-        break;
-      case Date::CENTURY:
-        if (year > 0) {
-          int cent = (year - 1) / 100;
-          CHECK_GE(cent, 0) << year;
-          CHECK_LE(cent, 99) << year;
-          sprintf(str, "+%02d**", cent);
-        } else {
-          int cent = (year + 1) / -100;
-          CHECK_GE(cent, 0) << year;
-          CHECK_LE(cent, 99) << year;
-          sprintf(str, "-%02d**", cent);
-        }
-        break;
-      case Date::DECADE:
-        sprintf(str, "%+04d*", year / 10);
-        break;
-      case Date::YEAR:
-        sprintf(str, "%+05d", year);
-        break;
-      case Date::MONTH:
-        sprintf(str, "%+05d-%02d", date.year, date.month);
-        break;
-      case Date::DAY:
-        sprintf(str, "%+05d-%02d-%02d", date.year, date.month, date.day);
-        break;
-    }
-  }
-
-  return str;
 }
 
 }  // namespace nlp

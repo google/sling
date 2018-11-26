@@ -52,6 +52,19 @@ class Date {
   // Date in  ISO 8601 format, e.g. "+2013-05-01T00:00:00Z" is May 1, 2013.
   string ISO8601() const;
 
+  // Convert date to integer or return -1 if the date cannot be encoded as an
+  // integer. This can only be used for dates after 1000 AD.
+  int AsNumber() const;
+
+  // Convert date to string format. The date format depends on the precision:
+  // DAY:        [+|-]YYYY-MM-DD
+  // MONTH:      [+|-]YYYY-MM
+  // YEAR:       [+|-]YYYY
+  // DECADE:     [+|-]YYY*
+  // CENTURY:    [+|-]YY**
+  // MILLENNIUM: [+|-]Y***
+  string AsString() const;
+
   // Year or 0 if date is invalid.
   int year = 0;
 
@@ -76,19 +89,6 @@ class Calendar {
   string DateAsString(const Object &object) const {
     return DateAsString(Date(object));
   }
-
-  // Convert date to integer or return -1 if the date cannot be encoded as an
-  // integer. This can only be used for dates after 1000 AD.
-  static int DateNumber(const Date &date);
-
-  // Convert date to string format. The date format depends on the precision:
-  // DAY:        [+|-]YYYY-MM-DD
-  // MONTH:      [+|-]YYYY-MM
-  // YEAR:       [+|-]YYYY
-  // DECADE:     [+|-]YYY*
-  // CENTURY:    [+|-]YY**
-  // MILLENNIUM: [+|-]Y***
-  static string DateString(const Date &date);
 
   // Get item for day.
   Handle Day(const Date &date) const;

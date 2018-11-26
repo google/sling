@@ -358,9 +358,9 @@ Handle WikidataConverter::ConvertTime(const Frame &value) {
   date.precision = date_precision[value.GetInt(s_precision_, 11)];
 
   // Convert timestamp to simplified integer or string format.
-  int number = Calendar::DateNumber(date);
+  int number = date.AsNumber();
   if (number != -1) return Handle::Integer(number);
-  string ts = Calendar::DateString(date);
+  string ts = date.AsString();
   if (!ts.empty()) return store->AllocateString(ts);
   return timestamp.handle();
 }
