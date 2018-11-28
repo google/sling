@@ -450,6 +450,7 @@ RecordDatabase::RecordDatabase(const string &filepattern,
   for (const string &filename : filenames) {
     RecordReader *reader = new RecordReader(filename, options);
     RecordIndex *index = new RecordIndex(reader, options);
+    reader->Rewind();
     shards_.push_back(index);
   }
 }
@@ -459,6 +460,7 @@ RecordDatabase::RecordDatabase(const std::vector<string> &filenames,
   for (const string &filename : filenames) {
     RecordReader *reader = new RecordReader(filename, options);
     RecordIndex *index = new RecordIndex(reader, options);
+    reader->Rewind();
     shards_.push_back(index);
   }
 }

@@ -5,8 +5,8 @@
 }
 
 .themes {
-  display: flex;
-  background: #eeeeee;
+  margin-top: 10px;
+
 }
 
 .text-and-panels {
@@ -17,6 +17,21 @@
 
 .title {
   font: 20pt bold arial, helvetica;
+}
+
+.titlelink {
+  color: black;
+  text-decoration: none;
+}
+
+.titlelink:link {
+  color: black;
+  text-decoration: none;
+}
+
+.titlelink:visited {
+  color: black;
+  text-decoration: none;
 }
 
 a {
@@ -85,6 +100,7 @@ a:visited {
   box-shadow: 1px 1px 1px 0px #808080;
   white-space: nowrap;
   cursor: pointer;
+  display:inline-block;
 }
 
 .type-label {
@@ -190,6 +206,7 @@ a:visited {
   position: relative;
   padding: 0px 2px 0px 2px;
   cursor: pointer;
+  word-wrap: break-word;
 }
 
 .b2 {
@@ -201,6 +218,7 @@ a:visited {
   position: relative;
   padding: 0px 2px 0px 2px;
   cursor: pointer;
+  word-wrap: break-word;
 }
 
 .b3 {
@@ -212,6 +230,7 @@ a:visited {
   position: relative;
   padding: 0px 2px 0px 2px;
   cursor: pointer;
+  word-wrap: break-word;
 }
 
 .callout {

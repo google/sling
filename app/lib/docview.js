@@ -114,7 +114,8 @@ export class DocumentViewer extends Component {
       if (doc.url) {
         elements.push(
           h("h3", {class: "title"},
-            h("a", {href: doc.url}, doc.title)
+            h("a", {href: doc.url, class: "titlelink", target: "_blank"},
+              doc.title)
            )
          );
       } else {
@@ -190,13 +191,12 @@ export class DocumentViewer extends Component {
         elements.push(h("span", attrs, subelements));
       }
     }
+    elements.push(h("div", {id: "themes" + this.docno(), class: "themes"}));
 
-    // Render document viewer with text to the left, panels to the right,
-    // and themes above.
+    // Render document viewer with text to the left, panels to the right.
     let key = "doc-" + this.docno();
     return (
       h(Grid, {class: "docviewer", key},
-        h("div", {id: "themes" + this.docno(), class: "themes"}),
         h("div", {class: "text-and-panels"}),
           h("div", {id: "text" + this.docno(),  class: "doctext", key},
             elements
@@ -347,7 +347,7 @@ export class DocumentViewer extends Component {
     tbl.className = "tfs";
     tbl.setAttribute("frame", fidx);
 
-    if (frame.name || frame.types.length > 0) {
+    if (frame.name || frame.id || frame.types.length > 0) {
       let hdr = document.createElement("tr");
       tbl.appendChild(hdr);
 
@@ -355,8 +355,8 @@ export class DocumentViewer extends Component {
       title.colSpan = 3;
       hdr.appendChild(title);
 
-      if (frame.name) {
-        let name = document.createTextNode(frame.name);
+      if (frame.name || frame.id) {
+        let name = document.createTextNode(frame.name ? frame.name : frame.id);
         if (frame.id) {
           if (this.IsExternal(frame)) {
             let a = document.createElement("a");
@@ -481,7 +481,8 @@ export class DocumentViewer extends Component {
       for (let i = 0; i < slots.length; i += 2) {
         let n = slots[i];
         let v = slots[i + 1];
-        if (this.document.frames[n].id == "evokes") {
+        if (this.document.frames[n].id == "evokes" ||
+            this.document.frames[n].id == "is") {
           let avm = this.BuildAVM(v, {});
           contents.appendChild(avm);
         }
@@ -729,7 +730,7 @@ export class DocumentViewer extends Component {
 
     this.highlighted = [];
     this.labeled = [];
-    HighlightFrames([fidx]);
+    this.HighlightFrames([fidx]);
     this.LabelMentionedRoles(fidx);
   }
 

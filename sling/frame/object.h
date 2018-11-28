@@ -156,7 +156,7 @@ class SharedNames : public Names {
   void Release() const { if (refs_.fetch_sub(1) == 1) delete this; }
 
  protected:
-  ~SharedNames() { CHECK_EQ(refs_, 0); }
+  virtual ~SharedNames() { CHECK_EQ(refs_, 0); }
 
  private:
   // Reference count.

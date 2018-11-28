@@ -62,7 +62,7 @@ struct PyJob : public PyBase {
   // Get string attribute for object.
   static const char *PyStrAttr(PyObject *obj, const char *name);
 
-  // Get string attribute for object.
+  // Get integer attribute for object.
   static int PyIntAttr(PyObject *obj, const char *name);
 
   // Get attribute for object. Returns new reference.

@@ -208,7 +208,7 @@ class RecordReader : public RecordFile {
   Status Close();
 
   // Return true if we have read all records in the file.
-  bool Done() { return position_ == size_; }
+  bool Done() { return position_ >= size_; }
 
   // Read next record from record file.
   Status Read(Record *record);

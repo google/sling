@@ -192,10 +192,10 @@ enum CaseForm {
   CASE_NONE    = 0,   // indeterminate or mixed case
   CASE_UPPER   = 1,   // uppercase, e.g. abbreviation
   CASE_LOWER   = 2,   // lowercase, e.g. common noun
-  CASE_CAPITAL = 3,   // capitalized, e.g. proper noun
+  CASE_TITLE   = 3,   // titlecase, e.g. proper noun
 };
 
-static const int NUM_FORMS = 4;
+static const int NUM_CASE_FORMS = 4;
 
 // UTF-8 string categorization and conversion.
 class UTF8 {

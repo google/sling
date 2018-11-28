@@ -404,6 +404,16 @@ void Tokenizer::Tokenize(Text text, const Callback &callback) const {
       token.brk = NO_BREAK;
     }
 
+    // Make a period followed by a lowercase letter conditional.
+    if (t.at(i) == '.') {
+      int k = j;
+      while (k < t.length() && t.is(k, CHAR_SPACE)) k++;
+      if (t.is(k, CHAR_LETTER) && !t.is(k, CHAR_UPPER)) {
+        t.clear(i, TOKEN_EOS);
+        t.set(i, TOKEN_CONDEOS);
+      }
+    }
+
     // Check for conditional end-of-sentence tokens. These must be followed by
     // an uppercase letter in order to be regarded as end-of-sentence markers.
     if (t.is(i, TOKEN_CONDEOS)) {

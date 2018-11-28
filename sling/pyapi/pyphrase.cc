@@ -41,7 +41,7 @@ void PyPhraseMatch::Define(PyObject *module) {
   RegisterEnum(module, "CASE_NONE", CASE_NONE);
   RegisterEnum(module, "CASE_UPPER", CASE_UPPER);
   RegisterEnum(module, "CASE_LOWER", CASE_LOWER);
-  RegisterEnum(module, "CASE_CAPITAL", CASE_CAPITAL);
+  RegisterEnum(module, "CASE_TITLE", CASE_TITLE);
 }
 
 int PyPhraseMatch::Init(PyStore *pystore,

@@ -126,6 +126,9 @@ class TokenizerText {
   // Sets a flag for an element.
   void set(int index, TokenFlags flags) { elements_[index].flags |= flags; }
 
+  // Clears a flag for an element.
+  void clear(int index, TokenFlags flags) { elements_[index].flags &= ~flags; }
+
   // Returns the Unicode character at some position in the text.
   char32 at(int index) const { return elements_[index].ch; }
 

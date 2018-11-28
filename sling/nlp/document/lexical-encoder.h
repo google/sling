@@ -44,7 +44,7 @@ class LexicalFeatures {
   // Lexical feature specification. Feature is disabled if dimension is zero.
   struct Spec {
     LexiconSpec lexicon;                // lexicon specification
-    int word_dim = 32;                  // word emmedding dimensions
+    int word_dim = 32;                  // word embedding dimensions
     int prefix_dim = 16;                // prefix embedding dimensions
     int suffix_dim = 16;                // prefix embedding dimensions
     int hyphen_dim = 2;                 // hyphenation embedding dimensions

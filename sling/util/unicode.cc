@@ -493,7 +493,7 @@ CaseForm UTF8::Case(const char *s, int len) {
   static const int state_on_upper[] = {1, 2, 2, 5, 5, 5};
   static const int state_on_lower[] = {3, 4, 5, 3, 4, 5};
   static const CaseForm state_case[] = {
-    CASE_NONE, CASE_UPPER, CASE_UPPER, CASE_LOWER, CASE_CAPITAL, CASE_NONE
+    CASE_NONE, CASE_UPPER, CASE_UPPER, CASE_LOWER, CASE_TITLE, CASE_NONE
   };
 
   int state = 0;

@@ -58,7 +58,7 @@ class CorpusBrowser : public DocumentService {
     // Fetch document from database.
     Record record;
     if (!FetchRecord(docid, &record)) {
-      response->SendError(400, nullptr, "unknown document");
+      response->SendError(404, nullptr, "unknown document");
       return;
     }
 

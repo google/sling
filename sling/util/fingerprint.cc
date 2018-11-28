@@ -46,8 +46,7 @@ uint64 Fingerprint(const char *bytes, size_t len) {
   }
   uint64 residual = 0;
   while (bytes < end) {
-    residual <<= 8;
-    residual |= *bytes;
+    residual = residual << 8 | *reinterpret_cast<const uint8 *>(bytes);
     bytes++;
   }
 
