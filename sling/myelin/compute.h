@@ -52,6 +52,7 @@ enum Placement {NOWHERE = 0x0, HOST = 0x1, DEVICE = 0x2, EVERYWHERE = 0x3};
 // Pointer to data in device memory.
 typedef uint64 DevicePtr;
 #define DEVICE_NULL 0
+const size_t NOOFFSET = -1;
 
 // Minimum data alignment.
 static const int kMinDataAlignment = sizeof(void *);
@@ -251,6 +252,12 @@ class Runtime {
     return nullptr;
   }
 
+  // Fetch data block from device. Caller takes ownership of the returned
+  // data buffer.
+  virtual char *FetchDataFromDevice(DevicePtr data, size_t size) {
+    return nullptr;
+  }
+
   // Generate code for transferring data between host and device.
   virtual void EmitTensorTransfers(const Transfers &xfers,
                                    Cell *cell,
@@ -432,12 +439,12 @@ class Tensor {
   // Size (in bytes) of elements in tensor.
   int element_size() const { return TypeTraits::of(type_).size(); }
 
-  // Offset in data instance block. Return -1 for constants and tensors that
-  // are not stored on the host.
+  // Offset in data instance block. Return NOOFFSET for constants and tensors
+  // that are not stored on the host.
   size_t offset() const { return offset_; }
 
-  // Offset in device data instance block. Return -1 for tensors that are not
-  // stored in the instance block on the device.
+  // Offset in device data instance block. Return NOOFFSET for tensors that are
+  // not stored in the instance block on the device.
   size_t device_offset() const { return device_offset_; }
 
   // Number bytes allocated for tensor in instance. This takes references into
@@ -507,6 +514,9 @@ class Tensor {
   // Return tensor placement.
   Placement placement() const { return placement_; }
 
+  // Return tensor reference placement.
+  Placement ref_placement() const { return ref_placement_; }
+
   // Add location for placement.
   void AddPlace(Placement place) {
     placement_ = static_cast<Placement>(placement_ | place);
@@ -515,6 +525,11 @@ class Tensor {
   // Add new location for current placement.
   void AddNewPlace(Placement place) {
     current_placement_ = static_cast<Placement>(current_placement_ | place);
+  }
+
+  // Add new location for referenced data.
+  void AddRefPlace(Placement place) {
+    ref_placement_ = static_cast<Placement>(ref_placement_ | place);
   }
 
   // Return the task index for consumers of this tensor or -1 if tensor is
@@ -587,10 +602,10 @@ class Tensor {
 
  private:
   // Offset in data instance block.
-  size_t offset_ = -1;
+  size_t offset_ = NOOFFSET;
 
   // Offset in device data instance block.
-  size_t device_offset_ = -1;
+  size_t device_offset_ = NOOFFSET;
 
   // Tensor name.
   string name_;
@@ -643,10 +658,10 @@ class Tensor {
   // or learnable tensors that need to be accessed from the device.
   DevicePtr device_data_ = DEVICE_NULL;
 
-  // Constant tensors are global and cannot be modifed.
+  // Constant tensors are global and cannot be modified.
   bool constant_ = false;
 
-  // Initialize tensor with random values from normal distrubution.
+  // Initialize tensor with random values from normal distribution.
   bool random_init_ = false;
 
   // Local tensors are allocated in the instance data block.
@@ -677,6 +692,9 @@ class Tensor {
 
   // Deferred placement for outputs from asynchronous steps.
   Placement deferred_placement_ = NOWHERE;
+
+  // Placement for data referenced by a reference tensor.
+  Placement ref_placement_ = NOWHERE;
 
   friend class Network;
   friend class InstanceAllocator;
@@ -826,10 +844,15 @@ class Channel {
   int size() const { return size_; }
 
   // Return placement of channel.
-  Placement placement() const { return format_->placement(); }
+  Placement placement() const {
+    return format_->ref() ? format_->ref_placement() : format_->placement();
+  }
 
   // Return runtime for channel.
   inline Runtime *runtime() const;
+
+  // Return tensor format for channel elements.
+  const Tensor *format() const { return format_; }
 
   // Return contents of channel as string.
   string ToString() const;

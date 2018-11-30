@@ -151,7 +151,7 @@ char *CUDARuntime::AllocateChannel(char *data,
                                    size_t new_size,
                                    size_t alignment,
                                    Placement placement) {
-  if (placement == DEVICE) {
+  if (placement & DEVICE) {
     // Allocate channel in device memory.
     if (new_size == 0) return nullptr;
     DevicePtr buffer;
@@ -175,7 +175,7 @@ char *CUDARuntime::AllocateChannel(char *data,
 
 void CUDARuntime::ClearChannel(char *data, size_t pos,
                                size_t size, Placement placement) {
-  if (placement == DEVICE) {
+  if (placement & DEVICE) {
     CHECK_CUDA(cuMemsetD8(reinterpret_cast<DevicePtr>(data + pos), 0, size));
   } else {
     memset(data + pos, 0, size);
@@ -183,7 +183,7 @@ void CUDARuntime::ClearChannel(char *data, size_t pos,
 }
 
 void CUDARuntime::FreeChannel(char *data, Placement placement) {
-  if (placement == DEVICE) {
+  if (placement & DEVICE) {
     if (data != nullptr) {
       CHECK_CUDA(cuMemFree(reinterpret_cast<DevicePtr>(data)));
     }
@@ -240,10 +240,17 @@ char *CUDARuntime::FetchTensorFromDevice(const Instance *data,
     CUDAInstance *rt = reinterpret_cast<CUDAInstance *>(data->data());
     CHECK(rt != nullptr);
     size_t offset = tensor->device_offset();
-    CHECK_NE(offset, -1);
+    CHECK_NE(offset, NOOFFSET);
     CHECK_CUDA(cuMemcpyDtoH(dest, rt->data + offset, tensor->space()));
   }
 
+  return dest;
+}
+
+char *CUDARuntime::FetchDataFromDevice(DevicePtr data, size_t size) {
+  if (data == DEVICE_NULL) return nullptr;
+  char *dest = reinterpret_cast<char *>(malloc(size));
+  CHECK_CUDA(cuMemcpyDtoH(dest, data, size));
   return dest;
 }
 

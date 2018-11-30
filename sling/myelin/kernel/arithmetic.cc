@@ -584,8 +584,29 @@ class ExpressionTransformer : public Transformer {
       }
     }
     for (Flow::Variable *v : second->outputs) {
-      // Map output from second op to a new output in the merged expression.
-      mapping[vars2[v]] = expr1.Variable(Express::OUTPUT, next_output++);
+      if (first->IsInput(v)) {
+        if (v->usages() == 1 && !v->out()) {
+          // First op is the only consumer of the output from the second op,
+          // so the output can be turned into a temporary variable.
+          int id = vars1[v]->id;
+          vars1[v]->type = Express::TEMP;
+          vars1[v]->id = -1;
+
+          // Adjust numbering of output variables from the second op.
+          next_output--;
+          for (auto *o : expr2.vars()) {
+            if (o->type == Express::OUTPUT && o->id > id) {
+              o->id--;
+            }
+          }
+        }
+
+        // Map output from second op to input to first op.
+        mapping[vars2[v]] = vars1[v];
+      } else {
+        // Map output from second op to a new output in the merged expression.
+        mapping[vars2[v]] = expr1.Variable(Express::OUTPUT, next_output++);
+      }
     }
     expr1.CompactTempVars();
     expr2.CompactTempVars();

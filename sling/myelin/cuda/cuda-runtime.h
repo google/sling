@@ -89,6 +89,9 @@ class CUDARuntime : public Runtime {
   char *FetchTensorFromDevice(const Instance *data,
                               const Tensor *tensor) override;
 
+  // Fetch data block from device.
+  char *FetchDataFromDevice(DevicePtr data, size_t size) override;
+
   // Instance tensor copying.
   void EmitTensorTransfers(const Transfers &xfers,
                            Cell *cell,

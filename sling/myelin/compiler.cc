@@ -49,6 +49,9 @@ DEFINE_bool(dump_code, false, "Dump generated assembly code");
 DEFINE_bool(check_flow_consistency, false, "Check that flow is consistent");
 DEFINE_bool(dynamic_instance_allocation, false, "Dynamic instance allocation");
 DEFINE_bool(dragnn, false, "Use DRAGNN kernels");
+DEFINE_bool(sync_steps, false, "Synchronize all compute steps");
+DEFINE_bool(graph_all_vars, false, "Include all variables in DOT graph");
+DEFINE_string(graph_layout, "", "DOT graph layout");
 
 namespace sling {
 namespace myelin {
@@ -138,6 +141,8 @@ void Compiler::Compile(Flow *flow, Network *net) {
   if (FLAGS_dynamic_instance_allocation) {
     net->options().dynamic_allocation = true;
   }
+  if (FLAGS_sync_steps) net->options().sync_steps = true;
+
   CHECK(net->Compile(*flow, *library_));
 
   // Optionally dump cells to log.
@@ -189,6 +194,8 @@ void Compiler::WriteGraph(const Flow &flow,
 
   // Generate GraphViz DOT script.
   GraphOptions opts;
+  if (FLAGS_graph_all_vars) opts.include_intermediates = true;
+  if (!FLAGS_graph_layout.empty()) opts.direction = FLAGS_graph_layout.c_str();
   string graph = FlowToDotGraph(flow, opts);
 
   // Write DOT file.
@@ -221,6 +228,18 @@ void LogProfile(const Network &net) {
   }
 }
 
+string ProfileReport(const Network &net) {
+  string report;
+  if (net.options().global_profiler) {
+    for (const Cell *cell : net.cells()) {
+      Profile profile(cell->profile_summary());
+      report.append(profile.ASCIIReport());
+      report.append("\n");
+    }
+  }
+  return report;
+}
+
 void SetCPUFeatures(const string &features) {
   const char *p = features.c_str();
 
@@ -235,7 +254,6 @@ void SetCPUFeatures(const string &features) {
     jit::CPU::Disable(jit::AVX2);
     jit::CPU::Disable(jit::AVX512F);
     jit::CPU::Disable(jit::FMA3);
-    p++;
   }
 
   while (*p != 0) {

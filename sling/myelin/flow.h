@@ -57,8 +57,9 @@ enum Type {
 class TypeTraits {
  public:
   TypeTraits(Type type, const char *name, int size,
-             const char *ctype, const char *ptx)
-      : type_(type), name_(name), size_(size), ctype_(ctype), ptx_(ptx) {}
+             const char *ctype, const char *ptx, const char *pytype)
+      : type_(type), name_(name), size_(size),
+        ctype_(ctype), ptx_(ptx), pytype_(pytype) {}
 
   Type type() const { return type_; }
   const string &name() const { return name_; }
@@ -66,6 +67,9 @@ class TypeTraits {
   bool valid() const { return type_ != DT_INVALID; }
   const char *ctype() const { return ctype_; }
   const char *ptx() const { return ptx_; }
+  const char *pytype() const { return pytype_; }
+
+  // Return data formatted according to type.
   string str(const void *data) const;
 
   // Look up traits from type code.
@@ -75,11 +79,12 @@ class TypeTraits {
   static const TypeTraits &of(string &name);
 
  private:
-  Type type_;          // basic type
-  string name_;        // type name
-  size_t size_;        // size in bytes
-  const char *ctype_;  // C type
-  const char *ptx_;    // ptx type
+  Type type_;           // basic type
+  string name_;         // type name
+  size_t size_;         // size in bytes
+  const char *ctype_;   // C type
+  const char *ptx_;     // ptx type
+  const char *pytype_;  // Python type
 };
 
 // Look up traits from type.

@@ -201,9 +201,35 @@ class CPU {
   }
 
   // Cache line size.
-  static unsigned CacheLineSize() {
+  static uint32_t CacheLineSize() {
     Probe();
     return cache_line_size;
+  }
+
+  // Cache sizes.
+  static uint32_t L1CacheSize() {
+    Probe();
+    return l1_cache_size;
+  }
+  static uint32_t L2CacheSize() {
+    Probe();
+    return l2_cache_size;
+  }
+  static uint32_t L3CacheSize() {
+    Probe();
+    return l3_cache_size;
+  }
+
+  // Page size.
+  static uint32_t PageSize() {
+    Probe();
+    return page_size;
+  }
+
+  // Memory size.
+  static uint64_t MemorySize() {
+    Probe();
+    return memory_size;
   }
 
   // VZEROUPPER is only needed on some processors.
@@ -220,7 +246,18 @@ class CPU {
   static unsigned features;
 
   // Cache line size.
-  static unsigned cache_line_size;
+  static uint32_t cache_line_size;
+
+  // Cache sizes.
+  static uint32_t l1_cache_size;
+  static uint32_t l2_cache_size;
+  static uint32_t l3_cache_size;
+
+  // Page size.
+  static unsigned page_size;
+
+  // Physical memory.
+  static uint64_t memory_size;
 
   // VZEROUPPER needed on AVX/SSE transitions.
   static bool vzero_needed;

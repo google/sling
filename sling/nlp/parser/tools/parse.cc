@@ -234,6 +234,7 @@ int main(int argc, char *argv[]) {
     FrameEvaluation::Output eval;
     FrameEvaluation::Evaluate(&corpus, &eval);
     FrameEvaluation::Scores scores;
+    eval.GetScores(&scores);
     for (const auto &score : scores) {
       std::cout << score.first << "=" << score.second << "\n";
     }

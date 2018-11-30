@@ -31,6 +31,8 @@
 
 #include "third_party/jit/cpu.h"
 
+#include <unistd.h>
+
 #include "sling/base/logging.h"
 
 namespace sling {
@@ -38,7 +40,12 @@ namespace jit {
 
 bool CPU::initialized = false;
 unsigned CPU::features = 0;
-unsigned CPU::cache_line_size = 0;
+uint32_t CPU::cache_line_size = 0;
+uint32_t CPU::l1_cache_size = 0;
+uint32_t CPU::l2_cache_size = 0;
+uint32_t CPU::l3_cache_size = 0;
+uint32_t CPU::page_size = 0;
+uint64_t CPU::memory_size = 0;
 bool CPU::vzero_needed = false;
 
 static void __cpuid(int cpu_info[4], int info_type) {
@@ -286,6 +293,12 @@ void CPU::Initialize() {
   if (cpu.has_one_idiom()) features |= 1u << ONEIDIOM;
 
   cache_line_size = cpu.cache_line_size();
+  l1_cache_size = sysconf(_SC_LEVEL1_DCACHE_SIZE);
+  l2_cache_size = sysconf(_SC_LEVEL2_CACHE_SIZE);
+  l3_cache_size = sysconf(_SC_LEVEL3_CACHE_SIZE);
+  page_size = sysconf(_SC_PAGESIZE);
+  memory_size = sysconf(_SC_PHYS_PAGES);
+  memory_size *= page_size;
 
   // Check if vzeroupper is needed to avoid expensive state transitions. Based
   // on recommandations in:
