@@ -146,6 +146,8 @@ void PyRecordDatabase::Define(PyObject *module) {
 
   type.tp_init = method_cast<initproc>(&PyRecordDatabase::Init);
   type.tp_dealloc = method_cast<destructor>(&PyRecordDatabase::Dealloc);
+  type.tp_iter = method_cast<getiterfunc>(&PyRecordDatabase::Self);
+  type.tp_iternext = method_cast<iternextfunc>(&PyRecordDatabase::Next);
 
   methods.Add("close", &PyRecordDatabase::Close);
   methods.AddO("lookup", &PyRecordDatabase::Lookup);
@@ -198,6 +200,35 @@ PyObject *PyRecordDatabase::Lookup(PyObject *obj) {
   Record record;
   if (!db->Lookup(key, &record)) Py_RETURN_NONE;
   return PyString_FromStringAndSize(record.value.data(), record.value.size());
+}
+
+PyObject *PyRecordDatabase::Next() {
+  // Read next record.
+  Record record;
+  if (!db->Next(&record)) {
+    PyErr_SetNone(PyExc_StopIteration);
+    return nullptr;
+  }
+
+  // Create key and value tuple.
+  PyObject *k = Py_None;
+  PyObject *v = Py_None;
+  if (!record.key.empty()) {
+    k = PyString_FromStringAndSize(record.key.data(), record.key.size());
+  }
+  if (!record.value.empty()) {
+    v = PyString_FromStringAndSize(record.value.data(), record.value.size());
+  }
+  PyObject *pair = PyTuple_Pack(2, k, v);
+  if (k != Py_None) Py_DECREF(k);
+  if (v != Py_None) Py_DECREF(v);
+
+  return pair;
+}
+
+PyObject *PyRecordDatabase::Self() {
+  Py_INCREF(this);
+  return AsObject();
 }
 
 void PyRecordWriter::Define(PyObject *module) {
