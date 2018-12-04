@@ -32,7 +32,7 @@ Var = torch.autograd.Variable
 
 
 # Computes accuracy on the given dev set, using the given Caspar module.
-def dev_accuracy(commons_path, dev_path, tmp_folder, caspar):
+def dev_accuracy(dev_path, tmp_folder, caspar):
   dev = Corpora(dev_path, caspar.spec.commons)
   print "Annotating dev documents", now(), mem()
   test_path = os.path.join(tmp_folder, "dev.annotated.rec")
@@ -65,7 +65,7 @@ def dev_accuracy(commons_path, dev_path, tmp_folder, caspar):
 
   return utils.frame_evaluation(gold_corpus_path=dev_path, \
                                 test_corpus_path=test_path, \
-                                commons_path=commons_path)
+                                commons=caspar.spec.commons)
 
 
 # Training hyperparameters.

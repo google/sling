@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import os
-import psutil
+import resource
 import sling
-import subprocess
 
 from datetime import datetime
 
@@ -30,27 +29,16 @@ def check_present(args, ls):
 
 # Evaluates gold vs test documents, which are assumed to be aligned,
 # and returns a dict of their results.
-def frame_evaluation(gold_corpus_path, test_corpus_path, commons_path):
-  try:
-    output = subprocess.check_output(
-        ['bazel-bin/sling/nlp/parser/tools/evaluate-frames',
-         '--gold_documents=' + gold_corpus_path,
-         '--test_documents=' + test_corpus_path,
-         '--commons=' + commons_path],
-        stderr=subprocess.STDOUT)
-  except subprocess.CalledProcessError as e:
-    print("Evaluation failed: ", e.returncode, e.output)
-    return {'eval_metric': 0.0}
+def frame_evaluation(gold_corpus_path, test_corpus_path, commons):
+  metrics = sling.evaluate_frames(commons, gold_corpus_path, test_corpus_path)
 
   eval_output = {}
-  for line in output.splitlines():
-    line = line.rstrip()
-    print "Evaluation Metric: ", line
-    parts = line.split('\t')
-    assert len(parts) == 2, "%r" % line
-    eval_output[parts[0]] = float(parts[1])
-    if line.startswith("SLOT_F1"):
-      eval_output['eval_metric'] = float(parts[1])
+  for metric in metrics:
+    name = metric[0]
+    print "Evaluation Metric: ", metric
+    eval_output[name] = metric[1]
+    if name == "SLOT_F1":
+      eval_output['eval_metric'] = metric
 
   assert eval_output.has_key('eval_metric'), "%r" % str(eval_output)
   return eval_output
@@ -62,9 +50,7 @@ def now():
 
 
 def mem():
-  p = psutil.Process(os.getpid())
-  info = p.memory_info()
-  return "(rss=%r vms=%r)" % (info.rss, info.vms)
+  return "(rss=%r)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
 
 # Sets up commonly used command-line training flags.

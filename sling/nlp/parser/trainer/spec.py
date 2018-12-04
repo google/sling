@@ -126,7 +126,6 @@ class Spec:
 
     # Resources.
     self.commons = None
-    self.commons_path = None
     self.actions = None
     self.words = None
     self.suffix = None
@@ -177,8 +176,7 @@ class Spec:
     blob.add_attr("mark_distance_bins", ' '.join(bins))
 
     # Temporarily remove fields that can't or don't need to be pickled.
-    fields_to_ignore = [
-      'commons', 'commons_path', 'actions', 'words', 'suffix', 'cascade']
+    fields_to_ignore = [ 'commons', 'actions', 'words', 'suffix', 'cascade']
     cache = {}
     for k, v in self.__dict__.iteritems():
       if k in fields_to_ignore:
@@ -415,7 +413,6 @@ class Spec:
 
     # Load common store, but not freeze it yet. We will add the action table
     # and cascade specification to it.
-    self.commons_path = commons_path
     self.commons = sling.Store()
     self.commons.load(commons_path)
     schema = sling.DocumentSchema(self.commons)

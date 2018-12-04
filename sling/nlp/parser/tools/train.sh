@@ -77,7 +77,6 @@ echo $COMMAND > ${COMMAND_FILE}
 LOG_FILE="${OUTPUT_FOLDER}/log"
 echo "Logging will be teed to ${LOG_FILE}"
 
-bazel build -c opt sling/nlp/parser/tools:evaluate-frames
 bazel build -c opt sling/pyapi:pysling.so
 SLING_SYMLINK=/usr/local/lib/python2.7/dist-packages/sling
 if [ ! -e  $SLING_SYMLINK ];

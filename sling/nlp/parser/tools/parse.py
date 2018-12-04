@@ -72,7 +72,7 @@ def run(args):
     caspar.spec.commons.save(fname, binary=True)
     f.close()
     eval_result = frame_evaluation(gold_corpus_path=args.input, \
-        test_corpus_path=args.output, commons_path=fname)
+        test_corpus_path=args.output, commons=caspar.spec.commons)
     os.unlink(fname)
     return eval_result
 
