@@ -22,6 +22,18 @@ from flow import Flow
 DT_INT = "int32"
 DT_FLOAT = "float32"
 
+typemap = {
+  "f": "float32",
+  "d": "float64",
+  "i": "int32",
+  "l": "int32",
+  "B": "uint8",
+  "h": "int16",
+  "b": "int8",
+  "q": "int64",
+  "?": "bool",
+}
+
 class Builder:
   def __init__(self, flow, func):
     self.flow = flow
@@ -90,6 +102,15 @@ class Builder:
     var.data = value
     return var
 
+  def array(self, name, value):
+    # Make constant from object with buffer support.
+    view = memoryview(value)
+    dtype = typemap[view.format]
+    shape = list(view.shape)
+    var = self.flow.var(self.func.name + "/" + name, dtype, shape)
+    var.data = value
+    return var
+
   def opname(self, optype):
     name = self.func.name + '/' + optype
     if name not in self.flow.ops: return name
@@ -145,7 +166,7 @@ class Builder:
     inputs = [embedding, indices]
     if oov is not None:
       inputs.append(oov)
-    result = self.op('Gather', inputs, name)
+    result = self.op("Gather", inputs, name)
     result.type = embedding.type
     if len(embedding.shape) == 2 and len(indices.shape) == 2:
       result.shape = [indices.shape[1], embedding.shape[1]]
@@ -153,14 +174,23 @@ class Builder:
       result.shape = [0]
     return result
 
-  def gather_sum(self, embedding, indices, name=None):
-    result = self.op('GatherSum', [embedding, indices], name)
+  def pooling_gather(self, optype, embedding, indices, name=None):
+    result = self.op(optype, [embedding, indices], name)
     result.type = embedding.type
     if len(embedding.shape) == 2:
       result.shape = [1, embedding.shape[1]]
     else:
       result.shape = [0]
     return result
+
+  def gather_sum(self, embedding, indices, name=None):
+    return self.pooling_gather("GatherSum", embedding, indices, name)
+
+  def gather_max(self, embedding, indices, name=None):
+    return self.pooling_gather("GatherMax", embedding, indices, name)
+
+  def gather_avg(self, embedding, indices, name=None):
+    return self.pooling_gather("GatherAvg", embedding, indices, name)
 
   def matmul(self, x, y, name=None):
     result = self.op("MatMul", [x, y], name)
@@ -254,17 +284,28 @@ class Builder:
   def identity(self, x, name=None):
     return self.op("Identity", [x], name)
 
+  def reduce(self, optype, x, name=None):
+    v = self.op(optype, [x], name)
+    v.shape = []
+    return v
+
   def sum(self, x, name=None):
-    return self.op("Sum", [x], name)
+    return self.reduce("Sum", x, name)
 
   def product(self, x, name=None):
-    return self.op("Product", [x], name)
+    return self.reduce("Product", x, name)
 
   def min(self, x, name=None):
-    return self.op("Min", [x], name)
+    return self.reduce("Min", x, name)
 
   def max(self, x, name=None):
-    return self.op("Max", [x], name)
+    return self.reduce("Max", x, name)
+
+  def normalize(self, x, name=None):
+    return self.mul(x, self.rcp(self.sum(x)), name)
+
+  def softmax(self, x, name=None):
+    return self.normalize(self.exp(self.sub(x, self.max(x))), name)
 
   def ref(self, instance, var, name=None):
     r = self.op("Reference", [instance], name)

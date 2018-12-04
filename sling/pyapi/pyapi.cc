@@ -25,6 +25,7 @@
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pydate.h"
 #include "sling/pyapi/pyframe.h"
+#include "sling/pyapi/pymyelin.h"
 #include "sling/pyapi/pyparser.h"
 #include "sling/pyapi/pyphrase.h"
 #include "sling/pyapi/pyrecordio.h"
@@ -54,24 +55,38 @@ static PyMethodDef py_funcs[] = {
 
 static void RegisterPythonModule() {
   PyObject *module = Py_InitModule3("pysling", py_funcs, "SLING");
+
   PyStore::Define(module);
   PySymbols::Define(module);
   PyFrame::Define(module);
   PySlots::Define(module);
   PyArray::Define(module);
   PyItems::Define(module);
+
   PyTokenizer::Define(module);
+  PyParser::Define(module);
+
   PyPhraseMatch::Define(module);
   PyPhraseTable::Define(module);
-  PyParser::Define(module);
+
   PyRecordReader::Define(module);
-  PyRecordDatabase::Define(module);
   PyRecordWriter::Define(module);
+  PyRecordDatabase::Define(module);
+
   PyCalendar::Define(module);
   PyDate::Define(module);
+
   PyWikiConverter::Define(module);
   PyFactExtractor::Define(module);
   PyTaxonomy::Define(module);
+
+  PyCompiler::Define(module);
+  PyNetwork::Define(module);
+  PyCell::Define(module);
+  PyInstance::Define(module);
+  PyChannel::Define(module);
+  PyTensor::Define(module);
+
 #ifndef SLING_GOOGLE3
   PyJob::Define(module);
   PyResource::Define(module);

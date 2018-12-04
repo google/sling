@@ -112,11 +112,11 @@ void sqrt_grad(Flow::Operation *op, Gradients *g) {
 }
 
 // y = 1 / x
-// dx = -dy / x^2
+// dx = -dy / x^2 = -dy * y^2
 void reciprocal_grad(Flow::Operation *op, Gradients *g) {
   auto x = op->inputs[0];
   auto y = op->outputs[0];
-  g->add(x, g->Neg(g->Div(g->d(y), g->Square(g->v(x)))));
+  g->add(x, g->Neg(g->Mul(g->d(y), g->Square(g->v(y)))));
 }
 
 // y = -x

@@ -8,8 +8,9 @@ when generating the code so it can take advantage of specialized features like
 SSE, AVX, and FMA3.
 
 Myelin can be used at inference time (as opposed to training time) to speed up
-neural network computations. The neural network is stored in a _.flow_ file
-which is loaded and compiled into a _network_ at runtime by Myelin.
+neural network computations. The neural network can be stored in a _.flow_ file
+which can then later be loaded and compiled into a _network_ at runtime by
+Myelin.
 
 ## Platform
 
@@ -18,7 +19,216 @@ Languages: C++, assembler, Python<br>
 CPU: Intel x64 or compatible<br>
 Build system: Bazel<br>
 
-## Creating flow files
+## Using Myelin in Python
+
+Myelin represents a computation graph using a _flow_. The graph is divivded into
+_functions_ which can be computed independently. A function is a set of
+_operations_ with tensor inputs and outputs. The tensor inputs and outputs are
+_variables_ in the flow. Variables can either be global constant tensor, e.g.
+learned weights in a neural network, or parameter tensors, which are local to
+the function.
+
+### Building a flow
+
+Let's consider a simple neural network with a single linear layer with a
+softmax on top:
+```
+y = softmax(relu(x * W + b))
+```
+This can be computed with the following flow graph:
+
+![input flow](flowin.svg)
+
+The graph only shows the input and output variables (green and blue), and the
+global variables (rectangles), but does not show the intermediate variables
+between the tensor operations. The softmax is also expanded into more basic
+operations, i.e.:
+```
+softmax(x) = normalize(exp(x - max(x)))
+normalize(x) = x * (1 / sum(x))
+```
+You can use a `myelin.Builder` for constructing a flow function for this
+computation:
+
+```python
+import sling
+import sling.myelin as myelin
+import numpy as np
+
+# Build flow.
+flow = myelin.Flow()
+
+# Create builder for function.
+f = myelin.Builder(flow, "f")
+```
+
+The weights in W and b can be initialized from NumPy arrays or any other
+objects that support the
+[Python buffer protocol](https://docs.python.org/2/c-api/buffer.html):
+
+```python
+# Initialize weights.
+W = f.array("W", np.random.rand(64, 256).astype(np.float32))
+b = f.array("b", np.random.rand(256).astype(np.float32))
+```
+
+Next, we create an input variable `x` and build up the computation using the
+builder:
+
+```python
+# Create input variable x as a float[1,64] tensor.
+x = f.var("x", myelin.DT_FLOAT, [1, 64])
+
+# Compute y=softmax(relu(x * W + b))
+y = f.softmax(f.relu(f.add(f.matmul(x, W), b)), name="y")
+```
+
+### Compiling a flow into a network
+
+The flow is just a specification of the computation. It needs to be compiled
+into a _network_. The Myelin JIT compiler converts the flow into assembly
+code for executing the computation. Each function is compiled into a _cell_
+which contains the data layout for the cell as well as the code for the
+computation:
+
+```python
+# Compile flow to network.
+compiler = myelin.Compiler()
+net = compiler.compile(flow)
+cell = net.cell("f")
+```
+
+The flow is first analyzed by the Myelin JIT compiler which transforms the
+flow graph into an optimized form using more specialized operations:
+
+![output flow](flowout.svg)
+
+In this example, the `MatMul`, `Add`, and `Relu` operations are converted into
+a combined kernel doing all three in one operation. The `Exp`, `Sub`, and
+`Sum` operations are also turned into a `Calculate` operation computing
+`@0=Exp(Sub(%0,%1));@1=Sum(@0)` as one element-wise operation.
+
+For each function, the compiler determines the optimal layout of the cell
+instance data and selects kernels for implementing the operations and the
+order of computation:
+```
+cell f {  // size 2336
+  input var f/x: float32[1x64]     // offset 0 size 256 alignment 32 row-major
+  var f/Relu:0: float32[1x256]     // offset 256 size 1024 alignment 32 row-major
+  var f/Max:0: float32             // offset 1280 size 4 alignment 4 row-major linked to f/Sum:0
+    union f/Sum:0: float32         // offset 1280 size 4 alignment 4 row-major linked to f/Reciprocal:0
+    union f/Reciprocal:0: float32  // offset 1280 size 4 alignment 4 row-major linked to f/Max:0
+  var f/Exp:0: float32[1x256]      // offset 1312 size 1024 alignment 32 row-major linked to f/y:0
+    union f/y:0: float32[1x256]    // offset 1312 size 1024 alignment 32 row-major linked to f/Exp:0
+
+  const f/W: float32[64x256]       // size 65536 alignment 32 row-major
+  const f/b: float32[256]          // size 1024 alignment 32 row-major
+
+  f/Relu:0 = AVXFltVecMatMulAddRelu[U8V](f/x, f/W, f/b)
+  f/Max:0 = MaxExpr[VFltAVX256](f/Relu:0)
+  f/Exp:0, f/Sum:0 = Calculate[VFltAVX256](f/Relu:0, f/Max:0)
+  f/Reciprocal:0 = ReciprocalExpr[FltAVX](f/Sum:0)
+  f/y:0 = MulExpr[VFltAVX256](f/Exp:0, f/Reciprocal:0)
+}
+```
+
+Finally, the Myelin JIT compiler converts the optimized operations into
+[assembler code](flowasm.txt) using the selected kernel generators. The code
+generated for each function depends the negotiated layout and alignment of the
+input and output tensors as well as the features support by the CPU (SSE, AVX,
+AVX2, FMA3, AVX512, etc.).
+
+### Computing using network cell instances
+
+In order to do any computation with the compiled network, you need to create
+a cell _instance_. If a cell is like a class, then an instance is like an object
+of that class. A cell instance has memory for storing all the local variables
+of a cell. You can create multiple instances of a cell, each with their own
+set of local variables.
+
+```python
+# Create new data instance.
+data = cell.instance()
+
+# Set input.
+xdata = data[x]
+for i in xrange(64): xdata[0, i] = 5
+
+# Run computation for data instance.
+data.compute()
+
+# Print result.
+ydata = data[y]
+print "y", ydata
+print "argmax", np.asarray(ydata).argmax()
+```
+
+The index operator on the cell object (e.g. `data[x]`) returns a _tensor_ object
+for the variable in the cell instance with that name.
+Alternatively, a numeric tensor parameter id can be used as as the index key.
+The `cell.index(name)` method can be used for looking up tensor parameter ids in
+advance, and looking up tensors by parameter ids is faster than looking up
+tensors by name.
+If the index key is neither a string not an integer, the repr() function of the
+index key is used for determining the tensor name.
+
+The tensor is a view into the data in the instance for the variable. The tensor
+elements can be read or modified using the index operator, e.g.
+`xdata[0, i] = 5`. The tensor object also supports the Python buffer interface,
+so you can create a NumPy array sharing the underlying data, e.g.
+`np.asarray(ydata)`. You can use the `name()`, `rank()`,  `shape()`, and
+`type()` methods for inspecting the tensor format.
+
+The `compute()` method is used for running the cell instance computation, i.e.
+compute the output tensor variables from the inputs tensor variables.
+A cell instances can be reused for multiple computations. The `clear()` method
+can be used for clearing all the tensors in the instance.
+
+### Putting it all together
+
+```python
+import sling
+import sling.myelin as myelin
+import numpy as np
+
+# Build flow.
+flow = myelin.Flow()
+
+# Create builder for function.
+f = myelin.Builder(flow, "f")
+
+# Initialize weights.
+W = f.array("W", np.random.rand(64, 256).astype(np.float32))
+b = f.array("b", np.random.rand(256).astype(np.float32))
+
+# Create input variable x as a float[1,64] tensor.
+x = f.var("x", myelin.DT_FLOAT, [1, 64])
+
+# Compute y=softmax(relu(x * W + b))
+y = f.softmax(f.relu(f.add(f.matmul(x, W), b)), name="y")
+
+# Compile flow to network.
+compiler = myelin.Compiler()
+net = compiler.compile(flow)
+cell = net.cell("f")
+
+# Create new data instance.
+data = cell.instance()
+
+# Set input.
+xdata = data[x]
+for i in xrange(64): xdata[0, i] = 5
+
+# Run computation for data instance.
+data.compute()
+
+# Print result.
+ydata = data[y]
+print "y", ydata
+print "argmax", np.asarray(ydata).argmax()
+```
+
+## Creating a flow file from a Tensorflow graph
 
 Myelin uses [flow files](#flow-file-format) to store neural networks. A
 Tensorflow graph can be stored as a flow file using the myelin Python module.
@@ -68,34 +278,9 @@ and `Add` _operations_ to this function. It will also add `W` and `b` as
 constant _variables_ to the flow with the trained weights. The resulting flow
 is then saved to the file _/tmp/model.flow_.
 
-If the Tensorflow graph has been saved to a checkpoint using a TF Saver object,
-you can load the checkpoint and only store the parts needed for inference as
-a flow file:
+## Using Myelin in C++
 
-```python
-import tensorflow as tf
-from sling.myelin import Flow
-from sling.myelin.tf import Extractor
-
-# Load Tensorflow checkpoint.
-sess = tf.Session()
-saver = tf.train.import_meta_graph('/tmp/mnist.ckpt.meta')
-saver.restore(sess, '/tmp/mnist.ckpt')
-
-# Create Myelin flow.
-flow = Flow()
-extractor = Extractor(sess, flow)
-
-# Extract flow from graph.
-inputs = [sess.graph.get_tensor_by_name("x:0")]
-outputs = [sess.graph.get_tensor_by_name("y:0")]
-extractor.add(flow.func("classifier"), inputs, outputs)
-
-# Save flow.
-flow.save("/tmp/mnist.flow")
-```
-
-## Setting up a kernel library
+### Setting up a kernel library
 
 ```c++
 #include "sling/myelin/compute.h"
@@ -115,7 +300,7 @@ used on any x64 processor as well as specialized kernels for CPUs with
 add your own kernel generators and graph transformations for custom ops or
 for generating optimized code for special cases of standard ops.
 
-## Compiling a network
+### Compiling a network
 
 ```c++
 // Load and compile neural network.
@@ -142,7 +327,7 @@ After the network has been compiled, the parameters can be looked up in the
 cell or network. The `Tensor` object then knows the location of the parameter
 in the compiled flow.
 
-## Computing cell functions
+### Computing cell functions
 
 ```c++
 // Create instance of neural network cell for classifying input.
@@ -190,32 +375,32 @@ flow = "flow" <version>
        <#cnxs> cnx*
        <#blobs> blob* (from version 4)
 
-var = <name$>
-      <#flags> (IN=1, OUT=2, REF=4, LEARNABLE=8 UNIQUE=16, from version 5)
+var = <#flags> (IN=1, OUT=2, REF=4, LEARNABLE=8 UNIQUE=16, from version 5)
+      <name$>
       <#aliases> <alias$>
       <dtype$>
       <shape>
       <#bytes> value
 
-op = <name$>
-     <#flags> (unused, from version 5)
+op = <#flags> (unused, from version 5)
+     <name$>
      <type$>
      <#inputs> <input$>*
      <#outputs> <output$>*
      <#attrs> attr*
 
-blob = <name$>
-       <#flags> (unused, from version 5)
+blob = <#flags> (unused, from version 5)
+       <name$>
        <type$>
        <#attrs> attr*
        <#bytes> data
 
-func = <name$>
-       <#flags> (TRAINING=1, from version 5)
+func = <#flags> (TRAINING=1, from version 5)
+       <name$>
        <#ops> <op$>
 
-cnx = <name$>
-      <#flags> (unused, from version 5)
+cnx = <#flags> (unused, from version 5)
+      <name$>
       <#vars> <var$>
 
 shape = <#dims> <size>*

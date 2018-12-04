@@ -80,6 +80,8 @@ class LexicalEncoder:
     self.feature_vector = bldr.concat(concat_args)
     bldr.rename(self.feature_vector, "feature_vector")
     self.feature_vector.ref = True
+    self.feature_vector.input = True
+    self.feature_vector.output = True
 
     # Add BiLSTM.
     lr = builder.Builder(flow, "lstm/lr")

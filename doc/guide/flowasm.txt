@@ -1,0 +1,166 @@
+0000000000000000 <f>:
+   0:	push   rbp
+   1:	mov    rbp,rdi
+
+0000000000000004 <f/MatMul:AVXFltVecMatMulAddRelu>:
+   4:	mov    rdi,rbp
+   7:	movabs rsi,0x0	9: R_X86_64_64	f/W
+  11:	movabs r9,0x0	13: R_X86_64_64	f/b
+  1b:	lea    r8,[rbp+0x100]
+  22:	vxorps ymm13,ymm13,ymm13
+  27:	xor    rcx,rcx
+  2a:	vmovaps ymm0,YMMWORD PTR [r9+rcx*1]
+  30:	vmovaps ymm1,YMMWORD PTR [r9+rcx*1+0x20]
+  37:	vmovaps ymm2,YMMWORD PTR [r9+rcx*1+0x40]
+  3e:	vmovaps ymm3,YMMWORD PTR [r9+rcx*1+0x60]
+  45:	vmovaps ymm4,YMMWORD PTR [r9+rcx*1+0x80]
+  4f:	vmovaps ymm5,YMMWORD PTR [r9+rcx*1+0xa0]
+  59:	vmovaps ymm6,YMMWORD PTR [r9+rcx*1+0xc0]
+  63:	vmovaps ymm7,YMMWORD PTR [r9+rcx*1+0xe0]
+  6d:	mov    rdx,rsi
+  70:	xor    rax,rax
+  73:	vbroadcastss ymm12,DWORD PTR [rdi+rax*1]
+  79:	vfmadd231ps ymm0,ymm12,YMMWORD PTR [rdx]
+  7e:	vfmadd231ps ymm1,ymm12,YMMWORD PTR [rdx+0x20]
+  84:	vfmadd231ps ymm2,ymm12,YMMWORD PTR [rdx+0x40]
+  8a:	vfmadd231ps ymm3,ymm12,YMMWORD PTR [rdx+0x60]
+  90:	vfmadd231ps ymm4,ymm12,YMMWORD PTR [rdx+0x80]
+  99:	vfmadd231ps ymm5,ymm12,YMMWORD PTR [rdx+0xa0]
+  a2:	vfmadd231ps ymm6,ymm12,YMMWORD PTR [rdx+0xc0]
+  ab:	vfmadd231ps ymm7,ymm12,YMMWORD PTR [rdx+0xe0]
+  b4:	add    rdx,0x400
+  bb:	add    rax,0x4
+  bf:	cmp    rax,0x100
+  c5:	jl     73 <f/MatMul:AVXFltVecMatMulAddRelu+0x6f>
+  c7:	vmaxps ymm0,ymm0,ymm13
+  cc:	vmovaps YMMWORD PTR [r8+rcx*1],ymm0
+  d2:	vmaxps ymm1,ymm1,ymm13
+  d7:	vmovaps YMMWORD PTR [r8+rcx*1+0x20],ymm1
+  de:	vmaxps ymm2,ymm2,ymm13
+  e3:	vmovaps YMMWORD PTR [r8+rcx*1+0x40],ymm2
+  ea:	vmaxps ymm3,ymm3,ymm13
+  ef:	vmovaps YMMWORD PTR [r8+rcx*1+0x60],ymm3
+  f6:	vmaxps ymm4,ymm4,ymm13
+  fb:	vmovaps YMMWORD PTR [r8+rcx*1+0x80],ymm4
+ 105:	vmaxps ymm5,ymm5,ymm13
+ 10a:	vmovaps YMMWORD PTR [r8+rcx*1+0xa0],ymm5
+ 114:	vmaxps ymm6,ymm6,ymm13
+ 119:	vmovaps YMMWORD PTR [r8+rcx*1+0xc0],ymm6
+ 123:	vmaxps ymm7,ymm7,ymm13
+ 128:	vmovaps YMMWORD PTR [r8+rcx*1+0xe0],ymm7
+ 132:	add    rsi,0x100
+ 139:	add    rcx,0x100
+ 140:	cmp    rcx,0x400
+ 147:	jl     2a <f/MatMul:AVXFltVecMatMulAddRelu+0x26>
+
+000000000000014d <f/Max:MaxExpr>:
+ 14d:	lea    rcx,[rbp+0x100]
+ 154:	vmovaps ymm0,YMMWORD PTR [rip+0x1a4]        # 300 <f_data+0xd>
+ 15c:	xor    rax,rax
+ 15f:	vmaxps ymm0,ymm0,YMMWORD PTR [rcx+rax*1]
+ 164:	add    rax,0x20
+ 168:	cmp    rax,0x400
+ 16e:	jl     15f <f/Max:MaxExpr+0x12>
+ 170:	vperm2f128 ymm1,ymm0,ymm0,0x1
+ 176:	vmaxps ymm0,ymm0,ymm1
+ 17a:	vpermilps ymm1,ymm0,0xe
+ 180:	vmaxps ymm0,ymm0,ymm1
+ 184:	vpermilps ymm1,ymm0,0x1
+ 18a:	vmaxps ymm0,ymm0,ymm1
+ 18e:	vmovss DWORD PTR [rbp+0x500],xmm0
+
+0000000000000196 <f/Sub:Calculate>:
+ 196:	lea    rcx,[rbp+0x100]
+ 19d:	lea    rdx,[rbp+0x520]
+ 1a4:	vxorps ymm14,ymm14,ymm14
+ 1a9:	vmovaps ymm0,YMMWORD PTR [rip+0x16f]        # 320 <f_data+0x2d>
+ 1b1:	vmovaps ymm1,YMMWORD PTR [rip+0x187]        # 340 <f_data+0x4d>
+ 1b9:	vmovaps ymm2,YMMWORD PTR [rip+0x19f]        # 360 <f_data+0x6d>
+ 1c1:	vmovaps ymm3,YMMWORD PTR [rip+0x1b7]        # 380 <f_data+0x8d>
+ 1c9:	vmovaps ymm4,YMMWORD PTR [rip+0x1cf]        # 3a0 <f_data+0xad>
+ 1d1:	vmovaps ymm5,YMMWORD PTR [rip+0x1e7]        # 3c0 <f_data+0xcd>
+ 1d9:	vmovaps ymm6,YMMWORD PTR [rip+0x1ff]        # 3e0 <f_data+0xed>
+ 1e1:	vmovaps ymm7,YMMWORD PTR [rip+0x217]        # 400 <f_data+0x10d>
+ 1e9:	vbroadcastss ymm8,DWORD PTR [rbp+0x500]
+ 1f2:	xor    rax,rax
+ 1f5:	vmovaps ymm9,YMMWORD PTR [rcx+rax*1]
+ 1fa:	vsubps ymm9,ymm9,ymm8
+ 1ff:	vminps ymm10,ymm9,ymm1
+ 203:	vmaxps ymm10,ymm10,ymm0
+ 207:	vmovaps ymm11,ymm10
+ 20c:	vfmadd213ps ymm11,ymm3,ymm2
+ 211:	vroundps ymm11,ymm11,0x1
+ 217:	vmovaps ymm12,ymm11
+ 21c:	vfmadd213ps ymm12,ymm4,ymm10
+ 221:	vmulps ymm10,ymm12,ymm12
+ 226:	vmovaps ymm13,ymm5
+ 22a:	vfmadd213ps ymm13,ymm12,ymm6
+ 22f:	vfmadd213ps ymm13,ymm12,ymm7
+ 234:	vfmadd213ps ymm13,ymm12,YMMWORD PTR [rip+0x1e3]        # 420 <f_data+0x12d>
+ 23d:	vfmadd213ps ymm13,ymm12,YMMWORD PTR [rip+0x1fa]        # 440 <f_data+0x14d>
+ 246:	vfmadd213ps ymm13,ymm12,YMMWORD PTR [rip+0x111]        # 360 <f_data+0x6d>
+ 24f:	vfmadd213ps ymm13,ymm10,ymm12
+ 254:	vaddps ymm13,ymm13,YMMWORD PTR [rip+0x204]        # 460 <f_data+0x16d>
+ 25c:	vaddps ymm11,ymm11,YMMWORD PTR [rip+0x21c]        # 480 <f_data+0x18d>
+ 264:	vcvttps2dq ymm11,ymm11
+ 269:	vpslld ymm11,ymm11,0x17
+ 26f:	vmulps ymm13,ymm13,ymm11
+ 274:	vmaxps ymm13,ymm13,ymm9
+ 279:	vmovaps YMMWORD PTR [rdx+rax*1],ymm13
+ 27e:	vaddps ymm14,ymm14,ymm13
+ 283:	add    rax,0x20
+ 287:	cmp    rax,0x400
+ 28d:	jl     1f5 <f/Sub:Calculate+0x5f>
+ 293:	vperm2f128 ymm15,ymm14,ymm14,0x1
+ 299:	vhaddps ymm14,ymm14,ymm15
+ 29e:	vhaddps ymm14,ymm14,ymm14
+ 2a3:	vhaddps ymm14,ymm14,ymm14
+ 2a8:	vmovss DWORD PTR [rbp+0x500],xmm14
+
+00000000000002b0 <f/Reciprocal:ReciprocalExpr>:
+ 2b0:	vmovss xmm0,DWORD PTR [rip+0x1e8]        # 4a0 <f_data+0x1ad>
+ 2b8:	vdivss xmm1,xmm0,DWORD PTR [rbp+0x500]
+ 2c0:	vmovss DWORD PTR [rbp+0x500],xmm1
+
+00000000000002c8 <f/y:MulExpr>:
+ 2c8:	lea    rcx,[rbp+0x520]
+ 2cf:	vbroadcastss ymm0,DWORD PTR [rbp+0x500]
+ 2d8:	xor    rax,rax
+ 2db:	vmulps ymm1,ymm0,YMMWORD PTR [rcx+rax*1]
+ 2e0:	vmovaps YMMWORD PTR [rcx+rax*1],ymm1
+ 2e5:	add    rax,0x20
+ 2e9:	cmp    rax,0x400
+ 2ef:	jl     2db <f/y:MulExpr+0x13>
+ 2f1:	pop    rbp
+ 2f2:	ret
+
+00000000000002f3 <f_data>:
+	...
+ 2ff:	................
+ 30f:	................
+ 31f:	................
+ 32f:	................
+ 33f:	....B...B...B...
+ 34f:	B...B...B...B...
+ 35f:	B...?...?...?...
+ 36f:	?...?...?...?...
+ 37f:	?;..?;..?;..?;..
+ 38f:	?;..?;..?;..?;..
+ 39f:	?.r1..r1..r1..r1
+ 3af:	..r1..r1..r1..r1
+ 3bf:	.giP9giP9giP9giP
+ 3cf:	9giP9giP9giP9giP
+ 3df:	9.C.:.C.:.C.:.C.
+ 3ef:	:.C.:.C.:.C.:.C.
+ 3ff:	:...<...<...<...
+ 40f:	<...<...<...<...
+ 41f:	<..*=..*=..*=..*
+ 42f:	=..*=..*=..*=..*
+ 43f:	=..*>..*>..*>..*
+ 44f:	>..*>..*>..*>..*
+ 45f:	>...?...?...?...
+ 46f:	?...?...?...?...
+ 47f:	?...B...B...B...
+ 48f:	B...B...B...B...
+ 49f:	B...?
+

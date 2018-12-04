@@ -21,7 +21,7 @@ from struct import pack
 from struct import unpack
 from struct import unpack_from
 
-class File:
+class FileWriter:
   """Flow file writer."""
 
   def __init__(self, file):
@@ -123,18 +123,52 @@ class FileReader:
     return ''
 
 
-class Variable:
+class Variable(object):
   """Flow variable."""
 
   def __init__(self, name):
     """Initialize new variable."""
     self.name = name
+    self.flags = 0
+    self.aliases = []
     self.type = None
     self.shape = []
-    self.ref = False
     self.data = None
     self.producer = None
     self.consumers = []
+
+  @property
+  def input(self):
+    return (self.flags & 1) != 0
+
+  @input.setter
+  def input(self, value):
+    if value:
+      self.flags |= 1
+    else:
+      self.flags &= ~1
+
+  @property
+  def output(self):
+    return (self.flags & 2) != 0
+
+  @output.setter
+  def output(self, value):
+    if value:
+      self.flags |= 2
+    else:
+      self.flags &= ~2
+
+  @property
+  def ref(self):
+    return (self.flags & 4) != 0
+
+  @ref.setter
+  def ref(self, value):
+    if value:
+      self.flags |= 4
+    else:
+      self.flags &= ~4
 
   def shape_defined(self):
     for d in self.shape:
@@ -147,7 +181,6 @@ class Variable:
   def __str__(self):
     s = "var " + self.name + " : " + self.typestr()
     if self.data is not None:
-      #s += " " + str(self.data.nbytes) + "bytes"
       s += " = " + str(self.data)
     s += " {\n"
     if self.producer != None:
@@ -165,12 +198,13 @@ class Variable:
     return t
 
 
-class Operation:
+class Operation(object):
   """Flow operation with inputs and outputs."""
 
   def __init__(self, name):
     """Initialize new operation."""
     self.name = name
+    self.flags = 0
     self.type = None
     self.inputs = []
     self.outputs = []
@@ -213,12 +247,13 @@ class Operation:
     return s
 
 
-class Function:
+class Function(object):
   """Flow function with operations."""
 
   def __init__(self, name):
     """Initialize new function."""
     self.name = name
+    self.flags = 0
     self.ops = []
 
   def add(self, op):
@@ -234,25 +269,34 @@ class Function:
     return s
 
 
-class Connector:
+class Connector(object):
   """Flow connector with linked variables."""
 
   def __init__(self, name):
     """Initialize new connector."""
     self.name = name
+    self.flags = 0
     self.links = []
 
   def add(self, var):
     """Add linked variable to connector."""
     self.links.append(var)
 
+  def __str__(self):
+    s = "connector " + self.name + " {\n"
+    for l in self.links:
+      s += "  " + l.name + "\n"
+    s += "}\n"
+    return s
 
-class Blob:
+
+class Blob(object):
   """Blob for storing extra data like lexicons and feature maps."""
 
   def __init__(self, name):
     """Initialize new blob."""
     self.name = name
+    self.flags = 0
     self.type = ""
     self.data = None
     self.attrs = {}
@@ -268,11 +312,23 @@ class Blob:
     """Get blob attribute as a string or None."""
     return self.attrs.get(name, None)
 
+  def __str__(self):
+    s = "blob " + self.name + " : " + self.type
+    if self.data is not None:
+      s += " = " + str(self.data)
+    s += " {\n"
+    for a in self.attrs:
+      s += "  " + a + " = " + self.attrs[a] + "\n"
+    s += "}\n"
+    return s
+
+
 class Flow:
   """Flow with variables, operations, and functions."""
 
   def __init__(self):
     """Initialize empty flow."""
+    self.flags = 0
     self.vars = {}
     self.ops = {}
     self.funcs = {}
@@ -435,17 +491,20 @@ class Flow:
     """Write flow to file."""
 
     # Write flow file header
-    f = File(filename)
+    f = FileWriter(filename)
     f.write('flow')
-    f.write_int(4)
+    f.write_int(5)
+    f.write_int(self.flags)
 
     # Write variables.
     f.write_int(len(self.vars))
     for name in self.vars:
       var = self.vars[name]
+      f.write_int(var.flags)
       f.write_string(var.name)
-      f.write_int(0)  # no aliases
-      f.write_string("&" + var.type if var.ref else var.type)
+      f.write_int(len(var.aliases))
+      for alias in var.aliases: f.write_string(alias)
+      f.write_string(var.type)
       f.write_int(len(var.shape))
       for d in var.shape: f.write_int(d)
       f.write_object(var.data)
@@ -454,6 +513,7 @@ class Flow:
     f.write_int(len(self.ops))
     for name in self.ops:
       op = self.ops[name]
+      f.write_int(op.flags)
       f.write_string(op.name)
       f.write_string(op.type)
       f.write_int(len(op.inputs))
@@ -471,6 +531,7 @@ class Flow:
     f.write_int(len(self.funcs))
     for name in self.funcs:
       func = self.funcs[name]
+      f.write_int(func.flags)
       f.write_string(func.name)
       f.write_int(len(func.ops))
       for op in func.ops:
@@ -480,6 +541,7 @@ class Flow:
     f.write_int(len(self.cnxs))
     for name in self.cnxs:
       cnx = self.cnxs[name]
+      f.write_int(cnx.flags)
       f.write_string(cnx.name)
       f.write_int(len(cnx.links))
       for link in cnx.links:
@@ -489,6 +551,7 @@ class Flow:
     f.write_int(len(self.blobs))
     for name in self.blobs:
       blob = self.blobs[name]
+      f.write_int(blob.flags)
       f.write_string(blob.name)
       f.write_string(blob.type)
       f.write_int(len(blob.attrs))
@@ -506,33 +569,41 @@ class Flow:
     assert magic == 'flow', magic
 
     version = f.read_int()
-    assert version == 4, version
+    assert version == 4 or version == 5, version
+    if version >= 5: self.flags = f.read_int()
 
     num_vars = f.read_int()
     for _ in xrange(num_vars):
+      flags = 0
+      if version >= 5: flags = f.read_int()
       name = f.read_string()
-      assert f.read_int() == 0
+      num_aliases = f.read_int()
+      aliases = []
+      for i in xrange(num_aliases):
+        aliases.append(f.read_string())
       t = f.read_string()
-      ref = False
       if t[0] == '&':
-        ref = True
+        flags |= 4
         t = t[1:]
       shape_size = f.read_int()
       shape = []
       for _ in xrange(shape_size):
         shape.append(f.read_int())
-
       var = self.var(name, type=t, shape=shape)
-      if ref: var.ref = True
-      data_size = f.read_long()
-      var.data = f.slice(data_size)  # avoid creating a copy
+      var.flags = flags
+      size = f.read_long()
+      if size > 0:
+        var.data = f.slice(size)  # avoid creating a copy
 
     num_ops = f.read_int()
     for _ in xrange(num_ops):
+      flags = 0
+      if version >= 5: flags = f.read_int()
       name = f.read_string()
       op = self.op(name)
-
+      op.flags = flags
       op.type = f.read_string()
+
       num_in = f.read_int()
       for _ in xrange(num_in):
         op.add_input(self.var(name=f.read_string()))
@@ -549,29 +620,42 @@ class Flow:
 
     num_funcs = f.read_int()
     for _ in xrange(num_funcs):
-      func = self.func(name=f.read_string())
+      flags = 0
+      if version >= 5: flags = f.read_int()
+      name = f.read_string()
+      func = self.func(name)
+      func.flags = flags
       n = f.read_int()
       for _ in xrange(n):
         func.add(self.op(f.read_string()))
 
     num_cnxs = f.read_int()
     for _ in xrange(num_cnxs):
-      cnx = self.cnx(f.read_string())
+      flags = 0
+      if version >= 5: flags = f.read_int()
+      name = f.read_string()
+      cnx = self.cnx(name)
+      cnx.flags = flags
       n = f.read_int()
       for _ in xrange(n):
         cnx.add(self.var(f.read_string()))
 
     num_blobs = f.read_int()
     for _ in xrange(num_blobs):
-      blob = self.blob(f.read_string())
+      flags = 0
+      if version >= 5: flags = f.read_int()
+      name = f.read_string()
+      blob = self.blob(name)
+      blob.flags = flags
       blob.type = f.read_string()
       n = f.read_int()
       for _ in xrange(n):
         name = f.read_string()
         val = f.read_string()
         blob.add_attr(name, val)
-      data_size = f.read_long()
-      blob.data = f.slice(data_size)  # avoid creating a copy
+      size = f.read_long()
+      if size > 0:
+        blob.data = f.slice(size)  # avoid creating a copy
 
   def __str__(self):
     s = ""
