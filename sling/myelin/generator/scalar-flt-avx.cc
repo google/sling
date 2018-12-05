@@ -40,6 +40,10 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
     }
+    model_.cond_reg_reg_reg = true;
+    model_.cond_reg_mem_reg = true;
+    model_.cond_reg_reg_mem = true;
+    model_.cond_reg_mem_mem = true;
   }
 
   string Name() override { return "FltAVX"; }
@@ -50,6 +54,7 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
+    int num_rr_aux = 0;
     if (instructions_.Has(Express::BITAND) ||
         instructions_.Has(Express::BITOR) ||
         instructions_.Has(Express::AND) ||
@@ -63,9 +68,14 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
     }
     if (instructions_.Has(Express::NOT)) {
       num_mm_aux = std::max(num_mm_aux, 2);
-      index_->ReserveAuxRegisters(1);
+      num_rr_aux = std::max(num_rr_aux, 1);
+    }
+    if (instructions_.Has(Express::SELECT) ||
+        instructions_.Has(Express::COND)) {
+      num_rr_aux = std::max(num_rr_aux, 1);
     }
 
+    index_->ReserveAuxRegisters(num_rr_aux);
     index_->ReserveAuxXMMRegisters(num_mm_aux);
   }
 
@@ -411,9 +421,16 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           __ vmovsd(src2, addr(instr->args[1]));
         }
         switch (instr->type) {
-          case Express::CVTFLTINT: __ vcvttpd2dq(dst, src); break;
-          case Express::CVTINTFLT: __ vcvtdq2pd(dst, src); break;
-          case Express::SUBINT: __ vpsubq(dst, src, src2); break;
+          case Express::CVTFLTINT:
+            __ vcvttpd2dq(dst, src);
+            __ vpmovsxdq(dst, dst);
+            break;
+          case Express::CVTINTFLT:
+            __ vcvtdq2pd(dst, src);
+            break;
+          case Express::SUBINT:
+            __ vpsubq(dst, src, src2);
+            break;
           case Express::BITAND:
           case Express::AND:
             __ vandpd(dst, src, src2);
@@ -443,28 +460,49 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
   // Generate conditional.
   void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
-    CHECK(instr->src != -1);
     CHECK(instr->mask != -1);
     Label l1, l2;
     switch (type_) {
-      case DT_FLOAT:
-        __ vtestps(xmm(instr->mask), xmm(instr->mask));
+      case DT_FLOAT: {
+        __ vmovd(aux(0), xmm(instr->mask));
+        __ testl(aux(0), aux(0));
+        __ j(zero, &l1);
+        if (instr->src != -1) {
+          __ vmovaps(xmm(instr->dst), xmm(instr->src));
+        } else {
+          __ vmovss(xmm(instr->dst), addr(instr->args[1]));
+        }
+        __ jmp(&l2);
+        __ bind(&l1);
+        if (instr->src2 != -1) {
+          __ vmovaps(xmm(instr->dst), xmm(instr->src2));
+        } else {
+          __ vmovss(xmm(instr->dst), addr(instr->args[2]));
+        }
+        __ bind(&l2);
         break;
-      case DT_DOUBLE:
-        __ vtestpd(xmm(instr->mask), xmm(instr->mask));
+      }
+      case DT_DOUBLE: {
+        __ vmovq(aux(0), xmm(instr->mask));
+        __ testq(aux(0), aux(0));
+        __ j(zero, &l1);
+        if (instr->src != -1) {
+          __ vmovapd(xmm(instr->dst), xmm(instr->src));
+        } else {
+          __ vmovsd(xmm(instr->dst), addr(instr->args[1]));
+        }
+        __ jmp(&l2);
+        __ bind(&l1);
+        if (instr->src2 != -1) {
+          __ vmovapd(xmm(instr->dst), xmm(instr->src2));
+        } else {
+          __ vmovsd(xmm(instr->dst), addr(instr->args[2]));
+        }
+        __ bind(&l2);
         break;
+      }
       default: UNSUPPORTED;
     }
-    __ j(zero, &l1);
-    __ movaps(xmm(instr->dst), xmm(instr->src));
-    __ jmp(&l2);
-    __ bind(&l1);
-    if (instr->src != -1) {
-      __ vmovaps(xmm(instr->dst), xmm(instr->src2));
-    } else {
-      __ vmovaps(xmm(instr->dst), addr(instr->args[2]));
-    }
-    __ bind(&l2);
   }
 
   // Generate masked select.
@@ -474,7 +512,8 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
     Label l1, l2;
     switch (type_) {
       case DT_FLOAT: {
-        __ vtestps(xmm(instr->mask), xmm(instr->mask));
+        __ vmovd(aux(0), xmm(instr->mask));
+        __ testl(aux(0), aux(0));
         __ j(not_zero, &l1);
         __ vxorps(xmm(instr->dst), xmm(instr->dst), xmm(instr->dst));
         if (instr->src == instr->dst) {
@@ -485,14 +524,15 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           if (instr->src != -1) {
             __ vmovaps(xmm(instr->dst), xmm(instr->src));
           } else {
-            __ vmovaps(xmm(instr->dst), addr(instr->args[1]));
+            __ vmovss(xmm(instr->dst), addr(instr->args[1]));
           }
         }
         __ bind(&l2);
         break;
       }
       case DT_DOUBLE: {
-        __ vtestpd(xmm(instr->mask), xmm(instr->mask));
+        __ vmovq(aux(0), xmm(instr->mask));
+        __ testq(aux(0), aux(0));
         __ j(not_zero, &l1);
         __ vxorpd(xmm(instr->dst), xmm(instr->dst), xmm(instr->dst));
         if (instr->src == instr->dst) {
@@ -503,7 +543,7 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           if (instr->src != -1) {
             __ vmovaps(xmm(instr->dst), xmm(instr->src));
           } else {
-            __ vmovaps(xmm(instr->dst), addr(instr->args[1]));
+            __ vmovsd(xmm(instr->dst), addr(instr->args[1]));
           }
         }
         __ bind(&l2);

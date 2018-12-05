@@ -400,6 +400,7 @@ class RecipeParser {
 
 // System-defined numeric constants.
 #define FLTCONST(x) {x##f, x}
+#define DBLCONST(a, b) {a##f, b}
 #define INTCONST(a, b) {FLT_FROM_INT(a), DBL_FROM_INT(b)}
 Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(0.0),    // ZERO
@@ -409,7 +410,6 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(-1.0),   // N1
   FLTCONST(9.0),    // P9
   FLTCONST(-9.0),   // N9
-  FLTCONST(127.0),  // P127
 
   FLTCONST(0.6931471805599453),    // LN2
   FLTCONST(-0.6931471805599453),   // NLN2
@@ -419,9 +419,9 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   INTCONST(0xFF800000, 0xFFF0000000000000LL),      // NINF
   INTCONST(0xFFFFFFFF, 0xFFFFFFFFFFFFFFFFLL),      // QNAN
 
-  INTCONST(0x00800000, 0x0010000000000000LL),      // MIN_NORM_POS
-  INTCONST(~0x7f800000, ~0x7FF0000000000000LL),    // INV_MANT_MASK
-  INTCONST(0x7f, 0x7ffLL),                         // MAX_MANT
+  INTCONST(0x00800000, 0x0020000000000000LL),      // MIN_NORM_POS
+  INTCONST(~0x7F800000, ~0x7FF0000000000000LL),    // INV_MANT_MASK
+  INTCONST(0x7F, 0x3FFLL),                         // MAX_MANT
 
   // Polynomial coefficients for natural logarithm.
   FLTCONST(0.707106781186547524),  // CEPHES_SQRTHF
@@ -438,8 +438,9 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(0.693359375),           // CEPHES_LOG_Q2
 
   // Clamping interval for exponential function.
-  FLTCONST(88.3762626647950),      // EXP_HI
-  FLTCONST(-88.3762626647949),     // EXP_LO
+  DBLCONST(88.3762626647950, 709.437),      // EXP_HI
+  DBLCONST(-88.3762626647949, -709.436),    // EXP_LO
+  DBLCONST(127.0, 1023.0),                  // EXP_BIAS
 
   // Polynomial coefficients for exponential function.
   FLTCONST(1.44269504088896341),   // CEPHES_LOG2EF
@@ -1518,20 +1519,25 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
           source = rewritten->Temp();
         }
 
-        // Put second argument into a register.
-        if (!args[1]->IsRegister()) {
-          source2 = rewritten->Temp();
+        // Put second operand into a register if memory operands are not
+        // available.
+        if (args[1]->IsRegister()) {
+          if (!model.cond_reg_reg_reg && !model.cond_reg_reg_mem) return false;
+        } else {
+          if (!(model.cond_reg_mem_reg || model.cond_reg_mem_mem) ||
+              args[1]->single) {
+            source2 = rewritten->Temp();
+          }
         }
 
         // Put third operand into a register if memory operands are not
         // available.
-        if (args[2]->type == CONST || args[2]->type == NUMBER) {
-          if (!model.func_reg_imm) {
-            source2 = rewritten->Temp();
-          }
-        } else if (!args[2]->IsRegister()) {
-          if (!model.func_reg_mem || args[2]->single) {
-            source2 = rewritten->Temp();
+        if (args[2]->IsRegister()) {
+          if (!model.cond_reg_reg_reg && !model.cond_reg_mem_reg) return false;
+        } else {
+          if (!(model.cond_reg_reg_mem || model.cond_reg_mem_mem) ||
+              args[2]->single) {
+            source3 = rewritten->Temp();
           }
         }
 
@@ -1760,7 +1766,7 @@ Express::Var *Express::Log(Var *x) {
     x = Sub(x, Number(ONE));
     e = Sub(e, Select(mask, Number(ONE)));
     x = Add(x, tmp);
-    Var *z = Mul(x, x);
+    Var *z = Square(x);
 
     // Part 3: Compute the polynomial approximation.
     Var *y = Number(CEPHES_LOG_P0);
@@ -1824,7 +1830,7 @@ Express::Var *Express::Exp(Var *x) {
     y = Add(y, Number(ONE));
 
     // Compute emm0 = 2^m.
-    Var *emm0 = Do(CVTINTEXP, Do(CVTFLTINT, Add(m, Number(P127))));
+    Var *emm0 = Do(CVTINTEXP, Do(CVTFLTINT, Add(m, Number(EXP_BIAS))));
 
     // Return 2^m * exp(r).
     return Maximum(Mul(y, emm0), arg);

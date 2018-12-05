@@ -76,6 +76,7 @@ PyObject *PyCompiler::Compile(PyObject *arg) {
 
   // Compile flow to network.
   Network *net = new Network();
+  net->options().parameter_element_order = ANY_ORDER;
   compiler->Compile(&flow, net);
 
   // Return compiled network.
@@ -110,7 +111,7 @@ bool PyCompiler::ImportFlow(PyObject *pyflow, Flow *flow, PyBuffers *buffers) {
 
     PyObject *pydata = PyAttr(pyvar, "data");
     if (pydata != Py_None) {
-      var->data = buffers->GetData(pydata, &var->size);
+      var->data = buffers->GetData(pydata, var->type, &var->size);
       if (var->data == nullptr) return false;
     }
     Py_DECREF(pydata);
@@ -203,7 +204,7 @@ bool PyCompiler::ImportFlow(PyObject *pyflow, Flow *flow, PyBuffers *buffers) {
 
     PyObject *pydata = PyAttr(pyblob, "data");
     if (pydata != Py_None) {
-      blob->data = buffers->GetData(pydata, &blob->size);
+      blob->data = buffers->GetData(pydata, DT_INVALID, &blob->size);
       if (blob->data == nullptr) return false;
     }
     Py_DECREF(pydata);
@@ -865,9 +866,9 @@ PyBuffers::~PyBuffers() {
   }
 }
 
-char *PyBuffers::GetData(PyObject *obj, size_t *size) {
+char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
+  // Try to data using Python buffer protocol.
   if (PyObject_CheckBuffer(obj)) {
-    // Get data using Python buffer protocol.
     Py_buffer *view = new Py_buffer;
     if (PyObject_GetBuffer(obj, view, PyBUF_C_CONTIGUOUS) == -1) {
       delete view;
@@ -876,7 +877,10 @@ char *PyBuffers::GetData(PyObject *obj, size_t *size) {
     views_.push_back(view);
     *size = view->len;
     return static_cast<char *>(view->buf);
-  } else if (PyString_Check(obj)) {
+  }
+  
+  // Try to get buffer from string.
+  if (PyString_Check(obj)) {
     // Get string buffer.
     char *data;
     Py_ssize_t length;
@@ -885,17 +889,52 @@ char *PyBuffers::GetData(PyObject *obj, size_t *size) {
     refs_.push_back(obj);
     *size = length;
     return data;
-  } else if (PyFloat_Check(obj)) {
-    float v = PyFloat_AsDouble(obj);
-    *size = sizeof(float);
-    return flow_->AllocateMemory(&v, sizeof(float));
-  } else if (PyInt_Check(obj)) {
-    int v = PyInt_AsLong(obj);
-    *size = sizeof(int);
-    return flow_->AllocateMemory(&v, sizeof(int));
-  } else {
-    PyErr_SetString(PyExc_TypeError, "Cannot get data from object");
-    return nullptr;
+  }
+  
+  // Determine type.
+  if (type == DT_INVALID) {
+    if (PyFloat_Check(obj)) {
+      type = DT_FLOAT;
+    } else if (PyInt_Check(obj)) {
+      type = DT_INT32;
+    }
+  }
+  
+  // Get data by converting it to the expected type.
+  switch (type) {
+    case DT_FLOAT: {
+      float v = PyFloat_AsDouble(obj);
+      *size = sizeof(float);
+      return flow_->AllocateMemory(&v, sizeof(float));
+    }
+    case DT_DOUBLE: {
+      double v = PyFloat_AsDouble(obj);
+      *size = sizeof(double);
+      return flow_->AllocateMemory(&v, sizeof(double));
+    }
+    case DT_INT32: {
+      int v = PyInt_AsLong(obj);
+      *size = sizeof(int);
+      return flow_->AllocateMemory(&v, sizeof(int));
+    }
+    case DT_INT64: {
+      int64 v = PyLong_AsLong(obj);
+      *size = sizeof(int64);
+      return flow_->AllocateMemory(&v, sizeof(int64));
+    }
+    case DT_INT16: {
+      int16 v = PyInt_AsLong(obj);
+      *size = sizeof(int16);
+      return flow_->AllocateMemory(&v, sizeof(int16));
+    }
+    case DT_INT8: {
+      int8 v = PyInt_AsLong(obj);
+      *size = sizeof(int8);
+      return flow_->AllocateMemory(&v, sizeof(int8));
+    }
+    default:
+      PyErr_SetString(PyExc_TypeError, "Cannot get data from object");
+      return nullptr;
   }
 }
 

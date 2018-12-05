@@ -61,6 +61,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
         instructions_.Has(Express::MAXIMUM)) {
       if (type_ == DT_INT64) {
         num_rr_aux = std::max(num_rr_aux, 2);
+        num_mm_aux = std::max(num_mm_aux, 1);
       }
     }
     index_->ReserveAuxRegisters(num_rr_aux);
@@ -207,7 +208,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
     if (instr->src2 != -1) {
       src2 = xmm(instr->src2);
     } else {
-      src2 = xmm(instr->dst);
+      src2 = xmmaux(0);
       __ vmovdqa(src2, addr(instr->args[1]));
     }
     for (int n = 0; n < 2; ++n) {
@@ -227,7 +228,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
     if (instr->src2 != -1) {
       src2 = xmm(instr->src2);
     } else {
-      src2 = xmm(instr->dst);
+      src2 = xmmaux(0);
       __ vmovdqa(src2, addr(instr->args[1]));
     }
     for (int n = 0; n < 2; ++n) {

@@ -142,13 +142,13 @@ class Express {
 
   // System-defined numeric constants.
   enum ConstantNumber {
-    ZERO, ONE, TWO, HALF, N1, P9, N9, P127, LN2, NLN2, LOG2E,
+    ZERO, ONE, TWO, HALF, N1, P9, N9, LN2, NLN2, LOG2E,
     PINF, NINF, QNAN, MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
     CEPHES_LOG_P5, CEPHES_LOG_P6, CEPHES_LOG_P7, CEPHES_LOG_P8,
     CEPHES_LOG_Q1, CEPHES_LOG_Q2,
-    EXP_HI, EXP_LO,
+    EXP_HI, EXP_LO, EXP_BIAS,
     CEPHES_LOG2EF, CEPHES_EXP_P0, CEPHES_EXP_P1, CEPHES_EXP_P2, CEPHES_EXP_P3,
     CEPHES_EXP_P4, CEPHES_EXP_P5,
     ALPHA_1, ALPHA_3, ALPHA_5, ALPHA_7, ALPHA_9, ALPHA_11, ALPHA_13,
@@ -309,6 +309,12 @@ class Express {
     bool fm_reg_reg_reg = false;    // dst = op(dst, src1, src2)
     bool fm_reg_reg_imm = false;    // dst = op(dst, src, imm)
     bool fm_reg_reg_mem = false;    // dst = op(dst, src, [mem])
+
+    // Conditional instruction formats.
+    bool cond_reg_reg_reg = false;  // dst = op(dst, pred, src, src2)
+    bool cond_reg_reg_mem = false;  // dst = op(dst, pred, src, [mem])
+    bool cond_reg_mem_reg = false;  // dst = op(dst, pred, [mem], src2)
+    bool cond_reg_mem_mem = false;  // dst = op(dst, pred, [mem], [mem])
 
     // Separate registers for predicates.
     bool predicate_regs = false;

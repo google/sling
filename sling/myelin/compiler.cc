@@ -52,6 +52,7 @@ DEFINE_bool(dragnn, false, "Use DRAGNN kernels");
 DEFINE_bool(sync_steps, false, "Synchronize all compute steps");
 DEFINE_bool(graph_all_vars, false, "Include all variables in DOT graph");
 DEFINE_string(graph_layout, "", "DOT graph layout");
+DEFINE_bool(jit_debug, false, "Debug break in jit code");
 
 namespace sling {
 namespace myelin {
@@ -142,6 +143,7 @@ void Compiler::Compile(Flow *flow, Network *net) {
     net->options().dynamic_allocation = true;
   }
   if (FLAGS_sync_steps) net->options().sync_steps = true;
+  if (FLAGS_jit_debug) net->options().debug = true;
 
   CHECK(net->Compile(*flow, *library_));
 

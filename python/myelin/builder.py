@@ -15,23 +15,34 @@
 
 """Myelin function builder and expression evaluator."""
 
+import flow
 from flow import Variable
 from flow import Function
 from flow import Flow
 
-DT_INT = "int32"
-DT_FLOAT = "float32"
+DT_FLOAT32 = "float32"
+DT_FLOAT64 = "float64"
+
+DT_INT8 = "int8"
+DT_INT16 = "int16"
+DT_INT32 = "int32"
+DT_INT64 = "int64"
+DT_BOOL = "bool"
+
+DT_INT = DT_INT32
+DT_FLOAT = DT_FLOAT32
+DT_DOUBLE = DT_FLOAT64
 
 typemap = {
-  "f": "float32",
-  "d": "float64",
-  "i": "int32",
-  "l": "int32",
-  "B": "uint8",
-  "h": "int16",
-  "b": "int8",
-  "q": "int64",
-  "?": "bool",
+  "f": DT_FLOAT32,
+  "d": DT_FLOAT64,
+  "i": DT_INT32,
+  "l": DT_INT32,
+  "B": DT_INT8,
+  "h": DT_INT16,
+  "b": DT_INT8,
+  "q": DT_INT64,
+  "?": DT_BOOL,
 }
 
 class Builder:
@@ -86,13 +97,11 @@ class Builder:
   def const(self, value, dtype=None, shape=None):
     # Convert scalars.
     if type(value) is float:
-      dtype = DT_FLOAT
-      shape = []
-      value = value
+      if dtype is None: dtype = DT_FLOAT
+      if shape is None: shape = []
     elif type(value) is int:
-      dtype = DT_INT
-      shape = []
-      value = value
+      if dtype is None: dtype = DT_INT
+      if shape is None: shape = []
 
     # Get type and shape if missing.
     if dtype is None: dtype = str(value.dtype)
@@ -131,7 +140,6 @@ class Builder:
 
   def concat(self, args, name=None):
     op = self.rawop("ConcatV2", name)
-    op.dtype = args[0].type
     shape = [args[0].shape[0], 0]
     for arg in args:
       op.add_input(arg)
@@ -139,7 +147,7 @@ class Builder:
     op.add_attr("N", len(args))
     axis = self.const(1, DT_INT)
     op.add_input(axis)
-    result = self.var(op.name + ":0", shape=shape)
+    result = self.var(op.name + ":0", args[0].type, shape)
     op.add_output(result)
 
     return op.outputs[0]
@@ -161,6 +169,12 @@ class Builder:
 
   def maximum(self, x, y, name=None):
     return self.op("Maximum", [x, y], name)
+
+  def argmax(self, x, name=None):
+    result = self.op("ArgMax", [x], name)
+    result.shape = []
+    result.type = DT_INT
+    return result
 
   def gather(self, embedding, indices, oov=None, name=None):
     inputs = [embedding, indices]
@@ -233,14 +247,14 @@ class Builder:
   def square(self, x, name=None):
     return self.op("Square", [x], name)
 
+  def sqrt(self, x, name=None):
+    return self.op("Sqrt", [x], name)
+
   def neg(self, x, name=None):
     return self.op("Neg", [x], name)
 
   def abs(self, x, name=None):
     return self.op("Abs", [x], name)
-
-  def sign(self, x, name=None):
-    return self.op("Sign", [x], name)
 
   def rcp(self, x, name=None):
     return self.op("Reciprocal", [x], name)
@@ -301,6 +315,9 @@ class Builder:
   def max(self, x, name=None):
     return self.reduce("Max", x, name)
 
+  def norm(self, x, name=None):
+    return self.sqrt(self.sum(self.square(x)))
+
   def normalize(self, x, name=None):
     return self.mul(x, self.rcp(self.sum(x)), name)
 
@@ -313,4 +330,10 @@ class Builder:
     r.type = var.type
     r.shape = var.shape
     return r
+
+# Set builder factory for flows.
+def builder_factory(flow, name):
+  return Builder(flow, name)
+
+flow.builder_factory = builder_factory
 

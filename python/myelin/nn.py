@@ -52,8 +52,8 @@ class FF:
         v.type = type
         v.shape = [1, width]
         v.ref = True
-        v.producer.add_attr("input", 1)
-        v.producer.add_attr("output", 1)
+        v.input = True
+        v.output = True
         self.hidden_out = v
 
     self.output = tf.identity(v, name='output')
@@ -114,8 +114,8 @@ class LSTM:
     # c_t = f_t \odot c_{t-1} + i_t \odot tanh(affine(x_t, h_{t-1}))
     ct = tf.add(tf.mul(i_it, i_wt), tf.mul(i_ft, c_in), name='c_out')
     ct.ref = True
-    ct.producer.add_attr("input", 1)
-    ct.producer.add_attr("output", 1)
+    ct.input = True
+    ct.output = True
     self.ct = ct
 
     # Connector for control channel.
@@ -131,8 +131,8 @@ class LSTM:
     ph_t = tf.tanh(ct)
     ht = tf.mul(i_ot, ph_t, name='h_out')
     ht.ref = True
-    ht.producer.add_attr("input", 1)
-    ht.producer.add_attr("output", 1)
+    ht.input = True
+    ht.output = True
     self.ht = ht
 
     # Connector for hidden channel.

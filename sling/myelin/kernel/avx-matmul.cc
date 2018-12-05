@@ -286,8 +286,13 @@ class AVXFltVecMatMulBase : public AVXVecMatMulBase {
       for (int i = 0; i < unrolls; ++i) {
         // Add bias last in strict mode.
         if (bias_ && strict) {
-          __ vaddps(sum[i].ymm(), sum[i].ymm(),
-                    Operand(vector, colofs, times_1, i * vecbytes));
+          if (avx512) {
+            __ vaddps(sum[i], sum[i],
+                      Operand(vector, colofs, times_1, i * vecbytes));
+          } else {
+            __ vaddps(sum[i].ymm(), sum[i].ymm(),
+                      Operand(vector, colofs, times_1, i * vecbytes));
+          }                      
         }
 
         // Compute relu.
@@ -684,16 +689,27 @@ class AVXFltVecMatMulBase : public AVXVecMatMulBase {
       if (avx512) {
         __ vshuff32x4(acc, sum[0], sum[0], 0x0E);
         __ vaddps(sum[0], sum[0], acc);
+        __ vshuff32x4(acc, sum[0], sum[0], 0xB1);
+        __ vaddps(sum[0], sum[0], acc);
+        __ vpermilps(acc, sum[0], 0x0E);
+        __ vaddps(sum[0], sum[0], acc);
+        __ vpermilps(acc, sum[0], 0x01);
+        __ vaddps(sum[0], sum[0], acc);
+      } else {
+        __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
+        __ vaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
+        __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
+        __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
       }
-      __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
-      __ vhaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
-      __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
-      __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
     }
 
     // Compute relu.
     if (relu_) {
-      __ vmaxss(sum[0].ymm(), sum[0].ymm(), zero.ymm());
+      if (avx512) {
+        __ vmaxss(sum[0], sum[0], zero);
+      } else {
+        __ vmaxss(sum[0].ymm(), sum[0].ymm(), zero.ymm());
+      }
     }
 
     // Save to y[col].
@@ -913,15 +929,26 @@ class AVXFltDotProduct : public Kernel {
     if (avx512) {
       __ vshuff32x4(acc, sum[0], sum[0], 0x0E);
       __ vaddps(sum[0], sum[0], acc);
+      __ vshuff32x4(acc, sum[0], sum[0], 0xB1);
+      __ vaddps(sum[0], sum[0], acc);
+      __ vpermilps(acc, sum[0], 0x0E);
+      __ vaddps(sum[0], sum[0], acc);
+      __ vpermilps(acc, sum[0], 0x01);
+      __ vaddps(sum[0], sum[0], acc);
+    } else {
+      __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
+      __ vaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
+      __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
+      __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
     }
-    __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
-    __ vhaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
-    __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
-    __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
 
     // Save result to c.
     __ LoadTensorAddress(cptr, c);
-    __ vmovss(Operand(cptr), sum[0].ymm());
+    if (avx512) {
+      __ vmovss(Operand(cptr), sum[0]);
+    } else {
+      __ vmovss(Operand(cptr), sum[0].ymm());
+    }
   }
 };
 

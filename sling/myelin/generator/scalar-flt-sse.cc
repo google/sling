@@ -35,6 +35,10 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
     model_.func_reg_reg = true;
     model_.func_reg_imm = true;
     model_.func_reg_mem = true;
+    model_.cond_reg_reg_reg = true;
+    model_.cond_reg_mem_reg = true;
+    model_.cond_reg_reg_mem = true;
+    model_.cond_reg_mem_mem = true;
   }
 
   string Name() override { return "FltSSE"; }
@@ -45,6 +49,7 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
+    int num_rr_aux = 0;
     if (instructions_.Has(Express::BITAND) ||
         instructions_.Has(Express::BITOR) ||
         instructions_.Has(Express::AND) ||
@@ -58,9 +63,14 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
     }
     if (instructions_.Has(Express::NOT)) {
       num_mm_aux = std::max(num_mm_aux, 2);
-      index_->ReserveAuxRegisters(1);
+      num_rr_aux = std::max(num_rr_aux, 1);
+    }
+    if (instructions_.Has(Express::SELECT) ||
+        instructions_.Has(Express::COND)) {
+      num_rr_aux = std::max(num_rr_aux, 1);
     }
 
+    index_->ReserveAuxRegisters(num_rr_aux);
     index_->ReserveAuxXMMRegisters(num_mm_aux);
   }
 
@@ -171,7 +181,7 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
         break;
       case Express::CVTFLTINT:
       case Express::CVTINTFLT:
-        if (CPU::Enabled(SSE2)) {
+        if (CPU::Enabled(SSE2) && CPU::Enabled(SSE4_1)) {
           GenerateRegisterOp(instr, masm);
         } else {
           UNSUPPORTED;
@@ -286,9 +296,15 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
           __ movss(src, addr(instr->args[1]));
         }
         switch (instr->type) {
-          case Express::CVTFLTINT: __ cvttps2dq(dst, src); break;
-          case Express::CVTINTFLT: __ cvtdq2ps(dst, src); break;
-          case Express::SUBINT: __ psubd(dst, src); break;
+          case Express::CVTFLTINT:
+            __ cvttps2dq(dst, src);
+            break;
+          case Express::CVTINTFLT:
+            __ cvtdq2ps(dst, src);
+            break;
+          case Express::SUBINT:
+            __ psubd(dst, src);
+            break;
           case Express::BITAND:
           case Express::AND:
             __ andps(dst, src);
@@ -321,9 +337,16 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
           __ movsd(src, addr(instr->args[1]));
         }
         switch (instr->type) {
-          case Express::CVTFLTINT: __ cvttpd2dq(dst, src); break;
-          case Express::CVTINTFLT: __ cvtdq2pd(dst, src); break;
-          case Express::SUBINT: __ psubq(dst, src); break;
+          case Express::CVTFLTINT:
+            __ cvttpd2dq(dst, src);
+            __ pmovsxdq(dst, dst);
+            break;
+          case Express::CVTINTFLT:
+            __ cvtdq2pd(dst, src);
+            break;
+          case Express::SUBINT:
+            __ psubq(dst, src);
+            break;
           case Express::BITAND:
           case Express::AND:
             __ andpd(dst, src);
@@ -344,7 +367,7 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
               __ movq(xmmaux(1), aux(0));
               __ xorpd(dst, xmmaux(1));
             } else {
-              __ movd(dst, aux(0));
+              __ movq(dst, aux(0));
               __ xorpd(dst, src);
             }
             break;
@@ -358,24 +381,49 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
   // Generate conditional.
   void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
-    CHECK(instr->src != -1);
     CHECK(instr->mask != -1);
     Label l1, l2;
-    __ ptest(xmm(instr->mask), xmm(instr->mask));
-    __ j(zero, &l1);
-    __ movaps(xmm(instr->dst), xmm(instr->src));
-    __ jmp(&l2);
-    __ bind(&l1);
-    if (instr->src != -1) {
-      __ movaps(xmm(instr->dst), xmm(instr->src2));
-    } else if (type_ == DT_FLOAT) {
-      __ movss(xmm(instr->dst), addr(instr->args[2]));
-    } else if (type_ == DT_DOUBLE) {
-      __ movsd(xmm(instr->dst), addr(instr->args[2]));
-    } else {
-      UNSUPPORTED;
+    switch (type_) {
+      case DT_FLOAT: {
+        __ movd(aux(0), xmm(instr->mask));
+        __ testl(aux(0), aux(0));
+        __ j(zero, &l1);
+        if (instr->src != -1) {
+          __ movaps(xmm(instr->dst), xmm(instr->src));
+        } else {
+          __ movss(xmm(instr->dst), addr(instr->args[1]));
+        }
+        __ jmp(&l2);
+        __ bind(&l1);
+        if (instr->src2 != -1) {
+          __ movaps(xmm(instr->dst), xmm(instr->src2));
+        } else {
+          __ movss(xmm(instr->dst), addr(instr->args[2]));
+        }
+        __ bind(&l2);
+        break;
+      }
+      case DT_DOUBLE: {
+        __ movq(aux(0), xmm(instr->mask));
+        __ testq(aux(0), aux(0));
+        __ j(zero, &l1);
+        if (instr->src != -1) {
+          __ movapd(xmm(instr->dst), xmm(instr->src));
+        } else {
+          __ movsd(xmm(instr->dst), addr(instr->args[1]));
+        }
+        __ jmp(&l2);
+        __ bind(&l1);
+        if (instr->src2 != -1) {
+          __ movapd(xmm(instr->dst), xmm(instr->src2));
+        } else {
+          __ movsd(xmm(instr->dst), addr(instr->args[2]));
+        }
+        __ bind(&l2);
+        break;
+      }
+      default: UNSUPPORTED;
     }
-    __ bind(&l2);
   }
 
   // Generate masked select.
@@ -385,7 +433,8 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
     Label l1, l2;
     switch (type_) {
       case DT_FLOAT: {
-        __ ptest(xmm(instr->mask), xmm(instr->mask));
+        __ movd(aux(0), xmm(instr->mask));
+        __ testl(aux(0), aux(0));
         __ j(not_zero, &l1);
         __ xorps(xmm(instr->dst), xmm(instr->dst));
         if (instr->src == instr->dst) {
@@ -403,7 +452,8 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
         break;
       }
       case DT_DOUBLE: {
-        __ ptest(xmm(instr->mask), xmm(instr->mask));
+        __ movq(aux(0), xmm(instr->mask));
+        __ testq(aux(0), aux(0));
         __ j(not_zero, &l1);
         __ xorpd(xmm(instr->dst), xmm(instr->dst));
         if (instr->src == instr->dst) {

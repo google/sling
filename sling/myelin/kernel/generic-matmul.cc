@@ -355,7 +355,7 @@ class GenericIntVecMatMulBase : public Kernel {
     // Check bias vector.
     if (bias_) {
       Tensor *b = step->input(2);
-      if (!!IsIntType(b->type())) return false;
+      if (!IsIntType(b->type())) return false;
       if (b->rank() == 1) {
         if (b->dim(0) != y->dim(1)) return false;
       } else if (b->rank() == 2) {
@@ -370,10 +370,11 @@ class GenericIntVecMatMulBase : public Kernel {
 
   void Adjust(Step *step) override {
     // Reserve registers.
+    bool saturate = step->GetAttr("saturate", false);
+    if (step->output(0)->type() == DT_INT64) saturate = false;
     int num_regs = 8;
     if (bias_) num_regs++;
-    if (bias_ || step->output(0)->type() != DT_INT64) num_regs++;
-    if (step->output(0)->type() != DT_INT64) num_regs++;
+    if (saturate) num_regs += 2;
     step->SetRegisterUsage(num_regs);
 
     // Matrix must be column major.
@@ -395,6 +396,10 @@ class GenericIntVecMatMulBase : public Kernel {
     int cols = W->dim(1);
     int row_size = W->stride(1);
 
+    // Check bounds if saturate attribute is set.
+    bool saturate = step->GetAttr("saturate", false);
+    if (y->type() == DT_INT64) saturate = false;
+
     // Allocate registers.
     Register v = rr.alloc();
     Register m = rr.alloc();
@@ -407,27 +412,29 @@ class GenericIntVecMatMulBase : public Kernel {
     Register output = rr.alloc();
     Register vector = bias_ ? rr.alloc() : no_reg;
 
-    Register min = (bias_ || y->type() != DT_INT64) ? rr.alloc() : no_reg;
-    Register max = y->type() != DT_INT64 ? rr.alloc() : no_reg;
+    Register min = saturate ? rr.alloc() : no_reg;
+    Register max = saturate ? rr.alloc() : no_reg;
 
     // Initialize overflow bounds.
-    switch (y->type()) {
-      case DT_INT8:
-        __ movq(min, Immediate(relu_ ? 0 : -0x80));
-        __ movq(max, Immediate(0x7f));
-        break;
+    if (saturate) {
+      switch (y->type()) {
+        case DT_INT8:
+          __ movq(min, Immediate(relu_ ? 0 : -0x80));
+          __ movq(max, Immediate(0x7f));
+          break;
 
-      case DT_INT16:
-        __ movq(min, Immediate(relu_ ? 0 : -0x8000));
-        __ movq(max, Immediate(0x7fff));
-        break;
+        case DT_INT16:
+          __ movq(min, Immediate(relu_ ? 0 : -0x8000));
+          __ movq(max, Immediate(0x7fff));
+          break;
 
-      case DT_INT32:
-        __ movq(min, Immediate(relu_ ? 0 : -0x80000000));
-        __ movq(max, Immediate(0x7fffffff));
-        break;
+        case DT_INT32:
+          __ movq(min, Immediate(relu_ ? 0 : -0x80000000));
+          __ movq(max, Immediate(0x7fffffff));
+          break;
 
-      default: ; // no overflow check
+        default: ; // no overflow check
+      }
     }
 
     // Load tensor locations.
@@ -458,12 +465,19 @@ class GenericIntVecMatMulBase : public Kernel {
     __ cmpq(row, Immediate(rows));
     __ j(not_equal, &l2);
 
+    // Apply relu.
+    if (relu_) {
+      Label nonneg;
+      __ testq(sum, sum);
+      __ j(positive, &nonneg);
+      __ xorq(sum, sum);
+      __ bind(&nonneg);
+    }
+
     // Check for overflow.
-    if (bias_ || y->type() != DT_INT64) {
+    if (saturate) {
       __ cmpq(sum, min);
       __ cmovq(less, sum, min);
-    }
-    if (y->type() != DT_INT64) {
       __ cmpq(sum, max);
       __ cmovq(greater, sum, max);
     }
@@ -548,6 +562,7 @@ class MatMulTransformer : public Transformer {
       if (var->consumers[0]->task != op->task) continue;
       if (var->out()) continue;
       if (!var->shape.defined()) continue;
+      if (var->type == DT_DOUBLE) continue;
       if (op->indegree() >= 1) {
         // Only combine for vector inputs.
         Flow::Variable *input = op->inputs[0];

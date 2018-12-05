@@ -72,6 +72,7 @@ namespace jit {
   V(rcr, 0x3)                           \
   V(shl, 0x4)                           \
   V(shr, 0x5)                           \
+  V(sal, 0x4)                           \
   V(sar, 0x7)                           \
 
 // SSE instructions.
@@ -141,8 +142,7 @@ namespace jit {
   V(pmaxsd, 66, 0F, 38, 3D)      \
   V(pmaxuw, 66, 0F, 38, 3E)      \
   V(pmaxud, 66, 0F, 38, 3F)      \
-  V(pmulld, 66, 0F, 38, 40)      \
-  V(ptest, 66, 0F, 38, 17)
+  V(pmulld, 66, 0F, 38, 40)
 
 }  // namespace jit
 }  // namespace sling

@@ -203,6 +203,12 @@ void vcvtps2udq(ZMMRegister dst, ZMMRegister src, Mask mask = nomask, RoundingMo
 void vcvtps2udq(ZMMRegister dst, const Operand &src, Mask mask = nomask) {
   zinstr(0x79, dst, src, 0, mask, EVEX_BCST | EVEX_BT4 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_W0);
 }
+void vcvtqq2pd(ZMMRegister dst, ZMMRegister src, Mask mask = nomask, RoundingMode er = noround) {
+  zinstr(0xE6, dst, src, 0, mask, EVEX_BT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_PF3 | EVEX_W1 | evex_round(er));
+}
+void vcvtqq2pd(ZMMRegister dst, const Operand &src, Mask mask = nomask) {
+  zinstr(0xE6, dst, src, 0, mask, EVEX_BCST | EVEX_BT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_PF3 | EVEX_W1);
+}
 void vcvtsd2si(Register dst, ZMMRegister src, RoundingMode er = noround) {
   zinstr(0x2D, dst, src, 0, nomask, EVEX_DT8 | EVEX_LIG | EVEX_M0F | EVEX_PF2 | EVEX_W0 | EVEX_W1 | evex_round(er));
 }
@@ -256,6 +262,12 @@ void vcvttpd2dq(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
 }
 void vcvttpd2dq(ZMMRegister dst, const Operand &src, Mask mask = nomask) {
   zinstr(0xE6, dst, src, 0, mask, EVEX_BCST | EVEX_BT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_P66 | EVEX_W1);
+}
+void vcvttpd2qq(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
+  zinstr(0x7A, dst, src, 0, mask, EVEX_BT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_P66 | EVEX_SAE | EVEX_W1);
+}
+void vcvttpd2qq(ZMMRegister dst, const Operand &src, Mask mask = nomask) {
+  zinstr(0x7A, dst, src, 0, mask, EVEX_BCST | EVEX_BT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_P66 | EVEX_W1);
 }
 void vcvttpd2udq(ZMMRegister dst, ZMMRegister src, Mask mask = nomask) {
   zinstr(0x78, dst, src, 0, mask, EVEX_BT8 | EVEX_L128 | EVEX_L256 | EVEX_L512 | EVEX_M0F | EVEX_SAE | EVEX_W1);

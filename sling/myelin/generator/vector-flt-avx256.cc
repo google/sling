@@ -40,6 +40,8 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
     }
+    model_.cond_reg_reg_reg = true;
+    model_.cond_reg_mem_reg = true;
   }
 
   string Name() override { return "VFltAVX256"; }
@@ -61,13 +63,13 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         num_mm_aux = std::max(num_mm_aux, 3);
       }
     }
-    if (instructions_.Has(Express::NOT)) {
-      num_mm_aux = std::max(num_mm_aux, 1);
-    }
     if (instructions_.Has(Express::SUM) ||
         instructions_.Has(Express::PRODUCT) ||
         instructions_.Has(Express::MIN) ||
         instructions_.Has(Express::MAX)) {
+      num_mm_aux = std::max(num_mm_aux, 1);
+    }
+    if (instructions_.Has(Express::CVTINTFLT) && type_ == DT_DOUBLE) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
     index_->ReserveAuxYMMRegisters(num_mm_aux);
@@ -231,16 +233,10 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
             round_down, masm);
         break;
       case Express::CVTFLTINT:
-        GenerateYMMFltOp(instr,
-            &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
-            &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
-            masm);
+        GenerateFltToInt(instr, masm);
         break;
       case Express::CVTINTFLT:
-        GenerateYMMFltOp(instr,
-            &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
-            &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
-            masm);
+        GenerateIntToFlt(instr, masm);
         break;
       case Express::CVTEXPINT:
         GenerateShift(instr, masm, false, type_ == DT_FLOAT ? 23 : 52);
@@ -280,6 +276,50 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
     }
   }
 
+  // Generate float to integer conversion.
+  void GenerateFltToInt(Express::Op *instr, MacroAssembler *masm) {
+    // Convert eight floats or four doubles to int32.
+    GenerateYMMFltOp(instr,
+        &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
+        &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
+        masm);
+
+    // Convert int32 to int64 for doubles.
+    if (type_ == DT_DOUBLE) {
+      __ vpmovsxdq(ymm(instr->dst), xmm(instr->dst));
+    }
+  }
+
+  // Generate integer to float conversion.
+  void GenerateIntToFlt(Express::Op *instr, MacroAssembler *masm) {
+    if (type_ == DT_FLOAT) {
+      // Convert four int32s to floats.
+      if (instr->src != -1) {
+        __ vcvtdq2ps(ymm(instr->dst), ymm(instr->src));
+      } else {
+        __ vcvtdq2ps(ymm(instr->dst), addr(instr->args[0]));
+      }
+    } else if (type_ == DT_DOUBLE) {
+      // Make sure source is in a register.
+      int src = instr->src;
+      if (instr->src == -1) {
+        GenerateYMMMoveMemToReg(ymm(instr->dst), addr(instr->args[0]), masm);
+        src = instr->dst;
+      }
+
+      // Convert four int64s to four int32s in lower lane.
+      __ vperm2f128(ymmaux(0), ymm(src), ymm(src), 1);
+      __ vpermilps(ymm(src), ymm(src), 0xD8);
+      __ vpermilps(ymmaux(0), ymmaux(0), 0x8D);
+      __ vblendps(ymm(src), ymm(src), ymmaux(0), 0x3C);
+
+      // Convert four int32s in lower lane to doubles.
+      __ vcvtdq2pd(ymm(instr->dst), ymm(src));
+    } else {
+      UNSUPPORTED;
+    }
+  }
+
   // Generate left/right shift.
   void GenerateShift(Express::Op *instr, MacroAssembler *masm,
                      bool left, int bits) {
@@ -291,36 +331,50 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
       src = instr->dst;
     }
 
-    if (CPU::Enabled(AVX2)) {
-      // Shift ymm register.
-      switch (type_) {
-        case DT_FLOAT:
+    switch (type_) {
+      case DT_FLOAT:
+        if (CPU::Enabled(AVX2)) {
+          // Shift ymm register.
           if (left) {
             __ vpslld(ymm(instr->dst), ymm(src), bits);
           } else {
             __ vpsrld(ymm(instr->dst), ymm(src), bits);
           }
-          break;
-        case DT_DOUBLE:
+        } else {
+          // Shift ymm register by shifting lo and hi xmm registers.
+          __ vextractf128(xmmaux(0), ymm(src), 1);
+          if (left) {
+            __ vpslld(xmmaux(0), xmmaux(0), bits);
+            __ vpslld(xmm(instr->dst), xmm(src), bits);
+          } else {
+            __ vpsrld(xmmaux(0), xmmaux(0), bits);
+            __ vpsrld(xmm(instr->dst), xmm(src), bits);
+          }
+          __ vinsertf128(ymm(instr->dst), ymm(instr->dst), xmmaux(0), 1);
+        }
+        break;
+      case DT_DOUBLE:
+        if (CPU::Enabled(AVX2)) {
+          // Shift ymm register.
           if (left) {
             __ vpsllq(ymm(instr->dst), ymm(src), bits);
           } else {
             __ vpsrlq(ymm(instr->dst), ymm(src), bits);
           }
-          break;
-        default: UNSUPPORTED;
-      }
-    } else {
-      // Shift ymm register by shifting lo and hi xmm registers.
-      __ vextractf128(xmmaux(0), ymm(src), 1);
-      if (left) {
-        __ vpslld(xmmaux(0), xmmaux(0), bits);
-        __ vpslld(xmm(instr->dst), xmm(src), bits);
-      } else {
-        __ vpsrld(xmmaux(0), xmmaux(0), bits);
-        __ vpsrld(xmm(instr->dst), xmm(src), bits);
-      }
-      __ vinsertf128(ymm(instr->dst), ymm(instr->dst), xmmaux(0), 1);
+        } else {
+          // Shift ymm register by shifting lo and hi xmm registers.
+          __ vextractf128(xmmaux(0), ymm(src), 1);
+          if (left) {
+            __ vpsllq(xmmaux(0), xmmaux(0), bits);
+            __ vpsllq(xmm(instr->dst), xmm(src), bits);
+          } else {
+            __ vpsrlq(xmmaux(0), xmmaux(0), bits);
+            __ vpsrlq(xmm(instr->dst), xmm(src), bits);
+          }
+          __ vinsertf128(ymm(instr->dst), ymm(instr->dst), xmmaux(0), 1);
+        }
+        break;
+      default: UNSUPPORTED;
     }
   }
 
@@ -362,18 +416,16 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
 
   // Generate logical not.
   void GenerateNot(Express::Op *instr, MacroAssembler *masm) {
-    // Set aux register to all 1s.
-    __ vpcmpeqd(ymmaux(0), ymmaux(0), ymmaux(0));
-
     // Compute not(x) = xor(1,x).
+    __ vpcmpeqd(ymm(instr->dst), ymm(instr->dst), ymm(instr->dst));
     if (instr->src != -1) {
       // NOT dst,reg
       switch (type_) {
         case DT_FLOAT:
-          __ vxorps(ymm(instr->dst), ymmaux(0), ymm(instr->src));
+          __ vxorps(ymm(instr->dst), ymm(instr->dst), ymm(instr->src));
           break;
         case DT_DOUBLE:
-          __ vxorpd(ymm(instr->dst), ymmaux(0), ymm(instr->src));
+          __ vxorpd(ymm(instr->dst), ymm(instr->dst), ymm(instr->src));
           break;
         default: UNSUPPORTED;
       }
@@ -381,10 +433,10 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
       // NOT dst,[mem]
       switch (type_) {
         case DT_FLOAT:
-          __ vxorps(ymm(instr->dst), ymmaux(0), addr(instr->args[0]));
+          __ vxorps(ymm(instr->dst), ymm(instr->dst), addr(instr->args[0]));
           break;
         case DT_DOUBLE:
-          __ vxorpd(ymm(instr->dst), ymmaux(0), addr(instr->args[0]));
+          __ vxorpd(ymm(instr->dst), ymm(instr->dst), addr(instr->args[0]));
           break;
         default: UNSUPPORTED;
       }
@@ -402,30 +454,30 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
   // Generate conditional.
   void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
-    CHECK(instr->src != -1);
+    CHECK(instr->src2 != -1);
     CHECK(instr->mask != -1);
-    if (instr->src2 != -1) {
+    if (instr->src != -1) {
       // COND dst[mask],src,src2
       switch (type_) {
         case DT_FLOAT:
-          __ vblendvps(ymm(instr->dst), ymm(instr->src), ymm(instr->src2),
+          __ vblendvps(ymm(instr->dst), ymm(instr->src2), ymm(instr->src),
                        ymm(instr->mask));
           break;
         case DT_DOUBLE:
-          __ vblendvpd(ymm(instr->dst), ymm(instr->src), ymm(instr->src2),
+          __ vblendvpd(ymm(instr->dst), ymm(instr->src2), ymm(instr->src),
                        ymm(instr->mask));
           break;
         default: UNSUPPORTED;
       }
     } else {
-      // COND dst[mask],src,[mem]
+      // COND dst[mask],[mem],src2
       switch (type_) {
         case DT_FLOAT:
-          __ vblendvps(ymm(instr->dst), ymm(instr->src), addr(instr->args[2]),
+          __ vblendvps(ymm(instr->dst), ymm(instr->src2), addr(instr->args[1]),
                        ymm(instr->mask));
           break;
         case DT_DOUBLE:
-          __ vblendvpd(ymm(instr->dst), ymm(instr->src), addr(instr->args[2]),
+          __ vblendvpd(ymm(instr->dst), ymm(instr->src2), addr(instr->args[1]),
                        ymm(instr->mask));
           break;
         default: UNSUPPORTED;
@@ -471,7 +523,7 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         switch (instr->type) {
           case Express::SUM:
             __ vperm2f128(aux, acc, acc, 1);
-            __ vhaddps(acc, acc, aux);
+            __ vaddps(acc, acc, aux);
             __ vhaddps(acc, acc, acc);
             __ vhaddps(acc, acc, acc);
             break;
@@ -511,7 +563,7 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         switch (instr->type) {
           case Express::SUM:
             __ vperm2f128(aux, acc, acc, 1);
-            __ vhaddpd(acc, acc, aux);
+            __ vaddpd(acc, acc, aux);
             __ vhaddpd(acc, acc, acc);
             break;
           case Express::PRODUCT:

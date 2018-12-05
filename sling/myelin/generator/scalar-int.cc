@@ -175,7 +175,7 @@ class ScalarIntGenerator : public ExpressionGenerator {
       GenerateInc(dst, masm);
     } else if (imm == -1) {
       GenerateDec(dst, masm);
-    } else  if (imm != 0) {
+    } else if (imm != 0) {
       switch (type_) {
         case DT_INT8:  __ addb(dst, Immediate(imm)); break;
         case DT_INT16: __ addw(dst, Immediate(imm)); break;
@@ -219,10 +219,10 @@ class ScalarIntGenerator : public ExpressionGenerator {
       }
       if (value == imm) {
         switch (type_) {
-          case DT_INT8:  __ shlb(dst, Immediate(shift)); break;
-          case DT_INT16: __ shlw(dst, Immediate(shift)); break;
-          case DT_INT32: __ shll(dst, Immediate(shift)); break;
-          case DT_INT64: __ shlq(dst, Immediate(shift)); break;
+          case DT_INT8:  __ salb(dst, Immediate(shift)); break;
+          case DT_INT16: __ salw(dst, Immediate(shift)); break;
+          case DT_INT32: __ sall(dst, Immediate(shift)); break;
+          case DT_INT64: __ salq(dst, Immediate(shift)); break;
           default: UNSUPPORTED;
         }
       } else {
@@ -277,27 +277,38 @@ class ScalarIntGenerator : public ExpressionGenerator {
       if (value == imm) {
         Register dst = reg(instr->dst);
         switch (type_) {
-          case DT_INT8:  __ shrb(dst, Immediate(shift)); break;
-          case DT_INT16: __ shrw(dst, Immediate(shift)); break;
-          case DT_INT32: __ shrl(dst, Immediate(shift)); break;
-          case DT_INT64: __ shrq(dst, Immediate(shift)); break;
+          case DT_INT8:  __ sarb(dst, Immediate(shift)); break;
+          case DT_INT16: __ sarw(dst, Immediate(shift)); break;
+          case DT_INT32: __ sarl(dst, Immediate(shift)); break;
+          case DT_INT64: __ sarq(dst, Immediate(shift)); break;
           default: UNSUPPORTED;
         }
         return;
       }
     }
 
-    __ movq(rax, reg(instr->dst));
-    if (type_ != DT_INT8) {
-      __ xorq(rdx, rdx);
+    if (reg(instr->dst).code() != rax.code()) {
+      __ movq(rax, reg(instr->dst));
     }
+
+    // Sign-extend rax into rdx:rax.
+    switch (type_) {
+      case DT_INT8:  __ movsxbl(rax, rax); break;
+      case DT_INT16: __ cbw(); break;
+      case DT_INT32: __ cdq(); break;
+      case DT_INT64: __ cqo(); break;
+      default: UNSUPPORTED;
+    }
+
     GenerateIntUnaryOp(instr,
         &Assembler::idivb, &Assembler::idivb,
         &Assembler::idivw, &Assembler::idivw,
         &Assembler::idivl, &Assembler::idivl,
         &Assembler::idivq, &Assembler::idivq,
         masm, 1);
-    __ movq(reg(instr->dst), rax);
+    if (reg(instr->dst).code() != rax.code()) {
+      __ movq(reg(instr->dst), rax);
+    }
   }
 
   // Generate min/max.

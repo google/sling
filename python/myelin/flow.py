@@ -21,6 +21,11 @@ from struct import pack
 from struct import unpack
 from struct import unpack_from
 
+def dummy_factory_builder(flow, name):
+  raise Exception("No flow builder defined")
+
+builder_factory = dummy_factory_builder
+
 class FileWriter:
   """Flow file writer."""
 
@@ -381,6 +386,10 @@ class Flow:
       b = Blob(name)
       self.blobs[name] = b
     return b
+
+  def define(self, name):
+    """Create a builder for a new funtion."""
+    return builder_factory(self, name)
 
   def rename_prefix(self, prefix, replacement):
     """Replace prefix in all names."""

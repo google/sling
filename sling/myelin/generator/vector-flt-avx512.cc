@@ -40,6 +40,8 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
     }
+    model_.cond_reg_reg_reg = true;
+    model_.cond_reg_mem_reg = true;
     model_.predicate_regs = true;
     model_.logic_in_regs = true;
   }
@@ -232,16 +234,16 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
         break;
       case Express::CVTFLTINT:
         GenerateZMMFltOp(instr,
-            &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
+            &Assembler::vcvttps2dq, &Assembler::vcvttpd2qq,
             nullptr, nullptr,
-            &Assembler::vcvttps2dq, &Assembler::vcvttpd2dq,
+            &Assembler::vcvttps2dq, &Assembler::vcvttpd2qq,
             masm);
         break;
       case Express::CVTINTFLT:
         GenerateZMMFltOp(instr,
-            nullptr, &Assembler::vcvtdq2pd,
-            &Assembler::vcvtdq2ps, nullptr,
-            &Assembler::vcvtdq2ps, &Assembler::vcvtdq2pd,
+            nullptr, nullptr,
+            &Assembler::vcvtdq2ps, &Assembler::vcvtqq2pd,
+            &Assembler::vcvtdq2ps, &Assembler::vcvtqq2pd,
             masm);
         break;
       case Express::CVTEXPINT:
@@ -427,32 +429,32 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
   // Generate conditional.
   void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
-    if (instr->src != -1 && instr->src2 != -1) {
+    CHECK(instr->src2 != -1);
+    CHECK(instr->mask != -1);
+    if (instr->src != -1) {
       switch (type_) {
         case DT_FLOAT:
-          __ vblendmps(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
+          __ vblendmps(zmm(instr->dst), zmm(instr->src2), zmm(instr->src),
                        Mask(kk(instr->mask), merging));
           break;
         case DT_DOUBLE:
-          __ vblendmpd(zmm(instr->dst), zmm(instr->src), zmm(instr->src2),
-                       Mask(kk(instr->mask), merging));
-          break;
-        default: UNSUPPORTED;
-      }
-    } else if (instr->src != -1 && instr->src2 == -1) {
-      switch (type_) {
-        case DT_FLOAT:
-          __ vblendmps(zmm(instr->dst), zmm(instr->src), addr(instr->args[2]),
-                       Mask(kk(instr->mask), merging));
-          break;
-        case DT_DOUBLE:
-          __ vblendmpd(zmm(instr->dst), zmm(instr->src), addr(instr->args[2]),
+          __ vblendmpd(zmm(instr->dst), zmm(instr->src2), zmm(instr->src),
                        Mask(kk(instr->mask), merging));
           break;
         default: UNSUPPORTED;
       }
     } else {
-      UNSUPPORTED;
+      switch (type_) {
+        case DT_FLOAT:
+          __ vblendmps(zmm(instr->dst), zmm(instr->src2), addr(instr->args[1]),
+                       Mask(kk(instr->mask), merging));
+          break;
+        case DT_DOUBLE:
+          __ vblendmpd(zmm(instr->dst), zmm(instr->src2), addr(instr->args[1]),
+                       Mask(kk(instr->mask), merging));
+          break;
+        default: UNSUPPORTED;
+      }
     }
   }
 
@@ -491,90 +493,47 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
       case DT_FLOAT:
         switch (instr->type) {
           case Express::SUM:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vaddps(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vhaddps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vhaddps(acc.ymm(), acc.ymm(), acc.ymm());
-            __ vhaddps(acc.ymm(), acc.ymm(), acc.ymm());
+            GenerateZMMReduction(&Assembler::vaddps, acc, aux, 16, masm);
             break;
           case Express::PRODUCT:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vmulps(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vmulps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilps(aux.ymm(), acc.ymm(), 0x0E);
-            __ vmulps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilps(aux.ymm(), acc.ymm(), 0x01);
-            __ vmulps(acc.ymm(), acc.ymm(), aux.ymm());
+            GenerateZMMReduction(&Assembler::vmulps, acc, aux, 16, masm);
             break;
           case Express::MIN:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vminps(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vminps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilps(aux.ymm(), acc.ymm(), 0x0E);
-            __ vminps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilps(aux.ymm(), acc.ymm(), 0x01);
-            __ vminps(acc.ymm(), acc.ymm(), aux.ymm());
+            GenerateZMMReduction(&Assembler::vminps, acc, aux, 16, masm);
             break;
           case Express::MAX:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vmaxps(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vmaxps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilps(aux.ymm(), acc.ymm(), 0x0E);
-            __ vmaxps(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilps(aux.ymm(), acc.ymm(), 0x01);
-            __ vmaxps(acc.ymm(), acc.ymm(), aux.ymm());
+            GenerateZMMReduction(&Assembler::vmaxps, acc, aux, 16, masm);
             break;
           default: UNSUPPORTED;
         }
         if (instr->dst != -1) {
-          __ vmovss(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
+          __ vmovss(zmm(instr->dst).x(), zmm(instr->dst).x(), 
+                    zmm(instr->acc).x());
         } else {
-          __ vmovss(addr(instr->result), xmm(instr->acc));
+          __ vmovss(addr(instr->result), zmm(instr->acc).x());
         }
         break;
       case DT_DOUBLE:
         switch (instr->type) {
           case Express::SUM:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vaddpd(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vhaddpd(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vhaddpd(acc.ymm(), acc.ymm(), acc.ymm());
+            GenerateZMMReduction(&Assembler::vaddpd, acc, aux, 8, masm);
             break;
           case Express::PRODUCT:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vmulpd(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vmulpd(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilpd(aux.ymm(), acc.ymm(), 1);
-            __ vmulpd(acc.ymm(), acc.ymm(), aux.ymm());
+            GenerateZMMReduction(&Assembler::vmulpd, acc, aux, 8, masm);
             break;
           case Express::MIN:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vminpd(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vminpd(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilpd(aux.ymm(), acc.ymm(), 1);
-            __ vminpd(acc.ymm(), acc.ymm(), aux.ymm());
+            GenerateZMMReduction(&Assembler::vminpd, acc, aux, 8, masm);
             break;
           case Express::MAX:
-            __ vshuff32x4(aux, acc, acc, 0x0E);
-            __ vmaxpd(acc, acc, aux);
-            __ vperm2f128(aux.ymm(), acc.ymm(), acc.ymm(), 1);
-            __ vmaxpd(acc.ymm(), acc.ymm(), aux.ymm());
-            __ vpermilpd(aux.ymm(), acc.ymm(), 1);
-            __ vmaxpd(acc.ymm(), acc.ymm(), aux.ymm());
+            GenerateZMMReduction(&Assembler::vmaxpd, acc, aux, 8, masm);
             break;
           default: UNSUPPORTED;
         }
         if (instr->dst != -1) {
-          __ vmovsd(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
+          __ vmovsd(zmm(instr->dst).x(), zmm(instr->dst).x(), 
+                    zmm(instr->acc).x());
         } else {
-          __ vmovsd(addr(instr->result), xmm(instr->acc));
+          __ vmovsd(addr(instr->result), zmm(instr->acc).x());
         }
         break;
       default: UNSUPPORTED;

@@ -35,6 +35,10 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
     model_.func_reg_reg = true;
     model_.func_reg_imm = true;
     model_.func_reg_mem = true;
+    model_.cond_reg_reg_reg = true;
+    model_.cond_reg_mem_reg = true;
+    model_.cond_reg_reg_mem = true;
+    model_.cond_reg_mem_mem = true;
   }
 
   string Name() override { return "VFltSSE"; }
@@ -286,11 +290,14 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
 
   // Generate float to integer conversion.
   void GenerateFltToInt(Express::Op *instr, MacroAssembler *masm) {
-    if (CPU::Enabled(SSE2)) {
+    if (CPU::Enabled(SSE2) && CPU::Enabled(SSE4_1)) {
       GenerateXMMFltOp(instr,
           &Assembler::cvttps2dq, &Assembler::cvttpd2dq,
           &Assembler::cvttps2dq, &Assembler::cvttpd2dq,
           masm);
+      if (type_ == DT_DOUBLE) {
+        __ pmovsxdq(xmm(instr->dst), xmm(instr->dst));
+      }
     } else {
       UNSUPPORTED;
     }
@@ -298,11 +305,26 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
 
   // Generate integer to float conversion.
   void GenerateIntToFlt(Express::Op *instr, MacroAssembler *masm) {
-    if (CPU::Enabled(SSE2)) {
-      GenerateXMMFltOp(instr,
-          &Assembler::cvtdq2ps, &Assembler::cvtdq2pd,
-          &Assembler::cvtdq2ps, &Assembler::cvtdq2pd,
-          masm);
+    if (type_ == DT_FLOAT && CPU::Enabled(SSE2)) {
+      // Convert four int32s to floats.
+      if (instr->src != -1) {
+        __ cvtdq2ps(xmm(instr->dst), xmm(instr->src));
+      } else {
+        __ cvtdq2ps(xmm(instr->dst), addr(instr->args[0]));
+      }
+    } else if (type_ == DT_DOUBLE && CPU::Enabled(SSE2)) {
+      // Make sure source is in a register.
+      int src = instr->src;
+      if (instr->src == -1) {
+        __ movdqa(xmm(instr->dst), addr(instr->args[0]));
+        src = instr->dst;
+      }
+
+      // Convert two int64s to two int32s.
+      __ shufps(xmm(instr->src), xmm(instr->src), 0xD8);
+
+      // Convert two int32s to doubles.
+      __ cvtdq2pd(xmm(instr->dst), xmm(src));
     } else {
       UNSUPPORTED;
     }
@@ -311,32 +333,11 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
   // Generate logical not.
   void GenerateNot(Express::Op *instr, MacroAssembler *masm) {
     // Compute not(x) = xor(1,x).
-    CHECK(instr->first_is_dest);
-    if (instr->src != -1) {
-      // NOT dst,reg
-      __ pcmpeqd(xmmaux(0), xmmaux(0));
-      switch (type_) {
-        case DT_FLOAT:
-          __ xorps(xmm(instr->dst), xmmaux(0));
-          break;
-        case DT_DOUBLE:
-          __ xorpd(xmm(instr->dst), xmmaux(0));
-          break;
-        default: UNSUPPORTED;
-      }
-    } else {
-      // NOT dst,[mem]
-      __ pcmpeqd(xmm(instr->dst), xmm(instr->dst));
-      switch (type_) {
-        case DT_FLOAT:
-          __ xorps(xmm(instr->dst), addr(instr->args[0]));
-          break;
-        case DT_DOUBLE:
-          __ xorpd(xmm(instr->dst), addr(instr->args[0]));
-          break;
-        default: UNSUPPORTED;
-      }
-    }
+    __ pcmpeqd(xmm(instr->dst), xmm(instr->dst));
+    GenerateXMMFltOp(instr,
+        &Assembler::xorps, &Assembler::xorpd,
+        &Assembler::xorps, &Assembler::xorpd,
+        masm);
   }
 
   // Generate compare.
@@ -350,7 +351,6 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
   // Generate conditional.
   void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
-    CHECK(instr->src != -1);
     CHECK(instr->mask != -1);
 
     // Mask first argument.
@@ -402,45 +402,21 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
   void GenerateSelect(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
     CHECK(instr->mask != -1);
-    bool copy_src = false;
-    int merge_src = true;
-    if (instr->dst == instr->src) {
-      if (instr->dst == instr->mask) return;  // no op
-      merge_src = false;
-    } else if (instr->dst != instr->mask && instr->src != instr->mask) {
-      copy_src = true;
-      merge_src = false;
-    }
-
-    if (copy_src) {
-      if (instr->src != -1) {
-        __ movaps(xmm(instr->dst), xmm(instr->src));
-      } else {
-        __ movaps(xmm(instr->dst), addr(instr->args[1]));
-      }
-    }
-
     switch (type_) {
       case DT_FLOAT:
-        if (merge_src) {
-          if (instr->src != -1) {
-            __ andps(xmm(instr->dst), xmm(instr->src));
-          } else {
-            __ andps(xmm(instr->dst), addr(instr->args[1]));
-          }
+        __ movaps(xmm(instr->dst), xmm(instr->mask));
+        if (instr->src != -1) {
+          __ andps(xmm(instr->dst), xmm(instr->src));
         } else {
-          __ andps(xmm(instr->dst), xmm(instr->mask));
+          __ andps(xmm(instr->dst), addr(instr->args[1]));
         }
         break;
       case DT_DOUBLE:
-        if (merge_src) {
-          if (instr->src != -1) {
-            __ andpd(xmm(instr->dst), xmm(instr->src));
-          } else {
-            __ andpd(xmm(instr->dst), addr(instr->args[1]));
-          }
+        __ movapd(xmm(instr->dst), xmm(instr->mask));
+        if (instr->src != -1) {
+          __ andpd(xmm(instr->dst), xmm(instr->src));
         } else {
-          __ andpd(xmm(instr->dst), xmm(instr->mask));
+          __ andpd(xmm(instr->dst), addr(instr->args[1]));
         }
         break;
       default: UNSUPPORTED;
@@ -455,26 +431,80 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
       case DT_FLOAT:
         switch (instr->type) {
           case Express::SUM:
-            __ haddps(acc, acc);
-            __ haddps(acc, acc);
+            if (CPU::Enabled(SSE3)) {
+              __ movshdup(aux, acc);
+              __ addps(acc, aux);
+              __ movhlps(aux, acc);
+              __ addss(acc, aux);
+            } else {
+              __ movaps(aux, acc);
+              __ shufps(aux, acc, 0xB1);
+              __ addps(acc, aux);
+                if (CPU::Enabled(SSE2)) {
+                  __ movhlps(aux, acc);
+                } else {
+                  __ movaps(aux, acc);
+                  __ shufps(aux, acc, 0x03);
+                }
+              __ addss(acc, aux);
+            }
             break;
           case Express::PRODUCT:
-            __ shufps(aux, acc, 0x0E);
-            __ mulps(acc, aux);
-            __ shufps(aux, acc, 0x01);
-            __ mulps(acc, aux);
+            if (CPU::Enabled(SSE3)) {
+              __ movshdup(aux, acc);
+              __ mulps(acc, aux);
+              __ movhlps(aux, acc);
+              __ mulss(acc, aux);
+            } else {
+              __ movaps(aux, acc);
+              __ shufps(aux, acc, 0xB1);
+              __ mulps(acc, aux);
+                if (CPU::Enabled(SSE2)) {
+                  __ movhlps(aux, acc);
+                } else {
+                  __ movaps(aux, acc);
+                  __ shufps(aux, acc, 0x03);
+                }
+              __ mulss(acc, aux);
+            }
             break;
           case Express::MIN:
-            __ shufps(aux, acc, 0x0E);
-            __ minps(acc, aux);
-            __ shufps(aux, acc, 0x01);
-            __ minps(acc, aux);
+            if (CPU::Enabled(SSE3)) {
+              __ movshdup(aux, acc);
+              __ minps(acc, aux);
+              __ movhlps(aux, acc);
+              __ minss(acc, aux);
+            } else {
+              __ movaps(aux, acc);
+              __ shufps(aux, acc, 0xB1);
+              __ minps(acc, aux);
+                if (CPU::Enabled(SSE2)) {
+                  __ movhlps(aux, acc);
+                } else {
+                  __ movaps(aux, acc);
+                  __ shufps(aux, acc, 0x03);
+                }
+              __ minss(acc, aux);
+            }
             break;
           case Express::MAX:
-            __ shufps(aux, acc, 0x0E);
-            __ maxps(acc, aux);
-            __ shufps(aux, acc, 0x01);
-            __ maxps(acc, aux);
+            if (CPU::Enabled(SSE3)) {
+              __ movshdup(aux, acc);
+              __ maxps(acc, aux);
+              __ movhlps(aux, acc);
+              __ maxss(acc, aux);
+            } else {
+              __ movaps(aux, acc);
+              __ shufps(aux, acc, 0xB1);
+              __ maxps(acc, aux);
+                if (CPU::Enabled(SSE2)) {
+                  __ movhlps(aux, acc);
+                } else {
+                  __ movaps(aux, acc);
+                  __ shufps(aux, acc, 0x03);
+                }
+              __ maxss(acc, aux);
+            }
             break;
           default: UNSUPPORTED;
         }
@@ -485,29 +515,31 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         }
         break;
       case DT_DOUBLE:
-        switch (instr->type) {
-          case Express::SUM:
-            __ shufpd(aux, acc, 1);
-            __ addpd(acc, aux);
-            break;
-          case Express::PRODUCT:
-            __ shufpd(aux, acc, 1);
-            __ mulpd(acc, aux);
-            break;
-          case Express::MIN:
-            __ shufpd(aux, acc, 1);
-            __ minpd(acc, aux);
-            break;
-          case Express::MAX:
-            __ shufpd(aux, acc, 1);
-            __ maxpd(acc, aux);
-            break;
-          default: UNSUPPORTED;
-        }
-        if (instr->dst != -1) {
-          __ movsd(xmm(instr->dst), xmm(instr->acc));
+        if (CPU::Enabled(SSE2)) {
+          __ movapd(aux, acc);
+          __ shufpd(aux, acc, 1);
+          switch (instr->type) {
+            case Express::SUM:
+              __ addsd(acc, aux);
+              break;
+            case Express::PRODUCT:
+              __ mulsd(acc, aux);
+              break;
+            case Express::MIN:
+              __ minsd(acc, aux);
+              break;
+            case Express::MAX:
+              __ maxsd(acc, aux);
+              break;
+            default: UNSUPPORTED;
+          }
+          if (instr->dst != -1) {
+            __ movsd(xmm(instr->dst), xmm(instr->acc));
+          } else {
+            __ movsd(addr(instr->result), xmm(instr->acc));
+          }
         } else {
-          __ movsd(addr(instr->result), xmm(instr->acc));
+          UNSUPPORTED;
         }
         break;
       default: UNSUPPORTED;
