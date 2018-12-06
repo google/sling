@@ -74,6 +74,9 @@ class MatMulArgs {
     // Width (inner dimension) of tensor array.
     int width() const { return tensor->dim(inner()); }
 
+    // Number of elements in tensor array.
+    int elements() const { return tensor->elements(); }
+
     // Size of tensor in bytes.
     int size() const { return tensor->size(); }
 
@@ -540,11 +543,13 @@ class SIMDMatMul : public Kernel {
     for (auto r : sum) sasm.main()->Zero(r);
 
     // Compute dot product between row in A and row in B.
+    bool scalar = true;
     for (auto &phase : strategy.phases()) {
       auto *gen = phase.generator;
       int vecsize = gen->VectorSize();
       int blkstart = phase.offset * dsize;
       int blksize = phase.unrolls * vecsize * dsize;
+      if (vecsize > 1) scalar = false;
 
       if (phase.repeat > 1) {
         // Repeated phase.
@@ -599,14 +604,16 @@ class SIMDMatMul : public Kernel {
 
     // Horizontal sum of results.
     sasm.Sum(sum);
-    sasm.main()->Sum(sum[0]);
+    if (!scalar) sasm.main()->Sum(sum[0]);
 
     // Save result in C.
     if (accumulate_) {
       sasm.scalar()->Add(sum[0], sum[0], Operand(c));
     }
     sasm.scalar()->Store(Operand(c), sum[0]);
-    __ addq(c, Immediate(dsize));
+    if (args.c().elements() > 1) {
+      __ addq(c, Immediate(dsize));
+    }
 
     // Next row in B.
     if (args.b().height() > 1) {

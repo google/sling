@@ -292,7 +292,7 @@ class AVXFltVecMatMulBase : public AVXVecMatMulBase {
           } else {
             __ vaddps(sum[i].ymm(), sum[i].ymm(),
                       Operand(vector, colofs, times_1, i * vecbytes));
-          }                      
+          }
         }
 
         // Compute relu.
@@ -687,19 +687,9 @@ class AVXFltVecMatMulBase : public AVXVecMatMulBase {
 
       // Add elements in sum[0] horizontally.
       if (avx512) {
-        __ vshuff32x4(acc, sum[0], sum[0], 0x0E);
-        __ vaddps(sum[0], sum[0], acc);
-        __ vshuff32x4(acc, sum[0], sum[0], 0xB1);
-        __ vaddps(sum[0], sum[0], acc);
-        __ vpermilps(acc, sum[0], 0x0E);
-        __ vaddps(sum[0], sum[0], acc);
-        __ vpermilps(acc, sum[0], 0x01);
-        __ vaddps(sum[0], sum[0], acc);
+        __ Reduce(REDUCE_ADD, DT_FLOAT, sum[0], acc);
       } else {
-        __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
-        __ vaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
-        __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
-        __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
+        __ Reduce(REDUCE_ADD, DT_FLOAT, sum[0].ymm(), acc.ymm());
       }
     }
 
@@ -927,19 +917,9 @@ class AVXFltDotProduct : public Kernel {
 
     // Add elements in sum[0] horizontally.
     if (avx512) {
-      __ vshuff32x4(acc, sum[0], sum[0], 0x0E);
-      __ vaddps(sum[0], sum[0], acc);
-      __ vshuff32x4(acc, sum[0], sum[0], 0xB1);
-      __ vaddps(sum[0], sum[0], acc);
-      __ vpermilps(acc, sum[0], 0x0E);
-      __ vaddps(sum[0], sum[0], acc);
-      __ vpermilps(acc, sum[0], 0x01);
-      __ vaddps(sum[0], sum[0], acc);
+      __ Reduce(REDUCE_ADD, DT_FLOAT, sum[0], acc);
     } else {
-      __ vperm2f128(acc.ymm(), sum[0].ymm(), sum[0].ymm(), 1);
-      __ vaddps(sum[0].ymm(), sum[0].ymm(), acc.ymm());
-      __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
-      __ vhaddps(sum[0].ymm(), sum[0].ymm(), sum[0].ymm());
+      __ Reduce(REDUCE_ADD, DT_FLOAT, sum[0].ymm(), acc.ymm());
     }
 
     // Save result to c.

@@ -515,6 +515,242 @@ OpmaskRegister MacroAssembler::LoadMask(int n, OpmaskRegister k) {
   return k;
 }
 
+void MacroAssembler::Accumulate(Reduction op, Type type,
+                                XMMRegister acc, XMMRegister r) {
+  bool avx = Enabled(AVX);
+  switch (type) {
+    case DT_FLOAT:
+      switch (op) {
+        case REDUCE_ADD:
+          if (avx) {
+            vaddps(acc, acc, r);
+          } else {
+            addps(acc, r);
+          }
+          break;
+        case REDUCE_MUL:
+          if (avx) {
+            vmulps(acc, acc, r);
+          } else {
+            mulps(acc, r);
+          }
+          break;
+        case REDUCE_MIN:
+          if (avx) {
+            vminps(acc, acc, r);
+          } else {
+            minps(acc, r);
+          }
+          break;
+        case REDUCE_MAX:
+          if (avx) {
+            vmaxps(acc, acc, r);
+          } else {
+            maxps(acc, r);
+          }
+          break;
+      }
+      break;
+    case DT_DOUBLE:
+      switch (op) {
+        case REDUCE_ADD:
+          if (avx) {
+            vaddpd(acc, acc, r);
+          } else {
+            addpd(acc, r);
+          }
+          break;
+        case REDUCE_MUL:
+          if (avx) {
+            vmulpd(acc, acc, r);
+          } else {
+            mulpd(acc, r);
+          }
+          break;
+        case REDUCE_MIN:
+          if (avx) {
+            vminpd(acc, acc, r);
+          } else {
+            minpd(acc, r);
+          }
+          break;
+        case REDUCE_MAX:
+          if (avx) {
+            vmaxpd(acc, acc, r);
+          } else {
+            maxpd(acc, r);
+          }
+          break;
+      }
+      break;
+    default:
+      LOG(FATAL) << "Reduction for type not supported";
+  }
+}
+
+void MacroAssembler::Accumulate(Reduction op, Type type,
+                                YMMRegister acc, YMMRegister r) {
+  switch (type) {
+    case DT_FLOAT:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddps(acc, acc, r);
+          break;
+        case REDUCE_MUL:
+          vmulps(acc, acc, r);
+          break;
+        case REDUCE_MIN:
+          vminps(acc, acc, r);
+          break;
+        case REDUCE_MAX:
+          vmaxps(acc, acc, r);
+          break;
+      }
+      break;
+    case DT_DOUBLE:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddpd(acc, acc, r);
+          break;
+        case REDUCE_MUL:
+          vmulpd(acc, acc, r);
+          break;
+        case REDUCE_MIN:
+          vminpd(acc, acc, r);
+          break;
+        case REDUCE_MAX:
+          vmaxpd(acc, acc, r);
+          break;
+      }
+      break;
+    default:
+      LOG(FATAL) << "Reduction for type not supported";
+  }
+}
+
+void MacroAssembler::Accumulate(Reduction op, Type type,
+                                ZMMRegister acc, ZMMRegister r) {
+  switch (type) {
+    case DT_FLOAT:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddps(acc, acc, r);
+          break;
+        case REDUCE_MUL:
+          vmulps(acc, acc, r);
+          break;
+        case REDUCE_MIN:
+          vminps(acc, acc, r);
+          break;
+        case REDUCE_MAX:
+          vmaxps(acc, acc, r);
+          break;
+      }
+      break;
+    case DT_DOUBLE:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddpd(acc, acc, r);
+          break;
+        case REDUCE_MUL:
+          vmulpd(acc, acc, r);
+          break;
+        case REDUCE_MIN:
+          vminpd(acc, acc, r);
+          break;
+        case REDUCE_MAX:
+          vmaxpd(acc, acc, r);
+          break;
+      }
+      break;
+    default:
+      LOG(FATAL) << "Reduction for type not supported";
+  }
+}
+
+void MacroAssembler::Reduce(Reduction op, Type type,
+                            XMMRegister acc, XMMRegister aux) {
+  int n = (128 / 8) / TypeTraits::of(type).size();
+  if (CPU::Enabled(AVX)) {
+    switch (n) {
+      case 4:
+        vpermil(type, aux, acc, 0x0E);
+        Accumulate(op, type, acc, aux);
+        FALLTHROUGH_INTENDED;
+      case 2:
+        vpermil(type, aux, acc, 0x01);
+        Accumulate(op, type, acc, aux);
+        break;
+      default:
+        LOG(FATAL) << "Reduction not supported";
+    }
+  } else if (CPU::Enabled(SSE3) && n == 4) {
+    movshdup(aux, acc);
+    Accumulate(op, type, acc, aux);
+    movhlps(aux, acc);
+    Accumulate(op, type, acc, aux);
+  } else if (n == 4) {
+    movaps(aux, acc);
+    shufps(aux, acc, 0xB1);
+    Accumulate(op, type, acc, aux);
+    if (CPU::Enabled(SSE2)) {
+      movhlps(aux, acc);
+    } else {
+      movaps(aux, acc);
+      shufps(aux, acc, 0x03);
+    }
+    Accumulate(op, type, acc, aux);
+  } else if (CPU::Enabled(SSE2) && n == 2) {
+    movapd(aux, acc);
+    shufpd(aux, acc, 1);
+    Accumulate(op, type, acc, aux);
+  } else {
+    LOG(FATAL) << "Reduction not supported";
+  }
+}
+
+void MacroAssembler::Reduce(Reduction op, Type type,
+                            YMMRegister acc, YMMRegister aux) {
+  int n = (256 / 8) / TypeTraits::of(type).size();
+  vperm2f128(aux, acc, acc, 1);
+  Accumulate(op, type, acc, aux);
+  switch (n) {
+    case 8:
+      vpermil(type, aux, acc, 0x0E);
+      Accumulate(op, type, acc, aux);
+      FALLTHROUGH_INTENDED;
+    case 4:
+      vpermil(type, aux, acc, 0x01);
+      Accumulate(op, type, acc, aux);
+      break;
+    default:
+      LOG(FATAL) << "Reduction not supported";
+  }
+}
+
+void MacroAssembler::Reduce(Reduction op, Type type,
+                            ZMMRegister acc, ZMMRegister aux) {
+  int n = (512 / 8) / TypeTraits::of(type).size();
+  vshuff32x4(aux, acc, acc, 0x0E);
+  Accumulate(op, type, acc, aux);
+  vshuff32x4(aux, acc, acc, 0xB1);
+  Accumulate(op, type, acc, aux);
+  switch (n) {
+    case 16:
+      vpermil(type, aux, acc, 0x0E);
+      Accumulate(op, type, acc, aux);
+      vpermil(type, aux, acc, 0x01);
+      Accumulate(op, type, acc, aux);
+      break;
+    case 8:
+      vpermil(type, aux, acc, 0x01);
+      Accumulate(op, type, acc, aux);
+      break;
+    default:
+      LOG(FATAL) << "Reduction not supported";
+  }
+}
+
 void MacroAssembler::UpdateCounter(int64 *counter, int64 value) {
   CHECK(!rr_.used(rdi));
   movp(rdi, counter);
@@ -614,6 +850,33 @@ void MacroAssembler::ResetRegisterUsage() {
   kk_.reset();
   rr_.use(datareg);
   if (options_.profiling) rr_.use(tsreg);
+}
+
+void MacroAssembler::vpermil(Type type, XMMRegister dst,
+                             XMMRegister src, int8_t imm8) {
+  if (TypeTraits::of(type).size() == 8) {
+    vpermilpd(dst, src, imm8);
+  } else {
+    vpermilps(dst, src, imm8);
+  }
+}
+
+void MacroAssembler::vpermil(Type type, YMMRegister dst,
+                             YMMRegister src, int8_t imm8) {
+  if (TypeTraits::of(type).size() == 8) {
+    vpermilpd(dst, src, imm8);
+  } else {
+    vpermilps(dst, src, imm8);
+  }
+}
+
+void MacroAssembler::vpermil(Type type, ZMMRegister dst,
+                             ZMMRegister src, int8_t imm8) {
+  if (TypeTraits::of(type).size() == 8) {
+    vpermilpd(dst, src, imm8);
+  } else {
+    vpermilps(dst, src, imm8);
+  }
 }
 
 }  // namespace myelin

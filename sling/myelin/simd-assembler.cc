@@ -112,30 +112,13 @@ class AVX512FloatGenerator : public SIMDGenerator {
   }
 
   void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
-    if (masm_->Enabled(FMA3)) {
-      masm_->vfmadd231ps(zmm(dst), zmm(src1), src2);
-    } else if (retain) {
-      ZMMRegister acc = masm_->mm().allocz();
-      masm_->vmulps(acc, zmm(src1), src2);
-      masm_->vaddps(zmm(dst), zmm(dst), acc);
-      masm_->mm().release(acc);
-    } else {
-      masm_->vmulps(zmm(src1), zmm(src1), src2);
-      masm_->vaddps(zmm(dst), zmm(dst), zmm(src1));
-    }
+    masm_->vfmadd231ps(zmm(dst), zmm(src1), src2);
   }
 
   void Sum(int r) override {
     ZMMRegister sum = ZMMRegister::from_code(r);
     ZMMRegister acc = masm_->mm().allocz();
-    masm_->vshuff32x4(acc, sum, sum, 0x0E);
-    masm_->vaddps(sum, sum, acc);
-    masm_->vshuff32x4(acc, sum, sum, 0xB1);
-    masm_->vaddps(sum, sum, acc);
-    masm_->vpermilps(acc, sum, 0x0E);
-    masm_->vaddps(sum, sum, acc);
-    masm_->vpermilps(acc, sum, 0x01);
-    masm_->vaddps(sum, sum, acc);
+    masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
     masm_->mm().release(acc);
   }
 
@@ -243,10 +226,7 @@ class AVX256FloatGenerator : public SIMDGenerator {
   void Sum(int r) override {
     YMMRegister sum = YMMRegister::from_code(r);
     YMMRegister acc = masm_->mm().allocy();
-    masm_->vperm2f128(acc, sum, sum, 1);
-    masm_->vaddps(sum, sum, acc);
-    masm_->vhaddps(sum, sum, sum);
-    masm_->vhaddps(sum, sum, sum);
+    masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
     masm_->mm().release(acc);
   }
 };
@@ -314,8 +294,9 @@ class AVX128FloatGenerator : public SIMDGenerator {
 
   void Sum(int r) override {
     XMMRegister sum = XMMRegister::from_code(r);
-    masm_->vhaddps(sum, sum, sum);
-    masm_->vhaddps(sum, sum, sum);
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
+    masm_->mm().release(acc);
   }
 };
 
@@ -418,8 +399,9 @@ class SSE128FloatGenerator : public SIMDGenerator {
 
   void Sum(int r) override {
     XMMRegister sum = XMMRegister::from_code(r);
-    masm_->haddps(sum, sum);
-    masm_->haddps(sum, sum);
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
+    masm_->mm().release(acc);
   }
 };
 
@@ -628,28 +610,13 @@ class AVX512DoubleGenerator : public SIMDGenerator {
   }
 
   void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
-    if (masm_->Enabled(FMA3)) {
-      masm_->vfmadd231pd(zmm(dst), zmm(src1), src2);
-    } else if (retain) {
-      ZMMRegister acc = masm_->mm().allocz();
-      masm_->vmulpd(acc, zmm(src1), src2);
-      masm_->vaddpd(zmm(dst), zmm(dst), acc);
-      masm_->mm().release(acc);
-    } else {
-      masm_->vmulpd(zmm(src1), zmm(src1), src2);
-      masm_->vaddpd(zmm(dst), zmm(dst), zmm(src1));
-    }
+    masm_->vfmadd231pd(zmm(dst), zmm(src1), src2);
   }
 
   void Sum(int r) override {
     ZMMRegister sum = ZMMRegister::from_code(r);
     ZMMRegister acc = masm_->mm().allocz();
-    masm_->vshuff32x4(acc, sum, sum, 0x0E);
-    masm_->vaddpd(sum, sum, acc);
-    masm_->vshuff32x4(acc, sum, sum, 0xB1);
-    masm_->vaddpd(sum, sum, acc);
-    masm_->vpermilpd(acc, sum, 0x0E);
-    masm_->vaddpd(sum, sum, acc);
+    masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
     masm_->mm().release(acc);
   }
 
@@ -757,9 +724,7 @@ class AVX256DoubleGenerator : public SIMDGenerator {
   void Sum(int r) override {
     YMMRegister sum = YMMRegister::from_code(r);
     YMMRegister acc = masm_->mm().allocy();
-    masm_->vperm2f128(acc, sum, sum, 1);
-    masm_->vaddpd(sum, sum, acc);
-    masm_->vhaddpd(sum, sum, sum);
+    masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
     masm_->mm().release(acc);
   }
 };
@@ -828,7 +793,9 @@ class AVX128DoubleGenerator : public SIMDGenerator {
 
   void Sum(int r) override {
     XMMRegister sum = XMMRegister::from_code(r);
-    masm_->vhaddpd(sum, sum, sum);
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
+    masm_->mm().release(acc);
   }
 };
 
@@ -932,9 +899,8 @@ class SSE128DoubleGenerator : public SIMDGenerator {
   void Sum(int r) override {
     XMMRegister sum = XMMRegister::from_code(r);
     XMMRegister acc = masm_->mm().allocx();
-    masm_->movapd(acc, sum);
-    masm_->shufpd(acc, sum, 1);
-    masm_->addsd(sum, acc);
+    masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
+    masm_->mm().release(acc);
   }
 };
 
@@ -1160,6 +1126,12 @@ void SIMDAssembler::Sum(const std::vector<int> &regs) {
 }
 
 SIMDStrategy::SIMDStrategy(SIMDAssembler *sasm, int size, int max_unrolls) {
+  // Use scalar generator for singletons.
+  if (size == 1) {
+    phases_.emplace_back(sasm->scalar());
+    return;
+  }
+
   // Add bulk phase.
   int vecsize = sasm->main()->VectorSize();
   int main = (size / vecsize) * vecsize;

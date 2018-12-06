@@ -518,41 +518,10 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
   void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
     auto acc = ymm(instr->acc);
     auto aux = ymmaux(0);
+    __ Reduce(ReduceOp(instr), type_, acc, aux);
+
     switch (type_) {
       case DT_FLOAT:
-        switch (instr->type) {
-          case Express::SUM:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vaddps(acc, acc, aux);
-            __ vhaddps(acc, acc, acc);
-            __ vhaddps(acc, acc, acc);
-            break;
-          case Express::PRODUCT:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vmulps(acc, acc, aux);
-            __ vpermilps(aux, acc, 0x0E);
-            __ vmulps(acc, acc, aux);
-            __ vpermilps(aux, acc, 0x01);
-            __ vmulps(acc, acc, aux);
-            break;
-          case Express::MIN:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vminps(acc, acc, aux);
-            __ vpermilps(aux, acc, 0x0E);
-            __ vminps(acc, acc, aux);
-            __ vpermilps(aux, acc, 0x01);
-            __ vminps(acc, acc, aux);
-            break;
-          case Express::MAX:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vmaxps(acc, acc, aux);
-            __ vpermilps(aux, acc, 0x0E);
-            __ vmaxps(acc, acc, aux);
-            __ vpermilps(aux, acc, 0x01);
-            __ vmaxps(acc, acc, aux);
-            break;
-          default: UNSUPPORTED;
-        }
         if (instr->dst != -1) {
           __ vmovss(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
         } else {
@@ -560,33 +529,6 @@ class VectorFltAVX256Generator : public ExpressionGenerator {
         }
         break;
       case DT_DOUBLE:
-        switch (instr->type) {
-          case Express::SUM:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vaddpd(acc, acc, aux);
-            __ vhaddpd(acc, acc, acc);
-            break;
-          case Express::PRODUCT:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vmulpd(acc, acc, aux);
-            __ vpermilpd(aux, acc, 1);
-            __ vmulpd(acc, acc, aux);
-            break;
-          case Express::MIN:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vminpd(acc, acc, aux);
-            __ vpermilpd(aux, acc, 1);
-            __ vminpd(acc, acc, aux);
-            break;
-          case Express::MAX:
-            __ vperm2f128(aux, acc, acc, 1);
-            __ vmaxpd(acc, acc, aux);
-            __ vpermilpd(aux, acc, 1);
-            __ vmaxpd(acc, acc, aux);
-            break;
-            break;
-          default: UNSUPPORTED;
-        }
         if (instr->dst != -1) {
           __ vmovsd(xmm(instr->dst), xmm(instr->dst), xmm(instr->acc));
         } else {

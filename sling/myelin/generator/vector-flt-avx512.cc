@@ -489,48 +489,20 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
   void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
     auto acc = zmm(instr->acc);
     auto aux = zmmaux(0);
+    __ Reduce(ReduceOp(instr), type_, acc, aux);
+
     switch (type_) {
       case DT_FLOAT:
-        switch (instr->type) {
-          case Express::SUM:
-            GenerateZMMReduction(&Assembler::vaddps, acc, aux, 16, masm);
-            break;
-          case Express::PRODUCT:
-            GenerateZMMReduction(&Assembler::vmulps, acc, aux, 16, masm);
-            break;
-          case Express::MIN:
-            GenerateZMMReduction(&Assembler::vminps, acc, aux, 16, masm);
-            break;
-          case Express::MAX:
-            GenerateZMMReduction(&Assembler::vmaxps, acc, aux, 16, masm);
-            break;
-          default: UNSUPPORTED;
-        }
         if (instr->dst != -1) {
-          __ vmovss(zmm(instr->dst).x(), zmm(instr->dst).x(), 
+          __ vmovss(zmm(instr->dst).x(), zmm(instr->dst).x(),
                     zmm(instr->acc).x());
         } else {
           __ vmovss(addr(instr->result), zmm(instr->acc).x());
         }
         break;
       case DT_DOUBLE:
-        switch (instr->type) {
-          case Express::SUM:
-            GenerateZMMReduction(&Assembler::vaddpd, acc, aux, 8, masm);
-            break;
-          case Express::PRODUCT:
-            GenerateZMMReduction(&Assembler::vmulpd, acc, aux, 8, masm);
-            break;
-          case Express::MIN:
-            GenerateZMMReduction(&Assembler::vminpd, acc, aux, 8, masm);
-            break;
-          case Express::MAX:
-            GenerateZMMReduction(&Assembler::vmaxpd, acc, aux, 8, masm);
-            break;
-          default: UNSUPPORTED;
-        }
         if (instr->dst != -1) {
-          __ vmovsd(zmm(instr->dst).x(), zmm(instr->dst).x(), 
+          __ vmovsd(zmm(instr->dst).x(), zmm(instr->dst).x(),
                     zmm(instr->acc).x());
         } else {
           __ vmovsd(addr(instr->result), zmm(instr->acc).x());

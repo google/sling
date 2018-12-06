@@ -95,6 +95,10 @@ bool PyCompiler::ImportFlow(PyObject *pyflow, Flow *flow, PyBuffers *buffers) {
     const char *name = PyStrAttr(pyvar, "name");
     string type = PyStrAttr(pyvar, "type");
     auto &t = TypeTraits::of(type);
+    if (t.type() == DT_INVALID) {
+      PyErr_Format(PyExc_TypeError, "Unknown type: %s", type.c_str());
+      return false;
+    }
 
     PyObject *pyshape = PyAttr(pyvar, "shape");
     Shape shape;

@@ -767,6 +767,9 @@ class Step : public Attributes {
   // case, the biggest input is returned.
   Tensor *GetPrototype() const;
 
+  // Get type signature for step.
+  string Signature() const;
+  
  private:
   // Step name from flow operation.
   string name_;

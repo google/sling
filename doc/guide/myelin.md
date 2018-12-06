@@ -169,7 +169,7 @@ Alternatively, a numeric tensor parameter id can be used as as the index key.
 The `cell.index(name)` method can be used for looking up tensor parameter ids in
 advance, and looking up tensors by parameter ids is faster than looking up
 tensors by name.
-If the index key is neither a string not an integer, the repr() function of the
+If the index key is neither a string nor an integer, the repr() function of the
 index key is used for determining the tensor name.
 
 The tensor is a view into the data in the instance for the variable. The tensor

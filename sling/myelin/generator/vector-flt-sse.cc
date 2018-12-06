@@ -427,87 +427,10 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
   void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
     auto acc = xmm(instr->acc);
     auto aux = xmmaux(0);
+    __ Reduce(ReduceOp(instr), type_, acc, aux);
+
     switch (type_) {
       case DT_FLOAT:
-        switch (instr->type) {
-          case Express::SUM:
-            if (CPU::Enabled(SSE3)) {
-              __ movshdup(aux, acc);
-              __ addps(acc, aux);
-              __ movhlps(aux, acc);
-              __ addss(acc, aux);
-            } else {
-              __ movaps(aux, acc);
-              __ shufps(aux, acc, 0xB1);
-              __ addps(acc, aux);
-                if (CPU::Enabled(SSE2)) {
-                  __ movhlps(aux, acc);
-                } else {
-                  __ movaps(aux, acc);
-                  __ shufps(aux, acc, 0x03);
-                }
-              __ addss(acc, aux);
-            }
-            break;
-          case Express::PRODUCT:
-            if (CPU::Enabled(SSE3)) {
-              __ movshdup(aux, acc);
-              __ mulps(acc, aux);
-              __ movhlps(aux, acc);
-              __ mulss(acc, aux);
-            } else {
-              __ movaps(aux, acc);
-              __ shufps(aux, acc, 0xB1);
-              __ mulps(acc, aux);
-                if (CPU::Enabled(SSE2)) {
-                  __ movhlps(aux, acc);
-                } else {
-                  __ movaps(aux, acc);
-                  __ shufps(aux, acc, 0x03);
-                }
-              __ mulss(acc, aux);
-            }
-            break;
-          case Express::MIN:
-            if (CPU::Enabled(SSE3)) {
-              __ movshdup(aux, acc);
-              __ minps(acc, aux);
-              __ movhlps(aux, acc);
-              __ minss(acc, aux);
-            } else {
-              __ movaps(aux, acc);
-              __ shufps(aux, acc, 0xB1);
-              __ minps(acc, aux);
-                if (CPU::Enabled(SSE2)) {
-                  __ movhlps(aux, acc);
-                } else {
-                  __ movaps(aux, acc);
-                  __ shufps(aux, acc, 0x03);
-                }
-              __ minss(acc, aux);
-            }
-            break;
-          case Express::MAX:
-            if (CPU::Enabled(SSE3)) {
-              __ movshdup(aux, acc);
-              __ maxps(acc, aux);
-              __ movhlps(aux, acc);
-              __ maxss(acc, aux);
-            } else {
-              __ movaps(aux, acc);
-              __ shufps(aux, acc, 0xB1);
-              __ maxps(acc, aux);
-                if (CPU::Enabled(SSE2)) {
-                  __ movhlps(aux, acc);
-                } else {
-                  __ movaps(aux, acc);
-                  __ shufps(aux, acc, 0x03);
-                }
-              __ maxss(acc, aux);
-            }
-            break;
-          default: UNSUPPORTED;
-        }
         if (instr->dst != -1) {
           __ movss(xmm(instr->dst), xmm(instr->acc));
         } else {
@@ -515,31 +438,10 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         }
         break;
       case DT_DOUBLE:
-        if (CPU::Enabled(SSE2)) {
-          __ movapd(aux, acc);
-          __ shufpd(aux, acc, 1);
-          switch (instr->type) {
-            case Express::SUM:
-              __ addsd(acc, aux);
-              break;
-            case Express::PRODUCT:
-              __ mulsd(acc, aux);
-              break;
-            case Express::MIN:
-              __ minsd(acc, aux);
-              break;
-            case Express::MAX:
-              __ maxsd(acc, aux);
-              break;
-            default: UNSUPPORTED;
-          }
-          if (instr->dst != -1) {
-            __ movsd(xmm(instr->dst), xmm(instr->acc));
-          } else {
-            __ movsd(addr(instr->result), xmm(instr->acc));
-          }
+        if (instr->dst != -1) {
+          __ movsd(xmm(instr->dst), xmm(instr->acc));
         } else {
-          UNSUPPORTED;
+          __ movsd(addr(instr->result), xmm(instr->acc));
         }
         break;
       default: UNSUPPORTED;

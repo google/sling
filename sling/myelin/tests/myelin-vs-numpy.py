@@ -23,6 +23,9 @@ import sys
 import struct
 
 flags.define("--dt", default=myelin.DT_FLOAT)
+flags.define("--test")
+flags.define("--superficial", default=False, action='store_true')
+
 flags.parse()
 dt = flags.arg.dt
 
@@ -86,6 +89,10 @@ def simulate(flow, f, data):
       v[o[0]] = np.log(v[i[0]])
     elif op.type == "Tanh":
       v[o[0]] = np.tanh(v[i[0]])
+    elif op.type == "Sin":
+      v[o[0]] = np.sin(v[i[0]])
+    elif op.type == "Cos":
+      v[o[0]] = np.cos(v[i[0]])
     elif op.type == "Relu":
       v[o[0]] = relu(v[i[0]])
     elif op.type == "Sqrt":
@@ -163,7 +170,10 @@ def check(flow, variant, lo=-10.0, hi=10.0):
   net = compiler.compile(flow)
   for f in flow.funcs.itervalues():
     # Output progress.
-    print "\r" + "Running " + f.name + " " + str(variant) + ": \033[K",
+    if sys.stdout.isatty():
+      print "\rRunning %-20s %s\033[K" % (f.name, str(variant)),
+    else:
+      print "Running %s %s" % (f.name, str(variant))
 
     # Create data instance for cell.
     cell = net.cell(f.name)
@@ -197,7 +207,8 @@ def check(flow, variant, lo=-10.0, hi=10.0):
       if b.dtype == bool: t = np.array(t, dtype=bool)
       if not np.allclose(t, b):
         test.errors += 1
-        print "mismatch in", f.name, "for", o.name
+        print
+        print "mismatch in", f.name, variant, "for", o.name
         print "inputs:"
         for i in flow.inputs(f):
           if i.data == None: print i.name, np.asarray(data[i])
@@ -319,6 +330,20 @@ def tanh_test(n):
   x = f.var("x", dt, [n])
   y = f.tanh(x)
   check(flow, n, -1.0, 1.0)
+
+def sin_test(n):
+  flow = myelin.Flow()
+  f = flow.define("sin")
+  x = f.var("x", dt, [n])
+  y = f.sin(x)
+  check(flow, n)
+
+def cos_test(n):
+  flow = myelin.Flow()
+  f = flow.define("cos")
+  x = f.var("x", dt, [n])
+  y = f.sin(x)
+  check(flow, n)
 
 def sqrt_test(n):
   flow = myelin.Flow()
@@ -502,8 +527,18 @@ def mul_const_test(n, c):
   x = f.mul(x, y)
   check(flow, (n, c))
 
+# Check for specific test to run.
+if flags.arg.test:
+  print "Running test", flags.arg.test
+  exec(flags.arg.test)
+  print
+  quit()
+
 # Run tests for different size ranges.
-sizes = range(1, 48) + [64, 128, 256]
+if flags.arg.superficial:
+  sizes = range(1, 8) + [9, 14, 15, 16, 31, 32, 33, 64]
+else:
+  sizes = range(1, 48) + [64, 128, 256]
 
 for i in sizes:
   for j in sizes:
@@ -549,7 +584,9 @@ for i in sizes:
     logic_test(i)
 
     if dt != myelin.DT_DOUBLE:
-      # No support yet for argmax over doubles.
+      # No support yet for argmax, sin, and cos for doubles.
+      sin_test(i)
+      cos_test(i)
       argmax_test(i)
 
 if dt == myelin.DT_FLOAT or dt == myelin.DT_DOUBLE:
@@ -560,7 +597,8 @@ if dt == myelin.DT_FLOAT or dt == myelin.DT_DOUBLE:
         matmul_test(i, j, k)
         matmul_add_test(i, j, k)
         matmul_add_relu_test(i, j, k)
-  matmul_test(2048, 2048, 2048)
+  if not flags.arg.superficial:
+    matmul_test(2048, 2048, 2048)
 else:
   # Only vector-matrix matmul supported for integers.
   for i in sizes:

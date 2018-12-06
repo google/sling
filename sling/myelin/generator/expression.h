@@ -417,18 +417,6 @@ class ExpressionGenerator {
       OpZMMRegRegMem fltopmem, OpZMMRegRegMem dblopmem,
       MacroAssembler *masm);
 
-  // Generate ZMM reduction with op.
-  void GenerateZMMReduction(
-      OpZMMRegRegReg op,
-      ZMMRegister acc, 
-      ZMMRegister aux,
-      int elements, MacroAssembler *masm);
-  void GenerateZMMReduction(
-      OpZMMRegRegRegR op,
-      ZMMRegister acc, 
-      ZMMRegister aux,
-      int elements, MacroAssembler *masm);
-
   // Generate one-operand x64 int op.
   void GenerateIntUnaryOp(
       Express::Op *instr,
@@ -505,6 +493,9 @@ class ExpressionGenerator {
   // Instructions for generating expression.
   Express instructions_;
 };
+
+// Return reduction operator for reduction instruction.
+Reduction ReduceOp(Express::Op *instr);
 
 // Error handler for unsupported operations.
 void UnsupportedOperation(const char *file, int line);
