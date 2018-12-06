@@ -86,12 +86,12 @@ Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
     "Q12737077",   // occupation
     "Q216353",     // title
     "Q618779",     // award
-    "Q17334923",   // location
     "Q27020041",   // sports season
     "Q4438121",    // sports organization
     "Q215380",     // band
     "Q2385804",    // educational institution
     "Q783794",     // company
+    "Q17334923",   // location
     "Q43229",      // organization
     "Q431289",     // brand
     "Q15474042",   // MediaWiki page
@@ -321,7 +321,8 @@ Taxonomy::Taxonomy(const FactCatalog *catalog, const std::vector<Text> &types) {
       LOG(WARNING) << "Ignoring unknown type in taxonomy: " << type;
       continue;
     }
-    typemap_[t] = typemap_.size();
+    int rank = typemap_.size();
+    typemap_[t] = rank;
   }
 }
 
@@ -341,7 +342,6 @@ Handle Taxonomy::Classify(const Frame &item) {
   Handle best = Handle::nil();
   int current = 0;
   while (current < types.size()) {
-    // Check if type is the highest ranked type so far.
     Frame type(store, types[current++]);
     auto f = typemap_.find(type.handle());
     if (f != typemap_.end()) {

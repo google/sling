@@ -187,19 +187,31 @@ int PyTaxonomy::Init(PyFactExtractor *extractor, PyObject *typelist) {
   // Keep reference to extractor to keep fact catalog alive.
   Py_INCREF(extractor);
   pyextractor = extractor;
+  taxonomy = nullptr;
 
   if (typelist == nullptr) {
     // Create default taxonomy.
     taxonomy = pyextractor->catalog->CreateDefaultTaxonomy();
   } else {
     // Build type list.
-    if (!PyList_Check(typelist)) return -1;
+    if (!PyList_Check(typelist)) {
+      PyErr_BadArgument();
+      return -1;
+    }
     int size = PyList_Size(typelist);
     std::vector<Text> types;
     for (int i = 0; i < size; ++i) {
       PyObject *item = PyList_GetItem(typelist, i);
-      if (!PyString_Check(item)) return -1;
-      types.emplace_back(PyString_AsString(item));
+      if (!PyString_Check(item)) {
+        PyErr_BadArgument();
+        return -1;
+      }
+      const char *name = PyString_AsString(item);
+      if (name == nullptr) {
+        PyErr_BadArgument();
+        return -1;
+      }
+      types.emplace_back(name);
     }
 
     // Create taxonomy from type list.

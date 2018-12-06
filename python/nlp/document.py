@@ -301,11 +301,18 @@ class Document(object):
 
 class Corpus:
   def __init__(self, filename, commons=None):
-    self.input = sling.RecordReader(filename)
+    self.input = sling.RecordDatabase(filename)
     self.iter = iter(self.input)
-    self.commons = sling.Store() if commons == None else commons
-    self.docschema = sling.DocumentSchema(self.commons)
-    if commons == None: self.commons.freeze()
+    if commons == None:
+      self.commons = sling.Store()
+      self.docschema = sling.DocumentSchema(self.commons)
+      self.commons.freeze()
+    else:
+      self.commons = commons
+      if "document" in commons:
+        self.docschema = sling.DocumentSchema(commons)
+      else:
+        self.docschema = None
 
   def __iter__(self):
     return self
