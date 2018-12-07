@@ -314,6 +314,11 @@ class Corpus:
       else:
         self.docschema = None
 
+  def __getitem__(self, key):
+    data = self.input.lookup(key)
+    f = sling.Store(self.commons).parse(data)
+    return sling.Document(f, schema=self.docschema)
+
   def __iter__(self):
     return self
 

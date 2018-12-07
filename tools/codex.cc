@@ -97,7 +97,7 @@ void DisplayFile(const string &filename) {
 int main(int argc, char *argv[]) {
   InitProgram(&argc, &argv);
   if (argc < 2) {
-    std::cerr << argv[0] << "[OPTIONS] [FILE] ...\n";
+    std::cerr << argv[0] << " [OPTIONS] [FILE] ...\n";
     return 1;
   }
 

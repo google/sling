@@ -74,7 +74,7 @@ std::vector<TypeTraits> typetraits = {
   {DT_QINT16, "qint16", sizeof(int16_t), nullptr, nullptr, nullptr},
   {DT_UINT16, "uint16", sizeof(uint16_t), nullptr, nullptr, nullptr},
   {DT_QUINT16, "quint16", sizeof(uint16_t), nullptr, nullptr, nullptr},
-  {DT_COMPLEX128, "complex128", 2 * sizeof(float), nullptr, nullptr, nullptr},
+  {DT_COMPLEX128, "complex128", 2 * sizeof(double), nullptr, nullptr, nullptr},
   {DT_HALF, "float16", 2, nullptr, "f16", nullptr},
   {DT_RESOURCE, "resource", 1, "char *", nullptr, nullptr},
 };

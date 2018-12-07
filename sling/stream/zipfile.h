@@ -61,7 +61,7 @@ class ZipFileReader {
     uint32 dirsize;     // size of central directory (bytes)
     uint32 dirofs;      // offset of start of central directory
     uint16 commentlen;  // comment length
-  } PACKED;
+  } ABSL_ATTRIBUTE_PACKED;
 
   // Locator for 64-bit EOCD.
   struct EOCD64Locator {
@@ -69,7 +69,7 @@ class ZipFileReader {
     uint32 disknum;         // number of this disk
     uint64 eocd64offset;    // offset of EOCD64Record
     uint32 totaldisks;      // total number of disks
-  } PACKED;
+  } ABSL_ATTRIBUTE_PACKED;
 
   // 64-bit EOCDRecord.
   struct EOCD64Record {
@@ -83,7 +83,7 @@ class ZipFileReader {
     uint64 numrecs;     // total number of central directory records
     uint64 dirsize;     // number of central directory (bytes)
     uint64 dirofs;      // offset of start of central directory
-  } PACKED;
+  } ABSL_ATTRIBUTE_PACKED;
 
   // Central directory file record.
   struct CDFile {
@@ -104,7 +104,7 @@ class ZipFileReader {
     uint16 intattrs;      // internal file attributes
     uint32 extattrs;      // external file attributes
     uint32 offset;        // relative offset of local file header
-  } PACKED;
+  } ABSL_ATTRIBUTE_PACKED;
 
   // File header record.
   struct FileHeader {
@@ -119,7 +119,7 @@ class ZipFileReader {
     uint32 uncompressed;  // uncompressed size
     uint16 fnlen;         // file name length
     uint16 extralen;      // extra field length
-  } PACKED;
+  } ABSL_ATTRIBUTE_PACKED;
 
   // ZIP file.
   File *file_;

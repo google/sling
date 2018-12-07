@@ -217,7 +217,7 @@ inline void *memrchr(const void *bytes, int find_char, size_t len) {
     __attribute__((__format__ (__scanf__, string_index, first_to_check)))
 
 // Prevent the compiler from padding a structure to natural alignment.
-#define PACKED __attribute__ ((packed))
+#define ABSL_ATTRIBUTE_PACKED __attribute__ ((packed))
 
 // Prevent the compiler from complaining about or optimizing away variables
 // that appear unused.

@@ -16,6 +16,7 @@
 #define SLING_STREAM_BOUNDED_H_
 
 #include "sling/base/macros.h"
+#include "sling/base/types.h"
 #include "sling/stream/stream.h"
 
 namespace sling {

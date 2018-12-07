@@ -23,6 +23,7 @@ namespace sling {
 PyTypeObject PyRecordReader::type;
 PyMethodTable PyRecordReader::methods;
 PyTypeObject PyRecordDatabase::type;
+PyMappingMethods PyRecordDatabase::mapping;
 PyMethodTable PyRecordDatabase::methods;
 PyTypeObject PyRecordWriter::type;
 PyMethodTable PyRecordWriter::methods;
@@ -148,6 +149,9 @@ void PyRecordDatabase::Define(PyObject *module) {
   type.tp_dealloc = method_cast<destructor>(&PyRecordDatabase::Dealloc);
   type.tp_iter = method_cast<getiterfunc>(&PyRecordDatabase::Self);
   type.tp_iternext = method_cast<iternextfunc>(&PyRecordDatabase::Next);
+
+  type.tp_as_mapping = &mapping;
+  mapping.mp_subscript = method_cast<binaryfunc>(&PyRecordDatabase::Lookup);
 
   methods.Add("close", &PyRecordDatabase::Close);
   methods.AddO("lookup", &PyRecordDatabase::Lookup);

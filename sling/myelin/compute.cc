@@ -1055,14 +1055,19 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         stride *= tensor->shape_.dim(d);
       }
 
-      if (var->size != stride) {
-        LOG(ERROR) << "Invalid data size for variable " << var->name << ", "
+      if (var->size < stride) {
+        LOG(ERROR) << "Invalid data size for variable " << var->name << " "
+                   << var->TypeString() << ", "
                    << var->size << " bytes, " << stride << " expected";
         return false;
+      } else if (var->size > stride) {
+        LOG(WARNING) << "Excess data for variable " << var->name << " "
+                   << var->TypeString() << ", "
+                   << var->size << " bytes, " << stride << " expected";
       }
 
       tensor->data_ = var->data;
-      tensor->size_ = var->size;
+      tensor->size_ = stride;
     }
   }
 

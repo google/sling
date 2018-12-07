@@ -86,6 +86,7 @@ struct PyRecordDatabase : public PyBase {
 
   // Registration.
   static PyTypeObject type;
+  static PyMappingMethods mapping;
   static PyMethodTable methods;
   static void Define(PyObject *module);
 };
