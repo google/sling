@@ -374,6 +374,8 @@ Handle WikidataConverter::ConvertEntity(const Frame &value) {
     return Lexeme(value.store(), id.AsInt());
   } else if (type.equals("form")) {
     return Form(value.store(), value.GetText(s_id_));
+  } else if (type.equals("sense")) {
+    return Sense(value.store(), value.GetText(s_id_));
   } else if (type.equals("property")) {
     return Property(value.store(), id.AsInt());
   } else {

@@ -59,6 +59,11 @@ class WikidataConverter {
     return store->Lookup(id);
   }
 
+  // Return symbol for Wikidata sense.
+  static Handle Sense(Store *store, Text id) {
+    return store->Lookup(id);
+  }
+
   // Return symbol for Wikidata property.
   static Handle Property(Store *store, int id) {
     return store->Lookup(StrCat("P", id));
