@@ -383,48 +383,92 @@ void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor,
 void MacroAssembler::Copy(Register dst, int ddisp,
                           Register src, int sdisp,
                           int size) {
-  // Save registers if needed.
-  if (rr_.used(rsi)) pushq(rsi);
-  if (rr_.used(rdi)) pushq(rdi);
-  if (rr_.used(rcx)) pushq(rcx);
-
-  // Set up source and destination.
-  if (src.is(rdi) && dst.is(rdi)) {
-    xchgq(dst, src);
-    if (ddisp != 0) addq(rdi, Immediate(ddisp));
-    if (sdisp != 0) addq(rsi, Immediate(sdisp));
+  if (size > 0 && size < 16) {
+    // Copy small blocks with move instructions.
+    Register acc = rr_.alloc();
+    int disp = 0;
+    int left = size;
+    while (left >= 8) {
+      movq(acc, Operand(src, sdisp + disp));
+      movq(Operand(dst, ddisp + disp), acc);
+      disp += 8;
+      left -= 8;
+    }
+    while (left >= 4) {
+      movl(acc, Operand(src, sdisp + disp));
+      movl(Operand(dst, ddisp + disp), acc);
+      disp += 4;
+      left -= 4;
+    }
+    while (left >= 2) {
+      movw(acc, Operand(src, sdisp + disp));
+      movw(Operand(dst, ddisp + disp), acc);
+      disp += 2;
+      left -= 2;
+    }
+    while (left >= 1) {
+      movb(acc, Operand(src, sdisp + disp));
+      movb(Operand(dst, ddisp + disp), acc);
+      disp += 1;
+      left -= 1;
+    }
+    rr_.release(acc);
   } else {
-    if (dst.is(rdi)) {
-      if (ddisp != 0) addq(rdi, Immediate(ddisp));
-    } else {
-      if (ddisp != 0) {
-        leaq(rdi, Operand(dst, ddisp));
-      } else {
-        movq(rdi, dst);
-      }
+    // Save registers if needed.
+    bool restore_rsi = false;
+    bool restore_rdi = false;
+    bool restore_rcx = false;
+    if (!src.is(rsi) && rr_.used(rsi)) {
+      pushq(rsi);
+      restore_rsi = true;
+    }
+    if (!dst.is(rdi) && rr_.used(rdi)) {
+      pushq(rdi);
+      restore_rdi = true;
+    }
+    if (rr_.used(rcx)) {
+      pushq(rcx);
+      restore_rcx = true;
     }
 
-    if (src.is(rsi)) {
+    // Set up source and destination.
+    if (src.is(rdi) && dst.is(rdi)) {
+      xchgq(dst, src);
+      if (ddisp != 0) addq(rdi, Immediate(ddisp));
       if (sdisp != 0) addq(rsi, Immediate(sdisp));
     } else {
-      if (sdisp != 0) {
-        leaq(rsi, Operand(src, sdisp));
+      if (dst.is(rdi)) {
+        if (ddisp != 0) addq(rdi, Immediate(ddisp));
       } else {
-        movq(rsi, src);
+        if (ddisp != 0) {
+          leaq(rdi, Operand(dst, ddisp));
+        } else {
+          movq(rdi, dst);
+        }
+      }
+
+      if (src.is(rsi)) {
+        if (sdisp != 0) addq(rsi, Immediate(sdisp));
+      } else {
+        if (sdisp != 0) {
+          leaq(rsi, Operand(src, sdisp));
+        } else {
+          movq(rsi, src);
+        }
       }
     }
+
+    // Set up size.
+    movq(rcx, Immediate(size));
+
+    // Copy data.
+    repmovsb();
+
+    // Restore registers if needed.
+    if (restore_rcx) popq(rcx);
+    if (restore_rdi) popq(rdi);
+    if (restore_rsi) popq(rsi);
   }
-
-  // Set up size.
-  movq(rcx, Immediate(size));
-
-  // Copy data.
-  repmovsb();
-
-  // Restore registers if needed.
-  if (rr_.used(rcx)) popq(rcx);
-  if (rr_.used(rdi)) popq(rdi);
-  if (rr_.used(rsi)) popq(rsi);
 }
 
 void MacroAssembler::LoadInteger(jit::Register dst, jit::Register base,

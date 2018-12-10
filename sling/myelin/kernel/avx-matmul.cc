@@ -108,17 +108,17 @@ class AVXFltVecMatMulBase : public AVXVecMatMulBase {
     Tensor *b = bias_ ? step->input(2) : nullptr;
     Tensor *y = step->output(0);
 
-    // Determine order.
-    if (W->required_order() == ANY_ORDER) {
-      // Use vertical summations for small matrices and horizontal summation for
-      // large matrices. Use the on-chip cache size for selection.
-      static const int kCacheHitRatio = 2;
-      int cache_size = CPU::L3CacheSize();
-      if (cache_size == 0) cache_size = 1024 * 1024;
-      int footprint = (x->size() + W->size() + y->size());
-      if (footprint * kCacheHitRatio > cache_size) {
-        W->SetRequiredOrder(COLUMN_MAJOR);
-      }
+    // Use vertical summations for small matrices and horizontal summation for
+    // large matrices. Use the on-chip cache size for selection.
+    static const int kCacheHitRatio = 2;
+    int cache_size = CPU::L3CacheSize();
+    if (cache_size == 0) cache_size = 1024 * 1024;
+    int elements = x->elements() + W->elements() + y->elements();
+    int footprint = elements * sizeof(float);
+    if (footprint * kCacheHitRatio > cache_size) {
+      W->RequireOrder(COLUMN_MAJOR_PREFERRED);
+    } else {
+      W->RequireOrder(ROW_MAJOR_PREFERRED);
     }
 
     // Align to one SIMD register.
@@ -977,7 +977,7 @@ class AVXFltAssignAddOuter : public Kernel {
     c->SetMiniumAlignment(byte_alignment);
 
     // Output must be row-major.
-    c->SetRequiredOrder(ROW_MAJOR);
+    c->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -1251,7 +1251,7 @@ class AVXIntVecMatMulHBase : public AVXVecMatMulBase {
     y->SetMiniumAlignment(byte_alignment);
     if (bias_) b->SetMiniumAlignment(byte_alignment);
 
-    W->SetRequiredOrder(COLUMN_MAJOR);
+    W->RequireOrder(COLUMN_MAJOR);
     x->MinAlign({1, 32});
     W->MinAlign({32, 1});
   }

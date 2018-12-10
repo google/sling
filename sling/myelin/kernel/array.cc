@@ -396,45 +396,13 @@ class Slice : public Kernel {
     // Allocate registers.
     Register src = masm->rr().alloc_fixed(rsi);
     Register dst = masm->rr().alloc_fixed(rdi);
-    Register cnt = masm->rr().alloc_fixed(rcx);
-    Register acc = masm->rr().alloc_fixed(rax);
 
     // Get source and destination addresses.
     __ LoadTensorAddress(src, source, begin);
     __ LoadTensorAddress(dst, destination);
 
     // Copy input to output.
-    if (bytes > 0 && bytes < 16) {
-      int disp = 0;
-      int left = bytes;
-      while (left >= 8) {
-        __ movq(acc, Operand(src, disp));
-        __ movq(Operand(dst, disp), acc);
-        disp += 8;
-        left -= 8;
-      }
-      while (left >= 4) {
-        __ movl(acc, Operand(src, disp));
-        __ movl(Operand(dst, disp), acc);
-        disp += 4;
-        left -= 4;
-      }
-      while (left >= 2) {
-        __ movw(acc, Operand(src, disp));
-        __ movw(Operand(dst, disp), acc);
-        disp += 2;
-        left -= 2;
-      }
-      while (left >= 1) {
-        __ movb(acc, Operand(src, disp));
-        __ movb(Operand(dst, disp), acc);
-        disp += 1;
-        left -= 1;
-      }
-    } else {
-      __ movq(cnt, Immediate(bytes));
-      __ repmovsb();
-    }
+    __ Copy(dst, 0, src, 0, bytes);
   }
 
   int64 Complexity(const Step *step) override {
@@ -471,12 +439,9 @@ class BasicConcat : public Kernel {
     int n = step->GetAttr("N", step->indegree() - 1);
 
     // Allocate registers.
-    Register src = masm->rr().alloc_fixed(rsi);
-    Register dst = masm->rr().alloc_fixed(rdi);
-    Register cnt = masm->rr().alloc_fixed(rcx);
-    Register acc = masm->rr().alloc_fixed(rax);
-    Register in = masm->rr().alloc();
-    Register out = masm->rr().alloc();
+    Register src = masm->rr().alloc_preferred(rsi);
+    Register dst = masm->rr().alloc_preferred(rdi);
+    Register out = masm->rr().alloc_preferred(rdx);
 
     // Load output tensor.
     __ LoadTensorAddress(out, step->output(0));
@@ -485,40 +450,9 @@ class BasicConcat : public Kernel {
     int offset = 0;
     for (int i = 0; i < n; ++i) {
       int size = step->input(i)->size();
-      if (size > 0 && size < 16) {
-        __ LoadTensorAddress(in, step->input(i));
-        int disp = 0;
-        int left = size;
-        while (left >= 8) {
-          __ movq(acc, Operand(in, disp));
-          __ movq(Operand(out, offset + disp), acc);
-          disp += 8;
-          left -= 8;
-        }
-        while (left >= 4) {
-          __ movl(acc, Operand(in, disp));
-          __ movl(Operand(out, offset + disp), acc);
-          disp += 4;
-          left -= 4;
-        }
-        while (left >= 2) {
-          __ movw(acc, Operand(in, disp));
-          __ movw(Operand(out, offset + disp), acc);
-          disp += 2;
-          left -= 2;
-        }
-        while (left >= 1) {
-          __ movb(acc, Operand(in, disp));
-          __ movb(Operand(out, offset + disp), acc);
-          disp += 1;
-          left -= 1;
-        }
-      } else {
         __ LoadTensorAddress(src, step->input(i));
         __ leaq(dst, Operand(out, offset));
-        __ movq(cnt, Immediate(size));
-        __ repmovsb();
-      }
+      __ Copy(dst, 0, src, 0, size);
       offset += size;
     }
     CHECK_EQ(offset, step->output(0)->size()) << step->name();
@@ -567,10 +501,8 @@ class GeneralConcat : public Kernel {
     int n = step->GetAttr("N", step->indegree() - 1);
 
     // Allocate registers.
-    Register src = masm->rr().alloc_fixed(rsi);
-    Register dst = masm->rr().alloc_fixed(rdi);
-    Register cnt = masm->rr().alloc_fixed(rcx);
-    Register acc = masm->rr().alloc_fixed(rax);
+    Register src = masm->rr().alloc_preferred(rsi);
+    Register dst = masm->rr().alloc_preferred(rdi);
     Register out = masm->rr().alloc();
     Register idx = masm->rr().alloc();
     std::vector<Register> in(n);
@@ -596,39 +528,9 @@ class GeneralConcat : public Kernel {
     for (int i = 0; i < n; ++i) {
       Tensor *input = step->input(i);
       int size = axis > 0 ? input->stride(axis - 1) : input->size();
-      if (size > 0 && size < 16) {
-        int disp = 0;
-        int left = size;
-        while (left >= 8) {
-          __ movq(acc, Operand(in[i], disp));
-          __ movq(Operand(out, disp), acc);
-          disp += 8;
-          left -= 8;
-        }
-        while (left >= 4) {
-          __ movl(acc, Operand(in[i], disp));
-          __ movl(Operand(out, disp), acc);
-          disp += 4;
-          left -= 4;
-        }
-        while (left >= 2) {
-          __ movw(acc, Operand(in[i], disp));
-          __ movw(Operand(out, disp), acc);
-          disp += 2;
-          left -= 2;
-        }
-        while (left >= 1) {
-          __ movb(acc, Operand(in[i], disp));
-          __ movb(Operand(out, disp), acc);
-          disp += 1;
-          left -= 1;
-        }
-      } else {
-        __ movq(src, in[i]);
-        __ movq(dst, out);
-        __ movq(cnt, Immediate(size));
-        __ repmovsb();
-      }
+      __ movq(src, in[i]);
+      __ movq(dst, out);
+      __ Copy(dst, 0, src, 0, size);
       __ addq(in[i], Immediate(size));
     }
 
@@ -638,6 +540,74 @@ class GeneralConcat : public Kernel {
     __ incq(idx);
     __ cmpq(idx, Immediate(prefix));
     __ j(less, &l);
+  }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+  }
+};
+
+// Split input tensors input tensor into chunks along a dimension.
+class Split : public Kernel {
+ public:
+  string Name() override { return "Split"; }
+  string Operation() override { return "Split"; }
+
+  bool Supports(Step *step) override {
+    // Check inputs and outputs.
+    if (step->indegree() != 2) return false;
+    int n = step->GetAttr("N", step->outdegree());
+    if (step->outdegree() != n) return false;
+
+    // Only splits along a singular prefix supported.
+    Tensor *input = step->input(0);
+    Tensor *axis = step->input(1);
+    if (!axis->constant()) return false;
+    int a = axis->value<int32>();
+    if (a > input->rank() - 1) return false;
+    if (input->shape().outer(a) != 1) return false;
+
+    // Check that outputs match the input.
+    Type dt = input->type();
+    int size = input->shape().inner(a);
+    if (size % n != 0) return false;
+    for (int i = 0; i < n; ++i) {
+      Tensor *output = step->output(i);
+      if (output->type() != dt) return false;
+      if (output->rank() != input->rank()) return false;
+      if (output->shape().outer(a) != 1) return false;
+      if (output->shape().inner(a) != size / n) return false;
+    }
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    // Get input.
+    Tensor *input = step->input(0);
+    int axis = step->input(1)->value<int32>();
+    int n = step->GetAttr("N", step->indegree());
+    int chunk_size = input->shape().inner(axis) / n;
+    int stride = input->stride(axis) * chunk_size;
+
+    // Allocate registers.
+    Register src = masm->rr().alloc_preferred(rsi);
+    Register dst = masm->rr().alloc_preferred(rdi);
+    Register in = masm->rr().alloc();
+
+    // Load input tensor.
+    __ LoadTensorAddress(in, input);
+
+    // Copy input tensors to output.
+    int offset = 0;
+    for (int i = 0; i < n; ++i) {
+      __ leaq(src, Operand(in, offset));
+      __ LoadTensorAddress(dst, step->output(i));
+      __ Copy(dst, 0, src, 0, stride);
+      offset += stride;
+    }
   }
 
   int64 Complexity(const Step *step) override {
@@ -688,7 +658,7 @@ class SingleGather : public Kernel {
     if (step->indegree() == 3) v->Link(step->input(2));
 
     // Embedding matrix must be row-major.
-    step->input(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(0)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -778,7 +748,7 @@ class MultiGather : public Kernel {
 
   void Adjust(Step *step) override {
     // Embedding matrix must be row-major.
-    step->input(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(0)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -896,7 +866,7 @@ class PoolingGather : public Kernel {
     v->SetMiniumAlignment(align * sizeof(float));
 
     // Embedding matrix must be row-major.
-    M->SetRequiredOrder(ROW_MAJOR);
+    M->RequireOrder(ROW_MAJOR);
     if (M->dim(1) >= align) M->MinAlign({1, align});
   }
 
@@ -1271,7 +1241,7 @@ class ScatterAdd : public Kernel {
     value->SetMiniumAlignment(align * sizeof(float));
 
     // Embedding matrix must be row-major.
-    var->SetRequiredOrder(ROW_MAJOR);
+    var->RequireOrder(ROW_MAJOR);
     int minalign = 1;
     if (var->dim(1) >= 4) minalign = 4;
     if (CPU::Enabled(AVX) && var->dim(1) >= 8) minalign = 8;
@@ -1577,6 +1547,7 @@ void RegisterArrayKernels(Library *library) {
   library->Register(new OneHot());
   library->Register(new GeneralConcat());
   library->Register(new BasicConcat());
+  library->Register(new Split());
   library->Register(new Slice());
   library->Register(new MultiGather());
   library->Register(new SingleGather());

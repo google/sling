@@ -152,6 +152,20 @@ class Builder:
 
     return op.outputs[0]
 
+  def split(self, x, splits, axis=0, name=None):
+    op = self.rawop("Split", name)
+    op.add_input(x)
+    op.add_input(self.const(axis, DT_INT))
+    op.add_attr("N", splits)
+    shape = x.shape[:]
+    shape[axis] = x.shape[axis] / splits
+    results = []
+    for n in xrange(splits):
+      o = self.var(op.name + ":" + str(n), x.type, shape)
+      op.add_output(o)
+      results.append(o)
+    return tuple(results)
+
   def add(self, x, y, name=None):
     return self.op("Add", [x, y], name)
 

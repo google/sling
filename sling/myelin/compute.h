@@ -41,7 +41,14 @@ class InstanceAllocator;
 class ProfileSummary;
 
 // Element order.
-enum Order {ANY_ORDER, ROW_MAJOR, COLUMN_MAJOR, CONFLICTING_ORDER};
+enum Order {
+  ANY_ORDER,
+  ROW_MAJOR,
+  COLUMN_MAJOR,
+  ROW_MAJOR_PREFERRED,
+  COLUMN_MAJOR_PREFERRED,
+  CONFLICTING_ORDER
+};
 
 // Task state.
 enum TaskState {PENDING, ACTIVE, COMPLETED};
@@ -336,7 +343,7 @@ class Tensor {
   bool SupportsOrder(Order order);
 
   // Set required element order.
-  void SetRequiredOrder(Order order);
+  void RequireOrder(Order order);
 
   // Update minimum byte alignment for tensor by combining new alignment
   // with existing constraints.
@@ -347,7 +354,7 @@ class Tensor {
 
   // Require standard row-major order.
   void RequireStandardOrder() {
-    if (rank() > 1 && dim(0) > 1) SetRequiredOrder(ROW_MAJOR);
+    if (rank() > 1 && dim(0) > 1) RequireOrder(ROW_MAJOR);
   }
 
   // Check if tensor has the same shape as another tensor.
@@ -543,7 +550,6 @@ class Tensor {
 
   // Element order.
   Order order() const { return order_; }
-  Order required_order() const { return required_order_; }
 
   // Other tensor that this tensor shares storage with.
   Tensor *shared() const { return shared_; }
@@ -641,8 +647,7 @@ class Tensor {
   int byte_alignment_ = 1;
 
   // Element order for data.
-  Order order_ = ROW_MAJOR;
-  Order required_order_ = ANY_ORDER;
+  Order order_ = ANY_ORDER;
 
   // Optional other tensor that this tensor shares storage with.
   Tensor *shared_ = nullptr;
@@ -769,7 +774,7 @@ class Step : public Attributes {
 
   // Get type signature for step.
   string Signature() const;
-  
+
  private:
   // Step name from flow operation.
   string name_;

@@ -64,8 +64,8 @@ class DragnnCollect : public Kernel {
   }
 
   void Adjust(Step *step) override {
-    step->input(1)->SetRequiredOrder(ROW_MAJOR);
-    step->output(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(1)->RequireOrder(ROW_MAJOR);
+    step->output(0)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -172,7 +172,7 @@ class DragnnLookup : public Kernel {
 
   void Adjust(Step *step) override {
     // Embedding matrix must be row-major.
-    step->input(1)->SetRequiredOrder(ROW_MAJOR);
+    step->input(1)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -285,7 +285,7 @@ class DragnnLookupSingle : public Kernel {
     v->Link(step->input(1));
 
     // Embedding matrix must be row-major.
-    step->input(1)->SetRequiredOrder(ROW_MAJOR);
+    step->input(1)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -371,7 +371,7 @@ class DragnnLookupUnrolled : public Kernel {
     step->output(0)->SetMiniumAlignment(align);
 
     // Embedding matrix must be row-major.
-    step->input(1)->SetRequiredOrder(ROW_MAJOR);
+    step->input(1)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {

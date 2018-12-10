@@ -189,7 +189,7 @@ class CUDAGatherSingle : public CUDAKernel {
     if (step->indegree() == 3) v->Link(step->input(2));
 
     // Embedding matrix must be row-major.
-    step->input(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(0)->RequireOrder(ROW_MAJOR);
   }
 
   void GeneratePTX(Step *step, PTXMacroAssembler *ptx) override {
@@ -279,7 +279,7 @@ class CUDAGatherMultiple : public CUDAKernel {
 
   void Adjust(Step *step) override {
     // Embedding matrix must be row-major.
-    step->input(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(0)->RequireOrder(ROW_MAJOR);
   }
 
   void GeneratePTX(Step *step, PTXMacroAssembler *ptx) override {
@@ -419,7 +419,7 @@ class CUDAPoolingGather : public CUDAKernel {
 
   void Adjust(Step *step) override {
     // Embedding matrix must be row-major.
-    step->input(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(0)->RequireOrder(ROW_MAJOR);
   }
 
   void GeneratePTX(Step *step, PTXMacroAssembler *ptx) override {

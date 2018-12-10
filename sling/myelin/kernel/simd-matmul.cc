@@ -146,7 +146,7 @@ class MatMulArgs {
   }
 
   // Set the required order for output.
-  void SetRequiredOrder(Order order) {
+  void RequireOrder(Order order) {
     EnsureOutputOrder(order);
     Order required;
     switch (order) {
@@ -159,7 +159,7 @@ class MatMulArgs {
       default:
         required = ANY_ORDER;
     }
-    c_.tensor->SetRequiredOrder(required);
+    c_.tensor->RequireOrder(required);
   }
 
   // Check that argument shapes match a matrix multiplication.
@@ -236,7 +236,7 @@ class SIMDMatMul : public Kernel {
   void Adjust(Step *step) override {
     // Set required order for output.
     MatMulArgs args(step);
-    args.SetRequiredOrder(ROW_MAJOR);
+    args.RequireOrder(ROW_MAJOR);
 
     // Set alignment.
     int vecbytes = SIMDAssembler::VectorBytes(args.c().type());

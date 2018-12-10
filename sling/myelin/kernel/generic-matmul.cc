@@ -74,7 +74,7 @@ class GenericFltVecMatMulBase : public Kernel {
   }
 
   void Adjust(Step *step) override {
-    step->input(1)->SetRequiredOrder(COLUMN_MAJOR);
+    step->input(1)->RequireOrder(COLUMN_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -235,9 +235,9 @@ class GenericFltMatMatMul : public Kernel {
   void Adjust(Step *step) override {
     bool transpose_a = step->GetAttr("transpose_a", false);
     bool transpose_b = step->GetAttr("transpose_b", false);
-    step->input(0)->SetRequiredOrder(transpose_a ? COLUMN_MAJOR : ROW_MAJOR);
-    step->input(1)->SetRequiredOrder(transpose_b ? ROW_MAJOR : COLUMN_MAJOR);
-    step->output(0)->SetRequiredOrder(ROW_MAJOR);
+    step->input(0)->RequireOrder(transpose_a ? COLUMN_MAJOR : ROW_MAJOR);
+    step->input(1)->RequireOrder(transpose_b ? ROW_MAJOR : COLUMN_MAJOR);
+    step->output(0)->RequireOrder(ROW_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -378,7 +378,7 @@ class GenericIntVecMatMulBase : public Kernel {
     step->SetRegisterUsage(num_regs);
 
     // Matrix must be column major.
-    step->input(1)->SetRequiredOrder(COLUMN_MAJOR);
+    step->input(1)->RequireOrder(COLUMN_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {

@@ -94,7 +94,7 @@ class SSEFltVecMatMulBase : public Kernel {
 
     W->MinAlign({4, 1});
     W->SetMiniumAlignment(alignment);
-    W->SetRequiredOrder(COLUMN_MAJOR);
+    W->RequireOrder(COLUMN_MAJOR);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {

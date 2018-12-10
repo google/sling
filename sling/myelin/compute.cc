@@ -36,23 +36,64 @@ namespace myelin {
 
 #define __ masm->
 
-// Combined tensor order.
-static const Order combined_order[4][4] = {
-  {ANY_ORDER,         ROW_MAJOR,         COLUMN_MAJOR,      CONFLICTING_ORDER},
-  {ROW_MAJOR,         ROW_MAJOR,         CONFLICTING_ORDER, CONFLICTING_ORDER},
-  {COLUMN_MAJOR,      CONFLICTING_ORDER, COLUMN_MAJOR,      CONFLICTING_ORDER},
-  {CONFLICTING_ORDER, CONFLICTING_ORDER, CONFLICTING_ORDER, CONFLICTING_ORDER},
-};
-
 // Element order names.
 const char *ordername[] = {
-  "unspecified", "row-major", "column-major", "conflicting"
+  "unspecified",
+  "row-major",
+  "column-major",
+  "row-major preferred",
+  "column-major preferred",
+  "conflicting"
 };
 
 // Placement names.
 const char *placename[] = {
   "nowhere", "host", "device", "host and device"
 };
+
+static Order CombinedOrder(Order a, Order b) {
+  if (a == ANY_ORDER) return b;
+  if (b == ANY_ORDER) return a;
+
+  if (a == CONFLICTING_ORDER) return CONFLICTING_ORDER;
+  if (b == CONFLICTING_ORDER) return CONFLICTING_ORDER;
+
+  if (a == ROW_MAJOR) {
+    if (b == COLUMN_MAJOR) return CONFLICTING_ORDER;
+    return ROW_MAJOR;
+  }
+  if (b == ROW_MAJOR) {
+    if (b == COLUMN_MAJOR) return CONFLICTING_ORDER;
+    return ROW_MAJOR;
+  }
+
+  if (a == COLUMN_MAJOR) {
+    if (b == ROW_MAJOR) return CONFLICTING_ORDER;
+    return COLUMN_MAJOR;
+  }
+  if (b == COLUMN_MAJOR) {
+    if (a == ROW_MAJOR) return CONFLICTING_ORDER;
+    return COLUMN_MAJOR;
+  }
+
+  if (a == COLUMN_MAJOR_PREFERRED && b == COLUMN_MAJOR_PREFERRED) {
+    return COLUMN_MAJOR_PREFERRED;
+  } else {
+    return ROW_MAJOR_PREFERRED;
+  }
+}
+
+static Order FinalOrder(Order order, Order preferred) {
+  switch (order) {
+    case ANY_ORDER: return preferred;
+    case ROW_MAJOR: return ROW_MAJOR;
+    case COLUMN_MAJOR: return COLUMN_MAJOR;
+    case ROW_MAJOR_PREFERRED:  return ROW_MAJOR;
+    case COLUMN_MAJOR_PREFERRED: return COLUMN_MAJOR;
+    case CONFLICTING_ORDER: return CONFLICTING_ORDER;
+  }
+  return CONFLICTING_ORDER;
+}
 
 static int LeastCommonMultiple(int n, int m) {
   int a = n;
@@ -534,11 +575,11 @@ int Tensor::ChannelElementSize() const {
 }
 
 bool Tensor::SupportsOrder(Order order) {
-  return combined_order[required_order_][order] != CONFLICTING_ORDER;
+  return CombinedOrder(order_, order) != CONFLICTING_ORDER;
 }
 
-void Tensor::SetRequiredOrder(Order order) {
-  required_order_ = combined_order[required_order_][order];
+void Tensor::RequireOrder(Order order) {
+  order_ = CombinedOrder(order_, order);
 }
 
 void Tensor::SetMiniumAlignment(int alignment) {
@@ -1017,7 +1058,6 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     tensor->local_ = !var->global();
     if (tensor->local_) {
       parameters_.push_back(tensor);
-      tensor->required_order_ = options_.parameter_element_order;
     } else {
       globals_.push_back(tensor);
       tensor->random_init_ = var->random() && var->learnable();
@@ -1040,11 +1080,19 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     if (var->in()) {
       tensor->current_placement_ = HOST;
       tensor->placement_ = HOST;
+      if (tensor->local_) {
+        tensor->order_ = options_.parameter_element_order;
+      }
     }
 
     // Output variables must be available on the host after the computation.
     tensor->out_ = var->out();
-    if (var->out()) tensor->placement_ = HOST;
+    if (var->out()) {
+      tensor->placement_ = HOST;
+      if (tensor->local_) {
+        tensor->order_ = options_.parameter_element_order;
+      }
+    }
 
     // Initialize constant tensors with data from the flow variable so they can
     // be used before tensor data allocation.
@@ -1285,11 +1333,11 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       l->require_dense_ |= t->require_dense_;
 
       // Propagate order constraints.
-      if (t->required_order_ != l->required_order_) {
-        Order c = combined_order[t->required_order_][l->required_order_];
-        if (t->required_order_ != c || l->required_order_ != c) {
-          t->required_order_ = c;
-          l->required_order_ = c;
+      if (t->order_ != l->order_) {
+        Order c = CombinedOrder(t->order_, l->order_);
+        if (t->order_ != c || l->order_ != c) {
+          t->order_ = c;
+          l->order_ = c;
           again = true;
         }
       }
@@ -1311,20 +1359,11 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   for (auto it : tensors) {
     Tensor *tensor = it.second;
 
-    // Determine element order.
-    CHECK_EQ(tensor->order(), ROW_MAJOR);
-    switch (tensor->required_order_) {
-      case COLUMN_MAJOR:
-        // Swap element order.
-        tensor->order_ = COLUMN_MAJOR;
-        break;
-      case ANY_ORDER:
-      case ROW_MAJOR:
-        // Already in row-major order.
-        break;
-      case CONFLICTING_ORDER:
-        LOG(ERROR) << "Conflicting order requirements for " << tensor->name();
-        return false;
+    // Determine final element order.
+    tensor->order_ = FinalOrder(tensor->order_, ROW_MAJOR);
+    if (tensor->order_ == CONFLICTING_ORDER) {
+      LOG(ERROR) << "Conflicting order requirements for " << tensor->name();
+      return false;
     }
 
     // Check for dense encoding conflicts.
