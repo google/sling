@@ -155,8 +155,8 @@ class Builder:
   def split(self, x, splits, axis=0, name=None):
     op = self.rawop("Split", name)
     op.add_input(x)
+    op.add_input(self.const(splits, DT_INT))
     op.add_input(self.const(axis, DT_INT))
-    op.add_attr("N", splits)
     shape = x.shape[:]
     shape[axis] = x.shape[axis] / splits
     results = []

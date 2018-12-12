@@ -27,9 +27,6 @@ namespace myelin {
 
 using namespace jit;
 
-// Maximum number of loop unrolls.
-static const int kMaxUnrolls = 4;
-
 // Arguments for matmul op. This takes transposition and element order of the
 // arguments into account.
 class MatMulArgs {
@@ -239,10 +236,14 @@ class SIMDMatMul : public Kernel {
     args.RequireOrder(ROW_MAJOR);
 
     // Set alignment.
-    int vecbytes = SIMDAssembler::VectorBytes(args.c().type());
+    Type type = args.c().type();
+    int vecbytes = SIMDAssembler::VectorBytes(type);
     args.a().tensor->SetMiniumAlignment(vecbytes);
     args.b().tensor->SetMiniumAlignment(vecbytes);
     args.c().tensor->SetMiniumAlignment(vecbytes);
+
+    // Reserve registers.
+    step->SetRegisterUsage(SIMDAssembler::RegisterUsage(type) + 8);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -283,7 +284,7 @@ class SIMDMatMul : public Kernel {
     }
 
     // Compute vector processing strategy.
-    SIMDStrategy strategy(&sasm, args.b().width(), kMaxUnrolls);
+    SIMDStrategy strategy(&sasm, args.b().width());
     strategy.PreloadMasks();
 
     // Allocate registers.
@@ -499,7 +500,7 @@ class SIMDMatMul : public Kernel {
     CHECK_EQ(args.a().width(), args.b().width());
 
     // Compute vector processing strategy.
-    SIMDStrategy strategy(&sasm, args.b().width(), kMaxUnrolls);
+    SIMDStrategy strategy(&sasm, args.b().width());
     strategy.PreloadMasks();
 
     // Allocate registers.
@@ -719,7 +720,10 @@ class SIMDMatMul : public Kernel {
 
   int64 Complexity(const Step *step) override {
     MatMulArgs args(step);
-    return args.c().tensor->elements() * args.a().shape.dim(1) * 2;
+    int64 ops = args.c().tensor->elements();
+    ops *= args.a().shape.dim(1);
+    ops *= 2;
+    return  ops;
   }
 
  private:

@@ -555,14 +555,20 @@ class Split : public Kernel {
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
-    if (step->indegree() != 2) return false;
-    int n = step->GetAttr("N", step->outdegree());
-    if (step->outdegree() != n) return false;
+    if (step->indegree() != 3) return false;
 
-    // Only splits along a singular prefix supported.
+    // Only constant number of splits along a singular prefix supported.
     Tensor *input = step->input(0);
-    Tensor *axis = step->input(1);
-    if (!axis->constant()) return false;
+    Tensor *splits = step->input(1);
+    Tensor *axis = step->input(2);
+
+    // Check splits.
+    if (splits->type() != DT_INT32 || !splits->constant()) return false;
+    int n = splits->value<int32>();
+    if (n != step->outdegree()) return false;
+
+    // Check axis.
+    if (axis->type() != DT_INT32 || !axis->constant()) return false;
     int a = axis->value<int32>();
     if (a > input->rank() - 1) return false;
     if (input->shape().outer(a) != 1) return false;
@@ -587,8 +593,8 @@ class Split : public Kernel {
   void Generate(Step *step, MacroAssembler *masm) override {
     // Get input.
     Tensor *input = step->input(0);
-    int axis = step->input(1)->value<int32>();
-    int n = step->GetAttr("N", step->indegree());
+    int n = step->input(1)->value<int32>();
+    int axis = step->input(2)->value<int32>();
     int chunk_size = input->shape().inner(axis) / n;
     int stride = input->stride(axis) * chunk_size;
 

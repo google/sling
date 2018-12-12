@@ -17,6 +17,7 @@
 # Run all Myelin tests.
 
 TESTPGM="python sling/myelin/tests/myelin-vs-numpy.py"
+EXTRA=$@
 
 # Determine CPU feature support.
 AVX512=$(grep avx512 /proc/cpuinfo)
@@ -28,27 +29,27 @@ AVX=$(grep avx /proc/cpuinfo)
 testtype() {
   DT=$1
   echo "Test data type $DT"
-  $TESTPGM --dt $DT
+  $TESTPGM --dt $DT ${EXTRA}
 
   if [[ $AVX512 ]]; then
     echo "Test data type $DT without AVX512"
-    $TESTPGM --dt $DT --cpu=-avx512
+    $TESTPGM --dt $DT --cpu=-avx512 ${EXTRA}
   fi
   if [[ $FMA ]]; then
     echo "Test data type $DT without FMA3"
-    $TESTPGM --dt $DT --cpu=-avx512-fma3
+    $TESTPGM --dt $DT --cpu=-avx512-fma3 ${EXTRA}
   fi
   if [[ $AVX2 ]]; then
     echo "Test data type $DT without AVX2"
-    $TESTPGM --dt $DT --cpu=-avx512-avx2
+    $TESTPGM --dt $DT --cpu=-avx512-avx2 ${EXTRA}
     if [[ $FMA ]]; then
       echo "Test data type $DT without AVX2 and FMA3"
-      $TESTPGM --dt $DT --cpu=-avx512-fma3-avx2
+      $TESTPGM --dt $DT --cpu=-avx512-fma3-avx2 ${EXTRA}
     fi
   fi
   if [[ $AVX ]]; then
     echo "Test data type $DT without AVX"
-    $TESTPGM --dt $DT --cpu=-avx512-fma3-avx2-avx
+    $TESTPGM --dt $DT --cpu=-avx512-fma3-avx2-avx ${EXTRA}
   fi
 }
 

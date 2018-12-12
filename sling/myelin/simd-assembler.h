@@ -33,6 +33,9 @@ class SIMDGenerator {
   // Number of elements per vector register.
   virtual int VectorSize() = 0;
 
+  // Returns false if computations should not be unrolled.
+  virtual bool SupportsUnroll();
+
   // Allocate SIMD register.
   virtual int Alloc() = 0;
 
@@ -116,6 +119,9 @@ class SIMDAssembler {
   // Check if type is supported.
   static bool Supports(Type type);
 
+  // Returns the number of regular register used by SIMD generators.
+  static int RegisterUsage(Type type);
+
   // Return biggest vector size in bytes.
   static int VectorBytes(Type type);
 
@@ -137,6 +143,9 @@ class SIMDAssembler {
 // of the vector.
 class SIMDStrategy {
  public:
+  // Maximum number of loop unrolls.
+  static const int kMaxUnrolls = 4;
+
   // A phase is a (repeated) (unrolled) (masked) operation on parts of a vector.
   struct Phase {
     Phase(SIMDGenerator *generator) : generator(generator) {}
@@ -150,7 +159,7 @@ class SIMDStrategy {
   };
 
   // Compute a strategy for processing a vector of a certain size.
-  SIMDStrategy(SIMDAssembler *sasm, int size, int max_unrolls);
+  SIMDStrategy(SIMDAssembler *sasm, int size);
 
   // Maximum number of unrolls.
   int MaxUnrolls();
