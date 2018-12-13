@@ -57,21 +57,16 @@ void PyTokenizer::Dealloc() {
 PyObject *PyTokenizer::Tokenize(PyObject *args) {
   // Get arguments.
   PyStore *pystore;
-  PyObject *text;
-  if (!PyArg_ParseTuple(args, "OS", &pystore, &text)) return nullptr;
+  char *text;
+  if (!PyArg_ParseTuple(args, "Os", &pystore, &text)) return nullptr;
   if (!PyStore::TypeCheck(pystore)) return nullptr;
   if (!pystore->Writable()) return nullptr;
-
-  // Get text.
-  char *data;
-  Py_ssize_t length;
-  PyString_AsStringAndSize(text, &data, &length);
 
   // Initialize empty document.
   nlp::Document document(pystore->store);
 
   // Tokenize text.
-  tokenizer->Tokenize(&document, Text(data, length));
+  tokenizer->Tokenize(&document, text);
   document.Update();
 
   // Create document frame wrapper.
@@ -83,22 +78,17 @@ PyObject *PyTokenizer::Tokenize(PyObject *args) {
 PyObject *PyTokenizer::Lex(PyObject *args) {
   // Get arguments.
   PyStore *pystore;
-  PyObject *lex;
-  if (!PyArg_ParseTuple(args, "OS", &pystore, &lex)) return nullptr;
+  char *lex;
+  if (!PyArg_ParseTuple(args, "Os", &pystore, &lex)) return nullptr;
   if (!PyStore::TypeCheck(pystore)) return nullptr;
   if (!pystore->Writable()) return nullptr;
-
-  // Get text.
-  char *data;
-  Py_ssize_t length;
-  PyString_AsStringAndSize(lex, &data, &length);
 
   // Initialize empty document.
   nlp::Document document(pystore->store);
 
   // Parse LEX-encoded text.
   nlp::DocumentLexer lexer(tokenizer);
-  if (!lexer.Lex(&document, Text(data, length))) {
+  if (!lexer.Lex(&document, lex)) {
     PyErr_SetString(PyExc_ValueError, "Invalid LEX encoding");
     return nullptr;
   }

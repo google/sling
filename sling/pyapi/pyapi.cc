@@ -13,10 +13,7 @@
 // limitations under the License.
 
 #ifdef SLING_GOOGLE3
-#include <stdlib.h>
 #include <Python.h>
-#include "base/googleinit.h"
-#include "base/init_google.h"
 #else
 #include <python2.7/Python.h>
 #endif
@@ -96,25 +93,10 @@ static void RegisterPythonModule() {
 
 }  // namespace sling
 
-#ifdef SLING_GOOGLE3
-
 extern "C" void initpysling() {
-  if (getenv("LOGTOSTDERR")) FLAGS_logtostderr = true;
-  static int argc = 1;
-  static char *name = "pysling";
-  static char *args[2] = {name, nullptr};
-  static char **argv = args;
-  InitGoogle("pysling", &argc, &argv, false);
-
-  sling::RegisterPythonModule();
-}
-
-#else
-
-extern "C" void initpysling() {
+#ifndef SLING_GOOGLE3
   sling::InitSharedLibrary();
+#endif
   sling::RegisterPythonModule();
 }
-
-#endif
 

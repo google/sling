@@ -702,7 +702,7 @@ void StandardTokenization::Init(CharacterFlags *char_flags) {
   char_flags->add('<', TAG_START);
   char_flags->add('>', TAG_END);
   char_flags->add('@', WORD_PUNCT);
-  char_flags->add('_', WORD_PUNCT);
+  char_flags->add('_', CHAR_LETTER);
   char_flags->add('`', WORD_PUNCT);
   char_flags->add(0x2019, WORD_PUNCT);  // ’ (single quote).
   char_flags->add('@', HASHTAG_START);  // For @handle
@@ -737,7 +737,6 @@ void StandardTokenization::Init(CharacterFlags *char_flags) {
   AddTokenType("|", TOKEN_EOS | TOKEN_DISCARD);
   AddTokenType(" * ", TOKEN_EOS | TOKEN_PARA | TOKEN_DISCARD);  // ASCII bullet
   AddTokenType("·", TOKEN_EOS | TOKEN_PARA | TOKEN_DISCARD);  // middle dot
-  AddTokenType("_", TOKEN_CONDEOS, "--");
   AddTokenType("...", TOKEN_CONDEOS);
   AddTokenType("…", TOKEN_CONDEOS, "...");
   AddTokenType("&", TOKEN_CONDEOS, "&");
