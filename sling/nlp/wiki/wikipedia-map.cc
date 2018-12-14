@@ -83,7 +83,7 @@ Handle WikipediaMap::Resolve(Handle h) {
   return frame->self;
 }
 
-Text WikipediaMap::Lookup(Text id) {
+Text WikipediaMap::Lookup(Text id, PageType type) {
   // Look up item in mapping.
   Handle h = store_.LookupExisting(id);
   if (h.IsNil()) return Text();
@@ -93,6 +93,14 @@ Text WikipediaMap::Lookup(Text id) {
 
   // Get Wikidata id for item.
   Frame frame(&store_, h);
+
+  // Check target type.
+  if (type != UNKNOWN) {
+    auto f = typemap_.find(frame.GetHandle(n_kind_));
+    if (f == typemap_.end() || f->second != type) return Text();
+  }
+
+  // Return qid.
   Frame qid = frame.GetFrame(n_qid_);
   if (qid.invalid()) return Text();
   return qid.Id();
@@ -154,14 +162,15 @@ void WikipediaMap::GetRedirectInfo(Handle redirect, PageInfo *info) {
   info->qid = item.Get(n_qid_).AsFrame().Id();
 }
 
-Text WikipediaMap::LookupLink(Text lang, Text link) {
+Text WikipediaMap::LookupLink(Text lang, Text link, PageType type) {
   string id = Wiki::Id(lang.str(), link.str());
-  return Lookup(id);
+  return Lookup(id, type);
 }
 
-Text WikipediaMap::LookupLink(Text lang, Text prefix, Text link) {
+Text WikipediaMap::LookupLink(Text lang, Text prefix, Text link,
+                              PageType type) {
   string id = Wiki::Id(lang.str(), prefix.str(), link.str());
-  return Lookup(id);
+  return Lookup(id, type);
 }
 
 }  // namespace nlp

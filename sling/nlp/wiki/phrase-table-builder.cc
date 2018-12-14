@@ -217,6 +217,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
   // are not marked as reliable.
   int noisy_alias_sources_ =
     (1 << SRC_WIKIPEDIA_ANCHOR) |
+    (1 << SRC_WIKIPEDIA_LINK) |
     (1 << SRC_WIKIPEDIA_DISAMBIGUATION);
 
   // Phrase tokenizer.

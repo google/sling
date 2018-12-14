@@ -1,7 +1,7 @@
-import pysling as api
-from log import *
-from nlp.document import *
-from nlp.parser import *
+import sling.pysling as api
+from sling.log import *
+from sling.nlp.document import *
+from sling.nlp.parser import *
 
 Store=api.Store
 Frame=api.Frame
@@ -22,4 +22,10 @@ DECADE=api.DECADE
 YEAR=api.YEAR
 MONTH=api.MONTH
 DAY=api.DAY
+
+CASE_INVALID=api.CASE_INVALID
+CASE_NONE=api.CASE_NONE
+CASE_UPPER=api.CASE_UPPER
+CASE_LOWER=api.CASE_LOWER
+CASE_TITLE=api.CASE_TITLE
 

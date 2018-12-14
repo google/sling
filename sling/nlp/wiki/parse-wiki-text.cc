@@ -21,6 +21,7 @@
 #include "sling/base/types.h"
 #include "sling/file/file.h"
 #include "sling/nlp/wiki/wiki-parser.h"
+#include "sling/nlp/wiki/wiki-extractor.h"
 
 DEFINE_string(input, "test.txt", "input file with wiki text");
 
@@ -35,15 +36,24 @@ int main(int argc, char *argv[]) {
 
   WikiParser parser(wikitext.c_str());
   parser.Parse();
-  parser.Extract();
+
+  WikiExtractor extractor(parser);
+  WikiTextSink sink;
+  extractor.Extract(&sink);
+
+  WikiPlainTextSink intro;
+  extractor.ExtractIntro(&intro);
 
   std::cout << "<html>\n";
   std::cout << "<head>\n";
   std::cout << "<meta charset='utf-8'/>\n";
   std::cout << "</head>\n";
   std::cout << "<body>\n";
-  std::cout <<  parser.text() << "\n";
+  std::cout <<  sink.text() << "\n";
   std::cout << "<h1>AST</h1>\n<pre>\n";
+  if (!intro.text().empty()) {
+    std::cout << "Intro: " << intro.text() << "<br><br>";
+  }
   parser.PrintAST(0, 0);
   std::cout << "</pre>\n";
   std::cout << "</body></html>\n";

@@ -146,16 +146,17 @@ class WikipediaMapping : public task::FrameProcessor {
     // Get language for mapping.
     string lang = task->Get("language", "en");
     language_ = commons_->Lookup(StrCat("/lang/" + lang));
+    wikitypes_.Init(commons_);
 
     // Statistics.
-    num_skipped_ = task->GetCounter("skipped_pages");
-    num_pages_ = task->GetCounter("total_pages");
-    num_articles_ = task->GetCounter("article_pages");
-    num_disambiguations_ = task->GetCounter("disambiguation_pages");
-    num_categories_ = task->GetCounter("category_pages");
-    num_lists_ = task->GetCounter("list_pages");
-    num_templates_ = task->GetCounter("template_pages");
-    num_infoboxes_ = task->GetCounter("infobox_pages");
+    num_skipped_ = task->GetCounter("items_skipped");
+    num_items_ = task->GetCounter("total_items_mapped");
+    num_articles_ = task->GetCounter("article_pages_mapped");
+    num_disambiguations_ = task->GetCounter("disambiguation_pages_mapped");
+    num_categories_ = task->GetCounter("category_pages_mapped");
+    num_lists_ = task->GetCounter("list_pages_mapped");
+    num_templates_ = task->GetCounter("template_pages_mapped");
+    num_infoboxes_ = task->GetCounter("infobox_pages_mapped");
   }
 
   void Process(Slice key, const Frame &frame) override {
@@ -165,7 +166,7 @@ class WikipediaMapping : public task::FrameProcessor {
       num_skipped_->Increment();
       return;
     }
-    num_pages_->Increment();
+    num_items_->Increment();
     Frame article = wikipedia.GetFrame(language_);
     if (article.invalid()) return;
 
@@ -177,15 +178,15 @@ class WikipediaMapping : public task::FrameProcessor {
     bool is_template = false;
     for (const Slot &s : frame) {
       if (s.name == n_instance_of_) {
-        if (s.value == n_category_) {
+        if (wikitypes_.IsCategory(s.value)) {
           is_category = true;
-        } else if (s.value == n_disambiguation_) {
+        } else if (wikitypes_.IsDisambiguation(s.value)) {
           is_disambiguation = true;
-        } else if (s.value == n_list_) {
+        } else if (wikitypes_.IsList(s.value)) {
           is_list = true;
-        } else if (s.value == n_infobox_) {
+        } else if (wikitypes_.IsInfobox(s.value)) {
           is_infobox = true;
-        } else if (s.value == n_template_) {
+        } else if (wikitypes_.IsTemplate(s.value)) {
           is_template = true;
         }
       }
@@ -222,15 +223,12 @@ class WikipediaMapping : public task::FrameProcessor {
   // Language.
   Handle language_;
 
-  // Names.
-  Name n_wikipedia_{names_, "/w/item/wikipedia"};
-  Name n_instance_of_{names_, "P31"};
-  Name n_category_{names_, "Q4167836"};
-  Name n_disambiguation_{names_, "Q4167410"};
-  Name n_list_{names_, "Q13406463"};
-  Name n_template_{names_, "Q11266439"};
-  Name n_infobox_{names_, "Q19887878"};
+  // Wiki page types.
+  WikimediaTypes wikitypes_;
 
+  // Names.
+  Name n_instance_of_{names_, "P31"};
+  Name n_wikipedia_{names_, "/w/item/wikipedia"};
   Name n_qid_{names_, "/w/item/qid"};
   Name n_kind_{names_, "/w/item/kind"};
   Name n_kind_article_{names_, "/w/item/kind/article"};
@@ -242,7 +240,7 @@ class WikipediaMapping : public task::FrameProcessor {
 
   // Statistics.
   task::Counter *num_skipped_ = nullptr;
-  task::Counter *num_pages_ = nullptr;
+  task::Counter *num_items_ = nullptr;
   task::Counter *num_articles_ = nullptr;
   task::Counter *num_disambiguations_ = nullptr;
   task::Counter *num_categories_ = nullptr;

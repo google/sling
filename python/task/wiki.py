@@ -325,6 +325,7 @@ class WikiWorkflow:
     if wikimap == None: wikimap = self.wikipedia_mapping(language)
 
     parser = self.wf.task("wikipedia-document-builder", "wikipedia-documents")
+    parser.add_param("language", language)
     self.wf.connect(self.wf.read(articles, name="article-reader"), parser)
     self.wf.connect(self.wf.read(categories, name="category-reader"), parser)
     parser.attach_input("commons", commons)

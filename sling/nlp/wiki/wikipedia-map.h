@@ -68,7 +68,9 @@ class WikipediaMap {
   Store *store() { return &store_; }
 
   // Look up Wikipedia id and return Wikidata id. This also resolves redirects.
-  Text Lookup(Text id);
+  // Returns the empty string id the id is not found or does not have the
+  // expected type.
+  Text Lookup(Text id, PageType type = UNKNOWN);
 
   // Return page information.
   bool GetPageInfo(Text id, PageInfo *info);
@@ -79,8 +81,8 @@ class WikipediaMap {
   void GetRedirectInfo(Handle redirect, PageInfo *info);
 
   // Look up Wikipedia link name and return Wikidata id for target.
-  Text LookupLink(Text lang, Text link);
-  Text LookupLink(Text lang, Text prefix, Text link);
+  Text LookupLink(Text lang, Text link, PageType type = UNKNOWN);
+  Text LookupLink(Text lang, Text prefix, Text link, PageType type = UNKNOWN);
 
  private:
   // Resolve redirects.

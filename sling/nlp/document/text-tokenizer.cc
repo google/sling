@@ -213,7 +213,11 @@ BreakType TokenizerText::BreakLevel(int index) const {
   }
   if (flags & TOKEN_EOS) return SENTENCE_BREAK;
   if (flags & TOKEN_LINE) return LINE_BREAK;
-  if (flags & TOKEN_DISCARD) return SPACE_BREAK;
+  if (flags & TOKEN_DISCARD) {
+    // Do not insert space break for zero-width space.
+    return elements_[index].ch == 0x200B ? NO_BREAK : SPACE_BREAK;
+  }
+
   return NO_BREAK;
 }
 
@@ -487,7 +491,8 @@ static const char *kBreakingTags[] = {
   "h1", "/h1", "h2", "/h2", "h3", "/h3", "h4", "/h4", "h5",
   "/h5", "h6", "/h6", "hr", "li", "noframes", "/noframes", "ol",
   "/ol", "option", "/option", "p", "/p", "select", "/select",
-  "table", "/table", "/title", "tr", "/tr", "ul", "/ul", nullptr
+  "table", "/table", "/title", "tr", "/tr", "ul", "/ul",
+  "blockquote", "/blockquote", nullptr
 };
 
 static const char *kTokenSuffixes[] = {
@@ -705,8 +710,9 @@ void StandardTokenization::Init(CharacterFlags *char_flags) {
   char_flags->add('_', CHAR_LETTER);
   char_flags->add('`', WORD_PUNCT);
   char_flags->add(0x2019, WORD_PUNCT);  // ’ (single quote).
-  char_flags->add('@', HASHTAG_START);  // For @handle
-  char_flags->add('#', HASHTAG_START);  // For #tags
+  char_flags->add('@', HASHTAG_START);  // for @handle
+  char_flags->add('#', HASHTAG_START);  // for #tags
+  char_flags->add(0x200B, TOKEN_DISCARD);  // zero-width space
 
   // Space tokens.
   AddTokenType(" ", TOKEN_DISCARD);

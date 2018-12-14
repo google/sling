@@ -20,6 +20,8 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/wiki/wikipedia-map.h"
+#include "sling/nlp/wiki/wiki-annotator.h"
+#include "sling/nlp/wiki/wiki-extractor.h"
 #include "sling/nlp/wiki/wiki-parser.h"
 #include "sling/task/accumulator.h"
 #include "sling/task/frames.h"
@@ -41,17 +43,18 @@ static bool strtoint(Text text, int *value) {
 // of the linked entity, and all links are converted to Wikidata ids, including
 // resolution of redirects. Titles, anchors, and disambiguations are used for
 // building up the aliases table for each entity.
-class WikipediaDocumentBuilder : public task::FrameProcessor {
+class WikipediaDocumentBuilder : public task::FrameProcessor,
+                                 public WikiLinkResolver {
  public:
-  // Language information for Wikipedia.
-  struct LanguageInfo {
-    Handle id;
-    Text code;
-    Text category_prefix;
-    Text template_prefix;
-  };
-
   void Startup(task::Task *task) override {
+    // Get language settings.
+    language_ = task->Get("language", "en");
+    lang_ = commons_->Lookup(StrCat("/lang/" + language_));
+    Frame langinfo(commons_, lang_);
+    CHECK(langinfo.valid());
+    category_prefix_ = langinfo.GetString(n_lang_category_);
+    template_prefix_ = langinfo.GetString(n_lang_template_);
+
     // Load redirects.
     task::Binding *redir = CHECK_NOTNULL(task->GetInput("redirects"));
     LOG(INFO) << "Loading redirects from " << redir->resource()->name();
@@ -78,18 +81,13 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
     num_wiki_ast_nodes_ = task->GetCounter("wiki_ast_nodes");
     num_article_text_bytes_ = task->GetCounter("article_text_bytes");
     num_article_tokens_ = task->GetCounter("article_tokens");
-    num_images_ = task->GetCounter("wiki_images");
     num_links_ = task->GetCounter("wiki_links");
     num_dead_links_ = task->GetCounter("dead_links");
     num_fragment_links_ = task->GetCounter("fragment_links");
-    num_anchors_ = task->GetCounter("wiki_anchors");
-    num_templates_ = task->GetCounter("wiki_templates");
-    num_special_templates_ = task->GetCounter("special_templates");
-    num_infoboxes_ = task->GetCounter("wiki_infoboxes");
-    num_unknown_templates_ = task->GetCounter("unknown_templates");
     num_categories_ = task->GetCounter("wiki_categories");
     num_unknown_categories_ = task->GetCounter("unknown_categories");
-    num_empty_phrases_ = task->GetCounter("empty_phrases");
+    num_templates_ = task->GetCounter("wiki_templates");
+    num_unknown_templates_ = task->GetCounter("unknown_templates");
     for (int i = 0; i < kNumAliasSources; ++i) {
       num_aliases_[i] =
           task->GetCounter(StrCat(kAliasSourceName[i], "_aliases"));
@@ -143,6 +141,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
         // Article: parse, extract aliases, output anchors as aliases for links.
         OutputTitleAlias(document);
         OutputAnchorAliases(document);
+        OutputLinkAliases(document);
         Output(page.qid, frame);
         num_article_pages_->Increment();
         break;
@@ -150,6 +149,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
       case WikipediaMap::CATEGORY:
         // Category: parse article, output anchors as aliases.
         OutputAnchorAliases(document);
+        OutputLinkAliases(document);
         if (categories_ != nullptr) {
           categories_->Send(task::CreateMessage(page.qid, frame));
         }
@@ -165,6 +165,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
       case WikipediaMap::LIST:
         // Only keep anchor aliases from list pages.
         OutputAnchorAliases(document);
+        OutputLinkAliases(document);
         num_list_pages_->Increment();
         break;
 
@@ -175,105 +176,41 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   }
 
   void ProcessArticle(const Frame &page, Text qid) {
-    // Get language for article.
-    LanguageInfo lang;
-    GetLanguageInfo(page.GetHandle(n_lang_), &lang);
-
     // Parse Wikipedia article.
     string wikitext = page.GetString(n_page_text_);
     WikiParser parser(wikitext.c_str());
     parser.Parse();
-    parser.Extract();
+    num_wiki_ast_nodes_->Increment(parser.nodes().size());
+
+    // Extract annotations from article.
+    WikiAnnotator annotator(page.store(), this);
+    WikiExtractor extractor(parser);
+    extractor.Extract(&annotator);
 
     // Add basic document information.
     Builder article(page);
     article.AddLink(n_page_item_, qid);
     article.AddIsA(docnames_->n_document);
     string title = page.GetString(n_page_title_);
-    article.Add(docnames_->n_url, Wiki::URL(lang.code.str(), title));
+    article.Add(docnames_->n_url, Wiki::URL(language_, title));
     article.Add(docnames_->n_title, page.GetHandle(n_page_title_));
-    const string &text =  parser.text();
+    const string &text =  annotator.text();
     article.Add(docnames_->n_text, text);
     article.Update();
+    num_article_text_bytes_->Increment(text.size());
 
-    // Tokenize article.
+    // Tokenize article and add extracted annotations to document.
     Document document(page, docnames_);
     tokenizer_.Tokenize(&document);
-
-    // Add links as mentions.
-    num_wiki_ast_nodes_->Increment(parser.num_ast_nodes());
-    num_article_text_bytes_->Increment(text.size());
+    annotator.AddToDocument(&document);
     num_article_tokens_->Increment(document.num_tokens());
-    for (const auto &node : parser.nodes()) {
-      switch (node.type) {
-        case WikiParser::IMAGE:
-          num_images_->Increment();
-          break;
-
-        case WikiParser::TEMPLATE: {
-          num_templates_->Increment();
-          if (node.param != 0) {
-            num_special_templates_->Increment();
-          } else {
-            WikipediaMap::PageInfo tmpl;
-            if (GetTemplateInfo(lang, node.name(), &tmpl)) {
-              if (tmpl.type == WikipediaMap::INFOBOX) {
-                num_infoboxes_->Increment();
-              }
-            } else {
-              VLOG(8) << "Unknown template: " << node.name();
-              num_unknown_templates_->Increment();
-            }
-          }
-          break;
-        }
-
-        case WikiParser::CATEGORY: {
-          num_categories_->Increment();
-          Text category = LookupCategory(lang, node.name());
-          if (category.empty()) {
-            VLOG(7) << "Unknown category: " << node.name();
-            num_unknown_categories_->Increment();
-          } else {
-            document.AddExtra(n_page_category_,
-                              document.store()->Lookup(category));
-          }
-          break;
-        }
-
-        case WikiParser::LINK: {
-          num_links_->Increment();
-          Text linkname = node.name();
-          if (linkname.find('#') != -1) {
-            num_fragment_links_->Increment();
-          } else {
-            Text link = LookupLink(lang, linkname);
-            if (link.empty()) {
-              VLOG(9) << "Dead link: " << node.name();
-              num_dead_links_->Increment();
-            } else if (node.anchored()) {
-              // Get tokens span.
-              int begin = document.Locate(node.text_begin);
-              int end = document.Locate(node.text_end);
-
-              if (begin == -1 || begin == end) {
-                num_empty_phrases_->Increment();
-              } else {
-                // Add mention with link.
-                Span *span = document.AddSpan(begin, end, n_link_);
-                span->Evoke(document.store()->Lookup(link));
-              }
-              num_anchors_->Increment();
-            }
-          }
-          break;
-        }
-
-        default: break;
-      }
-    }
-
     document.Update();
+
+    // Output intro text as alternative title alias.
+    WikiPlainTextSink intro;
+    if (extractor.ExtractIntro(&intro) && !intro.text().empty()) {
+      OutputAlias(qid, intro.text(), SRC_WIKIPEDIA_TITLE);
+    }
   }
 
   // Output alias for article title.
@@ -293,6 +230,18 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
       string anchor = span->GetText();
       Text qid = span->Evoked().Id();
       OutputAlias(qid, anchor, SRC_WIKIPEDIA_ANCHOR);
+    }
+  }
+
+  // Output aliases for links outside text.
+  void OutputLinkAliases(const Document &document) {
+    for (Handle h : document.themes()) {
+      Frame theme(document.store(), h);
+      if (theme.IsA(n_link_)) {
+        Text qid = theme.GetFrame(Handle::is()).Id();
+        Text anchor = theme.GetText(n_name_);
+        OutputAlias(qid, anchor, SRC_WIKIPEDIA_LINK);
+      }
     }
   }
 
@@ -322,33 +271,41 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
     }
   }
 
-  // Get language-specific information for Wikipedia.
-  void GetLanguageInfo(Handle lang, LanguageInfo *info) {
-    Frame langinfo(commons_, lang);
-    CHECK(langinfo.valid());
-    info->id = lang;
-    info->code = langinfo.GetText(n_lang_code_);
-    info->category_prefix = langinfo.GetText(n_lang_category_);
-    info->template_prefix = langinfo.GetText(n_lang_template_);
+  // Link resolution interface for annotator.
+  Text ResolveLink(Text link) override {
+    num_links_->Increment();
+    if (link.find('#') != -1) {
+      num_fragment_links_->Increment();
+      return Text();
+    }
+    Text qid = wikimap_.LookupLink(language_, link, WikipediaMap::ARTICLE);
+    if (qid.empty()) num_dead_links_->Increment();
+    return qid;
   }
 
-  // Lookup Wikidata id for link.
-  Text LookupLink(const LanguageInfo &lang, Text name) {
-    return wikimap_.LookupLink(lang.code, name);
+  Text ResolveTemplate(Text link) override {
+    Text qid = wikimap_.LookupLink(language_, template_prefix_, link,
+                                   WikipediaMap::TEMPLATE);
+    num_templates_->Increment();
+    if (qid.empty()) num_unknown_templates_->Increment();
+    return qid;
   }
 
-  // Get page info for template.
-  bool GetTemplateInfo(const LanguageInfo &lang, Text name,
-                       WikipediaMap::PageInfo *info) {
-    return wikimap_.GetPageInfo(lang.code, lang.template_prefix, name, info);
-  }
-
-  // Lookup Wikidata id for category.
-  Text LookupCategory(const LanguageInfo &lang, Text name) {
-    return wikimap_.LookupLink(lang.code, lang.category_prefix, name);
+  Text ResolveCategory(Text link) override {
+    Text qid = wikimap_.LookupLink(language_, category_prefix_, link,
+                                   WikipediaMap::CATEGORY);
+    num_categories_->Increment();
+    if (qid.empty()) num_unknown_categories_->Increment();
+    return qid;
   }
 
  private:
+  // Language.
+  string language_;
+  Handle lang_;
+  string category_prefix_;
+  string template_prefix_;
+
   // Mapping from Wikipedia ids to Wikidata ids.
   WikipediaMap wikimap_;
 
@@ -364,8 +321,6 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   // Symbols.
   DocumentNames *docnames_ = nullptr;
   Name n_name_{names_, "name"};
-  Name n_lang_{names_, "lang"};
-  Name n_lang_code_{names_, "code"};
   Name n_lang_category_{names_, "/lang/wikilang/wiki_category"};
   Name n_lang_template_{names_, "/lang/wikilang/wiki_template"};
 
@@ -386,18 +341,13 @@ class WikipediaDocumentBuilder : public task::FrameProcessor {
   task::Counter *num_wiki_ast_nodes_;
   task::Counter *num_article_text_bytes_;
   task::Counter *num_article_tokens_;
-  task::Counter *num_images_;
   task::Counter *num_links_;
   task::Counter *num_dead_links_;
   task::Counter *num_fragment_links_;
-  task::Counter *num_anchors_;
-  task::Counter *num_templates_;
-  task::Counter *num_special_templates_;
-  task::Counter *num_infoboxes_;
-  task::Counter *num_unknown_templates_;
   task::Counter *num_categories_;
   task::Counter *num_unknown_categories_;
-  task::Counter *num_empty_phrases_;
+  task::Counter *num_templates_;
+  task::Counter *num_unknown_templates_;
 
   task::Counter *num_aliases_[kNumAliasSources];
   task::Counter *num_discarded_aliases_[kNumAliasSources];

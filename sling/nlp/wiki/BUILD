@@ -50,6 +50,28 @@ cc_library(
 )
 
 cc_library(
+  name = "wiki-extractor",
+  srcs = ["wiki-extractor.cc"],
+  hdrs = ["wiki-extractor.h"],
+  deps = [
+    ":wiki-parser",
+    "//sling/string:strcat",
+  ],
+)
+
+cc_library(
+  name = "wiki-annotator",
+  srcs = ["wiki-annotator.cc"],
+  hdrs = ["wiki-annotator.h"],
+  deps = [
+    ":wiki-extractor",
+    "//sling/frame:object",
+    "//sling/nlp/document",
+    "//sling/string:text",
+  ],
+)
+
+cc_library(
   name = "wikidata-importer",
   srcs = ["wikidata-importer.cc"],
   deps = [
@@ -90,6 +112,8 @@ cc_library(
   name = "wikipedia-documents",
   srcs = ["wikipedia-documents.cc"],
   deps = [
+    ":wiki-annotator",
+    ":wiki-extractor",
     ":wiki-parser",
     ":wikipedia-map",
     "//sling/base",
@@ -184,6 +208,7 @@ cc_binary(
   srcs = ["parse-wiki-text.cc"],
   deps = [
     ":wiki-parser",
+    ":wiki-extractor",
     "//sling/base",
     "//sling/file",
     "//sling/file:posix",
