@@ -76,6 +76,7 @@ class StoreFactsBot:
     self.n_facts = self.store["facts"]
     self.n_provenance = self.store["provenance"]
     self.n_category = self.store["category"]
+    self.n_url = self.store["url"]
     self.n_method = self.store["method"]
     self.n_status = self.store["status"]
     self.n_revision = self.store["revision"]
@@ -85,6 +86,7 @@ class StoreFactsBot:
     self.rs = sling.Store(self.store)
 
     self.source_claim = pywikibot.Claim(self.repo, "P3452") # inferred from
+    self.url_source_claim = pywikibot.Claim(self.repo, "P4656") # Wm import URL
     self.time_claim = pywikibot.Claim(self.repo, "P813") # referenced (on)
     today = datetime.date.today()
     time_target = pywikibot.WbTime(year=today.year,
@@ -100,6 +102,10 @@ class StoreFactsBot:
     source_target = pywikibot.ItemPage(self.repo, category)
     self.source_claim.setTarget(source_target)
     return [self.source_claim, self.time_claim]
+
+  def get_url_sources(self, url):
+    self.url_source_claim.setTarget(url)
+    return [self.url_source_claim, self.time_claim]
 
   def ever_had_prop(self, wd_item, prop):
     # Up to 150 revisions covers the full history of 99% of e.g. human items
@@ -150,7 +156,7 @@ class StoreFactsBot:
       if updated >= batch_size:
         print "Hit batch size of", batch_size
         break
-      print "Processing", item_str
+      print "Processing https://www.wikidata.org/wiki/" + item_str
       fact_record = self.rs.parse(record)
       item = fact_record[self.n_item]
       facts = fact_record[self.n_facts]
@@ -159,10 +165,17 @@ class StoreFactsBot:
         self.log_status_skip(item, facts, "inconsistent input")
         continue # read next record in the file
       wd_item = pywikibot.ItemPage(self.repo, item_str)
+      if not wd_item.exists():
+        self.log_status_skip(item, facts, "page does not exist")
+        continue
       if wd_item.isRedirectPage():
         self.log_status_skip(item, facts, "redirect page")
         continue
-      wd_claims = wd_item.get().get('claims')
+      try:
+        wd_claims = wd_item.get().get('claims')
+      except:
+        self.log_status_skip(item, facts, "exception getting claims")
+        continue
       # Process facts / claims
       for prop, val in facts:
         prop_str = str(prop)
@@ -177,7 +190,20 @@ class StoreFactsBot:
         if claim.type == "time":
           date = sling.Date(val) # parse date from record
           precision = precision_map[date.precision] # sling to wikidata
-          target = pywikibot.WbTime(year=date.year, precision=precision)
+          if date.precision <= sling.YEAR:
+            target = pywikibot.WbTime(year=date.year, precision=precision)
+          elif date.precision == sling.MONTH:
+            target = pywikibot.WbTime(year=date.year,
+                                      month=date.month,
+                                      precision=precision)
+          elif date.precision == sling.DAY:
+            target = pywikibot.WbTime(year=date.year,
+                                      month=date.month,
+                                      day=date.day,
+                                      precision=precision)
+          else:
+            self.log_status_skip(item, facts, "date precision exception")
+            continue
         elif claim.type == 'wikibase-item':
           target = pywikibot.ItemPage(self.repo, val)
         else:
@@ -185,11 +211,18 @@ class StoreFactsBot:
           print "Error: Unknown claim type", claim.type
           continue
         claim.setTarget(target)
-        cat_str = str(provenance[self.n_category])
-        summary = provenance[self.n_method] + " " + cat_str
+        if provenance[self.n_category]:
+          s = str(provenance[self.n_category])
+          sources = self.get_sources(s)
+        elif provenance[self.n_url]:
+          s = str(provenance[self.n_url])
+          sources = self.get_url_sources(s)
+        else:
+          continue
+        summary = provenance[self.n_method] + " " + s
         wd_item.addClaim(claim, summary=summary)
         rev_id = str(wd_item.latest_revision_id)
-        claim.addSources(self.get_sources(cat_str))
+        claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
       print item, recno

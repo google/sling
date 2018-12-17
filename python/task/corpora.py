@@ -29,13 +29,18 @@ flags.define("--languages",
 
 flags.define("--wikidata",
              help="wikidata version",
-             default="20181001",
+             default="latest",
              metavar="YYYYMMDD")
 
 flags.define("--wikipedia",
              help="wikipedia version",
-             default="20181001",
+             default="latest",
              metavar="YYYYMMDD")
+
+flags.define("--overwrite",
+             help="overwrite existing file",
+             default=False,
+             action='store_true')
 
 def post_process_flags(arg):
   if arg.languages == None:
@@ -48,9 +53,11 @@ flags.hook(post_process_flags)
 
 def wikidata_url():
   """URL for downloading Wikidata dump."""
+  mid = ""
+  if flags.arg.wikidata != "latest":
+    mid = flags.arg.wikidata + "/wikidata-"
   return "https://dumps.wikimedia.org/wikidatawiki/entities/" + \
-          flags.arg.wikidata + "/wikidata-" + flags.arg.wikidata + \
-          "-all.json.bz2"
+          mid + flags.arg.wikidata + "-all.json.bz2"
 
 def wikidata_dump():
   """WikiData dump location."""

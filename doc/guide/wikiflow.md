@@ -46,12 +46,13 @@ the download with the following flags:
 
   * `--wikipedia YYYYMMDD`
     Specifies the version of the [Wikipedia dump](https://dumps.wikimedia.org/enwiki/).
-    If this is not specified, the latest version "sanctioned" by SLING is used.
-    This is usually updated once a quarter.
+    If this is not specified, the latest version available is used.
   * `--wikidata YYYYMMDD`
     Specifies the version of the [Wikidata dump](https://dumps.wikimedia.org/wikidatawiki/entities/).
-    If this is not specified, the latest version "sanctioned" by SLING is used.
-    This is usually updated once a quarter.
+    If this is not specified, the latest version available is used.
+  * `--overwrite`
+    Allows existing local files to be overwritten when downloading new dump
+    files.
   * `--language LANG`
     Specifies the language for Wikipedia. The default is `en` (English).
   * `--languages LANG,...`

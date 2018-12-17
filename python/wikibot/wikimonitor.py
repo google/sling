@@ -68,7 +68,6 @@ class WikiMonitor:
       print "Processing file {:4d} of {} ({})".format(file_no,
                                                       no_of_files,
                                                       r_file)
-      print r_file
       reader = sling.RecordReader(r_file)
       last_updated = updated
       for item_str, record in reader:
@@ -98,6 +97,10 @@ class WikiMonitor:
               date = sling.Date(val) # parse date from record
               precision = precision_map[date.precision] # sling to wikidata
               target = pywikibot.WbTime(year=date.year, precision=precision)
+              if target.toTimestr() != wd_claim.target.toTimestr():
+                print "https://www.wikidata.org/wiki/" + item_str,  str(prop)
+                print "Old:", target.toTimestr()
+                print "New:", wd_claim.target.toTimestr()
             elif wd_claim.type == 'wikibase-item':
               target = pywikibot.ItemPage(self.repo, val)
             else:
@@ -105,7 +108,6 @@ class WikiMonitor:
               print "Error: Unknown claim type", claim.type
               continue
             if not wd_claim.target_equals(target):
-              print item_str, target, wd_claim.target
               changed += 1
       reader.close()
       print updated - last_updated
