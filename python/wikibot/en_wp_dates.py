@@ -66,17 +66,28 @@ class ExtractWikipediaDates:
                         int(match.group(5 + offset)))
     return date
 
+  def precise_date(self, dates):
+    if dates is None: return False
+    first = True
+    for date in dates:
+      if not first: return True # more than one date - don't try to fix
+      if date is not None and sling.Date(date).precision > sling.YEAR:
+        return True
+      first = False
+    return False
+
   def run(self):
-    month = "(" + "|".join(months.keys()) + ")"
+    month = "(" + "|".join(self.months.keys()) + ")"
     day = "(\d{1,2})"
     year = "(\d{4})"
     date = "(?:(?:" + day + " " + month + " " + year + ")|"
     date += "(?:" + month + " " + day + ", " + year + "))"
     date += "(?:[^)]+?)?"
     dates = date + "\s*-+\s*" + date
-    dates = "(?:(?:born " + date + ")|(?:" + dates + "))"
-    pat = "(?:[^(]|\([^0-9]*\))*?\([, ;a-zA-Z\-]*?" + dates + "\s*\)"
+    dates = u"(?:(?:(?:born|b\.|n\xe9e),? [^0-9)]*?" + date + ")|(?:" + dates + "))"
+    pat = "(?:[^(]|\([^0-9]*\))*?\([^0-9)]*?" + dates + "\s*\)"
     rec = re.compile(pat)
+
 
     self.out_file = "local/data/e/wikibot/birth-death-dates.rec"
     record_file = sling.RecordWriter(self.out_file)
@@ -85,17 +96,16 @@ class ExtractWikipediaDates:
 
     for i in range(10):
       i_file = "local/data/e/wiki/en/documents-0000"+str(i)+"-of-00010.rec"
+      print i_file
       for (item_id, record) in sling.RecordReader(i_file):
         item = self.kb[item_id]
         if self.human not in item(self.instanceof): continue
-        if item[self.date_of_birth] is not None:
-          if item[self.date_of_death] is not None: continue
+        if self.precise_date(item(self.date_of_birth)) and \
+           self.precise_date(item(self.date_of_death)): continue
         parsed_record = sling.Store().parse(record)
         doc = sling.Document(parsed_record)
         raw_text = parsed_record['text']
-        if len(raw_text) ==  0:
-          print item_id, "has an empty 'text' field"
-          continue
+        if len(raw_text) ==  0: continue
         start_index = raw_text.find("<b>") + len("<b>")
         first = 1
         while first < len(doc.tokens) and \
@@ -109,7 +119,7 @@ class ExtractWikipediaDates:
         if text.find("(baptised") >= 0 or text.find("throne") >= 0: continue
         # Birth date only match
         if m.group(1) or m.group(4):
-          if item[self.date_of_birth] is not None: continue
+          if self.precise_date(item(self.date_of_birth)): continue
           facts = store.frame({
             self.date_of_birth: self.date_from_match(0, m).value(),
           })
@@ -118,7 +128,6 @@ class ExtractWikipediaDates:
             self.date_of_birth: self.date_from_match(6, m).value(),
             self.date_of_death: self.date_from_match(12, m).value()
           })
-        print "Match", records, item.id, item.name
         records += 1
         provenance = store.frame({
           self.url: parsed_record['url'],

@@ -104,6 +104,7 @@ class StoreFactsBot:
     return [self.source_claim, self.time_claim]
 
   def get_url_sources(self, url):
+    if '"' in url: url = "https://en.wikipedia.org"
     self.url_source_claim.setTarget(url)
     return [self.url_source_claim, self.time_claim]
 
@@ -172,7 +173,8 @@ class StoreFactsBot:
         self.log_status_skip(item, facts, "redirect page")
         continue
       try:
-        wd_claims = wd_item.get().get('claims')
+        wd_item.get()
+        wd_claims = wd_item.claims
       except:
         self.log_status_skip(item, facts, "exception getting claims")
         continue
@@ -180,10 +182,7 @@ class StoreFactsBot:
       for prop, val in facts:
         prop_str = str(prop)
         fact = self.rs.frame({prop: val})
-        if prop_str in wd_claims:
-          self.log_status_skip(item, fact, "already has property")
-          continue
-        if self.ever_had_prop(wd_item, prop_str):
+        if prop_str not in wd_claims and self.ever_had_prop(wd_item, prop_str):
           self.log_status_skip(item, fact, "already had property")
           continue
         claim = pywikibot.Claim(self.repo, prop_str)
@@ -204,13 +203,28 @@ class StoreFactsBot:
           else:
             self.log_status_skip(item, facts, "date precision exception")
             continue
+          if prop_str in wd_claims:
+            if len(wd_claims[prop_str]) > 1: # more than one property already
+              self.log_status_skip(item, fact, "already has property")
+              continue
+            old = wd_claims[prop_str][0].getTarget()
+            if old is None:
+              wd_item.removeClaims(wd_claims[prop_str])
+            elif not(old.precision < precision and old.year == date.year):
+              self.log_status_skip(item, fact, "already has property")
+              continue
+            else:
+              # item already has property with a same year less precise date
+              claim = wd_claims[prop_str][0]
         elif claim.type == 'wikibase-item':
+          if prop_str in wd_claims:
+            self.log_status_skip(item, fact, "already has property")
+            continue
           target = pywikibot.ItemPage(self.repo, val)
         else:
           # TODO add location and possibly other types
           print "Error: Unknown claim type", claim.type
           continue
-        claim.setTarget(target)
         if provenance[self.n_category]:
           s = str(provenance[self.n_category])
           sources = self.get_sources(s)
@@ -220,7 +234,11 @@ class StoreFactsBot:
         else:
           continue
         summary = provenance[self.n_method] + " " + s
-        wd_item.addClaim(claim, summary=summary)
+        if prop_str in wd_claims and claim in wd_claims[prop_str]:
+          claim.changeTarget(target)
+        else:
+          claim.setTarget(target)
+          wd_item.addClaim(claim, summary=summary)
         rev_id = str(wd_item.latest_revision_id)
         claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
