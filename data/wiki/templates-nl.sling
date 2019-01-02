@@ -1,0 +1,10 @@
+{=/wp/templates/nl
+
+"!!":     {type: "text" text: "||"}
+")!":     {type: "text" text: "]"}
+"!((":    {type: "text" text: "[["}
+"))!":    {type: "text" text: "]]"}
+"=":      {type: "text" text: "="}
+
+}
+

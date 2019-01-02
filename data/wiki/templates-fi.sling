@@ -1,0 +1,18 @@
+{=/wp/templates/fi
+
+"!!":     {type: "text" text: "||"}
+"'":      {type: "text" text: "'"}
+"-\"":    {type: "text" text: " \""}
+"'-":     {type: "text" text: "' "}
+
+"((":     {type: "text" text: "{{"}
+"))":     {type: "text" text: "}}"}
+
+"·":      {type: "text" text: "&nbsp;<b>&middot;</b>"}
+"•":      {type: "text" text: "&nbsp;&bull;"}
+"=":      {type: "text" text: "="}
+
+"päiväys": {type: "date" full: 1 year: 1 month: 2 day:3 format: /w/dates/fi}
+
+}
+

@@ -1,0 +1,28 @@
+{=/wp/templates/pt
+
+"!!":     {type: "text" text: "||"}
+"'":      {type: "text" text: "'"}
+"\" '":   {type: "text" text: "\" '"}
+
+")!":     {type: "text" text: "]"}
+"!((":    {type: "text" text: "[["}
+"))!":    {type: "text" text: "]]"}
+"(":      {type: "text" text: "{"}
+")":      {type: "text" text: "}"}
+"((":     {type: "text" text: "{{"}
+"))":     {type: "text" text: "}}"}
+"·":      {type: "text" text: "&nbsp;<b>&middot;</b>"}
+"•":      {type: "text" text: "&nbsp;&bull;"}
+"\\":     {type: "text" text: "&nbsp;/"}
+"=":      {type: "text" text: "="}
+
+"data": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/pt}
+"DataExt": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/pt}
+"dtlink": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/pt}
+"dtext": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/pt}
+"dni": {type: "date" year: 3 month: 2 day: 1 format: /w/dates/pt}
+"morte": {type: "date" year: 3 month: 2 day: 1 format: /w/dates/pt}
+"ani": {type: "date" year: 1 month: 2 day: 3 yearn: "ano" monthn: "mês" dayn: "dia" format: /w/dates/pt}
+
+}
+

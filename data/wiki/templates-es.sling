@@ -1,0 +1,22 @@
+{=/wp/templates/es
+
+"!":      {type: "text" text: "|"}
+"!!":     {type: "text" text: "||"}
+"'":      {type: "text" text: "'"}
+
+"!((":    {type: "text" text: "[["}
+"))!":    {type: "text" text: "]]"}
+"(":      {type: "text" text: "{"}
+")":      {type: "text" text: "}"}
+"((":     {type: "text" text: "{{"}
+"))":     {type: "text" text: "}}"}
+
+"·":      {type: "text" text: "&nbsp;<b>&middot;</b>"}
+"=":      {type: "text" text: "="}
+
+"fecha": {type: "date" year: 1 month: 2 day: 3 reverse: 1 format: /w/dates/es}
+"fecha de muerte": {type: "date" year: 1 month: 2 day: 3 reverse: 1 format: /w/dates/es}
+"año": {type: "year" bc: 2 format: /w/dates/es}
+
+}
+

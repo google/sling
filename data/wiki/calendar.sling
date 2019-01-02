@@ -5656,5 +5656,334 @@
     9: Q1375624
     10: Q963455
   }
+
+  /w/dates: {
+    /lang/en: /w/dates/en
+    /lang/da: /w/dates/da
+    /lang/sv: /w/dates/sv
+    /lang/no: /w/dates/no
+    /lang/de: /w/dates/de
+    /lang/fr: /w/dates/fr
+    /lang/es: /w/dates/es
+    /lang/it: /w/dates/it
+    /lang/nl: /w/dates/nl
+    /lang/pt: /w/dates/pt
+    /lang/pl: /w/dates/pl
+    /lang/fi: /w/dates/fi
+  }
+}
+
+{=/w/dates/en
+  /w/month_names: [
+    "January"
+    "February"
+    "March"
+    "April"
+    "May"
+    "June"
+    "July"
+    "August"
+    "September"
+    "October"
+    "November"
+    "December"
+  ]
+  /w/month_abbrev: 3
+  /w/day_output_format: "D M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+
+  /w/numeric_date_format: "MM/DD/YYYY"
+  /w/numeric_date_format: "DD-MM-YYYY"
+  /w/numeric_date_format: "DD.MM.YYYY"
+  /w/numeric_date_format: "YYYY/MM/DD"
+  /w/numeric_date_format: "YYYY-MM-DD"
+  /w/numeric_date_format: "YYYY"
+  /w/numeric_date_format: "MM/DD/YY"
+  /w/numeric_date_format: "YY-MM-DD"
+  /w/numeric_date_format: "DD.MM.YY"
+
+  /w/numeric_date_format: "MM/D/YYYY"
+  /w/numeric_date_format: "M/DD/YYYY"
+  /w/numeric_date_format: "M/D/YYYY"
+
+  /w/numeric_date_format: "DD-M-YYYY"
+  /w/numeric_date_format: "D-MM-YYYY"
+  /w/numeric_date_format: "D-M-YYYY"
+
+  /w/numeric_date_format: "D.MM.YYYY"
+  /w/numeric_date_format: "DD.M.YYYY"
+  /w/numeric_date_format: "D.M.YYYY"
+
+  /w/numeric_date_format: "YYYY/M/DD"
+  /w/numeric_date_format: "YYYY/MM/D"
+  /w/numeric_date_format: "YYYY/M/D"
+
+  /w/numeric_date_format: "YYYY-M-DD"
+  /w/numeric_date_format: "YYYY-MM-D"
+  /w/numeric_date_format: "YYYY-M-D"
+
+  /w/numeric_date_format: "M/DD/YY"
+  /w/numeric_date_format: "MM/D/YY"
+  /w/numeric_date_format: "M/D/YY"
+
+  /w/numeric_date_format: "YY-M-DD"
+  /w/numeric_date_format: "YY-MM-D"
+  /w/numeric_date_format: "YY-M-D"
+
+  /w/numeric_date_format: "DD.M.YY"
+  /w/numeric_date_format: "D.MM.YY"
+  /w/numeric_date_format: "D.M.YY"
+
+  /w/text_date_format: "M D, Y"
+  /w/text_date_format: "D M Y"
+  /w/text_date_format: "M D Y"
+  /w/text_date_format: "D M"
+  /w/text_date_format: "M D"
+}
+
+{=/w/dates/da
+  /w/month_names: [
+    "januar"
+    "februar"
+    "marts"
+    "april"
+    "maj"
+    "juni"
+    "juli"
+    "august"
+    "september"
+    "oktober"
+    "november"
+    "december"
+  ]
+  /w/month_abbrev: 3
+  /w/day_output_format: "D. M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/sv
+  /w/month_names: [
+    "januari"
+    "februari"
+    "mars"
+    "april"
+    "maj"
+    "juni"
+    "juli"
+    "augusti"
+    "september"
+    "oktober"
+    "november"
+    "december"
+  ]
+  /w/month_abbrev: 3
+  /w/day_output_format: "D M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/no
+  /w/month_names: [
+    "januar"
+    "februar"
+    "mars"
+    "april"
+    "mai"
+    "juni"
+    "juli"
+    "august"
+    "september"
+    "oktober"
+    "november"
+    "desember"
+  ]
+  /w/month_abbrev: 3
+  /w/day_output_format: "D. M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/de
+  /w/month_names: [
+    "Januar"
+    "Februar"
+    "März"
+    "April"
+    "Mai"
+    "Juni"
+    "Juli"
+    "August"
+    "September"
+    "Oktober"
+    "November"
+    "Dezember"
+  ]
+  /w/month_abbrev: 3
+  /w/day_output_format: "D. M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+
+  /w/numeric_date_format: "YYYY-MM-DD"
+  /w/numeric_date_format: "YYYY-MM-D"
+  /w/numeric_date_format: "YYYY-M-DD"
+  /w/numeric_date_format: "YYYY-M-D"
+}
+
+{=/w/dates/fr
+  /w/month_names: [
+    "janvier"
+    "février"
+    "mars"
+    "avril"
+    "mai"
+    "juin"
+    "juillet"
+    "août"
+    "septembre"
+    "octobre"
+    "novembre"
+    "décembre"
+  ]
+  /w/day_output_format: "D M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+
+  /w/numeric_date_format: "DD-MM-YYYY"
+  /w/numeric_date_format: "DD/MM/YYYY"
+  /w/numeric_date_format: "YYYY-MM-DD"
+
+  /w/text_date_format: "D M Y"
+  /w/text_date_format: "Der M Y"  ; 1er janvier 1980
+  /w/text_date_format: "M Y"
+}
+
+{=/w/dates/es
+  /w/month_names: [
+    "enero"
+    "febrero"
+    "marzo"
+    "abril"
+    "mayo"
+    "junio"
+    "julio"
+    "agosto"
+    "septiembre"
+    "octubre"
+    "noviembre"
+    "diciembre"
+  ]
+  /w/day_output_format: "D de M de Y"
+  /w/month_output_format: "M de Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/it
+  /w/month_names: [
+    "gennaio"
+    "febbraio"
+    "marzo"
+    "aprile"
+    "maggio"
+    "giugno"
+    "luglio"
+    "agosto"
+    "settembre"
+    "ottobre"
+    "novembre"
+    "dicembre"
+  ]
+  /w/day_output_format: "D M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/nl
+  /w/month_names: [
+    "januari"
+    "februari"
+    "maart"
+    "april"
+    "mei"
+    "juni"
+    "juli"
+    "augustus"
+    "september"
+    "oktober"
+    "november"
+    "december"
+  ]
+  /w/day_output_format: "D M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/pt
+  /w/month_names: [
+    "janeiro"
+    "fevereiro"
+    "março"
+    "abril"
+    "maio"
+    "junho"
+    "julho"
+    "agosto"
+    "setembro"
+    "outubro"
+    "novembro"
+    "dezembro"
+  ]
+  /w/day_output_format: "D de M de Y"
+  /w/month_output_format: "M de Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/pl
+  /w/month_names: [
+    "stycznia"
+    "lutego"
+    "marca"
+    "kwietnia"
+    "maja"
+    "czerwca"
+    "lipca"
+    "sierpnia"
+    "września"
+    "października"
+    "listopada"
+    "grudnia"
+  ]
+  /w/day_output_format: "D M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+}
+
+{=/w/dates/fi
+  /w/month_names: [
+    "tammikuuta"
+    "helmikuuta"
+    "maaliskuuta"
+    "huhtikuuta"
+    "toukokuuta"
+    "kesäkuuta"
+    "heinäkuuta"
+    "elokuuta"
+    "syyskuuta"
+    "lokakuuta"
+    "marraskuuta"
+    "joulukuuta"
+  ]
+  /w/day_output_format: "D. M Y"
+  /w/month_output_format: "M Y"
+  /w/year_output_format: "Y"
+
+  /w/numeric_date_format: "YYYY-MM-DD"
+  /w/numeric_date_format: "YYYY-MM-D"
+  /w/numeric_date_format: "YYYY-M-D"
+  /w/numeric_date_format: "YY-MM-DD"
+  /w/numeric_date_format: "YY-MM-D"
+  /w/numeric_date_format: "YY-M-DD"
+  /w/numeric_date_format: "YY-M-D"
 }
 

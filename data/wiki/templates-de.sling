@@ -1,0 +1,9 @@
+{=/wp/templates/de
+
+"'":      {type: "text" text: "'"}
+
+"datum": {type: "date" year: 3 month: 2 day: 1 yearn: "jahr" monthn: "monat" dayn: "tag" format: /w/dates/de}
+"FormatDate": {type: "date" full: 1 format: /w/dates/de}
+
+}
+

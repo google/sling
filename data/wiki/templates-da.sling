@@ -1,0 +1,187 @@
+{=/wp/templates/da
+
+"!":      {type: "text" text: "|"}
+"!!":     {type: "text" text: "||"}
+"'":      {type: "text" text: "'"}
+"'s":     {type: "text" text: "'s"}
+
+")!":     {type: "text" text: "]"}
+"!((":    {type: "text" text: "[["}
+"))!":    {type: "text" text: "]]"}
+"(":      {type: "text" text: "{"}
+")":      {type: "text" text: "}"}
+"((":     {type: "text" text: "{{"}
+"))":     {type: "text" text: "}}"}
+"(((":    {type: "text" text: "{{{"}
+")))":    {type: "text" text: "}}}"}
+
+"·":      {type: "text" text: "&nbsp;<b>&middot;</b>"}
+"•":      {type: "text" text: "&nbsp;&bull;"}
+"\\":     {type: "text" text: "&nbsp;/"}
+"=":      {type: "text" text: "="}
+
+"dato og alder": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/da}
+"dato og alder2": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/da}
+"fødselsdato":  {type: "date" year: 1 month: 2 day: 3 format: /w/dates/da}
+"dødsdato og alder":  {type: "date" year: 1 month: 2 day: 3 format: /w/dates/da}
+"start dato": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/da}
+"startdato og alder": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/da}
+
+"årstalfkr": {type: "year" bce: 1 post: " f.kr."}
+
+"Infoboks Wikidata person": {
+  type: "infobox"
+  class: /wp/infobox/person
+  fields: {
+    "navn": /wp/info/name
+    "fødselsnavn": /wp/info/birth_name
+    "fødselsdato": /wp/info/birth_date
+    "fødested": /wp/info/birth_place
+    "dødsdato": /wp/info/death_date
+    "dødssted": /wp/info/death_place
+    "bopæl": /wp/info/residence
+    "hvilested": /wp/info/resting_place
+    "nationalitet": /wp/info/nationality
+    "beskæftigelse": /wp/info/occupation
+    "politik": /wp/info/politics
+    "religion": /wp/info/religion
+    "forældre": /wp/info/parents
+    "ægtefælle": /wp/info/spouse
+    "partner": /wp/info/partner
+    "partnertype": /wp/info/partnertype
+    "børn": /wp/info/children
+    "kendtfor": /wp/info/known_for
+    "hæder": /wp/info/awards
+    "hjemmeside": /wp/info/website
+    "q": /wp/info/qid
+    "fulde navn": /wp/info/native_name
+    "fødenavn": /wp/info/birth_name
+    "andre navne": /wp/info/other_names
+    "dødsårsag": /wp/info/death_cause
+    "hvilestedkoordinater": /wp/info/resting_place_coordinates
+    "aktive år": /wp/info/years_active
+    "uddannelsessted": /wp/info/alma_mater
+    "institution": /wp/info/organization
+    "løn": /wp/info/salary
+    "højde": /wp/info/height
+    "vægt": /wp/info/weight
+    "formue": /wp/info/net_worth
+    "sambo": /wp/info/cohabitant
+    "kæreste": /wp/info/domestic_partner
+    "mor": /wp/info/mother
+    "far": /wp/info/father
+    "familie": /wp/info/relatives
+    "profession": /wp/info/occupation
+    "præsteembeder": /wp/info/priesthoods
+    "professorater": /wp/info/professorships
+    "berømtfor": /wp/info/known_for
+    "påvirket af": /wp/info/influenced
+    "har påvirket": /wp/info/influences
+    "honorific-prefix": /wp/info/honorific_prefix
+    "honorific-suffix": /wp/info/honorific_suffix
+    "status": /wp/info/status
+    "forsvundet_status": /wp/info/disappeared_status
+    "lig_fundet": /wp/info/body_dound
+    "monumenter": /wp/info/monuments
+    "embede": /wp/info/term
+    "embedsperiode": /wp/info/term_period
+    "forgænger": /wp/info/predecessor
+    "efterfølger": /wp/info/successor
+    "andet": /wp/info/other
+    "color": /wp/info/color
+    "region": /wp/info/region
+    "æra": /wp/info/era
+    "pseudonym": /wp/info/pseudonym
+    "genre": /wp/info/genre
+    "kendte værker": /wp/info/notable_works
+    "litterære bevægelse": /wp/info/literary_movement
+    "kendte roller": /wp/info/notable_roles
+
+    "oscarpriser": /wp/info/oscar_awards
+    "emmypriser": /wp/info/emmy_awards
+    "tonypriser": /wp/info/tony_awards
+    "goldenglobepriser": /wp/info/golden_globe_awards
+    "baftapriser": /wp/info/bafta_awards
+    "People's Choicepriser": /wp/info/peoples_choice_awards
+    "fagpriser": /wp/info/awards
+    "cesarpriser": /wp/info/cesar_awards
+    "goyapriser": /wp/info/goya_awards
+    "afipriser": /wp/info/afi_awards
+    "filmfarepriser": /wp/info/filmfare_awards
+    "olivierpriser": /wp/info/olivier_awards
+    "geminipriser": /wp/info/gemini_awards
+    "grammypriser": /wp/info/grammy_awards
+    "Screen Actors Guild": /wp/info/screen_actors_guild_awards
+    "teenchoiceadwardspriser": /wp/info/teenchoice_adwards
+    "bodilpriser": /wp/info/bodil_awards
+    "robertpriser": /wp/info/robert_awards
+
+    "forskningsområde": /wp/info/research_area
+    "hovedværk": /wp/info/notable_work
+    "hovedværk_udgivelsesår": /wp/info/masterpiece_year
+    "akademisk_vejleder": /wp/info/adviser
+    "arbejdssted": /wp/info/employer
+    "betydningsfulde_elever": /wp/info/notable_students
+
+    "nobelpris": /wp/info/nobel_price
+    "nobeltype": /wp/info/nobel_type
+    "nobelår": /wp/info/nobel_year
+
+    "skole_tradition": /wp/info/school_tradition
+    "fagområde": /wp/info/field_of_work
+    "betydningsfulde idéer": /wp/info/important_ideas
+    "elever": /wp/info/students
+    "felt": /wp/info/field
+    "periode": /wp/info/periode
+    "beskyttere": /wp/info/protectors
+    "inspireret af": /wp/info/inspired_by
+    "inspirerede": /wp/info/inspired
+    "udstilling": /wp/info/exhibition
+    "offentlig": /wp/info/public
+    "indkøbt": /wp/info/bought
+    "højeste_auktionspris": /wp/info/highest_bid
+    "Antal_ofre": /wp/info/casualties
+    "Ofre": /wp/info/victims
+    "Offer": /wp/info/victim
+    "Forbrydelse": /wp/info/crime
+    "Periode": /wp/info/period
+    "Land": /wp/info/country
+
+    "Arresteret": /wp/info/arrested
+    "Straf": /wp/info/criminal_penalty
+    "Fængslet_i": /wp/info/imprisoned_at
+    "Kriminel_status": /wp/info/criminal_status
+    "Sigtelse": /wp/info/criminal_charge
+    "Anklaget": /wp/info/charged
+    "Benådet": /wp/info/pardoned
+    "Løsladt": /wp/info/released
+
+    "dåbsdato": /wp/info/baptised
+    "øgenavn": /wp/info/nickname
+    "forsvundet": /wp/info/disappeared
+    "medicinsk tilstand": /wp/info/medical_condition
+    "dødsmåde": /wp/info/death_cause
+    "dræbt af": /wp/info/killed_by
+    "statsborgerskab": /wp/info/citizenship
+    "sprog": /wp/info/language
+    "politiskparti": /wp/info/party
+    "søskende": /wp/info/siblings
+    "elev af": /wp/info/student_of
+    "tilknyttet": /wp/info/affiliation
+    "hovedfag": /wp/info/major
+    "akademisk grad": /wp/info/academic_degree
+    "medlem": /wp/info/membership
+    "arbejdsgiver": /wp/info/employer
+    "interesse": /wp/info/interest
+    "bevægelse": /wp/info/movement
+    "deltog": /wp/info/participant_of
+    "filmografi": /wp/info/filmography
+    "bibliografi": /wp/info/bibliography
+    "nomineringer": /wp/info/nominations
+    "hædret for": /wp/info/for_work
+    "beskrevet": /wp/info/described_in
+  }
+}
+
+}
+

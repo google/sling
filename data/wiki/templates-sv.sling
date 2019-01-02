@@ -1,0 +1,34 @@
+{=/wp/templates/sv
+
+"!":      {type: "text" text: "|"}
+"!!":     {type: "text" text: "||"}
+"'":      {type: "text" text: "'"}
+"'s":     {type: "text" text: "'s"}
+"'-":     {type: "text" text: "' "}
+
+")!":     {type: "text" text: "]"}
+"!((":    {type: "text" text: "[["}
+"))!":    {type: "text" text: "]]"}
+"(":      {type: "text" text: "{"}
+")":      {type: "text" text: "}"}
+"((":     {type: "text" text: "{{"}
+"))":     {type: "text" text: "}}"}
+"(((":    {type: "text" text: "{{{"}
+")))":    {type: "text" text: "}}}"}
+
+"·":      {type: "text" text: "&nbsp;<b>&middot;</b>"}
+"•":      {type: "text" text: "&nbsp;&bull;"}
+"\\":     {type: "text" text: "&nbsp;/"}
+"=":      {type: "text" text: "="}
+
+;"datum": {type: "date" year: 3 month: 2 day: 1 format: /w/dates/se}
+"startdatum": {type: "date" year: 1 month: 1 day: 3 format: /w/dates/se}
+"slutdatum": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/se}
+"startdatum och ålder": {type: "date" year: 1 month: 1 day: 3 format: /w/dates/se}
+;"slutdatum och ålder": {type: "date" year: 1 month: 2 day: 3 format: /w/dates/se}
+
+"död datum och ålder": {type: "date" year: 3 month: 2 day: 1 format: /w/dates/se}
+"död år och ålder": {type: "year" format: /w/dates/se}
+
+}
+

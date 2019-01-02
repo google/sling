@@ -1,6 +1,6 @@
 ; Language definitions.
 
-{=/lang/wikilang :schema
+{=/lang/wikilang +language :schema
   name: "Wiki language metadata"
   family: /schema/lang
 
@@ -25,18 +25,61 @@
     target: string
   }
 
+  value: /lang/bg
+  value: /lang/ca
+  value: /lang/cs
   value: /lang/da
   value: /lang/de
+  value: /lang/el
   value: /lang/en
+  value: /lang/eo
   value: /lang/es
+  value: /lang/eu
   value: /lang/fi
   value: /lang/fr
+  value: /lang/hu
   value: /lang/it
+  value: /lang/la
   value: /lang/nl
   value: /lang/no
   value: /lang/pl
   value: /lang/pt
+  value: /lang/ro
+  value: /lang/ru
+  value: /lang/sh
+  value: /lang/sr
   value: /lang/sv
+  value: /lang/uk
+}
+
+{=/lang/bg
+  :language :/lang/wikilang
+  name: "Bulgarian"
+  code: "bg"
+
+  /lang/wikilang/wiki_category: "Категория"
+  /lang/wikilang/wiki_image: "Файл"
+  /lang/wikilang/wiki_template: "Шаблон"
+}
+
+{=/lang/ca
+  :language :/lang/wikilang
+  name: "Catalan"
+  code: "ca"
+
+  /lang/wikilang/wiki_category: "Categoria"
+  /lang/wikilang/wiki_image: "Fitxer"
+  /lang/wikilang/wiki_template: "Plantilla"
+}
+
+{=/lang/cs
+  :language :/lang/wikilang
+  name: "Czech"
+  code: "cs"
+
+  /lang/wikilang/wiki_category: "Kategorie"
+  /lang/wikilang/wiki_image: "Soubor"
+  /lang/wikilang/wiki_template: "Šablona"
 }
 
 {=/lang/da
@@ -59,6 +102,16 @@
   /lang/wikilang/wiki_template: "Vorlage"
 }
 
+{=/lang/el
+  :language :/lang/wikilang
+  name: "Greek"
+  code: "el"
+
+  /lang/wikilang/wiki_category: "Κατηγορία"
+  /lang/wikilang/wiki_image: "File"
+  /lang/wikilang/wiki_template: "Πρότυπο"
+}
+
 {=/lang/en
   :language :/lang/wikilang
   name: "English"
@@ -77,6 +130,26 @@
   /lang/wikilang/wiki_category: "Categoría"
   /lang/wikilang/wiki_image: "Archivo"
   /lang/wikilang/wiki_template: "Plantilla"
+}
+
+{=/lang/eo
+  :language :/lang/wikilang
+  name: "Esperanto"
+  code: "eo"
+
+  /lang/wikilang/wiki_category: "Kategorio"
+  /lang/wikilang/wiki_image: "Dosiero"
+  /lang/wikilang/wiki_template: "Ŝablono"
+}
+
+{=/lang/eu
+  :language :/lang/wikilang
+  name: "Basque"
+  code: "eu"
+
+  /lang/wikilang/wiki_category: "Kategoria"
+  /lang/wikilang/wiki_image: "Fitxategi"
+  /lang/wikilang/wiki_template: "Txantiloi"
 }
 
 {=/lang/fi
@@ -99,6 +172,16 @@
   /lang/wikilang/wiki_template: "Modèle"
 }
 
+{=/lang/hu
+  :language :/lang/wikilang
+  name: "Hungarian"
+  code: "hu"
+
+  /lang/wikilang/wiki_category: "Kategória"
+  /lang/wikilang/wiki_image: "Fájl"
+  /lang/wikilang/wiki_template: "Sablon"
+}
+
 {=/lang/it
   :language :/lang/wikilang
   name: "Italian"
@@ -107,6 +190,16 @@
   /lang/wikilang/wiki_category: "Categoria"
   /lang/wikilang/wiki_image: "Immagine"
   /lang/wikilang/wiki_template: "Template"
+}
+
+{=/lang/la
+  :language :/lang/wikilang
+  name: "Latin"
+  code: "la"
+
+  /lang/wikilang/wiki_category: "Categoria"
+  /lang/wikilang/wiki_image: "Fasciculus"
+  /lang/wikilang/wiki_template: "Formula"
 }
 
 {=/lang/nl
@@ -149,6 +242,46 @@
   /lang/wikilang/wiki_template: "Predefinição"
 }
 
+{=/lang/ro
+  :language :/lang/wikilang
+  name: "Romanian"
+  code: "ro"
+
+  /lang/wikilang/wiki_category: "Categorie"
+  /lang/wikilang/wiki_image: "Fișier"
+  /lang/wikilang/wiki_template: "Format"
+}
+
+{=/lang/ru
+  :language :/lang/wikilang
+  name: "Russian"
+  code: "ru"
+
+  /lang/wikilang/wiki_category: "Категория"
+  /lang/wikilang/wiki_image: "Файл"
+  /lang/wikilang/wiki_template: "Шаблон"
+}
+
+{=/lang/sh
+  :language :/lang/wikilang
+  name: "Serbo-Croatian"
+  code: "sh"
+
+  /lang/wikilang/wiki_category: "Kategorija"
+  /lang/wikilang/wiki_image: "Datoteka"
+  /lang/wikilang/wiki_template: "Šablon"
+}
+
+{=/lang/sr
+  :language :/lang/wikilang
+  name: "Serbian"
+  code: "sr"
+
+  /lang/wikilang/wiki_category: "Категорија"
+  /lang/wikilang/wiki_image: "Датотека"
+  /lang/wikilang/wiki_template: "Шаблон"
+}
+
 {=/lang/sv
   :language :/lang/wikilang
   name: "Swedish"
@@ -157,6 +290,16 @@
   /lang/wikilang/wiki_category: "Kategori"
   /lang/wikilang/wiki_image: "Fil"
   /lang/wikilang/wiki_template: "Mall"
+}
+
+{=/lang/uk
+  :language :/lang/wikilang
+  name: "Ukrainian"
+  code: "uk"
+
+  /lang/wikilang/wiki_category: "Категорія"
+  /lang/wikilang/wiki_image: "Файл"
+  /lang/wikilang/wiki_template: "Шаблон"
 }
 
 {=/schema/lang :schema_family
