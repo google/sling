@@ -62,12 +62,19 @@ class Accumulator {
 // Reducer that outputs the sum of all the values for a key.
 class SumReducer : public Reducer {
  public:
+  // Initialize reducer.
+  void Start(Task *task) override;
+
   // Sum all the counts for the key and call the output method with the sum.
   void Reduce(const ReduceInput &input) override;
 
   // Called with aggregate count for key. The default implementation just
   // outputs the key and the sum to the output.
   virtual void Aggregate(int shard, const Slice &key, uint64 sum);
+
+ private:
+  // Discard keys with counts lower than the threshold.
+  int64 threshold_ = 0;
 };
 
 }  // namespace task

@@ -82,8 +82,10 @@ WikidataConverter::WikidataConverter(Store *commons, const string &language) {
     info.language = commons->Lookup(StrCat("/lang/", *lang));
     info.wikisite = commons->Lookup(StrCat(*lang, "wiki"));
     languages_[commons->Lookup(*lang)] = info;
+    language_map_[*lang] = info.language;
     lang++;
   }
+  language_map_["mul"] = n_lang_mul_.handle();
 }
 
 Frame WikidataConverter::Convert(const Frame &item) {
@@ -211,31 +213,35 @@ Frame WikidataConverter::Convert(const Frame &item) {
         CHECK(!property.IsNil());
         Frame datavalue = snak.GetFrame(s_datavalue_);
         if (datavalue.invalid()) continue;
-        Object value(store, ConvertValue(datavalue));
 
-        // Add qualifiers.
-        Frame qualifiers = statement.GetFrame(s_qualifiers_);
-        if (qualifiers.valid()) {
-          Builder qualified(store);
-          qualified.AddIs(value);
-          for (const Slot &qproperty : qualifiers) {
-            Array qstatement_list(store, qproperty.value);
-            for (int j = 0; j < qstatement_list.length(); ++j) {
-              Frame qstatement(store, qstatement_list.get(j));
-              Handle qproperty = qstatement.GetHandle(s_property_);
-              CHECK(!qproperty.IsNil());
-              Frame qdatavalue = qstatement.GetFrame(s_datavalue_);
-              if (qdatavalue.invalid()) continue;
-              Object qvalue(store, ConvertValue(qdatavalue));
-              qualified.Add(Property(store, qproperty), qvalue);
+        Object value(store, ConvertValue(datavalue));
+        if (!value.IsNil()) {
+          // Add qualifiers.
+          Frame qualifiers = statement.GetFrame(s_qualifiers_);
+          if (qualifiers.valid()) {
+            Builder qualified(store);
+            qualified.AddIs(value);
+            for (const Slot &qproperty : qualifiers) {
+              Array qstatement_list(store, qproperty.value);
+              for (int j = 0; j < qstatement_list.length(); ++j) {
+                Frame qstatement(store, qstatement_list.get(j));
+                Handle qproperty = qstatement.GetHandle(s_property_);
+                CHECK(!qproperty.IsNil());
+                Frame qdatavalue = qstatement.GetFrame(s_datavalue_);
+                if (qdatavalue.invalid()) continue;
+                Object qvalue(store, ConvertValue(qdatavalue));
+                if (!qvalue.IsNil()) {
+                  qualified.Add(Property(store, qproperty), qvalue);
+                }
+              }
             }
+
+            value = qualified.Create();
           }
 
-          value = qualified.Create();
+          // Add property with value.
+          builder.Add(Property(store, property), value);
         }
-
-        // Add property with value.
-        builder.Add(Property(store, property), value);
       }
     }
   }
@@ -350,6 +356,22 @@ Handle WikidataConverter::ConvertQuantity(const Frame &value) {
   return amount;
 }
 
+Handle WikidataConverter::ConvertText(const Frame &value) {
+  // Get text and language. Only keep values for supported langages.
+  Store *store = value.store();
+  Object text = value.Get(s_text_);
+  string langid = value.GetString(s_language_);
+  auto f = language_map_.find(langid);
+  if (f == language_map_.end()) return Handle::nil();
+  if (f->second == n_lang_mul_) return text.handle();
+
+  // Convert text to string qualified by language.
+  Builder monoling(store);
+  monoling.AddIs(text);
+  monoling.Add(n_lang_, f->second);
+  return monoling.Create().handle();
+}
+
 Handle WikidataConverter::ConvertTime(const Frame &value) {
   // Convert ISO date string and precision to date.
   Store *store = value.store();
@@ -358,10 +380,8 @@ Handle WikidataConverter::ConvertTime(const Frame &value) {
   date.precision = date_precision[value.GetInt(s_precision_, 11)];
 
   // Convert timestamp to simplified integer or string format.
-  int number = date.AsNumber();
-  if (number != -1) return Handle::Integer(number);
-  string ts = date.AsString();
-  if (!ts.empty()) return store->AllocateString(ts);
+  Handle h = date.AsHandle(store);
+  if (!h.IsNil()) return h;
   return timestamp.handle();
 }
 
@@ -435,7 +455,7 @@ Handle WikidataConverter::ConvertValue(const Frame &datavalue) {
     } else if (type.equals("quantity")) {
       return ConvertQuantity(value);
     } else if (type.equals("monolingualtext")) {
-      return value.GetHandle(s_text_);
+      return ConvertText(value);
     } else if (type.equals("globecoordinate")) {
       return ConvertCoordinate(value);
     } else {

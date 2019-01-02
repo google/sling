@@ -260,7 +260,7 @@ class StandardTokenization : public TokenProcessor {
   TrieNode *suffix_types_;
 
   // Maximum length of a tag token, e.g. token of the form <...>.
-  int max_tag_token_length_ = 20;
+  int max_tag_token_length_ = 32;
 
   // Discard URL-like tokens.
   bool discard_urls_ = true;

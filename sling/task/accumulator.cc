@@ -61,6 +61,11 @@ void Accumulator::Flush() {
   }
 }
 
+void SumReducer::Start(Task *task) {
+  Reducer::Start(task);
+  task->Fetch("threshold", &threshold_);
+}
+
 void SumReducer::Reduce(const ReduceInput &input) {
   int64 sum = 0;
   for (Message *m : input.messages()) {
@@ -69,7 +74,9 @@ void SumReducer::Reduce(const ReduceInput &input) {
     CHECK(safe_strto64_base(value.data(), value.size(), &count, 10));
     sum += count;
   }
-  Aggregate(input.shard(), input.key(), sum);
+  if (sum >= threshold_) {
+    Aggregate(input.shard(), input.key(), sum);
+  }
 }
 
 void SumReducer::Aggregate(int shard, const Slice &key, uint64 sum) {

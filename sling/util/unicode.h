@@ -243,11 +243,21 @@ class UTF8 {
   static void Lowercase(const string &str, string *result) {
     Lowercase(str.data(), str.size(), result);
   }
+  static string Lower(const string &str) {
+    string result;
+    Lowercase(str, &result);
+    return result;
+  }
 
   // Uppercase UTF8 encoded string.
   static void Uppercase(const char *s, int len, string *result);
   static void Uppercase(const string &str, string *result) {
     Uppercase(str.data(), str.size(), result);
+  }
+  static string Upper(const string &str) {
+    string result;
+    Uppercase(str, &result);
+    return result;
   }
 
   // Normalize UTF8 encoded string for matching.
@@ -260,6 +270,11 @@ class UTF8 {
   }
   static void Normalize(const string &str, string *normalized) {
     Normalize(str.data(), str.size(), normalized);
+  }
+  static string Normal(const string &str) {
+    string result;
+    Normalize(str, &result);
+    return result;
   }
 
   // Convert string to title case, i.e. make the first letter uppercase.

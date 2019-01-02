@@ -11,6 +11,7 @@ cc_library(
     "//sling/frame:store",
     "//sling/string:text",
     "//sling/string:strcat",
+    "//sling/util:unicode",
   ],
 )
 

@@ -38,6 +38,11 @@ flags.define("--snapshot_kb",
              default=False,
              action='store_true')
 
+flags.define("--skip_wikipedia_mapping",
+             help="skip wikipedia mapping step",
+             default=False,
+             action='store_true')
+
 class WikiWorkflow:
   def __init__(self, name=None, wf=None):
     if wf == None: wf = Workflow(name)
@@ -261,6 +266,13 @@ class WikiWorkflow:
                             dir=corpora.repository("data/wiki"),
                             format="store/frame")
 
+  def template_defs(self, language=None):
+    """Resource for template definitions."""
+    if language == None: language = flags.arg.language
+    return self.wf.resource("templates-" + language + ".sling",
+                            dir=corpora.repository("data/wiki"),
+                            format="store/frame")
+
   def wikipedia_import(self, input, name=None):
     """Task for converting Wikipedia dump to SLING articles and redirects.
     Returns article and redirect channels."""
@@ -321,7 +333,14 @@ class WikiWorkflow:
     if articles == None: articles = self.wikipedia_articles(language)
     if categories == None: categories = self.wikipedia_categories(language)
     if redirects == None: redirects = self.wikipedia_redirects(language)
-    if commons == None: commons = self.language_defs()
+    if commons == None:
+      commons = [
+        self.language_defs(),
+        self.template_defs(language),
+        self.unit_defs(),
+        self.calendar_defs(),
+        self.country_defs(),
+      ]
     if wikimap == None: wikimap = self.wikipedia_mapping(language)
 
     parser = self.wf.task("wikipedia-document-builder", "wikipedia-documents")
@@ -342,7 +361,8 @@ class WikiWorkflow:
     with self.wf.namespace(language + "-wikipedia"):
       with self.wf.namespace("mapping"):
         # Build mapping from Wikipedia IDs to Wikidata IDs.
-        self.wikimap(language=language)
+        if not flags.arg.skip_wikipedia_mapping:
+          self.wikimap(language=language)
 
       with self.wf.namespace("parsing"):
         # Parse Wikipedia articles to SLING documents.
@@ -470,6 +490,18 @@ class WikiWorkflow:
                             dir=corpora.repository("data/wiki"),
                             format="store/frame")
 
+  def country_defs(self):
+    """Resource for country definitions."""
+    return self.wf.resource("countries.sling",
+                            dir=corpora.repository("data/wiki"),
+                            format="store/frame")
+
+  def unit_defs(self):
+    """Resource for calendar definitions."""
+    return self.wf.resource("units.sling",
+                            dir=corpora.repository("data/wiki"),
+                            format="store/frame")
+
   def wikidata_defs(self):
     """Resource for Wikidata schema definitions."""
     return self.wf.resource("wikidata.sling",
@@ -501,6 +533,8 @@ class WikiWorkflow:
     if schemas == None:
       schemas = [self.language_defs(),
                  self.calendar_defs(),
+                 self.country_defs(),
+                 self.unit_defs(),
                  self.wikidata_defs(),
                  self.wikipedia_defs()]
 

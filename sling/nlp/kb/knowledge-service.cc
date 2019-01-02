@@ -58,7 +58,7 @@ static string ConvertGeoCoord(double coord, bool latitude) {
   int seconds = static_cast<int>(integer + 0.5);
 
   // Build coordinate string.
-  return StrCat(degrees, "°", minutes, "'", seconds, "\"", sign);
+  return StrCat(degrees, "°", minutes, "′", seconds, "″", sign);
 }
 
 void KnowledgeService::Load(Store *kb, const string &name_table) {

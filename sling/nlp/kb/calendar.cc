@@ -21,6 +21,7 @@
 #include "sling/frame/store.h"
 #include "sling/string/strcat.h"
 #include "sling/string/text.h"
+#include "sling/util/unicode.h"
 
 namespace sling {
 namespace nlp {
@@ -185,6 +186,14 @@ int Date::AsNumber() const {
   }
 
   return -1;
+}
+
+Handle Date::AsHandle(Store *store) const {
+  int number = AsNumber();
+  if (number != -1) return Handle::Integer(number);
+  string ts = AsString();
+  if (!ts.empty()) return store->AllocateString(ts);
+  return Handle::nil();
 }
 
 string Date::AsString() const {
@@ -414,6 +423,232 @@ Text Calendar::ItemName(Handle item) const {
   if (!store_->IsString(name)) return "";
   StringDatum *str = store_->GetString(name);
   return str->str();
+}
+
+void DateFormat::Init(const Frame &format) {
+  // Get month names.
+  Store *store = format.store();
+  int prefix = format.GetInt("/w/month_abbrev");
+  Array months = format.Get("/w/month_names").AsArray();
+  if (months.valid()) {
+    for (int i = 0; i < months.length(); ++i) {
+      String month(store, months.get(i));
+      CHECK(month.valid());
+      string name = month.value();
+      month_names_.push_back(name);
+
+      // Normalize string.
+      string lcname;
+      month_dictionary_[UTF8::Lower(name)] = i + 1;
+      if (prefix > 0) {
+        string abbrev = UTF8::Lower(name.substr(0, prefix));
+        month_dictionary_[abbrev] = i + 1;
+      }
+    }
+  }
+
+  // Get numeric and textual input date formats.
+  Handle n_numeric = store->Lookup("/w/numeric_date_format");
+  Handle n_textual = store->Lookup("/w/text_date_format");
+  for (const Slot &s : format) {
+    if (s.name == n_numeric) {
+      String fmt(store, s.value);
+      CHECK(fmt.valid());
+      numeric_formats_.push_back(fmt.value());
+    } else if (s.name == n_textual) {
+      String fmt(store, s.value);
+      CHECK(fmt.valid());
+      text_formats_.push_back(fmt.value());
+    }
+  }
+
+  // Get output format for dates.
+  day_format_ = format.GetString("/w/day_output_format");
+  month_format_ = format.GetString("/w/month_output_format");
+  year_format_ = format.GetString("/w/year_output_format");
+}
+
+bool DateFormat::Parse(Text str, Date *date) const {
+  // Determine if date is numeric or text.
+  bool numeric = true;
+  for (char c : str) {
+    if (!IsDigit(c) && !IsDelimiter(c)) {
+      numeric = false;
+      break;
+    }
+  }
+
+  // Parse date into year, month, and date component.
+  bool valid = false;
+  int len = str.size();
+  int y, m, d, ys;
+  if (numeric) {
+    // Try to parse numeric date using each of the numeric date formats.
+    for (const string &fmt : numeric_formats_) {
+      if (len != fmt.size()) continue;
+      y = m = d = ys = 0;
+      valid = true;
+      for (int i = 0; i < fmt.size(); ++i) {
+        char c = str[i];
+        char f = fmt[i];
+        if (IsDigit(c)) {
+          switch (f) {
+            case 'Y': y = y * 10 + Digit(c); ys++; break;
+            case 'M': m = m * 10 + Digit(c); break;
+            case 'D': d = d * 10 + Digit(c); break;
+            default: valid = false;
+          }
+        } else if (c != f) {
+          valid = false;
+        }
+        if (!valid) break;
+      }
+      if (valid) break;
+    }
+  } else {
+    // Try to parse text date format.
+    for (const string &fmt : text_formats_) {
+      y = m = d = ys = 0;
+      valid = true;
+      int j = 0;
+      for (int i = 0; i < fmt.size(); ++i) {
+        if (j >= len) valid = false;
+        if (!valid) break;
+
+        switch (fmt[i]) {
+          case 'Y':
+            // Parse sequence of digits as year.
+            if (IsDigit(str[j])) {
+              while (j < len && IsDigit(str[j])) {
+                y = y * 10 + Digit(str[j++]);
+                ys++;
+              }
+            } else {
+              valid = false;
+            }
+            break;
+
+          case 'M': {
+            // Parse next token as month name.
+            int k = j;
+            while (k < len && !IsMonthBreak(str[k])) k++;
+            int month = Month(Text(str, j, k - j));
+            if (month != -1) {
+              m = month;
+              j = k;
+            } else {
+              valid = false;
+            }
+            break;
+          }
+
+          case 'D':
+            // Parse sequence of digits as day.
+            if (IsDigit(str[j])) {
+              while (j < len && IsDigit(str[j])) {
+                d = d * 10 + Digit(str[j++]);
+              }
+            } else {
+              valid = false;
+            }
+            break;
+
+          case ' ':
+            // Skip sequence of white space.
+            if (str[j] != ' ') {
+              valid = false;
+            } else {
+              while (j < len && str[j] == ' ') j++;
+            }
+            break;
+
+          default:
+            // Literal match.
+            valid = (fmt[i] == str[j++]);
+        }
+      }
+      if (valid) break;
+    }
+  }
+
+  // Return parsed date if it is valid.
+  if (valid) {
+    // Dates with two-digit years will have the years from 1970 to 2069.
+    if (ys == 2) {
+      if (y < 70) {
+        y += 2000;
+      } else {
+        y += 1900;
+      }
+    }
+    date->year = y;
+    date->month = m;
+    date->day = d;
+
+    // Determine precision.
+    if (date->year != 0) {
+      date->precision = Date::YEAR;
+      if (date->month != 0) {
+        date->precision = Date::MONTH;
+        if (date->day != 0) {
+          date->precision = Date::DAY;
+        }
+      }
+    }
+  }
+  return valid;
+}
+
+string DateFormat::AsString(const Date &date) const {
+  Text format;
+  switch (date.precision) {
+    case Date::YEAR: format = year_format_; break;
+    case Date::MONTH: format = month_format_; break;
+    case Date::DAY: format = day_format_; break;
+    default: return date.AsString();
+  }
+  string str;
+  char buf[32];
+  for (char c : format) {
+    switch (c) {
+      case 'Y':
+        if (date.year != 0) {
+          sprintf(buf, "%04d", date.year);
+          str.append(buf);
+        }
+        break;
+
+      case 'M':
+        if (date.month != 0) {
+          if (date.month > 0 && date.month <= month_names_.size()) {
+            str.append(month_names_[date.month - 1]);
+          } else {
+            sprintf(buf, "?%02d?", date.month);
+            str.append(buf);
+          }
+        }
+        break;
+
+      case 'D':
+        if (date.day != 0) {
+          sprintf(buf, "%d", date.day);
+          str.append(buf);
+        }
+        break;
+
+      default:
+        str.push_back(c);
+    }
+  }
+  return str;
+}
+
+int DateFormat::Month(Text name) const {
+  string lower;
+  UTF8::Lowercase(name.data(), name.size(), &lower);
+  auto f = month_dictionary_.find(lower);
+  if (f == month_dictionary_.end()) return -1;
+  return f->second;
 }
 
 }  // namespace nlp

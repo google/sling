@@ -57,25 +57,45 @@ Handle Reader::ParseObject() {
 
     case INTEGER_TOKEN: {
       int32 value;
-      CHECK(safe_strto32(token_text(), &value)) << token_text();
-      handle = Handle::Integer(value);
-      NextToken();
+      float fvalue;
+      if (safe_strto32(token_text(), &value)) {
+        if (value >= Handle::kMinInt && value <= Handle::kMaxInt) {
+          handle = Handle::Integer(value);
+        } else {
+          handle = Handle::Float(value);
+        }
+        NextToken();
+      } else if (safe_strtof(token_text(), &fvalue)) {
+        handle = Handle::Float(fvalue);
+        NextToken();
+      } else {
+        SetError("invalid number token");
+        handle = Handle::error();
+      }
       break;
     }
 
     case FLOAT_TOKEN: {
       float value;
-      CHECK(safe_strtof(token_text(), &value));
-      handle = Handle::Float(value);
-      NextToken();
+      if (safe_strtof(token_text(), &value)) {
+        handle = Handle::Float(value);
+        NextToken();
+      } else {
+        SetError("invalid floating point token");
+        handle = Handle::error();
+      }
       break;
     }
 
     case INDEX_TOKEN: {
       int32 value;
-      CHECK(safe_strto32(token_text(), &value)) << token_text();
-      handle = Handle::Index(value);
-      NextToken();
+      if (safe_strto32(token_text(), &value)) {
+        handle = Handle::Index(value);
+        NextToken();
+      } else {
+        SetError("invalid index token");
+        handle = Handle::error();
+      }
       break;
     }
 
@@ -107,12 +127,16 @@ Handle Reader::ParseObject() {
     case NUMERIC_TOKEN:
     case INDEX_REF_TOKEN: {
       int32 index;
-      CHECK(safe_strto32(token_text(), &index)) << token_text();
-      if (index >= references_.size()) references_.resize(index + 1);
-      Handle &ref = Reference(index);
-      if (ref.IsNil()) ref = store_->AllocateFrame(nullptr, nullptr);
-      handle = ref;
-      NextToken();
+      if (safe_strto32(token_text(), &index)) {
+        if (index >= references_.size()) references_.resize(index + 1);
+        Handle &ref = Reference(index);
+        if (ref.IsNil()) ref = store_->AllocateFrame(nullptr, nullptr);
+        handle = ref;
+        NextToken();
+      } else {
+        SetError("invalid numeric token");
+        handle = Handle::error();
+      }
       break;
     }
 
@@ -297,10 +321,14 @@ Handle Reader::ParseId() {
     return handle;
   } else if (token() == INDEX_REF_TOKEN || token() == NUMERIC_TOKEN) {
     int32 value;
-    CHECK(safe_strto32(token_text(), &value)) << token_text();
-    Handle index = Handle::Index(value);
-    NextToken();
-    return index;
+    if (safe_strto32(token_text(), &value)) {
+      Handle index = Handle::Index(value);
+      NextToken();
+      return index;
+    } else {
+      SetError("invalid id");
+      return Handle::error();
+    }
   } else {
     return ParseObject();
   }

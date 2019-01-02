@@ -102,9 +102,19 @@ void LoadStore(const string &filename, Store *store) {
     }
   }
 
-  FileDecoder decoder(store, filename);
   store->LockGC();
-  decoder.DecodeAll();
+  FileInputStream stream(filename);
+  Input input(&stream);
+  if (input.Peek() == WIRE_BINARY_MARKER) {
+    Decoder decoder(store, &input);
+    decoder.DecodeAll();
+  } else {
+    Reader reader(store, &input);
+    while (!reader.done()) {
+      reader.Read();
+      CHECK(!reader.error()) << reader.GetErrorMessage(filename);
+    }
+  }
   store->UnlockGC();
 }
 

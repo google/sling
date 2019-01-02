@@ -32,6 +32,9 @@ class Date {
   // Granularity for date.
   enum Precision {NONE, MILLENNIUM, CENTURY, DECADE, YEAR, MONTH, DAY};
 
+  // Initialize invalid date.
+  Date() {}
+
   // Initialize date from parts.
   Date(int year, int month, int day, Precision precision)
       : year(year), month(month), day(day), precision(precision) {}
@@ -55,6 +58,9 @@ class Date {
   // Convert date to integer or return -1 if the date cannot be encoded as an
   // integer. This can only be used for dates after 1000 AD.
   int AsNumber() const;
+
+  // Return an integer or string handle representing date.
+  Handle AsHandle(Store *store) const;
 
   // Convert date to string format. The date format depends on the precision:
   // DAY:        [+|-]YYYY-MM-DD
@@ -164,6 +170,72 @@ class Calendar {
   // Millennia. The millennia are numbered as (year-1)/1000+1 for AD and
   // (year+1)/1000-1 for BC.
   CalendarMap millennia_;
+};
+
+// Date parser and generator based on language-dependent format, e.g.:
+// {
+//   /w/month_names: ["January", "February", ...]
+//   /w/day_output_format: "D M Y"
+//   /w/month_output_format: "M Y"
+//   /w/year_output_format: "Y"
+//   /w/numeric_date_format: "MM/DD/YYYY"
+//   /w/numeric_date_format: "DD-MM-YYYY"
+//   ...
+//   /w/text_date_format: "M D, Y"
+//   ...
+// }
+class DateFormat {
+ public:
+  // Initialize from date format configuration.
+  void Init(const Frame &format);
+
+  // Parse date.
+  bool Parse(Text str, Date *date) const;
+
+  // Convert date to string.
+  string AsString(const Date &date) const;
+
+  // Lookup month name. Return -1 for invalid month name.
+  int Month(Text name) const;
+
+ private:
+  // Check if character is a digit.
+  static bool IsDigit(char c) {
+    return c >= '0' && c <= '9';
+  }
+
+  // Check if character is a date delimiter.
+  static bool IsDelimiter(char c) {
+    return c == '-' || c == '/' || c == '.';
+  }
+
+  // Check if character is a month name break.
+  static bool IsMonthBreak(char c) {
+    return c == ' ' || IsDigit(c) || IsDelimiter(c);
+  }
+
+  // Return digit value.
+  static int Digit(char c) {
+    DCHECK(IsDigit(c));
+    return c - '0';
+  }
+
+  // Month names for generating dates.
+  std::vector<string> month_names_;
+
+  // Month names (and abbreviations) for parsing.
+  std::unordered_map<string, int> month_dictionary_;
+
+  // Numeric date input formats, e.g. 'YYYY-MM-DD'.
+  std::vector<string> numeric_formats_;
+
+  // Text date input formats, e.g. 'M D, Y'.
+  std::vector<string> text_formats_;
+
+  // Output formats for dates.
+  string day_format_;
+  string month_format_;
+  string year_format_;
 };
 
 }  // namespace nlp

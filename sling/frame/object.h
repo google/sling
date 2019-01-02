@@ -114,6 +114,12 @@ class Name {
   // Initializes name and adds it to the names object.
   Name(Names &names, const string &name) : name_(name) { names.Add(this); }
 
+  // Assign value from another name.
+  void Assign(Name &other) {
+    handle_ = other.handle_;
+    store_ = other.store_;
+  }
+
   // Looks up name, or use the handle if it has already been resolved.
   Handle Lookup(Store *store) const {
     if (!handle_.IsNil()) {

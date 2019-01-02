@@ -138,8 +138,11 @@ class WikiParser {
   // Parse link end.
   void ParseLinkEnd();
 
-  // Parse url.
-  void ParseUrl();
+  // Parse url start.
+  void ParseUrlBegin();
+
+  // Parse url end.
+  void ParseUrlEnd();
 
   // Parse tag (<...>) or comment (<!-- ... -->).
   void ParseTag();
@@ -315,14 +318,22 @@ class WikiParser {
     TMPL_SUBST,
 
     TMPL_EXPR,
+    TMPL_IF,
     TMPL_IFEXPR,
+    TMPL_IFEXIST,
     TMPL_IFEQ,
     TMPL_TAG,
     TMPL_RELATED,
     TMPL_TIME,
     TMPL_INVOKE,
     TMPL_SECTION,
+    TMPL_SECTIONH,
     TMPL_PROPERTY,
+    TMPL_DATEFORMAT,
+    TMPL_FORMATDATE,
+    TMPL_LIST,
+    TMPL_STATEMENTS,
+    TMPL_SWITCH,
   };
 };
 

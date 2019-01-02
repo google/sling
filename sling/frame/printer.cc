@@ -326,8 +326,8 @@ void Printer::PrintInt(int number) {
 }
 
 void Printer::PrintFloat(float number) {
-  char buffer[kFastToBufferSize];
-  char *str = FloatToBuffer(number, buffer);
+  char str[32];
+  snprintf(str, 32, "%.6g", number);
   output_->Write(str, strlen(str));
 }
 

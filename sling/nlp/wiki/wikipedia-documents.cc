@@ -95,6 +95,13 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
           task->GetCounter(StrCat(kAliasSourceName[i], "_discarded_aliases"));
     }
 
+    // Load template repository configuration.
+    Frame template_config(commons_, "/wp/templates/" + language_);
+    if (template_config.valid()) {
+      LOG(INFO) << "Loading template configuration";
+      templates_.Init(this, template_config);
+    }
+
     // Output aliases for all redirects.
     aliases_ = task->GetSink("aliases");
     for (Handle redirect : wikimap_.redirects()) {
@@ -184,6 +191,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
 
     // Extract annotations from article.
     WikiAnnotator annotator(page.store(), this);
+    annotator.set_templates(&templates_);
     WikiExtractor extractor(parser);
     extractor.Extract(&annotator);
 
@@ -284,11 +292,18 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
   }
 
   Text ResolveTemplate(Text link) override {
-    Text qid = wikimap_.LookupLink(language_, template_prefix_, link,
-                                   WikipediaMap::TEMPLATE);
+    WikipediaMap::PageInfo info;
+    if (!wikimap_.GetPageInfo(language_, template_prefix_, link, &info)) {
+      num_unknown_templates_->Increment();
+      return Text();
+    }
+    if (info.type != WikipediaMap::TEMPLATE &&
+        info.type != WikipediaMap::INFOBOX) {
+      num_unknown_templates_->Increment();
+      return Text();
+    }
     num_templates_->Increment();
-    if (qid.empty()) num_unknown_templates_->Increment();
-    return qid;
+    return info.qid;
   }
 
   Text ResolveCategory(Text link) override {
@@ -311,6 +326,9 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
 
   // Plain text tokenizer.
   nlp::DocumentTokenizer tokenizer_;
+
+  // Template macro repository.
+  WikiTemplateRepository templates_;
 
   // Channel for aliases.
   task::Channel *aliases_ = nullptr;
