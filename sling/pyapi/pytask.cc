@@ -360,7 +360,6 @@ PyObject *PyTask::Resources(std::vector<Binding *> &bindings) {
     PyResource *pyres = PyObject_New(PyResource, &PyResource::type);
     pyres->Init(binding->resource());
     PyList_SetItem(list, i, pyres->AsObject());
-    Py_DECREF(pyres);
   }
   return list;
 }
