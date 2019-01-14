@@ -108,6 +108,7 @@ class SoftmaxDelegate(Delegate):
   def loss(self, state, ff_activation, gold):
     logits = self.model(ff_activation, train=True)
     gold_index = self.index(gold)
+    assert gold_index >= 0, gold
     return self.lossfn(logits, gold_index)
 
   """Predicts and returns the delegate's output action based on the input
@@ -231,10 +232,16 @@ class ShiftMarkDelegate(SoftmaxDelegate):
 """Delegate that decides only among non-SHIFT/MARK actions."""
 class NotShiftOrMarkDelegate(SoftmaxDelegate):
   def build(self, cascade, actions):
-    self.first = min(actions.shift(), actions.mark())
-    self.second = max(actions.shift(), actions.mark())
     self.actions = actions
-    self.softmax_size = self.actions.size() - 2  # except SHIFT, MARK
+    mark = actions.mark()
+    if mark is not None:
+      self.first = min(actions.shift(), mark)
+      self.second = max(actions.shift(), mark)
+      self.softmax_size = self.actions.size() - 2  # except SHIFT, MARK
+    else:
+      self.first = actions.shift()
+      self.second = None
+      self.softmax_size = self.actions.size() - 1  # except SHIFT
 
   def translate(self, action, output):
     output.append(action)
@@ -242,14 +249,17 @@ class NotShiftOrMarkDelegate(SoftmaxDelegate):
   def index(self, action):
     i = self.actions.index(action)
     if i < self.first: return i
-    if i < self.second: return i - 1
-    return i - 2
+    if self.second is not None:
+      if i < self.second: return i - 1
+      return i - 2
+    else:
+      return i - 1
 
   def action(self, index, previous_action):
-    if index >= self.first and index < self.second - 1:
+    if index >= self.first:
       index += 1
-    elif index >= self.second - 1:
-      index += 2
+    if self.second is not None and index >= self.second - 1:
+      index += 1
     return self.actions.action(index)
 
 
