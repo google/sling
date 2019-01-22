@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sling/nlp/wiki/phrase-table.h"
+#include "sling/nlp/kb/phrase-table.h"
 
 namespace sling {
 namespace nlp {
@@ -39,7 +39,7 @@ void PhraseTable::Load(Store *store, const string &filename) {
   entity_table_->resize(entity_index_.size());
 }
 
-Handle PhraseTable::GetEntityHandle(int index) {
+Handle PhraseTable::GetEntityHandle(int index) const {
   Handle handle = (*entity_table_)[index];
   if (handle.IsNil()) {
     const EntityItem *entity = entity_index_.GetEntity(index);
@@ -52,46 +52,55 @@ Handle PhraseTable::GetEntityHandle(int index) {
   return handle;
 }
 
-void PhraseTable::Lookup(uint64 fp, Handles *matches) {
-  matches->clear();
+const PhraseTable::Phrase *PhraseTable::Find(uint64 fp) const {
   int bucket = fp % phrase_index_.num_buckets();
   const PhraseItem *phrase = phrase_index_.GetBucket(bucket);
   const PhraseItem *end = phrase_index_.GetBucket(bucket + 1);
   while (phrase < end) {
-    if (phrase->fingerprint() == fp) {
-      const EntityPhrase *entities = phrase->entities();
-      for (int i = 0; i < phrase->num_entities(); ++i) {
-        int index = entities[i].index;
-        Handle handle = GetEntityHandle(index);
-        matches->push_back(handle);
-      }
-      break;
-    }
+    if (phrase->fingerprint() == fp) return phrase;
     phrase = phrase->next();
+  }
+  return nullptr;
+}
+
+void PhraseTable::GetMatches(const Phrase *phrase, Handles *matches) const {
+  if (phrase == nullptr) {
+    matches->clear();
+    return;
+  }
+  const EntityPhrase *entities = phrase->entities();
+  matches->resize(phrase->num_entities());
+  for (int i = 0; i < phrase->num_entities(); ++i) {
+    int index = entities[i].index;
+    (*matches)[i] = GetEntityHandle(index);
   }
 }
 
-void PhraseTable::Lookup(uint64 fp, MatchList *matches) {
-  matches->clear();
-  int bucket = fp % phrase_index_.num_buckets();
-  const PhraseItem *phrase = phrase_index_.GetBucket(bucket);
-  const PhraseItem *end = phrase_index_.GetBucket(bucket + 1);
-  while (phrase < end) {
-    if (phrase->fingerprint() == fp) {
-      const EntityPhrase *entities = phrase->entities();
-      for (int i = 0; i < phrase->num_entities(); ++i) {
-        int index = entities[i].index;
-        Text id = entity_index_.GetEntityId(index);
-        Handle handle = GetEntityHandle(index);
-        int count = entities[i].count();
-        int form = entities[i].form();
-        bool reliable = entities[i].reliable();
-        matches->emplace_back(id, handle, count, form, reliable);
-      }
-      break;
-    }
-    phrase = phrase->next();
+void PhraseTable::GetMatches(const Phrase *phrase, MatchList *matches) const {
+  if (phrase == nullptr) {
+    matches->clear();
+    return;
   }
+  const EntityPhrase *entities = phrase->entities();
+  matches->resize(phrase->num_entities());
+  for (int i = 0; i < phrase->num_entities(); ++i) {
+    int index = entities[i].index;
+    Match &match = (*matches)[i];
+    match.id = entity_index_.GetEntityId(index);
+    match.item = GetEntityHandle(index);
+    auto &entity = entities[i];
+    match.count = entity.count();
+    match.form = entity.form();
+    match.reliable = entity.reliable();
+  }
+}
+
+void PhraseTable::Lookup(uint64 fp, Handles *matches) const {
+  GetMatches(Find(fp), matches);
+}
+
+void PhraseTable::Lookup(uint64 fp, MatchList *matches) const {
+  GetMatches(Find(fp), matches);
 }
 
 }  // namespace nlp

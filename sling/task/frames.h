@@ -84,9 +84,6 @@ Message *CreateMessage(const Frame &frame, bool shallow = false);
 // Decode message as frame.
 Frame DecodeMessage(Store *store, Message *message);
 
-// Load repository into store from input file.
-void LoadStore(Store *store, Resource *file);
-
 }  // namespace task
 }  // namespace sling
 

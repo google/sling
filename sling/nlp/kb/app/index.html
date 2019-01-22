@@ -127,7 +127,12 @@
               </md-button>
             </div>
 
-            <div class="description">{{item.description}}</div>
+            <div class="description">
+              {{item.description}}
+            </div>
+            <div ng-show="item.type">
+              Data type: {{item.type}}
+            </div>
           </div>
 
           <!-- Item properties card -->
@@ -151,9 +156,12 @@
                 <td class="prop-values">
                   <div class="prop-value" ng-repeat="v in p.values">
                     <a ng-href="{{itemUrl(v.ref, v.url)}}">{{v.text}}</a>
+                    <span class="prop-lang" ng-show="v.lang" >
+                      <small>({{v.lang}})</small>
+                    </span>
 
                     <!-- Property qualifiers -->
-                    <table class="qual-tab" ngshow="v.qualifiers">
+                    <table class="qual-tab" ng-show="v.qualifiers">
                       <tr class="qual-row" ng-repeat="qp in v.qualifiers">
                         <td class="qprop-name">
                           <a ng-href="{{itemUrl(qp.ref)}}">{{qp.property}}</a>
@@ -163,6 +171,9 @@
                             <a ng-href="{{itemUrl(qv.ref, qv.url)}}">
                               {{qv.text}}
                             </a>
+                            <span class="prop-lang" ng-show="qv.lang" >
+                              <small>({{qv.lang}})</small>
+                            </span>
                           </div>
                         </td>
                       </tr>

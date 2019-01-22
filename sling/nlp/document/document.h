@@ -24,6 +24,7 @@
 #include "sling/frame/store.h"
 #include "sling/nlp/document/token-breaks.h"
 #include "sling/string/text.h"
+#include "sling/util/unicode.h"
 
 namespace sling {
 namespace nlp {
@@ -89,6 +90,12 @@ class Token {
   // Token fingerprint.
   uint64 Fingerprint() const;
 
+  // Token case form.
+  CaseForm Form() const;
+
+  // Punctuation tokens etc. are skipped in phrase comparison.
+  bool skipped() const { return Fingerprint() == 1; }
+
  private:
   Document *document_;          // document the token belongs to
   Handle handle_;               // handle for token in the store
@@ -101,6 +108,8 @@ class Token {
   BreakType brk_;               // break level before token
 
   mutable uint64 fingerprint_;  // fingerprint for token text
+  mutable CaseForm form_;       // case form for token
+
   Span *span_;                  // lowest span covering the token
 
   friend class Document;
@@ -183,6 +192,9 @@ class Span {
   // Returns fingerprint for span phrase.
   uint64 Fingerprint() const;
 
+  // Returns case form for span phrase.
+  CaseForm Form() const;
+
  private:
   // Document that span belongs to.
   Document *document_;
@@ -203,8 +215,9 @@ class Span {
   Span *sibling_ = nullptr;   // first sibling to the right enclosed by parent
   Span *children_ = nullptr;  // left-most enclosed sub-span
 
-  // Span fingerprint. This is lazily initialized and cached.
+  // Span fingerprint and case form. This is lazily initialized and cached.
   mutable uint64 fingerprint_ = 0;
+  mutable CaseForm form_ = CASE_INVALID;
 
   friend class Document;
 };
@@ -294,6 +307,9 @@ class Document {
 
   // Returns the fingerprint for [begin, end).
   uint64 PhraseFingerprint(int begin, int end);
+
+  // Returns case form forphrase [begin, end).
+  CaseForm Form(int begin, int end);
 
   // Returns the phrase text for span.
   string PhraseText(int begin, int end) const;

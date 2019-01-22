@@ -204,8 +204,10 @@ inline Word Align(Word n) {
 // The handle class is implemented as a POD type to make it efficient to pass by
 // value.
 struct Handle {
-  static const int kIntShift = 2;  // integers are shifted two bits
-  static const int kTagBits  = 2;  // the two lowest bits are tag bits
+  static const int kIntShift     = 2;   // integers are shifted two bits
+  static const int kHandleBits   = 32;  // handles are 32-bit integers
+  static const int kTagBits      = 2;   // the two lowest bits are tag bits
+  static const int kRefTagBits   = 3;   // tag bits plus mark bit
 
   static const Word kTagMask     = 0x00000003;  // bit mask for handle tag
   static const Word kRefTagMask  = 0x00000007;  // object reference tag bit mask
@@ -239,6 +241,9 @@ struct Handle {
   // Range for integer handles.
   static const int kMinInt       = -2147483648 >> kIntShift;
   static const int kMaxInt       = 2147483647 >> kIntShift;
+
+  // Maximum number of handles (local or global).
+  static const int kMaxHandles   = 1 << (kHandleBits - kRefTagBits);
 
   // Returns the tag bits for the value.
   Word tag() const { return bits & kTagMask; }
@@ -1355,6 +1360,7 @@ class Store {
   // objects go through the handle table, which provides a level of indirection
   // that allows object to move dynamically, e.g. during garbage collection and
   // when symbols are resolved.
+  static const size_t kMaxHandlesSize = Handle::kMaxHandles * sizeof(Reference);
   Reference *free_handle_;
   Space<Reference> handles_;
 

@@ -185,6 +185,13 @@ void KnowledgeService::HandleGetItem(HTTPRequest *request,
   }
   Builder b(ws.store());
   GetStandardProperties(item, &b);
+  Handle datatype = item.GetHandle(n_target_);
+  if (!datatype.IsNil()) {
+    Frame dt(kb_, datatype);
+    if (dt.valid()) {
+      b.Add(n_type_, dt.GetHandle(n_name_));
+    }
+  }
 
   // Fetch properties.
   Item info(ws.store());
@@ -253,8 +260,12 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
       Handle value = h;
       bool qualified = false;
       if (kb_->IsFrame(h)) {
-        Handle qua = Frame(kb_, h).GetHandle(Handle::is());
-        if (!qua.IsNil()) {
+        // Handle the ambiguity between qualified frames and mono-lingual text
+        // by checking for the presence of a language slot.
+        Frame f(kb_, h);
+        Handle qua = f.GetHandle(Handle::is());
+        Handle lang = f.GetHandle(n_lang_);
+        if (!qua.IsNil() && lang.IsNil()) {
           value = qua;
           qualified = true;
         }
@@ -282,8 +293,17 @@ void KnowledgeService::FetchProperties(const Frame &item, Item *info) {
         // Add string value.
         v.Add(n_text_, value);
       } else if (property.datatype == n_text_type_) {
-        // Add text value.
-        v.Add(n_text_, value);
+        // Add text value with language.
+        if (kb_->IsFrame(value)) {
+          Frame monotext(kb_, value);
+          v.Add(n_text_, monotext.GetHandle(Handle::is()));
+          Frame lang = monotext.GetFrame(n_lang_);
+          if (lang.valid()) {
+            v.Add(n_lang_, lang.GetHandle(n_name_));
+          }
+        } else {
+          v.Add(n_text_, value);
+        }
       } else if (property.datatype == n_url_type_) {
         // Add URL value.
         v.Add(n_text_, value);

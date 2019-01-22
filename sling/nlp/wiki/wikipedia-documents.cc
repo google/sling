@@ -213,12 +213,6 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
     annotator.AddToDocument(&document);
     num_article_tokens_->Increment(document.num_tokens());
     document.Update();
-
-    // Output intro text as alternative title alias.
-    WikiPlainTextSink intro;
-    if (extractor.ExtractIntro(&intro) && !intro.text().empty()) {
-      OutputAlias(qid, intro.text(), SRC_WIKIPEDIA_TITLE);
-    }
   }
 
   // Output alias for article title.

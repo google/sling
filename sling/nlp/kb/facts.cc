@@ -56,6 +56,7 @@ void FactCatalog::Init(Store *store) {
   SetExtractor(p_occupation_, &Facts::ExtractOccupation);
   SetExtractor(p_position_, &Facts::ExtractPosition);
   SetExtractor(p_member_of_sports_team_, &Facts::ExtractTeam);
+  SetExtractor(p_time_period_, &Facts::ExtractTimePeriod);
 
   // Set up items that stops closure expansion.
   static const char *baseids[] = {
@@ -115,7 +116,7 @@ Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
     "Q186081",     // time interval
     "Q11563",      // number
     "Q17376908",   // languoid
-    "Q2198779",    // unit
+    "Q47574",      // unit of measurement
     "Q39875001",   // measure
     "Q3695082",    // sign
     "Q2996394",    // biological process
@@ -133,11 +134,7 @@ Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
     "Q35120",      // entity
     nullptr,
   };
-  std::vector<Text> types;
-  for (const char **type = default_taxonomy; *type != nullptr; ++type) {
-    types.emplace_back(*type);
-  }
-  return new Taxonomy(this, types);
+  return new Taxonomy(this, default_taxonomy);
 }
 
 void Facts::Extract(Handle item) {
@@ -263,6 +260,26 @@ void Facts::ExtractDate(Handle value) {
   AddFact(catalog_->calendar_.Century(date));
 }
 
+void Facts::ExtractTimePeriod(Handle period) {
+  // Add fact for period.
+  ExtractSimple(period);
+
+  // Add facts for start and end time of period.
+  Frame f(store_, store_->Resolve(period));
+  Handle start = f.GetHandle(catalog_->p_start_time_);
+  if (!start.IsNil()) {
+    push(catalog_->p_start_time_);
+    ExtractDate(start);
+    pop();
+  }
+  Handle end = f.GetHandle(catalog_->p_end_time_);
+  if (!end.IsNil()) {
+    push(catalog_->p_end_time_);
+    ExtractDate(end);
+    pop();
+  }
+}
+
 void Facts::ExtractLocation(Handle location) {
   ExtractClosure(location, catalog_->p_located_in_.handle());
 }
@@ -319,6 +336,19 @@ Taxonomy::Taxonomy(const FactCatalog *catalog, const std::vector<Text> &types) {
     Handle t = catalog->store_->LookupExisting(type);
     if (t.IsNil()) {
       LOG(WARNING) << "Ignoring unknown type in taxonomy: " << type;
+      continue;
+    }
+    int rank = typemap_.size();
+    typemap_[t] = rank;
+  }
+}
+
+Taxonomy::Taxonomy(const FactCatalog *catalog, const char **types) {
+  catalog_ = catalog;
+  for (const char **type = types; *type != nullptr; ++type) {
+    Handle t = catalog->store_->LookupExisting(*type);
+    if (t.IsNil()) {
+      LOG(WARNING) << "Ignoring unknown type in taxonomy: " << *type;
       continue;
     }
     int rank = typemap_.size();

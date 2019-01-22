@@ -18,6 +18,7 @@ cc_library(
     "//sling/frame:object",
     "//sling/frame:store",
     "//sling/string:text",
+    "//sling/util:unicode",
   ],
 )
 

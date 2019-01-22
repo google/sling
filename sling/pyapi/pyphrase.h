@@ -16,7 +16,7 @@
 #define SLING_PYAPI_PYPHRASE_H_
 
 #include "sling/nlp/document/phrase-tokenizer.h"
-#include "sling/nlp/wiki/phrase-table.h"
+#include "sling/nlp/kb/phrase-table.h"
 #include "sling/pyapi/pybase.h"
 #include "sling/pyapi/pystore.h"
 

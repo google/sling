@@ -19,6 +19,7 @@
 #include "sling/frame/decoder.h"
 #include "sling/frame/object.h"
 #include "sling/frame/reader.h"
+#include "sling/frame/serialization.h"
 #include "sling/frame/store.h"
 #include "sling/frame/wire.h"
 #include "sling/stream/file.h"
@@ -34,7 +35,7 @@ void FrameProcessor::Start(Task *task) {
 
   // Load commons store from file.
   for (Binding *binding : task->GetInputs("commons")) {
-    LoadStore(commons_, binding->resource());
+    LoadStore(binding->resource()->name(), commons_);
   }
 
   // Get output channel (optional).
@@ -149,23 +150,6 @@ Frame DecodeMessage(Store *store, Message *message) {
     Reader reader(store, &input);
     return reader.Read().AsFrame();
   }
-}
-
-void LoadStore(Store *store, Resource *file) {
-  store->LockGC();
-  FileInputStream stream(file->name());
-  Input input(&stream);
-  if (input.Peek() == WIRE_BINARY_MARKER) {
-    Decoder decoder(store, &input);
-    decoder.DecodeAll();
-  } else {
-    Reader reader(store, &input);
-    while (!reader.done()) {
-      reader.Read();
-      CHECK(!reader.error()) << reader.GetErrorMessage(file->name());
-    }
-  }
-  store->UnlockGC();
 }
 
 }  // namespace task

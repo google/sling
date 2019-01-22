@@ -16,6 +16,7 @@
 
 import os
 import urllib2
+import _strptime
 import time
 
 from workflow import *

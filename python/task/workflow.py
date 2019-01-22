@@ -21,7 +21,24 @@ import re
 import time
 import sling
 import sling.pysling as api
+import sling.flags as flags
 import sling.log as log
+
+flags.define("--dryrun",
+             help="build worflows but do not run them",
+             default=False,
+             action='store_true')
+
+flags.define("--monitor",
+             help="port number for task monitor (0 means no monitor)",
+             default=6767,
+             type=int,
+             metavar="PORT")
+
+flags.define("--logdir",
+             help="directory where workflow logs are stored",
+             default="local/logs",
+             metavar="DIR")
 
 # Input readers.
 readers = {
@@ -704,4 +721,29 @@ def save_workflow_log(path):
   logfile.close()
   log.info("workflow stats saved in " + logfn)
   return True
+
+def run(wf):
+  # In dryrun mode the workflow is just dumped without running it.
+  if flags.arg.dryrun:
+    print wf.dump()
+    return
+
+  # Start workflow.
+  wf.start()
+
+  # Wait until workflow completes. Poll every second to make the workflow
+  # interruptible.
+  done = False
+  while not done: done = wf.wait(1000)
+
+def startup():
+  # Start task monitor.
+  if flags.arg.monitor > 0: start_monitor(flags.arg.monitor)
+
+def shutdown():
+  # Stop task monitor.
+  if flags.arg.monitor > 0: stop_monitor()
+
+  # Save log to log directory.
+  save_workflow_log(flags.arg.logdir)
 

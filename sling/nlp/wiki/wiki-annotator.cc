@@ -209,25 +209,23 @@ void WikiAnnotator::Link(const Node &node,
                          bool unanchored) {
   // Resolve link.
   Text link = resolver_->ResolveLink(node.name());
-  if (link.empty()) {
-    if (!unanchored) extractor->ExtractChildren(node);
-    return;
-  }
 
   if (unanchored) {
-    // Extract anchor as plain text.
-    WikiPlainTextSink plain;
-    extractor->Enter(&plain);
-    extractor->ExtractChildren(node);
-    extractor->Leave(&plain);
+    if (!link.empty()) {
+      // Extract anchor as plain text.
+      WikiPlainTextSink plain;
+      extractor->Enter(&plain);
+      extractor->ExtractChildren(node);
+      extractor->Leave(&plain);
 
-    // Add thematic frame for link.
-    if (!plain.text().empty()) {
-      Builder theme(store_);
-      theme.AddIsA(n_link_);
-      theme.Add(n_name_, plain.text());
-      theme.AddIs(store_->Lookup(link));
-      AddTheme(theme.Create().handle());
+      // Add thematic frame for link.
+      if (!plain.text().empty()) {
+        Builder theme(store_);
+        theme.AddIsA(n_link_);
+        theme.Add(n_name_, plain.text());
+        theme.AddIs(store_->Lookup(link));
+        AddTheme(theme.Create().handle());
+      }
     }
   } else {
     // Output anchor text.
@@ -237,7 +235,8 @@ void WikiAnnotator::Link(const Node &node,
 
     // Evoke frame for link.
     if (begin != end) {
-      AddMention(begin, end, store_->Lookup(link));
+      Handle evoke = link.empty() ? Handle::nil() : store_->Lookup(link);
+      AddMention(begin, end, evoke);
     }
   }
 }
@@ -277,7 +276,9 @@ void WikiAnnotator::AddToDocument(Document *document) {
     int begin = document->Locate(a.begin.AsInt());
     int end = document->Locate(a.end.AsInt());
     Span *span = document->AddSpan(begin, end);
-    span->Evoke(a.evoked);
+    if (!a.evoked.IsNil()) {
+      span->Evoke(a.evoked);
+    }
   }
 
   // Add thematic frames.

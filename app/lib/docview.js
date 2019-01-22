@@ -451,7 +451,7 @@ export class DocumentViewer extends Component {
   }
 
   BuildPanel(phrase, fidx) {
-    let mention = this.document.frames[fidx];
+    let frame = this.document.frames[fidx];
     let panel = document.createElement("div");
     panel.className = "panel";
     panel.id = "p" + next_panel++;
@@ -462,9 +462,11 @@ export class DocumentViewer extends Component {
 
     let title = document.createElement("span");
     title.className = "panel-title";
-    title.appendChild(document.createTextNode(phrase));
-    titlebar.appendChild(title);
-    this.AddTypes(titlebar, mention.types);
+    if (phrase) {
+      title.appendChild(document.createTextNode(phrase));
+      titlebar.appendChild(title);
+      this.AddTypes(titlebar, frame.types);
+    }
 
     let icon = document.createElement("span");
     icon.className = "panel-icon";
@@ -476,19 +478,24 @@ export class DocumentViewer extends Component {
     let contents = document.createElement("div");
     contents.className = "panel-content"
 
-    let slots = mention.slots;
-    if (slots) {
-      for (let i = 0; i < slots.length; i += 2) {
-        let n = slots[i];
-        let v = slots[i + 1];
-        if (this.document.frames[n].id == "evokes" ||
-            this.document.frames[n].id == "is") {
-          let avm = this.BuildAVM(v, {});
-          contents.appendChild(avm);
+    if (phrase) {
+      let rendered = {};
+      let slots = frame.slots;
+      if (slots) {
+        for (let i = 0; i < slots.length; i += 2) {
+          let n = slots[i];
+          let v = slots[i + 1];
+          if (this.document.frames[n].id == "evokes" ||
+              this.document.frames[n].id == "is") {
+            let avm = this.BuildAVM(v, rendered);
+            contents.appendChild(avm);
+          }
         }
       }
+    } else {
+      let avm = this.BuildAVM(fidx, {});
+      contents.appendChild(avm);
     }
-
     panel.appendChild(contents);
     return panel;
   }
@@ -504,7 +511,11 @@ export class DocumentViewer extends Component {
     let span = e.currentTarget;
     let phrase = span.getAttribute("phrase");
     let fidx = parseInt(span.getAttribute("frame"));
-    this.AddPanel('"' + phrase + '"', fidx);
+    if (phrase) {
+      this.AddPanel('"' + phrase + '"', fidx);
+    } else {
+      this.AddPanel(null, fidx);
+    }
   }
 
   ClosePanel(e) {
@@ -519,7 +530,6 @@ export class DocumentViewer extends Component {
     chip.className = "chip";
     chip.id = "t" + fidx;
     chip.setAttribute("frame", fidx);
-    chip.setAttribute("phrase", name);
     chip.appendChild(document.createTextNode(name));
 
     return chip;
@@ -548,13 +558,14 @@ export class DocumentViewer extends Component {
 
     let fidx = parseInt(span.getAttribute("frame"))
     let mention = this.document.frames[fidx];
+    let rendered = {};
     let slots = mention.slots;
     if (slots) {
       for (let i = 0; i < slots.length; i += 2) {
         let n = slots[i];
         let v = slots[i + 1];
         if (this.document.frames[n].id == "evokes") {
-          let avm = this.BuildAVM(v, {});
+          let avm = this.BuildAVM(v, rendered);
           callout.appendChild(avm);
         }
       }

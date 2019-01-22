@@ -43,7 +43,7 @@ SLING uses [Bazel](https://bazel.build/) as the build system, so you need to
 to build the SLING parser.
 
 ```shell
-sudo apt-get install pkg-config zip g++ zlib1g-dev unzip python
+sudo apt-get install pkg-config zip g++ zlib1g-dev unzip python2.7 python2.7-dev
 wget -P /tmp https://github.com/bazelbuild/bazel/releases/download/0.13.0/bazel-0.13.0-installer-linux-x86_64.sh
 chmod +x /tmp/bazel-0.13.0-installer-linux-x86_64.sh
 sudo /tmp/bazel-0.13.0-installer-linux-x86_64.sh

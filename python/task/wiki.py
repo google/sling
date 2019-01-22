@@ -583,7 +583,7 @@ class WikiWorkflow:
     if aliases == None:
       # Get language-dependent aliases from Wikidata and Wikpedia.
       wikidata_aliases = self.wf.map(self.fused_items(),
-                                     "profile-alias-extractor",
+                                     "alias-extractor",
                                      params={
                                        "language": language,
                                        "skip_aux": True,
@@ -599,7 +599,7 @@ class WikiWorkflow:
     merged_aliases = self.wf.shuffle(aliases, len(names))
 
     # Filter and select aliases.
-    self.wf.reduce(merged_aliases, names, "profile-alias-reducer",
+    self.wf.reduce(merged_aliases, names, "alias-reducer",
                    params={"language": language})
     return names
 
@@ -648,8 +648,11 @@ class WikiWorkflow:
     with self.wf.namespace("phrase-table"):
       builder = self.wf.task("phrase-table-builder")
       builder.add_param("language", language)
+      builder.add_param("transfer_aliases", True)
       self.wf.connect(self.wf.read(names, name="name-reader"), builder)
+      kb = self.knowledge_base()
       repo = self.phrase_table(language)
+      builder.attach_input("commons", kb)
       builder.attach_output("repository", repo)
     return repo
 

@@ -49,6 +49,7 @@ Normalization ParseNormalization(const string &spec) {
       case 'd': flags |= NORMALIZE_DIGITS; break;
       case 'p': flags |= NORMALIZE_PUNCTUATION; break;
       case 'w': flags |= NORMALIZE_WHITESPACE; break;
+      case 'n': flags |= NORMALIZE_NAME; break;
       default:
         LOG(FATAL) << "Unknown normalization specifier: " << spec;
     }
@@ -63,6 +64,7 @@ string NormalizationString(Normalization normalization) {
   if (normalization & NORMALIZE_DIGITS) str.push_back('d');
   if (normalization & NORMALIZE_PUNCTUATION) str.push_back('p');
   if (normalization & NORMALIZE_WHITESPACE) str.push_back('w');
+  if (normalization & NORMALIZE_NAME) str.push_back('n');
   return str;
 }
 
@@ -127,6 +129,10 @@ bool Unicode::IsPunctuation(int c) {
   return Is(c, CATMASK_PUNCTUATION);
 }
 
+bool Unicode::IsNamePunctuation(int c) {
+  return Is(c, CATMASK_NAME_PUNCTUATION) || c == '.';
+}
+
 int Unicode::ToLower(int c) {
   if (c & unicode_tab_mask) return c;
   return unicode_lower_tab[c];
@@ -150,6 +156,9 @@ int Unicode::Normalize(int c, int flags) {
   }
   if (flags & NORMALIZE_PUNCTUATION) {
     if (IsPunctuation(c)) c = 0;
+  }
+  if (flags & NORMALIZE_NAME) {
+    if (IsNamePunctuation(c)) c = 0;
   }
   if (flags & NORMALIZE_WHITESPACE) {
     if (IsWhitespace(c)) c = 0;

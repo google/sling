@@ -32,8 +32,6 @@ namespace nlp {
 class PhraseTable {
  public:
   struct Match {
-    Match(Text id, Handle item, int count, int form, bool reliable)
-      : id(id), item(item), count(count), form(form), reliable(reliable) {}
     Text id;        // entity id of matching item
     Handle item;    // matching item
     int count;      // frequency of matching item
@@ -49,17 +47,17 @@ class PhraseTable {
   void Load(Store *store, const string &filename);
 
   // Find all entities matching a phrase fingerprint.
-  void Lookup(uint64 fp, Handles *matches);
+  void Lookup(uint64 fp, Handles *matches) const;
 
   // Find all entities matching a phrase fingerprint and return list of matches.
-  void Lookup(uint64 fp, MatchList *matches);
+  void Lookup(uint64 fp, MatchList *matches) const;
 
   // Text normalization flags.
   const string &normalization() const { return normalization_; }
 
  private:
   // Get handle for entity.
-  Handle GetEntityHandle(int index);
+  Handle GetEntityHandle(int index) const;
 
   // Entity phrase with entity index and frequency. The count_and_flags field
   // contains the count in the lower 29 bit. Bit 29 and 30 contain the case
@@ -150,6 +148,20 @@ class PhraseTable {
     }
   };
 
+ public:
+  // Opaque public type for phrase items in the phrase table.
+  typedef PhraseItem Phrase;
+
+  // Find matching phrase in phrase table. Return null if phrase is not found.
+  const Phrase *Find(uint64 fp) const;
+
+  // Get matching handles for phrase.
+  void GetMatches(const Phrase *phrase, Handles *matches) const;
+
+  // Get matching items for phrase.
+  void GetMatches(const Phrase *phrase, MatchList *matches) const;
+
+ private:
   // Repository with name table.
   Repository repository_;
 
@@ -166,7 +178,7 @@ class PhraseTable {
   Handles *entity_table_ = nullptr;
 
   // Text normalization flags.
-  string normalization_ = "lcp";
+  string normalization_ = "lcn";
 };
 
 }  // namespace nlp

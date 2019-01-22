@@ -34,6 +34,18 @@ uint64 Token::Fingerprint() const {
   return fingerprint_;
 }
 
+CaseForm Token::Form() const {
+  if (form_ == CASE_INVALID) {
+    // Case for first token in a sentence is indeterminate.
+    if (index_ == 0 || brk_ >= SENTENCE_BREAK) {
+      form_ = CASE_NONE;
+    } else {
+      form_ = UTF8::Case(word_);
+    }
+  }
+  return form_;
+}
+
 void Span::Evoke(const Frame &frame) {
   mention_.Add(document_->names_->n_evokes, frame);
   document_->AddMention(frame.handle(), this);
@@ -123,11 +135,19 @@ uint64 Span::Fingerprint() const {
   return fp;
 }
 
+CaseForm Span::Form() const {
+  if (form_ == CASE_INVALID) form_ = document_->Form(begin_, end_);
+  return form_;
+}
+
 Document::Document(Store *store, const DocumentNames *names)
     : themes_(store), names_(names) {
   // Bind names.
-  if (names_ == nullptr) names_ = new DocumentNames(store);
-  names_->AddRef();
+  if (names_ == nullptr) {
+    names_ = new DocumentNames(store);
+  } else {
+    names_->AddRef();
+  }
 
   // Build empty document.
   Builder builder(store);
@@ -138,8 +158,11 @@ Document::Document(Store *store, const DocumentNames *names)
 Document::Document(const Frame &top, const DocumentNames *names)
     : top_(top), themes_(top.store()), names_(names) {
   // Bind names.
-  if (names_ == nullptr) names_ = new DocumentNames(top.store());
-  names_->AddRef();
+  if (names_ == nullptr) {
+    names_ = new DocumentNames(top.store());
+  } else {
+    names_->AddRef();
+  }
 
   // Add document frame if it is missing.
   if (!top_.valid()) {
@@ -190,6 +213,7 @@ Document::Document(const Frame &top, const DocumentNames *names)
         t.brk_ = i == 0 ? NO_BREAK : SPACE_BREAK;
       }
       t.fingerprint_ = 0;
+      t.form_ = CASE_INVALID;
       t.span_ = nullptr;
     }
   }
@@ -311,6 +335,7 @@ void Document::AddToken(Text word, int begin, int end, BreakType brk) {
   t.word_.assign(word.data(), word.size());
   t.brk_ = brk;
   t.fingerprint_ = 0;
+  t.form_ = CASE_INVALID;
   t.span_ = nullptr;
   tokens_changed_ = true;
 }
@@ -412,6 +437,20 @@ uint64 Document::PhraseFingerprint(int begin, int end) {
   return fp;
 }
 
+CaseForm Document::Form(int begin, int end) {
+  CaseForm form = CASE_INVALID;
+  for (int t = begin; t < end; ++t) {
+    if (token(t).skipped()) continue;
+    CaseForm token_form = token(t).Form();
+    if (form == CASE_INVALID) {
+      form = token_form;
+    } else if (form != token_form) {
+      form = CASE_NONE;
+    }
+  }
+  return form;
+}
+
 string Document::PhraseText(int begin, int end) const {
   string phrase;
   for (int t = begin; t < end; ++t) {
@@ -466,7 +505,7 @@ Span *Document::Insert(int begin, int end) {
   bool crossing = false;
   Span *enclosing = EnclosingSpan(begin, end, &crossing);
   if (crossing) return nullptr;
-  
+
   // Check if span already exists.
   if (enclosing != nullptr && enclosing->begin() == begin &&
       enclosing->end() == end) {

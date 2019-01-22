@@ -294,7 +294,7 @@ PyMemberDef PyResource::members[] = {
 };
 
 void PyResource::Define(PyObject *module) {
-  InitType(&type, "sling.Resource", sizeof(PyResource), false);
+  InitType(&type, "sling.api.Resource", sizeof(PyResource), false);
   type.tp_init = method_cast<initproc>(&PyResource::Init);
   type.tp_dealloc = method_cast<destructor>(&PyResource::Dealloc);
   type.tp_members = members;
@@ -512,7 +512,7 @@ PyObject *PyStartTaskMonitor(PyObject *self, PyObject *args) {
   // Start HTTP server.
   bool start_http_server = false;
   if (http == nullptr) {
-    LOG(INFO) << "Start HTTP server in port " << port;
+    LOG(INFO) << "Start HTTP server on port " << port;
     HTTPServerOptions options;
     http = new HTTPServer(options, port);
     start_http_server = true;

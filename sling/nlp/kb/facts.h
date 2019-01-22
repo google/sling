@@ -82,6 +82,9 @@ class FactCatalog {
   Name p_academic_degree_{names_, "P512"};
   Name p_member_of_sports_team_{names_, "P54"};
   Name p_league_{names_, "P118"};
+  Name p_time_period_{names_, "P2348"};
+  Name p_start_time_{names_, "P580"};
+  Name p_end_time_{names_, "P582"};
 
   Name n_time_{names_, "/w/time"};
   Name n_item_{names_, "/w/item"};
@@ -125,6 +128,9 @@ class Facts {
 
   // Extract date-valued fact with backoff to year, decade and century.
   void ExtractDate(Handle value);
+
+  // Extract time period.
+  void ExtractTimePeriod(Handle period);
 
   // Extract location of item with containment backoff.
   void ExtractPlacement(Handle item);
@@ -181,6 +187,7 @@ class Taxonomy {
  public:
   // Initialize taxonomy from a ranked type list.
   Taxonomy(const FactCatalog *catalog, const std::vector<Text> &types);
+  Taxonomy(const FactCatalog *catalog, const char **types);
 
   // Classify item according to taxonomy.
   Handle Classify(const Frame &item);

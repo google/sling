@@ -23,7 +23,7 @@
 #include "sling/http/http-server.h"
 #include "sling/http/static-content.h"
 #include "sling/nlp/kb/calendar.h"
-#include "sling/nlp/wiki/name-table.h"
+#include "sling/nlp/kb/name-table.h"
 
 namespace sling {
 namespace nlp {
@@ -117,6 +117,7 @@ class KnowledgeService {
   Name n_url_{names_, "url"};
   Name n_thumbnail_{names_, "thumbnail"};
   Name n_matches_{names_, "matches"};
+  Name n_lang_{names_, "lang"};
 
   Name n_xref_type_{names_, "/w/xref"};
   Name n_item_type_{names_, "/w/item"};

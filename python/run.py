@@ -120,37 +120,6 @@ flags.define("--train_fact_embeddings",
              default=False,
              action='store_true')
 
-flags.define("--dryrun",
-             help="build worflows but do not run them",
-             default=False,
-             action='store_true')
-
-flags.define("--monitor",
-             help="port number for task monitor (0 means no monitor)",
-             default=6767,
-             type=int,
-             metavar="PORT")
-
-flags.define("--logdir",
-             help="directory where workflow logs are stored",
-             default="local/logs",
-             metavar="DIR")
-
-def run_workflow(wf):
-  # In dryrun mode the workflow is just dumped without running it.
-  if flags.arg.dryrun:
-    print wf.wf.dump()
-    return
-
-  # Start workflow.
-  log.info("start workflow")
-  wf.wf.start()
-
-  # Wait until workflow completes. Poll every second to make the workflow
-  # interruptible.
-  done = False
-  while not done: done = wf.wf.wait(1000)
-
 def download_corpora():
   if flags.arg.download_wikidata or flags.arg.download_wikipedia:
     wf = download.DownloadWorkflow("wiki-download")
@@ -164,7 +133,7 @@ def download_corpora():
       for language in flags.arg.languages:
         wf.download_wikipedia(language=language)
 
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
 def import_wiki():
   if flags.arg.import_wikidata or flags.arg.import_wikipedia:
@@ -180,7 +149,7 @@ def import_wiki():
         log.info("Import " + language + " wikipedia")
         wf.wikipedia(language=language)
 
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
 def parse_wikipedia():
   # Convert wikipedia pages to SLING documents.
@@ -189,7 +158,7 @@ def parse_wikipedia():
       log.info("Parse " + language + " wikipedia")
       wf = wiki.WikiWorkflow(language + "-wikipedia-parsing")
       wf.parse_wikipedia(language=language)
-      run_workflow(wf)
+      workflow.run(wf.wf)
 
 def fuse_items():
   # Merge categories from wikipedias.
@@ -197,28 +166,28 @@ def fuse_items():
     log.info("Merge wikipedia categories")
     wf = wiki.WikiWorkflow("category-merging")
     wf.merge_wikipedia_categories()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
   # Invert categories.
   if flags.arg.invert_categories:
     log.info("Invert categories")
     wf = wiki.WikiWorkflow("category-inversion")
     wf.invert_wikipedia_categories()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
   # Compute item popularity.
   if flags.arg.compute_item_popularity:
     log.info("Compute item popularity")
     wf = wiki.WikiWorkflow("item-popularity")
     wf.compute_item_popularity()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
   # Fuse items.
   if flags.arg.fuse_items:
     log.info("Fuse items")
     wf = wiki.WikiWorkflow("fuse-items")
     wf.fuse_items()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
 
 def build_knowledge_base():
@@ -227,7 +196,7 @@ def build_knowledge_base():
     log.info("Build knowledge base repository")
     wf = wiki.WikiWorkflow("knowledge-base")
     wf.build_knowledge_base()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
   # Extract item names from wikidata and wikipedia.
   if flags.arg.extract_names:
@@ -235,7 +204,7 @@ def build_knowledge_base():
       log.info("Extract " + language + " names")
       wf = wiki.WikiWorkflow(language + "-name-extraction")
       wf.extract_names(language=language)
-      run_workflow(wf)
+      workflow.run(wf.wf)
 
   # Build name table.
   if flags.arg.build_nametab:
@@ -243,7 +212,7 @@ def build_knowledge_base():
       log.info("Build " + language + " name table")
       wf = wiki.WikiWorkflow(language + "-name-table")
       wf.build_name_table(language=language)
-      run_workflow(wf)
+      workflow.run(wf.wf)
 
   # Build phrase table.
   if flags.arg.build_phrasetab:
@@ -251,7 +220,7 @@ def build_knowledge_base():
       log.info("Build " + language + " phrase table")
       wf = wiki.WikiWorkflow(language + "-phrase-table")
       wf.build_phrase_table(language=language)
-      run_workflow(wf)
+      workflow.run(wf.wf)
 
 def train_embeddings():
   # Extract vocabulary for word embeddings.
@@ -260,7 +229,7 @@ def train_embeddings():
       log.info("Extract " + language + " vocabulary")
       wf = embedding.EmbeddingWorkflow(language + "-vocabulary")
       wf.extract_vocabulary(language=language)
-      run_workflow(wf)
+      workflow.run(wf.wf)
 
   # Train word embeddings.
   if flags.arg.train_word_embeddings:
@@ -268,28 +237,28 @@ def train_embeddings():
       log.info("Train " + language + " word embeddings")
       wf = embedding.EmbeddingWorkflow(language + "-word-embeddings")
       wf.train_word_embeddings(language=language)
-      run_workflow(wf)
+      workflow.run(wf.wf)
 
   # Extract vocabulary for fact and category embeddings.
   if flags.arg.extract_fact_lexicon:
     log.info("Extract fact and category lexicons")
     wf = embedding.EmbeddingWorkflow("fact-lexicon")
     wf.extract_fact_lexicon()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
   # Extract facts from knowledge base.
   if flags.arg.extract_facts:
     log.info("Extract facts from knowledge base")
     wf = embedding.EmbeddingWorkflow("fact-extraction")
     wf.extract_facts()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
   # Train fact and category embeddings.
   if flags.arg.train_fact_embeddings:
     log.info("Train fact and category embeddings")
     wf = embedding.EmbeddingWorkflow("fact-embeddings")
     wf.train_fact_embeddings()
-    run_workflow(wf)
+    workflow.run(wf.wf)
 
 
 if __name__ == '__main__':
@@ -309,20 +278,16 @@ if __name__ == '__main__':
     flags.arg.build_nametab = True
     flags.arg.build_phrasetab = True
 
-  # Start task monitor.
-  if flags.arg.monitor > 0: workflow.start_monitor(flags.arg.monitor)
-
   # Run workflows.
+  workflow.startup()
   download_corpora()
   import_wiki()
   parse_wikipedia()
   fuse_items()
   build_knowledge_base()
   train_embeddings()
-
-  # Stop task monitor.
-  if flags.arg.monitor > 0: workflow.stop_monitor()
-  workflow.save_workflow_log(flags.arg.logdir)
+  workflow.shutdown()
 
   # Done.
   log.info("Done")
+

@@ -377,7 +377,7 @@ flow = "flow" <version>
 
 var = <#flags> (IN=1, OUT=2, REF=4, LEARNABLE=8 UNIQUE=16, from version 5)
       <name$>
-      <#aliases> <alias$>
+      <#aliases> <alias$>*
       <dtype$>
       <shape>
       <#bytes> value
@@ -397,11 +397,11 @@ blob = <#flags> (unused, from version 5)
 
 func = <#flags> (TRAINING=1, from version 5)
        <name$>
-       <#ops> <op$>
+       <#ops> <op$>*
 
 cnx = <#flags> (unused, from version 5)
       <name$>
-      <#vars> <var$>
+      <#vars> <var$>*
 
 shape = <#dims> <size>*
 

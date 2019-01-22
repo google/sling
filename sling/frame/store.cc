@@ -1088,7 +1088,10 @@ Handle Store::AllocateHandleSlow(Datum *object) {
   DCHECK(free_handle_ == nullptr);
 
   // Expand handle table.
-  handles_.reserve(handles_.size() * 2);
+  if (handles_.size() >= kMaxHandlesSize) LOG(FATAL) << "Handle overflow";
+  size_t newsize = handles_.size() * 2;
+  if (newsize > kMaxHandlesSize) newsize = kMaxHandlesSize;
+  handles_.reserve(newsize);
 
   // Update the pool pointer to handle table.
   pools_[store_tag_] = reinterpret_cast<Address>(handles_.base());

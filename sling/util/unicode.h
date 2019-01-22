@@ -95,6 +95,10 @@ enum UnicodeCategoryMask {
       (1 << CHARCAT_LINE_SEPARATOR) |
       (1 << CHARCAT_PARAGRAPH_SEPARATOR),
 
+  // Name punctuation.
+  CATMASK_NAME_PUNCTUATION =
+    (1 << CHARCAT_DASH_PUNCTUATION),
+
   // Punctuation.
   CATMASK_PUNCTUATION =
     (1 << CHARCAT_DASH_PUNCTUATION) |
@@ -118,9 +122,10 @@ enum Normalization {
   NORMALIZE_DIGITS      = 0x04,  // replace all digits with 9
   NORMALIZE_PUNCTUATION = 0x08,  // remove punctuation
   NORMALIZE_WHITESPACE  = 0x10,  // remove whitespace
+  NORMALIZE_NAME   =      0x20,  // remove name punctuation (periods and dashes)
 
   // Default normalization.
-  NORMALIZE_DEFAULT = NORMALIZE_CASE | NORMALIZE_LETTERS | NORMALIZE_PUNCTUATION
+  NORMALIZE_DEFAULT = NORMALIZE_CASE | NORMALIZE_LETTERS | NORMALIZE_NAME
 };
 
 // Parse a list of normalization specifiers to a normalization bit mask.
@@ -130,6 +135,7 @@ enum Normalization {
 //   d: NORMALIZE_DIGITS
 //   p: NORMALIZE_PUNCTUATION
 //   w: NORMALIZE_WHITESPACE
+//   n: NORMALIZE_NAME
 Normalization ParseNormalization(const string &spec);
 
 // Return string with normalization specifiers for flags.
@@ -173,6 +179,9 @@ class Unicode {
 
    // Check if code point is punctuation.
    static bool IsPunctuation(int c);
+
+   // Check if code point is name punctuation.
+   static bool IsNamePunctuation(int c);
 
    // Convert code point to lower case.
    static int ToLower(int c);

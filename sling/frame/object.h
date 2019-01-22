@@ -69,7 +69,8 @@ class HandleSpace : public Space<Handle>, public External {
 };
 
 // Hash map and set keyed by handle.
-template<typename T> using HandleMap = std::unordered_map<Handle, T, HandleHash>;
+template<typename T> using HandleMap =
+  std::unordered_map<Handle, T, HandleHash>;
 typedef std::unordered_set<Handle, HandleHash> HandleSet;
 
 // Name with lazy lookup that can be initialized as static variables and

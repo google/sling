@@ -166,8 +166,8 @@ class WikiAnnotator : public WikiTextSink {
   // the store and links will be resolved using the resolver.
   WikiAnnotator(Store *store, WikiLinkResolver *resolver);
 
-  // Initialize sub-annotator based on another annotator. Plase notice that this
-  // is not a copy constructor.
+  // Initialize sub-annotator based on another annotator. Please notice that
+  // this is not a copy constructor.
   explicit WikiAnnotator(WikiAnnotator *other);
 
   // Wiki sink interface receiving the annotations from the extractor.

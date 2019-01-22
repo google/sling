@@ -42,12 +42,12 @@ cc_library(
     "//sling/myelin:compiler",
     "//sling/myelin:compute",
     "//sling/nlp/document",
-    "//sling/nlp/wiki:phrase-table",
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",
     "//sling/nlp/document:phrase-tokenizer",
     "//sling/nlp/kb:calendar",
     "//sling/nlp/kb:facts",
+    "//sling/nlp/kb:phrase-table",
     "//sling/nlp/parser",
     "//sling/nlp/parser/trainer:frame-evaluation",
     "//sling/nlp/wiki:wikidata-converter",
@@ -69,12 +69,13 @@ cc_library(
 cc_library(
   name = "tasks",
   deps = [
-    "//sling/nlp/wiki:profile-aliases",
+    "//sling/nlp/wiki:aliases",
     "//sling/nlp/wiki:wikidata-importer",
     "//sling/nlp/wiki:wikipedia-importer",
     "//sling/nlp/wiki:wikipedia-documents",
-    "//sling/nlp/wiki:name-table-builder",
-    "//sling/nlp/wiki:phrase-table-builder",
+
+    "//sling/nlp/kb:name-table-builder",
+    "//sling/nlp/kb:phrase-table-builder",
 
     "//sling/nlp/embedding:fact-embeddings",
     "//sling/nlp/embedding:word-embeddings",

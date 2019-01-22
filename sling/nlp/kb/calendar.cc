@@ -125,6 +125,7 @@ void Date::ParseFromString(Text str) {
 
 void Date::ParseFromFrame(const Frame &frame) {
   // Try to get the 'point in time' property from frame and parse it.
+  if (frame.invalid()) return;
   Store *store = frame.store();
   Object time(store, store->Resolve(frame.GetHandle("P585")));
   if (time.invalid()) return;
@@ -256,19 +257,24 @@ void Calendar::Init(Store *store) {
   if (!cal.valid()) return;
 
   // Build calendar mappings.
-  BuildCalendarMapping(&weekdays_, cal.GetFrame("/w/weekdays"));
-  BuildCalendarMapping(&months_, cal.GetFrame("/w/months"));
-  BuildCalendarMapping(&days_, cal.GetFrame("/w/days"));
-  BuildCalendarMapping(&years_, cal.GetFrame("/w/years"));
-  BuildCalendarMapping(&decades_, cal.GetFrame("/w/decades"));
-  BuildCalendarMapping(&centuries_, cal.GetFrame("/w/centuries"));
-  BuildCalendarMapping(&millennia_, cal.GetFrame("/w/millennia"));
+  BuildCalendarMapping(&weekdays_, nullptr, cal.GetFrame("/w/weekdays"));
+  BuildCalendarMapping(&months_, &month_items_, cal.GetFrame("/w/months"));
+  BuildCalendarMapping(&days_, &day_items_, cal.GetFrame("/w/days"));
+  BuildCalendarMapping(&years_, nullptr, cal.GetFrame("/w/years"));
+  BuildCalendarMapping(&decades_, nullptr, cal.GetFrame("/w/decades"));
+  BuildCalendarMapping(&centuries_, nullptr, cal.GetFrame("/w/centuries"));
+  BuildCalendarMapping(&millennia_, nullptr, cal.GetFrame("/w/millennia"));
 };
 
-bool Calendar::BuildCalendarMapping(CalendarMap *mapping, const Frame &source) {
+bool Calendar::BuildCalendarMapping(CalendarMap *mapping,
+                                    CalendarItemMap *items,
+                                    const Frame &source) {
   if (!source.valid()) return false;
   for (const Slot &s : source) {
     (*mapping)[s.name.AsInt()] = s.value;
+    if (items != nullptr) {
+      (*items)[s.value] = s.name.AsInt();
+    }
   }
   return true;
 }
@@ -350,6 +356,21 @@ string Calendar::DateAsString(const Date &date) const {
   }
 
   return "???";
+}
+
+bool Calendar::GetDayAndMonth(Handle item, Date *date) const {
+  auto f = day_items_.find(item);
+  if (f == day_items_.end()) return false;
+  date->day = f->second % 100;
+  date->month = f->second / 100;
+  return true;
+}
+
+bool Calendar::GetMonth(Handle item, Date *date) const {
+  auto f = month_items_.find(item);
+  if (f == month_items_.end()) return false;
+  date->month = f->second;
+  return true;
 }
 
 Handle Calendar::Day(const Date &date) const {

@@ -91,6 +91,10 @@
   cursor: hand;
 }
 
+.prop-lang {
+  color: #808080;
+}
+
 .prop-value a {
   color: #0b0080;
   text-decoration: none;

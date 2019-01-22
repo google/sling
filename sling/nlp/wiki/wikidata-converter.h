@@ -138,6 +138,7 @@ class WikidataConverter {
   Name n_lng_{names_, "/w/lng"};
   Name n_globe_{names_, "/w/globe"};
   Name n_lang_mul_{names_, "/lang/mul"};
+  Name n_lang_none_{names_, "/lang/zxx"};
 
   Name n_alias_{names_, "alias"};
   Name n_sources_{names_, "sources"};

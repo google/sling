@@ -56,9 +56,10 @@ enum AliasSource {
   SRC_WIKIDATA_NATIVE          =  8,  //  256  0x0100
   SRC_WIKIDATA_DEMONYM         =  9,  //  512  0x0200
   SRC_WIKIPEDIA_LINK           = 10,  // 1024  0x0400
+  SRC_WIKIDATA_NAME            = 11,  // 2048  0x0800
 };
 
-static const int kNumAliasSources = 11;
+static const int kNumAliasSources = 12;
 
 extern const char *kAliasSourceName[kNumAliasSources];
 

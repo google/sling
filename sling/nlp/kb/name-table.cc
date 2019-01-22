@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sling/nlp/wiki/name-table.h"
+#include "sling/nlp/kb/name-table.h"
 
 #include <algorithm>
 #include <string>

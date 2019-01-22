@@ -96,6 +96,12 @@ class Calendar {
     return DateAsString(Date(object));
   }
 
+  // Get day and month for calendar item.
+  bool GetDayAndMonth(Handle item, Date *date) const;
+
+  // Get month for item.
+  bool GetMonth(Handle item, Date *date) const;
+
   // Get item for day.
   Handle Day(const Date &date) const;
   Handle Day(int month, int day) const;
@@ -130,11 +136,16 @@ class Calendar {
   // Mapping from calendar item key to the corresponding calendar item.
   typedef std::unordered_map<int, Handle> CalendarMap;
 
+  // Mapping from calendar item to the corresponding key.
+  typedef HandleMap<int> CalendarItemMap;
+
   // Get name for item.
   Text ItemName(Handle item) const;
 
   // Build calendar mapping.
-  bool BuildCalendarMapping(CalendarMap *mapping, const Frame &source);
+  bool BuildCalendarMapping(CalendarMap *mapping,
+                            CalendarItemMap *items,
+                            const Frame &source);
 
   // Store with calendar.
   Store *store_ = nullptr;
@@ -170,6 +181,12 @@ class Calendar {
   // Millennia. The millennia are numbered as (year-1)/1000+1 for AD and
   // (year+1)/1000-1 for BC.
   CalendarMap millennia_;
+
+  // Mapping from calendar item to day of year (month*100+day).
+  CalendarItemMap day_items_;
+
+  // Mapping from calendar item to month.
+  CalendarItemMap month_items_;
 };
 
 // Date parser and generator based on language-dependent format, e.g.:
