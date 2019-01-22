@@ -55,7 +55,7 @@ static void __cpuid(int cpu_info[4], int info_type) {
                     : "a"(info_type), "c"(0));
 }
 
-static uint64_t _xgetbv(unsigned int xcr) {
+static uint64_t xgetbv(unsigned int xcr) {
   unsigned eax, edx;
   __asm__ volatile (".byte 0x0f, 0x01, 0xd0" : "=a"(eax), "=d"(edx) : "c"(xcr));
   return static_cast<uint64_t>(eax) | (static_cast<uint64_t>(edx) << 32);
@@ -63,7 +63,7 @@ static uint64_t _xgetbv(unsigned int xcr) {
 
 static bool os_has_avx_support() {
   // Get XFEATURE_ENABLED_MASK register.
-  uint64_t feature_mask = _xgetbv(0);
+  uint64_t feature_mask = xgetbv(0);
 
   // Check for AVX support.
   return (feature_mask & 0x6) == 0x6;
