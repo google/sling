@@ -35,6 +35,7 @@ class UrlDownload:
     url = task.param("url")
     ratelimit = task.param("ratelimit", 0)
     chunksize = task.param("chunksize", 64 * 1024)
+    priority = task.param("priority", 0)
     output = task.output("output")
     log.info("Download " + name + " from " + url)
 
@@ -46,6 +47,9 @@ class UrlDownload:
     if not flags.arg.overwrite and os.path.exists(output.name):
       raise Exception("file already exists: " + output.name + \
                       " (use --overwrite to overwrite existing files)")
+
+    # Hold-off on low-prio tasks
+    if priority > 0: time.sleep(priority)
 
     # Wait until we are below the rate limit.
     global download_concurrency
@@ -94,6 +98,8 @@ class DownloadWorkflow:
     if language == None: language = flags.arg.language
     if url == None: url = corpora.wikipedia_url(language)
     if dump == None: dump = self.wikipedia_dump(language)
+    priority = 1
+    if language == "en": priority = 0
 
     with self.wf.namespace(language + "-wikipedia-download"):
       download = self.wf.task("url-download")
@@ -102,6 +108,7 @@ class DownloadWorkflow:
         "url": url,
         "shortname": language + "wiki",
         "ratelimit": 2,
+        "priority": priority,
       })
       download.attach_output("output", dump)
       return dump

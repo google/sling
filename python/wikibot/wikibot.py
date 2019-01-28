@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Class for updating wikidata with extracted facts from a record file."""
-
 import pywikibot
 import sling
 import json
@@ -85,9 +84,17 @@ class StoreFactsBot:
     self.store.freeze()
     self.rs = sling.Store(self.store)
 
-    self.source_claim = pywikibot.Claim(self.repo, "P3452") # inferred from
-    self.url_source_claim = pywikibot.Claim(self.repo, "P4656") # Wm import URL
-    self.time_claim = pywikibot.Claim(self.repo, "P813") # referenced (on)
+    # inferred from
+    self.source_claim = pywikibot.Claim(self.repo, "P3452")
+    # Wikimedia import URL
+    self.url_source_claim = pywikibot.Claim(self.repo, "P4656")
+    # imported from Wikimedia project
+    self.wp_source_claim = pywikibot.Claim(self.repo, "P143")
+    self.en_wp = pywikibot.ItemPage(self.repo, "Q328")
+    self.wp_source_claim.setTarget(self.en_wp)
+
+    # referenced (on)
+    self.time_claim = pywikibot.Claim(self.repo, "P813")
     today = datetime.date.today()
     time_target = pywikibot.WbTime(year=today.year,
                                    month=today.month,
@@ -107,6 +114,15 @@ class StoreFactsBot:
     if '"' in url: url = "https://en.wikipedia.org"
     self.url_source_claim.setTarget(url)
     return [self.url_source_claim, self.time_claim]
+
+  def get_wp_sources(self):
+    return [self.wp_source_claim]
+
+  def all_WP(self, sources):
+    if not sources: return True
+    for source in sources:
+      if source and "P143" not in source: return False
+    return True
 
   def ever_had_prop(self, wd_item, prop):
     # Up to 150 revisions covers the full history of 99% of e.g. human items
@@ -205,17 +221,21 @@ class StoreFactsBot:
             continue
           if prop_str in wd_claims:
             if len(wd_claims[prop_str]) > 1: # more than one property already
-              self.log_status_skip(item, fact, "already has property")
+              self.log_status_skip(item, fact, "has property more than once")
               continue
             old = wd_claims[prop_str][0].getTarget()
             if old is None:
               wd_item.removeClaims(wd_claims[prop_str])
             elif not(old.precision < precision and old.year == date.year):
-              self.log_status_skip(item, fact, "already has property")
+              self.log_status_skip(item, fact, "precise or conflicting date")
               continue
             else:
               # item already has property with a same year less precise date
-              claim = wd_claims[prop_str][0]
+              # check that sources are all WP or empty
+              if not self.all_WP(wd_claims[prop_str][0].getSources()):
+                self.log_status_skip(item, fact, "date with non-WP source(s)")
+                continue
+              wd_item.removeClaims(wd_claims[prop_str])
         elif claim.type == 'wikibase-item':
           if prop_str in wd_claims:
             self.log_status_skip(item, fact, "already has property")
@@ -230,15 +250,12 @@ class StoreFactsBot:
           sources = self.get_sources(s)
         elif provenance[self.n_url]:
           s = str(provenance[self.n_url])
-          sources = self.get_url_sources(s)
+          sources = self.get_wp_sources()
         else:
           continue
         summary = provenance[self.n_method] + " " + s
-        if prop_str in wd_claims and claim in wd_claims[prop_str]:
-          claim.changeTarget(target)
-        else:
-          claim.setTarget(target)
-          wd_item.addClaim(claim, summary=summary)
+        claim.setTarget(target)
+        wd_item.addClaim(claim, summary=summary)
         rev_id = str(wd_item.latest_revision_id)
         claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)

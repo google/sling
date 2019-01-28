@@ -76,6 +76,12 @@ class ExtractWikipediaDates:
       first = False
     return False
 
+  def same_year(self, year, dates):
+    if dates is None: return False
+    for date in dates:
+      if date and year == sling.Date(date).year: return True
+    return False
+
   def run(self):
     month = "(" + "|".join(self.months.keys()) + ")"
     day = "(\d{1,2})"
@@ -83,11 +89,11 @@ class ExtractWikipediaDates:
     date = "(?:(?:" + day + " " + month + " " + year + ")|"
     date += "(?:" + month + " " + day + ", " + year + "))"
     date += "(?:[^)]+?)?"
-    dates = date + "\s*-+\s*" + date
-    dates = u"(?:(?:(?:born|b\.|n\xe9e),? [^0-9)]*?" + date + ")|(?:" + dates + "))"
+    dates = date + u"\s*-+\s*" + date
+    dates = u"(?:(?:(?:born|b\.|n\xe9e),? ([^0-9)]*?)" + date + \
+      "(?:(?:died|d\.),? [^0-9)]*?" + date + ")?)|(?:" + dates + "))"
     pat = "(?:[^(]|\([^0-9]*\))*?\([^0-9)]*?" + dates + "\s*\)"
     rec = re.compile(pat)
-
 
     self.out_file = "local/data/e/wikibot/birth-death-dates.rec"
     record_file = sling.RecordWriter(self.out_file)
@@ -96,7 +102,7 @@ class ExtractWikipediaDates:
 
     for i in range(10):
       i_file = "local/data/e/wiki/en/documents-0000"+str(i)+"-of-00010.rec"
-      print i_file
+      print i_file, records
       for (item_id, record) in sling.RecordReader(i_file):
         item = self.kb[item_id]
         if self.human not in item(self.instanceof): continue
@@ -117,16 +123,43 @@ class ExtractWikipediaDates:
         m = rec.match(text)
         if m is None: continue
         if text.find("(baptised") >= 0 or text.find("throne") >= 0: continue
-        # Birth date only match
-        if m.group(1) or m.group(4):
-          if self.precise_date(item(self.date_of_birth)): continue
-          facts = store.frame({
-            self.date_of_birth: self.date_from_match(0, m).value(),
-          })
+        if text.find("(baptized") >= 0 or text.find("partner") >= 0: continue
+        if m.group(2) or m.group(5):
+          first = self.date_from_match(1, m)
+          if first.year < 1753: continue # possibly Julian calendar date
+          if m.group(8) or m.group(11):
+            second = self.date_from_match(7, m)
+            if second.year < 1753: continue # possibly Julian calendar date
+            facts = store.frame({
+              self.date_of_birth: first.value(),
+              self.date_of_death: second.value()
+            })
+          else:
+            # Only one date match
+            mg1 = m.group(1)
+            dob = item(self.date_of_birth)
+            dod = item(self.date_of_death)
+            if mg1 and max(mg1.find("died"), mg1.find("d.")) >= 0:
+              # death date only
+              if self.precise_date(dod): continue
+              if self.same_year(first.year, dob): continue # b&d too close
+              facts = store.frame({
+                self.date_of_death: first.value(),
+              })
+            else:
+              # birth date only
+              if self.precise_date(dob): continue
+              if self.same_year(first.year, dod): continue # b&d too close
+              facts = store.frame({
+                self.date_of_birth: first.value(),
+              })
         else:
+          first = self.date_from_match(13, m)
+          second = self.date_from_match(19, m)
+          if min(first.year, second.year) < 1753: continue # possibly Julian
           facts = store.frame({
-            self.date_of_birth: self.date_from_match(6, m).value(),
-            self.date_of_death: self.date_from_match(12, m).value()
+            self.date_of_birth: first.value(),
+            self.date_of_death: second.value()
           })
         records += 1
         provenance = store.frame({
