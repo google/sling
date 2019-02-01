@@ -43,8 +43,10 @@ app.controller('SearchCtrl', function($http,  $location) {
   }
 
   self.selectedItemChange = function(item) {
-    console.log('Navigate to item ' + item.ref);
-    $location.search('id', item.ref);
+    if (item) {
+      console.log('Navigate to item ' + item.ref);
+      $location.search('id', item.ref);
+    }
   }
 })
 
