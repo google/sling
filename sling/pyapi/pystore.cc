@@ -418,6 +418,17 @@ Handle PyStore::Value(PyObject *object) {
     Py_ssize_t length;
     PyString_AsStringAndSize(object, &data, &length);
     return  store->AllocateString(Text(data, length));
+  } else if (PyUnicode_Check(object)) {
+    // Create string from Unicode and return handle.
+    if (!Writable()) return Handle::error();
+    PyObject *str = PyUnicode_AsUTF8String(object);
+    if (str == nullptr) return Handle::error();
+    char *data;
+    Py_ssize_t length;
+    PyString_AsStringAndSize(str, &data, &length);
+    Handle h = store->AllocateString(Text(data, length));
+    Py_DECREF(str);
+    return h;
   } else if (PyInt_Check(object)) {
     // Return integer handle.
     return Handle::Integer(PyInt_AsLong(object));
@@ -493,6 +504,20 @@ Handle PyStore::RoleValue(PyObject *object, bool existing) {
     } else {
       return store->Lookup(name);
     }
+  } else if (PyUnicode_Check(object)) {
+    Handle h;
+    PyObject *str = PyUnicode_AsUTF8String(object);
+    if (str == nullptr) return Handle::error();
+    char *name = PyString_AsString(str);
+    if (name == nullptr) {
+      h = Handle::error();
+    } else if (existing) {
+      h = store->LookupExisting(name);
+    } else {
+      h = store->Lookup(name);
+    }
+    Py_DECREF(str);
+    return h;
   } else {
     return Value(object);
   }
@@ -503,6 +528,13 @@ Handle PyStore::SymbolValue(PyObject *object) {
     char *name = PyString_AsString(object);
     if (name == nullptr) return Handle::error();
     return store->Symbol(name);
+  } else if (PyUnicode_Check(object)) {
+    PyObject *str = PyUnicode_AsUTF8String(object);
+    if (str == nullptr) return Handle::error();
+    char *name = PyString_AsString(str);
+    Handle h = name == nullptr ? Handle::error() :  store->Symbol(name);
+    Py_DECREF(str);
+    return h;
   } else {
     return Value(object);
   }
@@ -522,7 +554,7 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
 
       // Get slot value.
       Handle value;
-      if (name.IsId() && PyString_Check(v)) {
+      if (name.IsId() && (PyString_Check(v) || PyUnicode_Check(v))) {
         value = SymbolValue(v);
       } else {
         value = Value(v);
@@ -552,7 +584,7 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
       // Get slot value.
       PyObject *v = PyTuple_GetItem(item, 1);
       Handle value;
-      if (name.IsId() && PyString_Check(v)) {
+      if (name.IsId() && (PyString_Check(v) || PyUnicode_Check(v))) {
         value = SymbolValue(v);
       } else {
         value = Value(v);
