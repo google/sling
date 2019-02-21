@@ -41,11 +41,13 @@ void FactCatalog::Init(Store *store) {
       }
       if (is_location) {
         SetExtractor(property, &Facts::ExtractLocation);
+        location_properties_.insert(s.value);
       } else {
         SetExtractor(property, &Facts::ExtractSimple);
       }
     } else if (target == n_time_) {
       SetExtractor(property, &Facts::ExtractDate);
+      date_properties_.insert(s.value);
     }
   }
 
@@ -137,6 +139,65 @@ Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
   return new Taxonomy(this, default_taxonomy);
 }
 
+void Facts::ExtractFor(Handle item, const HandleSet &properties) {
+  // Extract facts from the properties of the item.
+  auto &extractors = catalog_->property_extractors_;
+  for (const Slot &s : Frame(store_, item)) {
+    if (properties.find(s.name) == properties.end()) continue;
+
+    // Look up extractor for property.
+    auto f = extractors.find(s.name);
+    if (f == extractors.end()) continue;
+
+    // Extract facts for property.
+    FactCatalog::Extractor extractor = f->second;
+    push(s.name);
+    (this->*extractor)(s.value);
+    pop();
+  }
+}
+
+bool Facts::Subsumes(Handle property, Handle coarse, Handle fine) {
+  if (coarse == fine) return true;
+
+  if (catalog_->location_properties_.find(property) !=
+      catalog_->location_properties_.end()) {
+    fine = store_->Resolve(fine);
+    Handles closure(store_);
+    closure.push_back(fine);
+    int current = 0;
+    while (current < closure.size()) {
+      Frame f(store_, closure[current++]);
+      for (const Slot &s : f) {
+        if (s.name == catalog_->p_located_in_.handle()) {
+          Handle value = store_->Resolve(s.value);
+          if (value == coarse) {
+            return true;
+          } else if (!catalog_->IsBaseItem(value)) {
+            bool known = false;
+            for (Handle h : closure) {
+              if (value == h) {
+                known = true;
+                break;
+              }
+            }
+            if (!known) closure.push_back(value);
+          }
+        }
+      }
+    }
+  } else if (catalog_->date_properties_.find(property) !=
+      catalog_->date_properties_.end()) {
+    fine = store_->Resolve(fine);
+    Date date(Object(store_, fine));
+    return catalog_->calendar_.Year(date) == coarse ||
+      catalog_->calendar_.Decade(date) == coarse ||
+      catalog_->calendar_.Century(date) == coarse;
+  }
+
+  return false;
+}
+
 void Facts::Extract(Handle item) {
   // Extract facts from the properties of the item.
   auto &extractors = catalog_->property_extractors_;
@@ -190,8 +251,13 @@ void Facts::ExtractSimple(Handle value) {
 }
 
 void Facts::ExtractClosure(Handle item, Handle relation) {
-  Handles closure(store_);
   item = store_->Resolve(item);
+  if (!closure_) {
+    AddFact(item);
+    return;
+  }
+
+  Handles closure(store_);
   closure.push_back(item);
   int current = 0;
   while (current < closure.size()) {
@@ -251,8 +317,14 @@ void Facts::ExtractQualifier(Handle item, const Name &qualifier) {
 }
 
 void Facts::ExtractDate(Handle value) {
+  value = store_->Resolve(value);
+  if (!closure_) {
+    AddFact(value);
+    return;
+  }
+
   // Convert value to date.
-  Date date(Object(store_, store_->Resolve(value)));
+  Date date(Object(store_, value));
 
   // Add facts for year, decade, and century.
   AddFact(catalog_->calendar_.Year(date));

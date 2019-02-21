@@ -97,8 +97,10 @@ void PyFactExtractor::Define(PyObject *module) {
   type.tp_dealloc = method_cast<destructor>(&PyFactExtractor::Dealloc);
 
   methods.Add("facts", &PyFactExtractor::Facts);
+  methods.Add("facts_for", &PyFactExtractor::FactsFor);
   methods.Add("types", &PyFactExtractor::Types);
   methods.Add("taxonomy", &PyFactExtractor::Taxonomy);
+  methods.Add("subsumes", &PyFactExtractor::Subsumes);
   type.tp_methods = methods.table();
 
   RegisterType(&type, module, "FactExtractor");
@@ -129,18 +131,82 @@ PyObject *PyFactExtractor::Facts(PyObject *args, PyObject *kw) {
   // Get store and Wikidata item.
   PyStore *pystore = nullptr;
   PyFrame *pyitem = nullptr;
-  if (!PyArg_ParseTuple(args, "OO", &pystore, &pyitem)) return nullptr;
+  int closure = 1;
+  if (!PyArg_ParseTuple(args, "OO|i", &pystore, &pyitem, &closure)) {
+    return nullptr;
+  }
   if (!PyStore::TypeCheck(pystore)) return nullptr;
   if (!PyFrame::TypeCheck(pyitem)) return nullptr;
 
   // Extract facts.
   nlp::Facts facts(catalog, pystore->store);
+  facts.set_closure(closure == 1);
   facts.Extract(pyitem->handle());
 
   // Return array of facts.
   const Handle *begin = facts.list().data();
   const Handle *end = begin + facts.list().size();
   return pystore->PyValue(pystore->store->AllocateArray(begin, end));
+}
+
+PyObject *PyFactExtractor::FactsFor(PyObject *args, PyObject *kw) {
+  // Get store and Wikidata item.
+  PyStore *pystore = nullptr;
+  PyFrame *pyitem = nullptr;
+  PyObject *pyproperties = nullptr;
+  int closure = 1;
+  if (!PyArg_ParseTuple(
+      args, "OOO|i", &pystore, &pyitem, &pyproperties, &closure)) {
+    return nullptr;
+  }
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
+  if (!PyFrame::TypeCheck(pyitem)) return nullptr;
+  if (!PyList_Check(pyproperties)) return nullptr;
+
+  HandleSet properties;
+  int size = PyList_Size(pyproperties);
+  for (int i = 0; i < size; ++i) {
+    PyObject *item = PyList_GetItem(pyproperties, i);
+    if (!PyFrame::TypeCheck(item)) return nullptr;
+    Handle handle = reinterpret_cast<PyFrame *>(item)->handle();
+    properties.insert(handle);
+  }
+
+  // Extract facts.
+  nlp::Facts facts(catalog, pystore->store);
+  facts.set_closure(closure == 1);
+  facts.ExtractFor(pyitem->handle(), properties);
+
+  // Return array of facts.
+  const Handle *begin = facts.list().data();
+  const Handle *end = begin + facts.list().size();
+  return pystore->PyValue(pystore->store->AllocateArray(begin, end));
+}
+
+PyObject *PyFactExtractor::Subsumes(PyObject *args, PyObject *kw) {
+  // Get store and Wikidata item.
+  PyStore *pystore = nullptr;
+  PyFrame *pyproperty = nullptr;
+  PyFrame *pycoarse = nullptr;
+  PyFrame *pyfine = nullptr;
+  if (!PyArg_ParseTuple(
+    args, "OOOO", &pystore, &pyproperty, &pycoarse, &pyfine)) {
+    return nullptr;
+  }
+  if (!PyStore::TypeCheck(pystore)) return nullptr;
+  if (!PyFrame::TypeCheck(pyproperty)) return nullptr;
+  if (!PyFrame::TypeCheck(pycoarse)) return nullptr;
+  if (!PyFrame::TypeCheck(pyfine)) return nullptr;
+
+  nlp::Facts facts(catalog, pystore->store);
+  bool subsumes = facts.Subsumes(pyproperty->handle(),
+    pycoarse->handle(), pyfine->handle());
+
+  if (subsumes) {
+    Py_RETURN_TRUE;
+  } else {
+    Py_RETURN_FALSE;
+  }
 }
 
 PyObject *PyFactExtractor::Types(PyObject *args, PyObject *kw) {

@@ -17,6 +17,7 @@
 # A signature replaces each (PID, QID) span in a parse by $PID=$label(QID),
 # where 'label' is derived using a custom taxonomy.
 
+import math
 import sling
 from sling.task.workflow import register_task
 from util import load_kb
@@ -36,22 +37,23 @@ class PrelimCategoryParseRanker:
         'Q12737077',   # occupation
         'Q216353',     # title
         'Q618779',     # award
+        'Q31629',      # type of sport
         'Q27020041',   # sports season
         'Q4438121',    # sports organization
         'Q215380',     # band
         'Q2385804',    # educational institution
         'Q783794',     # company
-        'Q41710',      # ethnic group  (NEW TYPE)
-        'Q6256',       # country  (NEW TYPE)
+        'Q41710',      # ethnic group
+        'Q6256',       # country
         'Q17334923',   # location
         'Q43229',      # organization
         'Q431289',     # brand
-        'Q2188189',    # musical work
         'Q571',        # book
         'Q732577',     # publication
         'Q11424',      # film
         'Q15416',      # television program
         'Q12136',      # disease
+        'Q1931388',    # cause of death
         'Q16521',      # taxon
         'Q5058355',    # cellular component
         'Q7187',       # gene
@@ -65,11 +67,10 @@ class PrelimCategoryParseRanker:
         'Q186081',     # time interval
         'Q11563',      # number
         'Q17376908',   # languoid
-        'Q1047113',    # specialty  (REORDERED)
-        'Q968159',     # art movement (NEW TYPE)
-        'Q483394',     # genre  (REORDERED)
-        'Q47574',      # unit of measurement (REPLACES unit)
-        'Q39875001',   # measure
+        'Q1047113',    # specialty
+        'Q968159',     # art movement
+        'Q483394',     # genre
+        'Q47574',      # unit of measurement
         'Q3695082',    # sign
         'Q2996394',    # biological process
         'Q11410',      # game
@@ -99,7 +100,7 @@ class PrelimCategoryParseRanker:
           qid_to_spans[span.qid] = set()
         qid_to_spans[span.qid].add((span.begin, span.end))
 
-    num_members = 1.0 * category.num_members
+    num_members = 1.0 * len(category.members)
     for parse in parses:
       prior = 1.0            # product of priors of all spans' QIDs
       member_score = 1.0     # product of proportions of members covered
@@ -114,6 +115,10 @@ class PrelimCategoryParseRanker:
         prior *= span.prior
         member_score *= span.count / num_members
         cover += span.end - span.begin
+
+      # Normalize all scores so that they can be compared across parses.
+      prior = math.pow(prior, 1.0 / len(parse.spans))
+      member_score = math.pow(member_score, 1.0 / len(parse.spans))
       cover /= 1.0 * len(category.document.tokens)
 
       overall_score = 0.0
@@ -132,7 +137,7 @@ class PrelimCategoryParseRanker:
 
   # Returns a signature for 'parse'. Spans in the parse are reported as
   # $PID=$label(QID), and tokens not covered by any span are reported as-is.
-  def signature(self, document, parse):
+  def signature(self, document, parse, coarse=False):
     tokens = []              # tokens in the full signature
     span_signature = {}      # span -> span's signature
     start = 0
@@ -145,8 +150,11 @@ class PrelimCategoryParseRanker:
         label = span.qid
       elif self.h_name in label:
         label = label[self.h_name]
-      pids = '.'.join([pid.name for pid in span.pids])
-      word = '$' + pids + '=$' + str(label)
+      if coarse:
+        word = '$' + str(label)
+      else:
+        pids = '.'.join([pid.name for pid in span.pids])
+        word = '$' + pids + '=$' + str(label)
       word = word.replace(' ', '_')
       span_signature[span] = word
       tokens.append(word)
@@ -187,6 +195,13 @@ class PrelimCategoryParseRanker:
         for span in parse.spans:
           if span in span_signature:
             span["signature"] = span_signature[span]
+
+        # Also compute the coarse signature.
+        tokens, span_signature = self.signature(document, parse, coarse=True)
+        parse["coarse_signature"] = tokens
+        for span in parse.spans:
+          if span in span_signature:
+            span["coarse_signature"] = span_signature[span]
 
       # Replace the current set of parses with the ranked list.
       del category["parse"]

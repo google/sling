@@ -65,6 +65,10 @@ class FactCatalog {
   // Items that stop closure expansion.
   HandleSet base_items_;
 
+  // Date and location valued properties.
+  HandleSet date_properties_;
+  HandleSet location_properties_;
+
   // Symbols.
   Names names_;
   Name p_role_{names_, "role"};
@@ -100,10 +104,18 @@ class FactCatalog {
 class Facts {
  public:
   Facts(const FactCatalog *catalog, Store *store)
-      : catalog_(catalog), store_(store), list_(store), path_(store) {}
+      : catalog_(catalog), store_(store), list_(store), path_(store),
+      closure_(true) {}
+
+  // Accessor/mutator for whether closure will be performed on certain facts.
+  bool closure() const { return closure_; }
+  void set_closure(bool c) { closure_ = c; }
 
   // Extract facts for item.
   void Extract(Handle item);
+
+  // Extract facts for item only for properties in 'properties'.
+  void ExtractFor(Handle item, const HandleSet &properties);
 
   // Extract item types (P31) with closure over subclass of (P279).
   void ExtractItemTypes(Handle item, Handles *types);
@@ -156,6 +168,12 @@ class Facts {
   // Add fact based on current path.
   void AddFact(Handle value);
 
+  // Returns true if 'coarse' subsumes 'fine' as a value of 'property'.
+  // E.g. 'US' subsumes 'New York' for place of birth property.
+  // Returns true in the base case where coarse = fine.
+  // Only works for location and date-valued properties.
+  bool Subsumes(Handle property, Handle coarse, Handle fine);
+
   // Add value to current fact path.
   void push(Handle value) { path_.push_back(value); }
   void push(const Name &value) { path_.push_back(value.handle()); }
@@ -178,6 +196,9 @@ class Facts {
 
   // Current fact path [P1,...,Pn].
   Handles path_;
+
+  // Whether closure is enabled.
+  bool closure_;
 };
 
 // A taxonomy is a type system for classifying items into a list of types.

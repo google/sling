@@ -20,6 +20,7 @@ import sling.task.corpora as corpora
 from sling.task.workflow import Workflow, start_monitor
 
 # Workflow tasks.
+import fact_matcher
 import generator
 import prelim_ranker
 
@@ -37,6 +38,12 @@ class CategoryParsingWorkflow:
       kb_dir = corpora.wikidir()
     kb = self.wf.resource(file="kb.sling", dir=kb_dir, format="store/frame")
     task.attach_input("kb", kb)
+
+
+  # Returns the output of the candidate parse generation stage (stage 1).
+  def generated_parses_resource(self):
+    return self.wf.resource(
+        "generated-parses.rec", dir=self.outdir, format="records/frame")
 
 
   # Stage 1: Generate all parses.
@@ -59,8 +66,7 @@ class CategoryParsingWorkflow:
           "phrase-table.repo", dir=phrase_table_dir, format="text/frame")
       generator.attach_input("phrase-table", phrase_table)
 
-      output = self.wf.resource(
-          "generated-parses.rec", dir=self.outdir, format="records/frame")
+      output = self.generated_parses_resource()
       generator.attach_output("output", output)
       rejected = self.wf.resource(
           "rejected-categories.rec", dir=self.outdir, format="records/text")
@@ -78,6 +84,19 @@ class CategoryParsingWorkflow:
       output = self.wf.resource(
           "filtered-parses.rec", dir=self.outdir, format="records/frame")
       ranker.attach_output("output", output)
+      return output
+
+
+  # Stage 3: Attach detailed fact matching statistics to each parse.
+  def attach_fact_matches(self, input_parses):
+    with self.wf.namespace("attach-fact-matches"):
+      matcher = self.wf.task("category-parse-fact-matcher")
+      self.kb_input(matcher)
+      matcher.attach_input("parses", input_parses)
+      output = self.wf.resource(
+          "parses-with-match-statistics.rec", \
+          dir=self.outdir, format="records/frame")
+      matcher.attach_output("output", output)
       return output
 
 
@@ -107,11 +126,21 @@ if __name__ == '__main__':
                default=50,
                type=int,
                metavar="TOPK")
+  flags.define("--skip_generation",
+               help="Skip generating the initial candidate parses",
+               default=False,
+               action='store_true')
 
   flags.parse()
+  print "skip generation", flags.arg.skip_generation
   categories = CategoryParsingWorkflow("category-parsing", flags.arg.output)
-  generated = categories.generate_parses(flags.arg.lang, flags.arg.min_members)
+  if not flags.arg.skip_generation:
+    generated = categories.generate_parses(
+        flags.arg.lang, flags.arg.min_members)
+  else:
+    generated = categories.generated_parses_resource()
   filtered = categories.prelim_rank_parses(generated, flags.arg.topk)
+  matched = categories.attach_fact_matches(filtered)
   print categories.wf.dump()
 
   start_monitor(flags.arg.port)

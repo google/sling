@@ -19,8 +19,10 @@
 import collections
 import copy
 import sling
+import sling.log as log
 import string
 
+from collections import defaultdict
 from sling.task.workflow import register_task
 from util import load_kb
 
@@ -29,7 +31,6 @@ from util import load_kb
 # from the phrase table. This resolution also comes with a count of how
 # many members of the category have that (PID-chain, QID) as a fact.
 Span = collections.namedtuple('Span', 'begin end qid prior pids count')
-
 
 # Generates an exhaustive list of parses for a category string.
 # Only processes categories that pass some basic checks.
@@ -136,7 +137,7 @@ class CategoryParseGenerator:
   # all members. (PID-chain, QID) facts that occur multiple times in a single
   # member are counted only once.
   def qid_pid_counts(self, store, members):
-    qp_counts = {}       # QID -> PID -> # of members with a (PID, QID) fact
+    qp_counts = defaultdict(lambda: defaultdict(int))
     seen = set()         # (PID, QID) seen in one member
     for member in members:
       facts = self.extractor.facts(store, member)
@@ -146,12 +147,7 @@ class CategoryParseGenerator:
           continue
         seen.add(fact)
         qid = fact[-1]     # fact = sequence of PIDs followed by a QID
-        pids = fact[:-1]
-
-        if qid not in qp_counts:
-          qp_counts[qid] = {}
-        if pids not in qp_counts[qid]:
-          qp_counts[qid][pids] = 0
+        pids = tuple(fact[:-1])
         qp_counts[qid][pids] += 1
     return qp_counts
 
@@ -274,6 +270,8 @@ class CategoryParseGenerator:
       for span in parse:
         if not self.skip_span(span):
           new_parse.append(span)
+      if len(new_parse) == 0:
+        continue
       if len(new_parse) != len(parse):
         # Dropping spans might lead to duplicate parses, so dedup them.
         s = self.parse_to_str(new_parse)
@@ -301,6 +299,7 @@ class CategoryParseGenerator:
     writer = sling.RecordWriter(task.output("output").name)
     rejected = sling.RecordWriter(task.output("rejected").name)
     inputs = [t.name for t in task.inputs("items")]
+
     for filename in inputs:
       reader = sling.RecordReader(filename)
       for index, (key, value) in enumerate(reader):
@@ -338,20 +337,21 @@ class CategoryParseGenerator:
 
         # Post-process parses.
         parses = self.post_process(parses)
-        if len(parses) == 1 and len(parses[0]) == 0:
+        if len(parses) == 0 or len(parses) == 1 and len(parses[0]) == 0:
           task.increment("skipped_categories/no_parses")
           rejected.write(key, "no_parses")
           continue
 
         # Write parses as frames.
-        frame = store.frame({"name": title, "num_members": len(members)})
+        frame = store.frame({"name": title, "members": members})
         frame["document"] = document.frame
         for parse in parses:
           span_array = store.array(len(parse))
           for i, span in enumerate(parse):
             span_array[i] = store.frame({
                 "begin": span.begin, "end": span.end, "qid": span.qid,
-                "prior": span.prior, "pids": span.pids, "count": span.count
+                "prior": span.prior, "pids": list(span.pids),
+                "count": span.count
             })
           parse_frame = store.frame({"spans": span_array})
           frame.append("parse", parse_frame)

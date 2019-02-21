@@ -50,6 +50,12 @@ struct PyFactExtractor : public PyBase {
   // Extract list of facts from item.
   PyObject *Facts(PyObject *args, PyObject *kw);
 
+  // Extract list of facts from item for certain properties.
+  PyObject *FactsFor(PyObject *args, PyObject *kw);
+
+  // Returns if a given item subsumes another in the context of a property.
+  PyObject *Subsumes(PyObject *args, PyObject *kw);
+
   // Get types for item.
   PyObject *Types(PyObject *args, PyObject *kw);
 
