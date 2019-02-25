@@ -79,7 +79,6 @@ class StoreFactsBot:
     self.n_method = self.store["method"]
     self.n_status = self.store["status"]
     self.n_revision = self.store["revision"]
-    self.n_url = self.store["url"]
     self.n_skipped = self.store["skipped"]
     self.store.freeze()
     self.rs = sling.Store(self.store)
@@ -121,7 +120,13 @@ class StoreFactsBot:
   def all_WP(self, sources):
     if not sources: return True
     for source in sources:
-      if source and "P143" not in source: return False
+      if source and "P143" not in source:
+        if "P3452" not in source: return False
+        for claim in source["P3452"]:
+          target = claim.getTarget()
+          target.get()
+          if not target.labels["en"].startswith("Category:"):
+            return False
     return True
 
   def ever_had_prop(self, wd_item, prop):
@@ -138,7 +143,7 @@ class StoreFactsBot:
     return False
 
   def log_status_skip(self, item, facts, error):
-    print "Skipping", str(item), " -- ", error
+    print "Skipping", str(item), " -- ", str(facts), error
     status_record = self.rs.frame({
       self.n_item: item,
       self.n_facts: facts,
@@ -147,6 +152,7 @@ class StoreFactsBot:
     self.status_file.write(str(item), status_record.data(binary=True))
 
   def log_status_stored(self, item, facts, rev_id):
+    print "Storing", str(item), " -- ", str(facts)
     url = "https://www.wikidata.org/w/index.php?title="
     url += str(item)
     url += "&type=revision&diff="
@@ -224,18 +230,23 @@ class StoreFactsBot:
               self.log_status_skip(item, fact, "has property more than once")
               continue
             old = wd_claims[prop_str][0].getTarget()
-            if old is None:
-              wd_item.removeClaims(wd_claims[prop_str])
-            elif not(old.precision < precision and old.year == date.year):
-              self.log_status_skip(item, fact, "precise or conflicting date")
-              continue
-            else:
+            if old is not None:
+              if old.precision >= precision:
+                self.log_status_skip(item, fact, "precise date already exists")
+                continue
+              if old.year != date.year:
+                self.log_status_skip(item, fact, "conflicting year in date")
+                continue
+              if old.precision >= pywikibot.WbTime.PRECISION['month'] and \
+                 old.month != date.month:
+                self.log_status_skip(item, fact, "conflicting month in date")
+                continue
               # item already has property with a same year less precise date
               # check that sources are all WP or empty
               if not self.all_WP(wd_claims[prop_str][0].getSources()):
                 self.log_status_skip(item, fact, "date with non-WP source(s)")
                 continue
-              wd_item.removeClaims(wd_claims[prop_str])
+            wd_item.removeClaims(wd_claims[prop_str])
         elif claim.type == 'wikibase-item':
           if prop_str in wd_claims:
             self.log_status_skip(item, fact, "already has property")
@@ -257,7 +268,7 @@ class StoreFactsBot:
         claim.setTarget(target)
         wd_item.addClaim(claim, summary=summary)
         rev_id = str(wd_item.latest_revision_id)
-        claim.addSources(sources)
+        if len(sources) > 0: claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
       print item, recno
