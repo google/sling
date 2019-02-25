@@ -138,22 +138,23 @@ void StaticContent::HandleFile(HTTPRequest *request, HTTPResponse *response) {
     return;
   }
 
+  // Get path.
+  string path;
+  if (!DecodeURLComponent(request->path(), &path)) {
+    response->SendError(400, "Bad Request", nullptr);
+    return;
+  }
+
   // Check that path is valid.
-  if (!IsValidPath(request->path())) {
+  if (!IsValidPath(path.c_str())) {
     LOG(WARNING) << "Invalid request path: " << request->path();
     response->SendError(403, "Forbidden", nullptr);
     return;
   }
 
-  // Get file name.
-  string filename = dir_;
-  if (!DecodeURLComponent(request->path(), &filename)) {
-    response->SendError(400, "Bad Request", nullptr);
-    return;
-  }
-  VLOG(5) << "url: " << request->path() << " file: " << filename;
-
   // Remove trailing slash from file name.
+  string filename = dir_ + path;
+  VLOG(5) << "url: " << request->path() << " file: " << filename;
   bool trailing_slash = false;
   if (filename.back() == '/') {
     filename.pop_back();
