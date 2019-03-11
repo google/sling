@@ -89,6 +89,7 @@ class FactCatalog {
   Name p_time_period_{names_, "P2348"};
   Name p_start_time_{names_, "P580"};
   Name p_end_time_{names_, "P582"};
+  Name p_described_by_source_{names_, "P1343"};
 
   Name n_time_{names_, "/w/time"};
   Name n_item_{names_, "/w/item"};
@@ -122,6 +123,9 @@ class Facts {
 
   // Extract simple fact with no backoff.
   void ExtractSimple(Handle value);
+
+  // Skip extraction.
+  void ExtractNothing(Handle value);
 
   // Extract simple property from item.
   void ExtractProperty(Handle item, const Name &property);

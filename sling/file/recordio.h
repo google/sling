@@ -342,6 +342,9 @@ class RecordWriter : public RecordFile {
   explicit RecordWriter(const string &filename);
   ~RecordWriter();
 
+  // Open record file for shared reading and writing.
+  explicit RecordWriter(RecordReader *reader, const RecordFileOptions &options);
+
   // Close record file.
   Status Close();
 
@@ -366,9 +369,6 @@ class RecordWriter : public RecordFile {
                          const RecordFileOptions &options);
 
  private:
-  // Special constructor for reindexing record files.
-  explicit RecordWriter(RecordReader *reader, const RecordFileOptions &options);
-
   // Flush output buffer to disk.
   Status Flush();
 

@@ -83,6 +83,12 @@ struct PyFrame : public PyBase, public Root {
   // Check if frame is global.
   PyObject *IsGlobal();
 
+  // Check if frame is anonymous.
+  PyObject *IsAnonymous();
+
+  // Check if frame is named, i.e. has an id slot.
+  PyObject *IsNamed();
+
   // Resolve frame by following is: chain.
   PyObject *Resolve();
 

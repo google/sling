@@ -95,9 +95,9 @@ class WordEmbeddingsVocabularyReducer : public SumReducer {
     vocabulary_.emplace_back("<UNKNOWN>", 0);
 
     // Statistics.
-    num_words_ = task->GetCounter("num_words");
+    num_words_ = task->GetCounter("words");
     word_count_ = task->GetCounter("word_count");
-    num_words_discarded_ = task->GetCounter("num_words_discarded");
+    num_words_discarded_ = task->GetCounter("words_discarded");
   }
 
   void Aggregate(int shard, const Slice &key, uint64 sum) override {
@@ -324,10 +324,10 @@ class WordEmbeddingsTrainer : public Process {
     commons_->Freeze();
 
     // Statistics.
-    num_documents_ = task->GetCounter("num_documents");
+    num_documents_ = task->GetCounter("documents");
     total_documents_ = task->GetCounter("total_documents");
-    num_tokens_ = task->GetCounter("num_tokens");
-    num_instances_ = task->GetCounter("num_instances");
+    num_tokens_ = task->GetCounter("tokens");
+    num_instances_ = task->GetCounter("instances");
     epochs_completed_ = task->GetCounter("epochs_completed");
 
     // Start training threads. Use one worker thread per input file.

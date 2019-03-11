@@ -129,7 +129,7 @@ class FactLexiconExtractor : public Process {
 
       num_items->Increment();
     });
-    task->GetCounter("num_categories")->Increment(category_lexicon.map.size());
+    task->GetCounter("categories")->Increment(category_lexicon.map.size());
 
     // Write fact lexicon to text map.
     fact_lexicon.sort();

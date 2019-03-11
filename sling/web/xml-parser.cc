@@ -418,10 +418,6 @@ bool XMLParser::Comment(const char *str) {
   return true;
 }
 
-bool XMLParser::CData(const char *str) {
-  return true;
-}
-
 bool XMLParser::ProcessingInstruction(const XMLElement &element) {
   return true;
 }

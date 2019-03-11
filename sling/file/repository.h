@@ -220,13 +220,14 @@ class RepositoryMapItem {
 template<class OBJ> class RepositoryMap : public RepositoryIndex<uint64, OBJ> {
  public:
   using RepositoryIndex<uint64, OBJ>::Init;
+  using RepositoryIndex<uint64, OBJ>::size;
 
   // Initialize buckets and items for map.
   void Init(const Repository &repository, const string &name) {
     string buckets = name + "Buckets";
     string items = name + "Items";
     if (RepositoryIndex<uint64, OBJ>::Init(repository, buckets, items, true)) {
-      num_buckets_ = repository.GetBlockSize(buckets) / sizeof(uint64) - 1;
+      num_buckets_ = size() - 1;
     } else {
       num_buckets_ = 0;
     }

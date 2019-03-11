@@ -20,7 +20,8 @@
 
 namespace sling {
 
-InputParser::InputParser(Store *store, InputStream *stream, bool force_binary)
+InputParser::InputParser(Store *store, InputStream *stream,
+                         bool force_binary, bool json)
     : input_(stream) {
   // If the input starts with a binary marker, use a binary decoder for reading
   // the stream. Otherwise, the input is assumed to be in text format.
@@ -28,6 +29,7 @@ InputParser::InputParser(Store *store, InputStream *stream, bool force_binary)
     decoder_ = new Decoder(store, &input_);
   } else {
     reader_ = new Reader(store, &input_);
+    if (json) reader_->set_json(true);
   }
 }
 

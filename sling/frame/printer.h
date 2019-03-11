@@ -38,6 +38,9 @@ class Printer {
   // Prints handle value relative to a store.
   void Print(Handle handle) { Print(handle, false); }
 
+  // Prints handle reference.
+  void PrintReference(Handle handle) { PrintLink(handle); }
+
   // Prints all frames in the symbol table of the store.
   void PrintAll();
 

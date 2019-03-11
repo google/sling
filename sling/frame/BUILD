@@ -124,6 +124,19 @@ cc_library(
 )
 
 cc_library(
+  name = "xml",
+  srcs = ["xml.cc"],
+  hdrs = ["xml.h"],
+  deps = [
+    ":object",
+    ":store",
+    "//sling/base",
+    "//sling/stream:input",
+    "//sling/web:xml-parser",
+  ],
+)
+
+cc_library(
   name = "snapshot",
   srcs = ["snapshot.cc"],
   hdrs = ["snapshot.h"],

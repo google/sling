@@ -508,6 +508,30 @@ void Store::Add(Handle frame, Handle name, Handle value) {
   t->assign(name, value);
 }
 
+Handle Store::Clone(Handle frame) {
+  // Get existing frame.
+  FrameDatum *datum = GetFrame(frame);
+  CHECK(datum->IsFrame());
+
+  // This method can only be used for anonymous frames.
+  DCHECK(datum->IsAnonymous());
+
+  // Allocate a clone frame.
+  FrameDatum *clone = AllocateDatum(FRAME, datum->size())->AsFrame();
+
+  // Fetch frame again in case of GC.
+  datum = GetFrame(frame);
+
+  // Copy slots from original frame.
+  Slot *t = clone->begin();
+  for (Slot *s = datum->begin(); s < datum->end(); ++s, ++t) {
+    t->assign(s->name, s->value);
+  }
+
+  // Allocate and return handle for new frame.
+  return AllocateHandle(clone);
+}
+
 Handle Store::Extend(Handle frame, Handle name, Handle value) {
   // Get existing frame.
   FrameDatum *datum = GetFrame(frame);

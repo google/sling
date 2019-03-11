@@ -15,6 +15,7 @@
 #include "sling/pyapi/pystore.h"
 
 #include "sling/frame/snapshot.h"
+#include "sling/frame/xml.h"
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/stream/file.h"
@@ -213,12 +214,14 @@ PyObject *PyStore::Save(PyObject *args, PyObject *kw) {
 
 PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
   // Parse arguments.
-  static const char *kwlist[] = {"data", "binary", nullptr};
+  static const char *kwlist[] = {"data", "binary", "json", "xml", nullptr};
   PyObject *object = nullptr;
   bool force_binary = false;
+  bool json = false;
+  bool xml = false;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "S|b", const_cast<char **>(kwlist),
-                  &object, &force_binary);
+                args, kw, "S|bbb", const_cast<char **>(kwlist),
+                &object, &force_binary, &json, &xml);
   if (!ok) return nullptr;
 
   // Check that store is writable.
@@ -228,16 +231,28 @@ PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
   char *data;
   Py_ssize_t length;
   PyString_AsStringAndSize(object, &data, &length);
-
-  // Load frames from memory buffer.
   ArrayInputStream stream(data, length);
-  InputParser parser(store, &stream, force_binary);
-  Object result = parser.ReadAll();
-  if (parser.error()) {
-    PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
-    return nullptr;
+
+  if (xml) {
+    // Parse input as XML.
+    Input input(&stream);
+    XMLReader reader(store, &input);
+    Frame result = reader.Read();
+    if (result.IsNil()) {
+      PyErr_SetString(PyExc_IOError, "XML error");
+      return nullptr;
+    }
+    return PyValue(result.handle());
+  } else {
+    // Load frames from memory buffer.
+    InputParser parser(store, &stream, force_binary, json);
+    Object result = parser.ReadAll();
+    if (parser.error()) {
+      PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
+      return nullptr;
+    }
+    return PyValue(result.handle());
   }
-  return PyValue(result.handle());
 }
 
 Py_ssize_t PyStore::Size() {

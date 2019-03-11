@@ -307,7 +307,7 @@ struct Handle {
   }
 
   // Constructs boolean handle.
-  static Handle Bool(bool b) {
+  static constexpr Handle Bool(bool b) {
     return Handle{b ? kTrue : kFalse};
   }
 
@@ -342,7 +342,7 @@ struct Handle {
   }
 
   // Constructs index handle.
-  static Handle Index(int n) {
+  static constexpr Handle Index(int n) {
     return Handle{static_cast<Word>(n << kIntShift) | kIndexMask};
   }
 
@@ -986,6 +986,10 @@ class Store {
   // this method. If you want to add multiple slots it is faster to use a
   // Builder object.
   void Add(Handle frame, Handle name, Handle value);
+
+  // Clones an existing frame. This can only be used on anonymous frames.
+  // Returns handle to the new frame.
+  Handle Clone(Handle frame);
 
   // Clones an existing frame and adds an additional slot to the clone. This can
   // only be used on anonymous frames. Returns handle to the new frame.

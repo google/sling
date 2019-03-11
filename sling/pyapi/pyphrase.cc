@@ -85,6 +85,8 @@ void PyPhraseTable::Define(PyObject *module) {
 
   methods.AddO("lookup", &PyPhraseTable::Lookup);
   methods.AddO("query", &PyPhraseTable::Query);
+  methods.AddO("fingerprint", &PyPhraseTable::Fingerprint);
+  methods.AddO("form", &PyPhraseTable::Form);
   type.tp_methods = methods.table();
 
   RegisterType(&type, module, "PhraseTable");
@@ -158,6 +160,32 @@ PyObject *PyPhraseTable::Query(PyObject *obj) {
   }
 
   return result;
+}
+
+PyObject *PyPhraseTable::Fingerprint(PyObject *obj) {
+  // Get phrase.
+  char *phrase = PyString_AsString(obj);
+  if (phrase == nullptr) return nullptr;
+
+  // Compute phrase fingerprint.
+  uint64 fp = tokenizer->Fingerprint(phrase);
+
+  // Return fingerprint.
+  return PyLong_FromUnsignedLong(fp);
+}
+
+PyObject *PyPhraseTable::Form(PyObject *obj) {
+  // Get phrase.
+  char *phrase = PyString_AsString(obj);
+  if (phrase == nullptr) return nullptr;
+
+  // Determine case form.
+  uint64 fp;
+  CaseForm form;
+  tokenizer->FingerprintAndForm(phrase, &fp, &form);
+
+  // Return case form.
+  return PyInt_FromLong(form);
 }
 
 }  // namespace sling

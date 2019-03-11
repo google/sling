@@ -18,7 +18,6 @@
 #include <string>
 #include <vector>
 
-#include "sling/base/types.h"
 #include "sling/base/logging.h"
 #include "sling/base/registry.h"
 #include "sling/base/status.h"

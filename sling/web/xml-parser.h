@@ -59,7 +59,6 @@ class XMLParser {
   virtual bool EndElement(const char *name);
   virtual bool Text(const char *str);
   virtual bool Comment(const char *str);
-  virtual bool CData(const char *str);
   virtual bool ProcessingInstruction(const XMLElement &element);
 
   // Input stream.

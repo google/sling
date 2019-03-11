@@ -52,6 +52,8 @@ void PyFrame::Define(PyObject *module) {
   methods.AddO("isa", &PyFrame::IsA);
   methods.Add("islocal", &PyFrame::IsLocal);
   methods.Add("isglobal", &PyFrame::IsGlobal);
+  methods.Add("isanonymous", &PyFrame::IsAnonymous);
+  methods.Add("isnamed", &PyFrame::IsNamed);
   methods.Add("resolve", &PyFrame::Resolve);
   type.tp_methods = methods.table();
 
@@ -344,6 +346,14 @@ PyObject *PyFrame::IsLocal() {
 
 PyObject *PyFrame::IsGlobal() {
   return PyBool_FromLong(handle().IsGlobalRef());
+}
+
+PyObject *PyFrame::IsAnonymous() {
+  return PyBool_FromLong(frame()->IsAnonymous());
+}
+
+PyObject *PyFrame::IsNamed() {
+  return PyBool_FromLong(frame()->IsNamed());
 }
 
 PyObject *PyFrame::Resolve() {

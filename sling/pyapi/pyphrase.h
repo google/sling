@@ -64,6 +64,12 @@ struct PyPhraseTable : public PyBase {
   // Look up entities in phrase table returning entities and counts.
   PyObject *Query(PyObject *obj);
 
+  // Compute phrase fingerprint.
+  PyObject *Fingerprint(PyObject *obj);
+
+  // Compute phrase case form.
+  PyObject *Form(PyObject *obj);
+
   // Phrase tokenizer.
   nlp::PhraseTokenizer *tokenizer;
 
