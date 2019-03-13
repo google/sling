@@ -41,13 +41,11 @@ void FactCatalog::Init(Store *store) {
       }
       if (is_location) {
         SetExtractor(property, &Facts::ExtractLocation);
-        location_properties_.insert(s.value);
       } else {
         SetExtractor(property, &Facts::ExtractSimple);
       }
     } else if (target == n_time_) {
       SetExtractor(property, &Facts::ExtractDate);
-      date_properties_.insert(s.value);
     }
   }
 
@@ -158,42 +156,31 @@ void Facts::ExtractFor(Handle item, const HandleSet &properties) {
   }
 }
 
-bool Facts::Subsumes(Handle property, Handle coarse, Handle fine) {
+bool Facts::ItemInClosure(Handle property, Handle coarse, Handle fine) {
   if (coarse == fine) return true;
 
-  if (catalog_->location_properties_.find(property) !=
-      catalog_->location_properties_.end()) {
-    fine = store_->Resolve(fine);
-    Handles closure(store_);
-    closure.push_back(fine);
-    int current = 0;
-    while (current < closure.size()) {
-      Frame f(store_, closure[current++]);
-      for (const Slot &s : f) {
-        if (s.name == catalog_->p_located_in_.handle()) {
-          Handle value = store_->Resolve(s.value);
-          if (value == coarse) {
-            return true;
-          } else if (!catalog_->IsBaseItem(value)) {
-            bool known = false;
-            for (Handle h : closure) {
-              if (value == h) {
-                known = true;
-                break;
-              }
+  Handles closure(store_);
+  closure.push_back(fine);
+  int current = 0;
+  while (current < closure.size()) {
+    Frame f(store_, closure[current++]);
+    for (const Slot &s : f) {
+      if (s.name == property) {
+        Handle value = store_->Resolve(s.value);
+        if (value == coarse) {
+          return true;
+        } else if (!catalog_->IsBaseItem(value)) {
+          bool known = false;
+          for (Handle h : closure) {
+            if (value == h) {
+              known = true;
+              break;
             }
-            if (!known) closure.push_back(value);
           }
+          if (!known) closure.push_back(value);
         }
       }
     }
-  } else if (catalog_->date_properties_.find(property) !=
-      catalog_->date_properties_.end()) {
-    fine = store_->Resolve(fine);
-    Date date(Object(store_, fine));
-    return catalog_->calendar_.Year(date) == coarse ||
-      catalog_->calendar_.Decade(date) == coarse ||
-      catalog_->calendar_.Century(date) == coarse;
   }
 
   return false;

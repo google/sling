@@ -100,21 +100,43 @@ class FactMatcher:
     self.extractor = extractor
     self.unique_properties = set()
     self.date_properties = set()
+    self.location_properties = set()
 
-    # Collect unique-valued and date-valued properties.
+    # Collect unique-valued, date-valued, and location-valued properties.
     # The former will be used to compute CONFLICT counts, and the latter need to
     # be processed in a special manner while matching existing facts.
     constraint_role = kb["P2302"]
     unique = kb["Q19474404"]         # single-value constraint
     w_time = kb["/w/time"]
+    w_item = kb["/w/item"]
+    p_subproperty_of = kb["P1647"]
+    p_location = kb["P276"]
     for prop in kb["/w/entity"]("role"):
       if prop.target == w_time:
         self.date_properties.add(prop)
+      if prop.target == w_item:
+        for role, value in prop:
+          if role == p_subproperty_of:
+            if kb.resolve(value) == p_location:
+              self.location_properties.add(prop)
       for constraint_type in prop(constraint_role):
         if constraint_type == unique or constraint_type["is"] == unique:
           self.unique_properties.add(prop)
+
     log.info("%d unique-valued properties" % len(self.unique_properties))
     log.info("%d date-valued properties" % len(self.date_properties))
+    log.info("%d location-valued properties" % len(self.location_properties))
+
+    # Set closure properties.
+    self.closure_properties = {}
+    self.p_subclass = kb["P279"]
+    self.p_parent_org = kb["P749"]
+    p_located_in = kb["P131"]
+    for p in self.location_properties:
+      self.closure_properties[p] = p_located_in
+
+    # 'Educated at' -> 'Part of'.
+    self.closure_properties[kb["P69"]] = kb["P361"]
 
 
   # Returns whether 'prop' is a date-valued property.
@@ -153,6 +175,21 @@ class FactMatcher:
 
     # Should not reach here.
     return False
+
+
+  # Returns whether 'coarse' subsumes 'fine' by following 'prop' edges.
+  def subsumes(self, store, prop, coarse, fine):
+    coarse = self.kb.resolve(coarse)
+    fine = self.kb.resolve(fine)
+    if coarse == fine:
+      return True
+    closure_property = self.closure_properties.get(prop, None)
+
+    if closure_property is not None:
+      return self.extractor.in_closure(store, closure_property, coarse, fine)
+    else:
+      return self.extractor.in_closure(store, self.p_subclass, coarse, fine) \
+          or self.extractor.in_closure(store, self.p_parent_org, coarse, fine)
 
 
   # Reports match type for the proposed fact (item, prop, value) against
@@ -196,16 +233,16 @@ class FactMatcher:
       return (FactMatchType.SUBSUMES_EXISTING, item)
 
     # Check whether the proposed fact is subsumed by an existing fact.
-    for existing in exact_facts:
-      if isinstance(existing, sling.Frame):
-        if self.extractor.subsumes(store, prop[-1], existing, value):
-          return (FactMatchType.SUBSUMED_BY_EXISTING, (item, existing))
-
     # Again, dates require special treatment.
     if self._date_valued(prop[-1]):
       for e in existing_dates:
         if self._finer_date(proposed_date, e):
           return (FactMatchType.SUBSUMED_BY_EXISTING, (item, e))
+    else:
+      for existing in exact_facts:
+        if isinstance(existing, sling.Frame):
+          if self.subsumes(store, prop[-1], existing, value):
+            return (FactMatchType.SUBSUMED_BY_EXISTING, (item, existing))
 
     # Check for conflicts in case of unique-valued properties.
     if len(prop) == 1 and prop[0] in self.unique_properties:

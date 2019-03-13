@@ -43,6 +43,7 @@ void PyStore::Define(PyObject *module) {
   methods.Add("parse", &PyStore::Parse);
   methods.AddO("frame", &PyStore::NewFrame);
   methods.AddO("array", &PyStore::NewArray);
+  methods.AddO("resolve", &PyStore::Resolve);
   methods.Add("globals", &PyStore::Globals);
   methods.Add("lockgc", &PyStore::LockGC);
   methods.Add("unlockgc", &PyStore::UnlockGC);
@@ -267,6 +268,14 @@ PyObject *PyStore::Lookup(PyObject *key) {
   // Lookup name in symbol table.
   Handle handle = store->Lookup(name);
   return PyValue(handle);
+}
+
+PyObject *PyStore::Resolve(PyObject *handle) {
+  if (PyObject_TypeCheck(handle, &PyFrame::type)) {
+    PyFrame *pyhandle = reinterpret_cast<PyFrame *>(handle);
+    return PyValue(store->Resolve(pyhandle->handle()));
+  }
+  return handle;
 }
 
 int PyStore::Contains(PyObject *key) {

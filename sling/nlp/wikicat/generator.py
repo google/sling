@@ -35,6 +35,9 @@ Span = collections.namedtuple('Span', 'begin end qid prior pids count')
 # Generates an exhaustive list of parses for a category string.
 # Only processes categories that pass some basic checks.
 class CategoryParseGenerator:
+  # Minimum count below which a (pid, qid) span annotation will be ignored.
+  MIN_PID_QID_COUNT = 2
+
   def lookup(self, name):
     handle = self.kb[name]
     assert handle is not None, "%s not in KB" % name
@@ -149,6 +152,7 @@ class CategoryParseGenerator:
         qid = fact[-1]     # fact = sequence of PIDs followed by a QID
         pids = tuple(fact[:-1])
         qp_counts[qid][pids] += 1
+
     return qp_counts
 
 
@@ -207,6 +211,10 @@ class CategoryParseGenerator:
           prior = match.count() * total_denom
           if qid in qp_counts:
             for pids, count in qp_counts[qid].iteritems():
+              # Ignore low frequency (pid, qid) pairs.
+              if count < CategoryParseGenerator.MIN_PID_QID_COUNT:
+                continue
+
               span = Span(begin, end, match.item(), prior, pids, count)
               begin_to_spans[begin].append(span)
     return begin_to_spans

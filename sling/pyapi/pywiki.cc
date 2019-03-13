@@ -100,7 +100,7 @@ void PyFactExtractor::Define(PyObject *module) {
   methods.Add("facts_for", &PyFactExtractor::FactsFor);
   methods.Add("types", &PyFactExtractor::Types);
   methods.Add("taxonomy", &PyFactExtractor::Taxonomy);
-  methods.Add("subsumes", &PyFactExtractor::Subsumes);
+  methods.Add("in_closure", &PyFactExtractor::InClosure);
   type.tp_methods = methods.table();
 
   RegisterType(&type, module, "FactExtractor");
@@ -183,7 +183,7 @@ PyObject *PyFactExtractor::FactsFor(PyObject *args, PyObject *kw) {
   return pystore->PyValue(pystore->store->AllocateArray(begin, end));
 }
 
-PyObject *PyFactExtractor::Subsumes(PyObject *args, PyObject *kw) {
+PyObject *PyFactExtractor::InClosure(PyObject *args, PyObject *kw) {
   // Get store and Wikidata item.
   PyStore *pystore = nullptr;
   PyFrame *pyproperty = nullptr;
@@ -199,7 +199,7 @@ PyObject *PyFactExtractor::Subsumes(PyObject *args, PyObject *kw) {
   if (!PyFrame::TypeCheck(pyfine)) return nullptr;
 
   nlp::Facts facts(catalog, pystore->store);
-  bool subsumes = facts.Subsumes(pyproperty->handle(),
+  bool subsumes = facts.ItemInClosure(pyproperty->handle(),
     pycoarse->handle(), pyfine->handle());
 
   if (subsumes) {

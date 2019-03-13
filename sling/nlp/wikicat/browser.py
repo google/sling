@@ -86,7 +86,7 @@ class SignatureStats:
     # Total number of categories.
     self.num = 0
 
-  
+
   # Set the exemplar if it is not already set.
   def example(self, qid, category, parse):
     if self.example_qid is not None:
@@ -462,7 +462,7 @@ class Browser(BaseHTTPRequestHandler):
       self._begin_end("input", **box_args)
       self._br()
     self._end(["form", "div"])
-    
+
 
   # Writes the main form, which on surface only has the input text field.
   # On submission, this form copies all the settings from the settings form,
@@ -544,7 +544,7 @@ class Browser(BaseHTTPRequestHandler):
     else:
       if main_input in browser_globals.category_name_to_qid:
         main_input = browser_globals.category_name_to_qid[main_input]
-
+        self.handle_category(main_input, form)
       elif main_input[0] == 'Q' and main_input[1:].isdigit():
         if main_input in browser_globals.category_frame:
           self.handle_category(main_input, form)
@@ -594,7 +594,7 @@ class Browser(BaseHTTPRequestHandler):
 
   # Handler for 'top signatures' query.
   def handle_top_signatures(self, form):
-    max_output = 200
+    max_rows = 200
     fact_weights = self.fact_match_weights(form)
     score_type = form.getvalue("main_form_sort_metric")
     signature_type = form.getvalue("main_form_signature_type")
@@ -627,10 +627,10 @@ class Browser(BaseHTTPRequestHandler):
         stats.num += 1
         util.fact_matches_for_parse(parse, stats.fact_stats)
 
-    # Take only the 'max_output' top signatures as per the aggregated scores.
+    # Take only the 'max_rows' top signatures as per the aggregated scores.
     all_stats = list(all_stats.iteritems())
     all_stats.sort(key=lambda x: -x[1].score)
-    all_stats = all_stats[:max_output]
+    all_stats = all_stats[:max_rows]
 
     # Display them in a tabular form.
     self.write_main_table_header(

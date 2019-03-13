@@ -41,6 +41,9 @@ struct PyStore : public PyBase {
   // Parse string as binary or ascii encoded frames.
   PyObject *Parse(PyObject *args, PyObject *kw);
 
+  // Resolves the given handle.
+  PyObject *Resolve(PyObject *handle);
+
   // Return the number of objects in the symbol table.
   Py_ssize_t Size();
 
