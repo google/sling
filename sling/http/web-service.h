@@ -35,6 +35,7 @@ class WebService {
     COMPACT,  // frames in compact text format, i.e. no indentation
     JSON,     // human-readable JSON encoding with indentation (text/json)
     CJSON,    // compact JSON (application/json)
+    LEX,      // LEX-encoded document (text/lex)
     PLAIN,    // plain text (text/plain)
   };
 
@@ -46,8 +47,8 @@ class WebService {
 
   // Get URL query parameters.
   Text Get(Text name) const;
-  int Get(Text name, int defval);
-  bool Get(Text name, bool defval);
+  int Get(Text name, int defval) const;
+  bool Get(Text name, bool defval) const;
 
   // Parsed input and output.
   const Object &input() const { return input_; }

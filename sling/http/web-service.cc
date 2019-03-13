@@ -82,6 +82,8 @@ WebService::WebService(Store *commons,
     input_format_ = CJSON;
   } else if (content_type == "text/json") {
     input_format_ = JSON;
+  } else if (content_type == "text/lex") {
+    input_format_ = LEX;
   } else if (content_type == "text/plain") {
     input_format_ = PLAIN;
   }
@@ -115,6 +117,7 @@ WebService::WebService(Store *commons,
         break;
       }
 
+      case LEX:
       case PLAIN: {
         // Get plain text from request body.
         size_t size = request->content_length();
@@ -141,7 +144,6 @@ WebService::~WebService() {
 
   // Use input format to determine output format if it has not been set.
   if (output_format_ == EMPTY) output_format_ = input_format_;
-  if (output_format_ == PLAIN) output_format_ = TEXT;
 
   // Change output format based on fmt parameter.
   Text fmt = Get("fmt");
@@ -150,6 +152,8 @@ WebService::~WebService() {
       output_format_ = ENCODED;
     } else if (fmt == "txt") {
       output_format_ = TEXT;
+    } else if (fmt == "lex") {
+      output_format_ = LEX;
     } else if (fmt == "compact") {
       output_format_ = COMPACT;
     } else if (fmt == "json") {
@@ -214,7 +218,28 @@ WebService::~WebService() {
       break;
     }
 
-    case PLAIN:
+    case LEX: {
+      // Output is a LEX-encoded string.
+      if (!output_.IsString()) {
+        response_->SendError(500, "Internal Server Error", "no lex output");
+      } else {
+        response_->SetContentType("text/lex");
+        out.Write(output_.AsString().text());
+      }
+      break;
+    }
+
+    case PLAIN: {
+      // Output plain text string.
+      if (!output_.IsString()) {
+        response_->SendError(500, "Internal Server Error", "no output");
+      } else {
+        response_->SetContentType("text/plain");
+        out.Write(output_.AsString().text());
+      }
+      break;
+    }
+
     case EMPTY:
     case UNKNOWN:
       // Ignore empty or unknown output formats.
@@ -229,7 +254,7 @@ Text WebService::Get(Text name) const {
   return Text();
 }
 
-int WebService::Get(Text name, int defval) {
+int WebService::Get(Text name, int defval) const {
   Text value = Get(name);
   if (value.empty()) return defval;
   int number;
@@ -237,7 +262,7 @@ int WebService::Get(Text name, int defval) {
   return number;
 }
 
-bool WebService::Get(Text name, bool defval) {
+bool WebService::Get(Text name, bool defval) const {
   for (auto &p : parameters_) {
     if (p.name == name) {
       if (p.value.empty()) return true;

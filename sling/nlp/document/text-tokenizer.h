@@ -22,7 +22,7 @@
 
 #include "sling/base/macros.h"
 #include "sling/base/types.h"
-#include "sling/nlp/document/token-breaks.h"
+#include "sling/nlp/document/token-properties.h"
 #include "sling/string/text.h"
 #include "sling/util/unicode.h"
 
@@ -32,43 +32,48 @@ namespace nlp {
 class TrieNode;
 
 // Flags for tokens.
-enum TokenFlagValues {
+enum TokenFlagValues : uint64 {
   // The four lowest bits are reserved for a numerical parameter.
-  TOKEN_PARAM_MASK = (1 << 4) - 1,
+  TOKEN_PARAM_MASK = (1ULL << 4) - 1,
 
   // Token level flags.
-  TOKEN_LINE     = (1 << 4),   // End-of-line token.
-  TOKEN_EOS      = (1 << 5),   // End-of-sentence token.
-  TOKEN_PARA     = (1 << 6),   // End-of-paragraph token.
-  TOKEN_DISCARD  = (1 << 7),   // Discardable token (like whitespace).
-  TOKEN_CONDEOS  = (1 << 8),   // Conditional end-of-sentence token.
-  TOKEN_QUOTE    = (1 << 9),   // Quote token.
-  TOKEN_OPEN     = (1 << 10),  // Opening bracket token.
-  TOKEN_CLOSE    = (1 << 11),  // Closing bracket token.
-  TOKEN_URL      = (1 << 12),  // URL-like token.
-  TOKEN_TAG      = (1 << 13),  // Tag-like token.
-  TOKEN_WORD     = (1 << 14),  // Word-like token.
-  TOKEN_SPLIT    = (1 << 15),  // Split token.
-  TOKEN_PREFIX   = (1 << 16),  // Prefix exception.
-  TOKEN_SUFFIX   = (1 << 17),  // Suffix exception.
+  TOKEN_NONBREAK = (1ULL << 4),   // non-breaking token
+  TOKEN_DISCARD  = (1ULL << 5),   // discardable token (like whitespace)
+  TOKEN_LINE     = (1ULL << 6),   // end-of-line token
+  TOKEN_EOS      = (1ULL << 7),   // end-of-sentence token
+  TOKEN_PARA     = (1ULL << 8),   // end-of-paragraph token
+  TOKEN_CONDEOS  = (1ULL << 9),   // conditional end-of-sentence token
+  TOKEN_QUOTE    = (1ULL << 10),  // quote token
+  TOKEN_OPEN     = (1ULL << 11),  // opening bracket token
+  TOKEN_CLOSE    = (1ULL << 12),  // closing bracket token
+  TOKEN_URL      = (1ULL << 13),  // url-like token
+  TOKEN_TAG      = (1ULL << 14),  // tag-like token
+  TOKEN_WORD     = (1ULL << 15),  // word-like token
+  TOKEN_SPLIT    = (1ULL << 16),  // split token
+  TOKEN_PREFIX   = (1ULL << 17),  // prefix exception
+  TOKEN_SUFFIX   = (1ULL << 18),  // suffix exception
 
   // Character level flags.
-  TOKEN_START    = (1 << 18),  // Start of token marker.
-  CHAR_LETTER    = (1 << 19),  // Letter character.
-  CHAR_DIGIT     = (1 << 20),  // Digit character.
-  CHAR_UPPER     = (1 << 21),  // Uppercase letter.
-  CHAR_SPACE     = (1 << 22),  // Whitespace character.
-  CHAR_PUNCT     = (1 << 23),  // Punctuation character.
-  CHAR_HYPHEN    = (1 << 24),  // Hyphen dash character.
-  NUMBER_START   = (1 << 25),  // Character valid as first character in number.
-  NUMBER_PUNCT   = (1 << 26),  // Character allowed inside number.
-  WORD_PUNCT     = (1 << 27),  // Character allowed inside word.
-  TAG_START      = (1 << 28),  // Tag start character.
-  TAG_END        = (1 << 29),  // Tag end character.
-  HASHTAG_START  = (1 << 30),  // Character indicating start of hash-tag.
+  TOKEN_START    = (1ULL << 19),  // start of token marker
+  CHAR_LETTER    = (1ULL << 20),  // letter character
+  CHAR_DIGIT     = (1ULL << 21),  // digit character
+  CHAR_UPPER     = (1ULL << 22),  // uppercase letter
+  CHAR_SPACE     = (1ULL << 23),  // whitespace character
+  CHAR_PUNCT     = (1ULL << 24),  // punctuation character
+  CHAR_HYPHEN    = (1ULL << 25),  // hyphen dash character
+  NUMBER_START   = (1ULL << 26),  // character can be first character in number
+  NUMBER_PUNCT   = (1ULL << 27),  // character allowed inside number
+  WORD_PUNCT     = (1ULL << 28),  // character allowed inside word
+  TAG_START      = (1ULL << 29),  // tag start character.
+  TAG_END        = (1ULL << 30),  // tag end character.
+  HASHTAG_START  = (1ULL << 31),  // character indicating start of hash-tag
+
+  // Tag style is stored in four bits.
+  TOKEN_STYLE_SHIFT = 32,
+  TOKEN_STYLE_MASK = (15ULL << 32),
 };
 
-typedef int32 TokenFlags;
+typedef uint64 TokenFlags;
 
 // Mapping from characters values to character flags. The lookup table is split
 // in two. The low ASCII characters (0-127) are mapped through an array and the
@@ -114,6 +119,9 @@ class TokenizerText {
 
   // Returns the break level for a token.
   BreakType BreakLevel(int index) const;
+
+  // Returns style change for a token.
+  int Style(int index) const;
 
   // Returns the number of characters in the text.
   int length() const { return length_; }
@@ -191,6 +199,7 @@ class Tokenizer {
   struct Token {
     string text;
     BreakType brk;
+    int style;
     int begin;
     int end;
   };

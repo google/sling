@@ -1,22 +1,43 @@
+@import url('https://fonts.googleapis.com/css?family=Lato|Lora:400,400i,700,700i');
+
 .docviewer {
+  display: flex;
+  flex-direction: row;
   width: 100%;
   height: 100%;
-  padding: 0px 0px 0px 0px;
 }
 
-.themes {
-  margin-top: 10px;
-
-}
-
-.text-and-panels {
-  display: flex;
+.doctext {
+  flex: 1;
   height: 100%;
-  background: #eeeeee;
+  overflow-y: auto;
+  padding: 5px 5px 5px 10px;
+  background: white;
+  border: 2px solid #cccccc;
+  box-sizing: border-box;
+  font: 13pt lora, georgia, serif;
+}
+
+.docspacer {
+  flex: 0 0 10px;
+}
+
+.docpanels {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.docref {
+  font-size: 14pt;
+  color: #888888;
+  margin-left: 10px;
 }
 
 .title {
-  font: 20pt bold arial, helvetica;
+  font: 24pt lato, helvetica, sans-serif;
+  margin-top: 10px;
+  margin-bottom: 20px;
 }
 
 .titlelink {
@@ -34,6 +55,21 @@
   text-decoration: none;
 }
 
+.topiclink {
+  color: #888888;
+  text-decoration: none;
+}
+
+.topiclink:link {
+  color: #888888;
+  text-decoration: none;
+}
+
+.topiclink:visited {
+  color: #888888;
+  text-decoration: none;
+}
+
 a {
   color: black;
 }
@@ -46,20 +82,24 @@ a:visited {
   text-decoration: underline;
 }
 
-.doctext {
-  flex: 1;
-  overflow-x: auto;
-  margin: 10px 5px 10px 10px;
-  background: white;
-  border: 2px solid #cccccc;
-  font: 13pt lora, georgia, serif;
-  padding: 10px;
+h2 {
+  font: 16pt lato, helvetica, sans-serif;
+  margin-top: 20px;
+  margin-bottom: 10px;
 }
 
-.docpanels {
-  flex: 1;
-  overflow-x: auto;
-  margin: 10px 10px 10px 5px;
+ul {
+  font-size: 13pt;
+}
+
+blockquote {
+  font: 12pt lora, georgia, serif;
+  line-height: normal;
+  letter-spacing: normal;
+}
+
+.themes {
+  margin-top: 10px;
 }
 
 .panel {

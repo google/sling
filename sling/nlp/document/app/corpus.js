@@ -54,6 +54,7 @@ class App extends Component {
                 id: "docid",
                 placeholder: "Document ID",
                 type: "search",
+                value: state.document ? state.document.key : "",
                 onsearch: e => this.search(e),
               }),
               h(Button, {icon: true, onclick: e => this.back(e)},

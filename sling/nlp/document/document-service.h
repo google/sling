@@ -16,7 +16,10 @@
 #define SLING_NLP_DOCUMENT_DOCUMENT_SERVICE_H_
 
 #include "sling/frame/object.h"
+#include "sling/http/web-service.h"
 #include "sling/nlp/document/document.h"
+#include "sling/nlp/document/document-tokenizer.h"
+#include "sling/nlp/document/lex.h"
 
 namespace sling {
 namespace nlp {
@@ -24,12 +27,14 @@ namespace nlp {
 // Conversion of SLING documents to JSON format used in document viewer.
 class DocumentService {
  public:
-  DocumentService(Store *commons) : commons_(commons) {
-    CHECK(names_.Bind(commons));
-  }
+  DocumentService(Store *commons);
+  ~DocumentService();
+
+  // Get input document.
+  Document *GetInputDocument(WebService *ws) const;
 
   // Convert SLING document to JSON format.
-  Frame Convert(const Document &document);
+  Frame Convert(const Document &document) const;
 
  protected:
   // Commons store.
@@ -58,12 +63,20 @@ class DocumentService {
     HandleMap<int> indices;  // mapping from frame to index
   };
 
+  // Document tokenizer.
+  DocumentTokenizer tokenizer_;
+
+  // LEX converter.
+  DocumentLexer lexer_{&tokenizer_};
+
   // Symbol names.
   Names names_;
+  DocumentNames *docnames_;
   Name n_name_{names_, "name"};
   Name n_description_{names_, "description"};
   Name n_title_{names_, "title"};
   Name n_url_{names_, "url"};
+  Name n_key_{names_, "key"};
   Name n_text_{names_, "text"};
   Name n_tokens_{names_, "tokens"};
   Name n_frames_{names_, "frames"};
@@ -80,6 +93,7 @@ class DocumentService {
 
   Name n_item_{names_, "/w/item"};
   Name n_property_{names_, "/w/property"};
+  Name n_page_item_{names_, "/wp/page/item"};
 };
 
 }  // namespace nlp

@@ -159,6 +159,25 @@ bool DocumentLexer::Lex(Document *document, Text lex) const {
   return true;
 }
 
+static void OutputStyle(int style, Output *output) {
+  if (style & BEGIN_STYLE) {
+    if (style & HEADING_BEGIN) output->Write("<h2>");
+    if (style & QUOTE_BEGIN) output->Write("<blockquote>");
+    if (style & ITEMIZE_BEGIN) output->Write("<ul>\n");
+    if (style & LISTITEM_BEGIN) output->Write("<li>");
+    if (style & BOLD_BEGIN) output->Write("<b>");
+    if (style & ITALIC_BEGIN) output->Write("<em>");
+  }
+  if (style & END_STYLE) {
+    if (style & ITALIC_END) output->Write("</em>");
+    if (style & BOLD_END) output->Write("</b>");
+    if (style & LISTITEM_END) output->Write("</li>");
+    if (style & ITEMIZE_END) output->Write("\n</ul>");
+    if (style & QUOTE_END) output->Write("</blockquote>");
+    if (style & HEADING_END) output->Write("</h2>");
+  }
+}
+
 string ToLex(const Document &document) {
   // Set up frame printer for output.
   string lex;
@@ -168,7 +187,16 @@ string ToLex(const Document &document) {
 
   // Output all tokens with mentions and evoked frames.
   Handles evoked(document.store());
+  int styles = 0;
   for (const Token &token : document.tokens()) {
+    // Add style end.
+    int style = token.style();
+    if (style != 0) {
+      int end_style = style & END_STYLE;
+      OutputStyle(end_style, &output);
+      styles &= ~end_style;
+    }
+
     // Add token break.
     if (token.index() > 0) {
       switch (token.brk()) {
@@ -184,14 +212,28 @@ string ToLex(const Document &document) {
       }
     }
 
+    // Add style begin.
+    if (style != 0) {
+      int begin_style = style & BEGIN_STYLE;
+      OutputStyle(begin_style, &output);
+      styles |= begin_style << 1;
+    }
+
     // Add span open brackets.
     Span *span = document.GetSpanAt(token.index());
     for (Span *s = span; s != nullptr; s = s->parent()) {
       if (s->begin() == token.index()) output.WriteChar('[');
     }
 
-    // Add token word.
-    output.Write(token.word());
+    // Add token word. Escape reserved characters.
+    for (char c : token.word()) {
+      switch (c) {
+        case '{': case '[': c = '('; break;
+        case '}': case ']': c = ')'; break;
+        case '|': c = '!'; break;
+      }
+      output.WriteChar(c);
+    }
 
     // Add span close brackets.
     for (Span *s = span; s != nullptr; s = s->parent()) {
@@ -199,18 +241,23 @@ string ToLex(const Document &document) {
         bool first = true;
         s->AllEvoked(&evoked);
         for (Handle frame : evoked) {
-          if (first) output.WriteChar('|');
+          output.WriteChar(first ? '|' : ' ');
           first = false;
-          printer.Print(frame);
+          printer.PrintReference(frame);
         }
         output.WriteChar(']');
       }
     }
   }
 
+  // Terminate remaining styles.
+  if (styles != 0) {
+    OutputStyle(styles, &output);
+  }
+
   // Output themes.
   for (Handle frame : document.themes()) {
-    printer.Print(frame);
+    printer.PrintReference(frame);
   }
 
   output.Flush();

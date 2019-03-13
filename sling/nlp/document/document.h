@@ -22,7 +22,7 @@
 #include "sling/base/types.h"
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"
-#include "sling/nlp/document/token-breaks.h"
+#include "sling/nlp/document/token-properties.h"
 #include "sling/string/text.h"
 #include "sling/util/unicode.h"
 
@@ -50,6 +50,7 @@ struct DocumentNames : public SharedNames {
   Name n_size{*this, "size"};
   Name n_word{*this, "word"};
   Name n_break{*this, "break"};
+  Name n_style{*this, "style"};
 
   Name n_phrase{*this, "phrase"};
   Name n_begin{*this, "begin"};
@@ -84,6 +85,9 @@ class Token {
   // Break level before token.
   BreakType brk() const { return brk_; }
 
+  // Token style change before token.
+  int style() const { return style_; }
+
   // Lowest span covering the token.
   Span *span() const { return span_; }
 
@@ -96,6 +100,9 @@ class Token {
   // Punctuation tokens etc. are skipped in phrase comparison.
   bool skipped() const { return Fingerprint() == 1; }
 
+  // Check for initial token in a sentence.
+  bool initial() const { return index_ == 0 || brk_ >= SENTENCE_BREAK; }
+
  private:
   Document *document_;          // document the token belongs to
   Handle handle_;               // handle for token in the store
@@ -106,6 +113,7 @@ class Token {
 
   string word_;                 // token word
   BreakType brk_;               // break level before token
+  int style_;                   // token style change before token
 
   mutable uint64 fingerprint_;  // fingerprint for token text
   mutable CaseForm form_;       // case form for token
@@ -232,6 +240,13 @@ class Document {
   // Initialize document from frame.
   explicit Document(const Frame &top, const DocumentNames *names = nullptr);
 
+  // Copy constructor for making a shallow copy of the whole document.
+  Document(const Document &other);
+
+  // Make a shallow copy of parts of the document. Only annotations within the
+  // token range are copied.
+  Document(const Document &other, int begin, int end, bool annotations);
+
   ~Document();
 
   // Return document frame.
@@ -260,7 +275,8 @@ class Document {
   // Add token to document.
   void AddToken(Text word,
                 int begin = -1, int end = -1,
-                BreakType brk = SPACE_BREAK);
+                BreakType brk = SPACE_BREAK,
+                int style = 0);
 
   // Returns the small enclosing span for [begin, end). If no such span exists,
   // then returns nullptr. If a crossing span exists, then returns nullptr and
@@ -288,6 +304,9 @@ class Document {
   // Return span in document.
   Span *span(int index) const { return spans_[index]; }
 
+  // Return all spans in document.
+  const std::vector<Span *> spans() const { return spans_; }
+
   // Return the number of tokens in the document.
   int num_tokens() const { return tokens_.size(); }
 
@@ -306,10 +325,10 @@ class Document {
   }
 
   // Returns the fingerprint for [begin, end).
-  uint64 PhraseFingerprint(int begin, int end);
+  uint64 PhraseFingerprint(int begin, int end) const;
 
   // Returns case form forphrase [begin, end).
-  CaseForm Form(int begin, int end);
+  CaseForm Form(int begin, int end) const;
 
   // Returns the phrase text for span.
   string PhraseText(int begin, int end) const;

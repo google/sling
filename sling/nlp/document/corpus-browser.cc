@@ -55,14 +55,14 @@ class CorpusBrowser : public DocumentService {
       return;
     }
 
-    // Fetch document from database.
+    // Fetch document record from database.
     Record record;
     if (!FetchRecord(docid, &record)) {
       response->SendError(404, nullptr, "unknown document");
       return;
     }
 
-    // Convert document to JSON.
+    // Convert record to document.
     Store *store = ws.store();
     Frame top = Decode(store, record.value).AsFrame();
     Document document(top);

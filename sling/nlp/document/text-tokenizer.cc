@@ -68,7 +68,7 @@ class TrieNode {
 
   // Returns/sets the flags for the node.
   TokenFlags flags() const { return flags_; }
-  void set_flags(TokenFlags flags) { flags_ = flags; }
+  void set_flags(TokenFlags flags) { flags_ |= flags; }
   bool is(TokenFlags flags) const { return (flags_ & flags) != 0; }
 
   // Returns/sets the terminal status of this node.
@@ -213,12 +213,21 @@ BreakType TokenizerText::BreakLevel(int index) const {
   }
   if (flags & TOKEN_EOS) return SENTENCE_BREAK;
   if (flags & TOKEN_LINE) return LINE_BREAK;
-  if (flags & TOKEN_DISCARD) {
-    // Do not insert space break for zero-width space.
-    return elements_[index].ch == 0x200B ? NO_BREAK : SPACE_BREAK;
-  }
+  if (flags & TOKEN_NONBREAK) return NO_BREAK;
+  if (flags & TOKEN_DISCARD) return SPACE_BREAK;
 
   return NO_BREAK;
+}
+
+int TokenizerText::Style(int index) const {
+  TokenFlags flags = elements_[index].flags;
+  if (flags & TOKEN_TAG) {
+    TokenFlags style = flags & TOKEN_STYLE_MASK;
+    if (style != 0) {
+      return 1 << (style >> TOKEN_STYLE_SHIFT);
+    }
+  }
+  return 0;
 }
 
 TrieNode::TrieNode() {
@@ -375,6 +384,7 @@ void Tokenizer::Tokenize(Text text, const Callback &callback) const {
   bool in_quote = false;
   int bracket_level = 0;
   token.brk = NO_BREAK;
+  token.style = 0;
   while (i < t.length()) {
     // Find start of next token.
     int j = t.NextStart(i + 1);
@@ -383,6 +393,23 @@ void Tokenizer::Tokenize(Text text, const Callback &callback) const {
       // Update break level.
       BreakType brk = t.BreakLevel(i);
       if (brk > token.brk) token.brk = brk;
+
+      // Update style.
+      int style = t.Style(i);
+      if (style != 0) {
+        // In order to detect empty style changes, i.e. a BEGIN style followed
+        // by an END style without emitting a token, the empty style change is
+        // cancelled out.
+        if (style & END_STYLE) {
+          // Check for corresponding BEGIN style.
+          if ((style >> 1) & token.style) {
+            // Cancel style change.
+            token.style &= ~(style >> 1);
+            style = 0;
+          }
+        }
+        token.style |= style;
+      }
     } else {
       // Get token value.
       t.GetText(i, j, &token.text);
@@ -402,10 +429,13 @@ void Tokenizer::Tokenize(Text text, const Callback &callback) const {
         // Replacement token.
         token.text = t.node(i)->value();
       }
+
+      // Emit token.
       token.begin = t.position(i);
       token.end = t.position(j);
       callback(token);
       token.brk = NO_BREAK;
+      token.style = 0;
     }
 
     // Make a period followed by a lowercase letter conditional.
@@ -475,6 +505,7 @@ void Tokenizer::Tokenize(Text text, const Callback &callback) const {
           extra.begin = t.position(j);
           extra.end = t.position(k);
           extra.brk = NO_BREAK;
+          extra.style = 0;
           callback(extra);
           j = k;
         }
@@ -494,6 +525,40 @@ static const char *kBreakingTags[] = {
   "table", "/table", "/title", "tr", "/tr", "ul", "/ul",
   "blockquote", "/blockquote", nullptr
 };
+
+#define TS(s) ((1ULL * s) << TOKEN_STYLE_SHIFT)
+
+static const struct { const char *tag; uint64 flags; } kStyleTags[] = {
+  {"<b>",   TS(STYLE_BOLD_BEGIN) | TOKEN_NONBREAK},
+  {"</b>",  TS(STYLE_BOLD_END) | TOKEN_NONBREAK},
+  {"<em>",  TS(STYLE_ITALIC_BEGIN) | TOKEN_NONBREAK},
+  {"</em>", TS(STYLE_ITALIC_END) | TOKEN_NONBREAK},
+
+  {"<h1>",  TS(STYLE_HEADING_BEGIN)},
+  {"</h1>", TS(STYLE_HEADING_END)},
+  {"<h2>",  TS(STYLE_HEADING_BEGIN)},
+  {"</h2>", TS(STYLE_HEADING_END)},
+  {"<h3>",  TS(STYLE_HEADING_BEGIN)},
+  {"</h3>", TS(STYLE_HEADING_END)},
+  {"<h4>",  TS(STYLE_HEADING_BEGIN)},
+  {"</h4>", TS(STYLE_HEADING_END)},
+  {"<h5>",  TS(STYLE_HEADING_BEGIN)},
+  {"</h5>", TS(STYLE_HEADING_END)},
+
+  {"<ul>",  TS(STYLE_ITEMIZE_BEGIN)},
+  {"</ul>", TS(STYLE_ITEMIZE_END)},
+  {"<ol>",  TS(STYLE_ITEMIZE_BEGIN)},
+  {"</ol>", TS(STYLE_ITEMIZE_END)},
+  {"<li>",  TS(STYLE_LISTITEM_BEGIN)},
+  {"</li>", TS(STYLE_LISTITEM_END)},
+
+  {"<blockquote>",  TS(STYLE_QUOTE_BEGIN)},
+  {"</blockquote>", TS(STYLE_QUOTE_END)},
+
+  {nullptr, 0}
+};
+
+#undef TS
 
 static const char *kTokenSuffixes[] = {
   "'s", nullptr,
@@ -795,7 +860,8 @@ void StandardTokenization::Init(CharacterFlags *char_flags) {
   AddTokenType("‹", TOKEN_CLOSE, "''");
 
   // URL tokens.
-  int url_flags = discard_urls_ ? (TOKEN_URL | TOKEN_DISCARD) : TOKEN_URL;
+  TokenFlags url_flags = TOKEN_URL;
+  if (discard_urls_) url_flags |= TOKEN_DISCARD;
   AddTokenType("http:", url_flags);
   AddTokenType("https:", url_flags);
   AddTokenType("ftp:", url_flags);
@@ -842,6 +908,13 @@ void StandardTokenization::Init(CharacterFlags *char_flags) {
     AddTokenType(tag_open.c_str(),
                  TOKEN_EOS | TOKEN_PARA | TOKEN_DISCARD | TOKEN_TAG);
     tag++;
+  }
+
+  // Styling tags.
+  const auto *style = kStyleTags;
+  while (style->tag != nullptr) {
+    AddTokenType(style->tag, TOKEN_TAG | TOKEN_DISCARD | style->flags);
+    style++;
   }
 
   // Abbreviations.
@@ -907,7 +980,7 @@ void StandardTokenization::Process(TokenizerText *t) {
 
     // Check for special tokens. The text is matched against the token trie and
     // the longest match is found.
-    int tag_flags = 0;
+    TokenFlags tag_flags = 0;
     int length;
     const TrieNode *node = token_types_->FindMatch(*t, i, &length);
     if (length > 0) {
@@ -1095,6 +1168,9 @@ void LDCTokenization::Init(CharacterFlags *char_flags) {
 
   // Allow dash to start a negative number (i.e. dash as a sign).
   char_flags->add('-', NUMBER_START);
+
+  // Non-breaking space.
+  char_flags->add(0x200B, TOKEN_DISCARD | TOKEN_NONBREAK);
 
   // Exceptions for prefixes with hyphens.
   const char **exception = kHyphenatedPrefixExceptions;

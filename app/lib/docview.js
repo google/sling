@@ -14,6 +14,24 @@ let type_color = {
   '/w': '#0B5394',
 };
 
+let begin_styles = [
+  {mask: (1 << 5), tag: "h2"},
+  {mask: (1 << 11), tag: "blockquote"},
+  {mask: (1 << 7), tag: "ul"},
+  {mask: (1 << 9), tag: "li"},
+  {mask: (1 << 1), tag: "b"},
+  {mask: (1 << 3), tag: "em"},
+];
+
+let end_styles = [
+  {mask: (1 << 4), tag: "em", para: false},
+  {mask: (1 << 2), tag: "b", para: false},
+  {mask: (1 << 10), tag: "li", para: true},
+  {mask: (1 << 8), tag: "ul", para: true},
+  {mask: (1 << 12), tag: "blockquote", para: true},
+  {mask: (1 << 6), tag: "h2", para: true},
+];
+
 let notchgif = 'data:image/gif;base64,R0lGODlhDAAWAJEAAP/68NK8jv///' +
                'wAAACH5BAUUAAIALAAAAAAMABYAAAIrlI8SmQF83INyNoBtzPhy' +
                'XXHb1ylkZp5dSBqs6KrIq6Xw/FG3V+M9DpkVAAA7';
@@ -39,6 +57,7 @@ export class Document {
     this.docno = next_docno++;
     this.title = data.title;
     this.url = data.url;
+    this.key = data.key;
     this.text = text_encoder.encode(data.text);
     this.tokens = data.tokens || [];
     this.frames = data.frames
@@ -108,19 +127,24 @@ export class DocumentViewer extends Component {
     let doc = this.document;
     let spans = doc.spans;
     let nesting = [];
+    let styles = [];
     let next = 0;
     let elements = [];
     if (doc.title) {
+      let headline = []
       if (doc.url) {
-        elements.push(
-          h("h3", {class: "title"},
-            h("a", {href: doc.url, class: "titlelink", target: "_blank"},
-              doc.title)
-           )
-         );
+        let props = {href: doc.url, class: "titlelink", target: "_blank"}
+        headline.push(h("a", props, doc.title));
       } else {
-        elements.push(h("h3", {class: "title"}, doc.title));
+        headline.push(doc.title);
       }
+      if (doc.key) {
+        let url = kb_url + doc.key;
+        let props = {href: url, class: "topiclink", target: "_blank"}
+        headline.push(h("span", {class: "docref"},
+                        "(", h("a", props, doc.key), ")"));
+      }
+      elements.push(h("h1", {class: "title"}, headline));
     } else if (doc.url) {
       elements.push(
         h("div", {class: "title"},
@@ -131,10 +155,25 @@ export class DocumentViewer extends Component {
       );
     }
     for (let index = 0; index < doc.tokens.length; ++index) {
-      // Render token break.
       let token = doc.tokens[index];
+      let brk = token.break;
+
+      // Pop elements for end of style.
+      if (token.style) {
+        for (let ts of end_styles) {
+          if (ts.mask & token.style) {
+            if (styles.length == 0) break;
+            let style = styles.pop();
+            let subelements = elements.slice(style.mark);
+            elements.length = style.mark;
+            elements.push(h(style.tag, null, subelements));
+            if (ts.para && brk == PARAGRAPH_BREAK) brk = undefined;
+          }
+        }
+      }
+
+      // Render token break.
       if (index > 0) {
-        let brk = token.break;
         if (brk === undefined) {
           elements.push(" ");
         } else if (brk >= CHAPTER_BREAK) {
@@ -144,9 +183,18 @@ export class DocumentViewer extends Component {
         } else if (brk >= PARAGRAPH_BREAK) {
           elements.push(h("p"));
         } else if (brk >= SENTENCE_BREAK) {
-          elements.push("	 ");
+          elements.push(" 	");
         } else if (brk >= SPACE_BREAK) {
           elements.push(" ");
+        }
+      }
+
+      // Push elements for start of style.
+      if (token.style) {
+        for (let ts of begin_styles) {
+          if (ts.mask & token.style) {
+            styles.push({mark: elements.length, tag: ts.tag});
+          }
         }
       }
 
@@ -191,17 +239,25 @@ export class DocumentViewer extends Component {
         elements.push(h("span", attrs, subelements));
       }
     }
+
+    // Terminate remaining styles.
+    while (styles.length > 0) {
+      let style = styles.pop();
+      let subelements = elements.slice(style.mark);
+      elements.length = style.mark;
+      elements.push(h(style.tag, null, subelements));
+    }
+
+    // Add container for theme chips.
     elements.push(h("div", {id: "themes" + this.docno(), class: "themes"}));
 
     // Render document viewer with text to the left, panels to the right.
     let key = "doc-" + this.docno();
     return (
-      h(Grid, {class: "docviewer", key},
-        h("div", {class: "text-and-panels"}),
-          h("div", {id: "text" + this.docno(),  class: "doctext", key},
-            elements
-          ),
-          h("div", {id: "panels" + this.docno(), class: "docpanels"})
+      h("div", {id: "docview" + this.docno(), class: "docviewer", key},
+        h("div", {id: "text" + this.docno(), class: "doctext", key}, elements),
+        h("div", {class: "docspacer"}),
+        h("div", {id: "panels" + this.docno(), class: "docpanels"})
       )
     );
   }
@@ -211,6 +267,8 @@ export class DocumentViewer extends Component {
   }
 
   componentDidUpdate() {
+    let panels = document.getElementById("panels" + this.docno());
+    while (panels.firstChild) panels.removeChild(panels.firstChild);
     this.Initialize();
   }
 
@@ -341,6 +399,7 @@ export class DocumentViewer extends Component {
 
   BuildAVM(fidx, rendered) {
     let frame = this.document.frames[fidx];
+    if (frame == undefined) return document.createTextNode(fidx);
     rendered[fidx] = true;
 
     let tbl = document.createElement("table");

@@ -264,6 +264,15 @@ export class Card extends MaterialComponent {
     super();
     this.component = "mdl-card";
   }
+
+  mdlRender(props) {
+    let c = [];
+    if (props.class) c.push(props.class);
+    if (props.shadow) c.push("mdl-shadow--" + props.shadow + "dp");
+    return h("div",
+             Object.assign({class: c.join(" ")}, props),
+             props.children);
+  }
 }
 
 export class CardTitle extends MaterialComponent {

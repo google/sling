@@ -23,7 +23,7 @@
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"
 #include "sling/nlp/document/fingerprinter.h"
-#include "sling/nlp/document/token-breaks.h"
+#include "sling/nlp/document/token-properties.h"
 
 namespace sling {
 namespace nlp {
@@ -36,12 +36,10 @@ uint64 Token::Fingerprint() const {
 
 CaseForm Token::Form() const {
   if (form_ == CASE_INVALID) {
+    form_ = UTF8::Case(word_);
+
     // Case for first token in a sentence is indeterminate.
-    if (index_ == 0 || brk_ >= SENTENCE_BREAK) {
-      form_ = CASE_NONE;
-    } else {
-      form_ = UTF8::Case(word_);
-    }
+    if (initial() && form_ == CASE_TITLE) form_ = CASE_NONE;
   }
   return form_;
 }
@@ -188,6 +186,7 @@ Document::Document(const Frame &top, const DocumentNames *names)
       Handle start = token->get(names_->n_start.handle());
       Handle size = token->get(names_->n_size.handle());
       Handle brk = token->get(names_->n_break.handle());
+      Handle style = token->get(names_->n_style.handle());
 
       // Fill token from frame.
       Token &t = tokens_[i];
@@ -211,6 +210,11 @@ Document::Document(const Frame &top, const DocumentNames *names)
         t.brk_ = static_cast<BreakType>(brk.AsInt());
       } else {
         t.brk_ = i == 0 ? NO_BREAK : SPACE_BREAK;
+      }
+      if (!style.IsNil()) {
+        t.style_ = style.AsInt();
+      } else {
+        t.style_ = 0;
       }
       t.fingerprint_ = 0;
       t.form_ = CASE_INVALID;
@@ -241,6 +245,105 @@ Document::Document(const Frame &top, const DocumentNames *names)
       themes_.push_back(slot->value);
     }
   }
+}
+
+Document::Document(const Document &other)
+    : text_(other.text_),
+      tokens_(other.tokens_),
+      themes_(other.store()),
+      names_(other.names_) {
+  // Make a copy of the document frame (except document id).
+  names_->AddRef();
+  Store *store = other.store();
+  Builder builder(store);
+  for (const Slot &s : other.top_) {
+    if (s.name != Handle::id()) {
+      builder.Add(s.name, s.value);
+    }
+  }
+  top_ = builder.Create();
+
+  // Update tokens.
+  for (Token &token : tokens_) {
+    token.document_ = this;
+    token.span_ = nullptr;
+  }
+
+  // Copy mention spans.
+  for (const Span *s : other.spans_) {
+    Span *span = Insert(s->begin_, s->end_);
+    span->mention_ = Frame(store, store->Clone(s->mention_.handle()));
+    for (const Slot &s : span->mention_) {
+      if (s.name == names_->n_evokes) AddMention(s.value, span);
+    }
+  }
+
+  // Copy themes.
+  for (Handle h : other.themes_) {
+    themes_.push_back(h);
+  }
+
+  // Copy extra slots.
+  if (other.extras_ != nullptr) {
+    extras_ = new Slots(store);
+    extras_->reserve(other.extras_->size());
+    for (const Slot &s : *other.extras_) {
+      extras_->emplace_back(s.name, s.value);
+    }
+  }
+}
+
+Document::Document(const Document &other,
+                   int begin, int end,
+                   bool annotations)
+    : themes_(other.store()), names_(other.names_) {
+  // Copy tokens.
+  names_->AddRef();
+  Store *store = other.store();
+  int length = end - begin;
+  int text_begin = other.text().size();
+  int text_end = 0;
+  tokens_.resize(length);
+  for (int i = 0; i < length; ++i) {
+    const Token &o = other.tokens_[i + begin];
+    Token &t = tokens_[i];
+    t = o;
+    t.document_ = this;
+    t.index_ = i;
+    t.span_ = nullptr;
+    if (o.begin_ < text_begin) text_begin = o.begin_;
+    if (o.end_ > text_end) text_end = o.end_;
+  }
+  if (length > 0) tokens_changed_ = true;
+
+  // Copy text and adjust token positions.
+  if (text_end > text_begin) {
+    text_ = other.text_.substr(text_begin, text_end - text_begin);
+    for (Token &t : tokens_) {
+      t.begin_ -= text_begin;
+      t.end_ -= text_begin;
+    }
+  }
+
+  // Copy annotations.
+  if (annotations) {
+    for (const Span *s : other.spans_) {
+      int b = s->begin_ - begin;
+      int e = s->end_ - begin;
+      if (b < 0 || e > length) continue;
+      Span *span = Insert(b, e);
+      span->mention_ = Frame(store, store->Clone(s->mention_.handle()));
+      for (const Slot &s : span->mention_) {
+        if (s.name == names_->n_evokes) AddMention(s.value, span);
+      }
+    }
+  }
+
+  // Create document frame.
+  Builder builder(store);
+  builder.AddIsA(names_->n_document);
+  if (!text_.empty()) builder.Add(names_->n_text, text_);
+  top_ = builder.Create();
 }
 
 Document::~Document() {
@@ -277,6 +380,9 @@ void Document::Update() {
       }
       if (t.brk_ != (i == 0 ? NO_BREAK : SPACE_BREAK)) {
         token.Add(names_->n_break, t.brk_);
+      }
+      if (t.style_ != 0) {
+        token.Add(names_->n_style, t.style_);
       }
       tokens.push_back(token.Create().handle());
     }
@@ -320,7 +426,8 @@ void Document::SetText(Text text) {
   tokens_changed_ = true;
 }
 
-void Document::AddToken(Text word, int begin, int end, BreakType brk) {
+void Document::AddToken(Text word, int begin, int end,
+                        BreakType brk, int style) {
   // Expand token array.
   int index = tokens_.size();
   tokens_.resize(index + 1);
@@ -334,6 +441,7 @@ void Document::AddToken(Text word, int begin, int end, BreakType brk) {
   t.end_ = end;
   t.word_.assign(word.data(), word.size());
   t.brk_ = brk;
+  t.style_ = style;
   t.fingerprint_ = 0;
   t.form_ = CASE_INVALID;
   t.span_ = nullptr;
@@ -426,7 +534,7 @@ int Document::Locate(int position) const {
   return index;
 }
 
-uint64 Document::PhraseFingerprint(int begin, int end) {
+uint64 Document::PhraseFingerprint(int begin, int end) const {
   uint64 fp = 1;
   for (int t = begin; t < end; ++t) {
     uint64 word_fp = TokenFingerprint(t);
@@ -437,7 +545,7 @@ uint64 Document::PhraseFingerprint(int begin, int end) {
   return fp;
 }
 
-CaseForm Document::Form(int begin, int end) {
+CaseForm Document::Form(int begin, int end) const {
   CaseForm form = CASE_INVALID;
   for (int t = begin; t < end; ++t) {
     if (token(t).skipped()) continue;
@@ -469,7 +577,7 @@ Span *Document::EnclosingSpan(int begin, int end, bool *crossing) {
   for (int t = begin; t < end; ++t) {
     Span *s = tokens_[t].span_;
 
-    // Skip if is the same as the leaf span for the previous token.
+    // Skip if it has the same leaf span as the previous token.
     if (s == prev) continue;
     prev = s;
 
