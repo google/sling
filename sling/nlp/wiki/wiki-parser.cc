@@ -36,7 +36,7 @@ namespace {
 static const char *node_names[] = {
   "DOCUMENT", "ARG", "ATTR",
   "TEXT", "FONT", "TEMPLATE", "LINK", "IMAGE", "CATEGORY", "URL",
-  "COMMENT", "TAG", "BTAG", "ETAG", "MATH", "GALLERY", "REF",
+  "COMMENT", "TAG", "BTAG", "ETAG", "MATH", "GALLERY", "REF", "NOWIKI",
   "HEADING", "INDENT", "TERM", "UL", "OL", "HR", "SWITCH",
   "TABLE", "CAPTION", "ROW", "HEADER", "CELL", "BREAK",
 };
@@ -465,7 +465,7 @@ void WikiParser::ParseArgument() {
   // Try to parse argument name.
   const char *name = ptr_;
   const char *p = name;
-  while (*p != 0 && *p != '\n' && *p != '=' &&
+  while (*p != 0 && *p != '\n' && *p != '=' && *p != '<' &&
          *p != ']' && *p != '|' && *p != '}' && *p != '{') {
     p++;
   }
@@ -581,14 +581,15 @@ void WikiParser::ParseTag() {
     nodes_[node].end = ptr_;
     txt_ = ptr_;
   } else if (Matches("<nowiki>")) {
+    int node = Add(NOWIKI);
     ptr_ += 8;
     txt_ = ptr_;
     while (*ptr_ != 0) {
       if (*ptr_ == '<' && Matches("</nowiki>")) break;
       ptr_++;
     }
-    EndText();
     if (*ptr_ != 0) ptr_ += 9;
+    nodes_[node].end = ptr_;
     txt_ = ptr_;
   } else if (Matches("</ref>")) {
     ptr_ += 6;

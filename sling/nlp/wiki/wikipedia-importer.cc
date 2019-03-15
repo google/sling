@@ -58,10 +58,10 @@ class WikipediaXMLParser : public XMLParser {
     commons_.Freeze();
 
     // Initialize counters.
-    num_articles_ = task->GetCounter("num_wikipedia_articles");
-    num_categories_ = task->GetCounter("num_wikipedia_categories");
-    num_redirects_ = task->GetCounter("num_wikipedia_redirects");
-    num_fragment_redirects_ = task->GetCounter("num_fragment_redirects");
+    num_articles_ = task->GetCounter("wikipedia_articles");
+    num_categories_ = task->GetCounter("wikipedia_categories");
+    num_redirects_ = task->GetCounter("wikipedia_redirects");
+    num_fragment_redirects_ = task->GetCounter("fragment_redirects");
     input_bytes_ = task->GetCounter("wikipedia_input_bytes");
   }
 

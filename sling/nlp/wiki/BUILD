@@ -64,6 +64,7 @@ cc_library(
   srcs = ["wiki-annotator.cc"],
   hdrs = ["wiki-annotator.h"],
   deps = [
+    ":wiki",
     ":wiki-extractor",
     "//sling/base:registry",
     "//sling/frame",
@@ -78,6 +79,7 @@ cc_library(
   name = "wiki-macros",
   srcs = ["wiki-macros.cc"],
   deps = [
+    ":wiki",
     ":wiki-annotator",
     "//sling/nlp/document",
     "//sling/nlp/document:fingerprinter",
@@ -146,6 +148,22 @@ cc_library(
     "//sling/task:reducer",
     "//sling/string:strcat",
     "//sling/string:text",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "wikipedia-links",
+  srcs = ["wikipedia-links.cc"],
+  deps = [
+    "//sling/base",
+    "//sling/nlp/document",
+    "//sling/nlp/document:document-tokenizer",
+    "//sling/nlp/document:lex",
+    "//sling/task",
+    "//sling/task:accumulator",
+    "//sling/task:documents",
+    "//sling/task:reducer",
   ],
   alwayslink = 1,
 )

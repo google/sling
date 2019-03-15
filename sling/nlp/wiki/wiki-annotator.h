@@ -22,6 +22,7 @@
 #include "sling/base/types.h"
 #include "sling/frame/object.h"
 #include "sling/nlp/document/document.h"
+#include "sling/nlp/wiki/wiki.h"
 #include "sling/nlp/wiki/wiki-extractor.h"
 #include "sling/string/text.h"
 
@@ -162,6 +163,15 @@ class WikiTemplateRepository {
 // thematic frames for unanchored annotations.
 class WikiAnnotator : public WikiTextSink {
  public:
+  // Alias for document topic.
+  struct Alias {
+    Alias(const string &name, AliasSource source)
+        : name(name), source(source) {}
+
+    string name;         // alias name
+    AliasSource source;  // alias source
+  };
+
   // Initialize document annotator. The frame annotations will be created in
   // the store and links will be resolved using the resolver.
   WikiAnnotator(Store *store, WikiLinkResolver *resolver);
@@ -192,6 +202,12 @@ class WikiAnnotator : public WikiTextSink {
 
   // Add category.
   void AddCategory(Handle category);
+
+  // Add alias.
+  void AddAlias(const string &name, AliasSource source);
+
+  // Get list of aliases.
+  const std::vector<Alias> &aliases() const { return aliases_; }
 
   // Return store for annotations.
   Store *store() { return store_; }
@@ -248,6 +264,9 @@ class WikiAnnotator : public WikiTextSink {
 
   // Categories.
   Handles categories_;
+
+  // Aliases.
+  std::vector<Alias> aliases_;
 
   // Symbols.
   Names names_;

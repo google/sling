@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
     LoadStore("data/wiki/calendar.sling", store);
     LoadStore("data/wiki/countries.sling", store);
     LoadStore("data/wiki/templates-" + FLAGS_lang + ".sling", store);
-    LoadStore("data/wiki/units-" + FLAGS_lang + ".sling", store);
+    LoadStore("data/wiki/units.sling", store);
   }
 
   string wikitext;
@@ -102,9 +102,6 @@ int main(int argc, char *argv[]) {
   }
 
   extractor.Extract(&annotator);
-
-  WikiPlainTextSink intro;
-  extractor.ExtractIntro(&intro);
 
   Document document(store);
   if (FLAGS_ann) {
@@ -146,9 +143,6 @@ int main(int argc, char *argv[]) {
     }
   }
   std::cout << "<h1>AST</h1>\n<pre>\n";
-  if (!intro.text().empty()) {
-    std::cout << "Intro: " << intro.text() << "<br><br>";
-  }
   parser.PrintAST(0, 0);
   std::cout << "</pre>\n";
   std::cout << "</body></html>\n";

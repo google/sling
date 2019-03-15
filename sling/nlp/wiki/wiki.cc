@@ -43,6 +43,8 @@ const char *kAliasSourceName[kNumAliasSources] = {
   "wikidata_demonym",
   "wikipedia_link",
   "wikidata_name",
+  "wikipedia_name",
+  "wikipedia_nickname",
 };
 
 void Wiki::SplitTitle(const string &title,
@@ -114,7 +116,8 @@ bool WikimediaTypes::IsCategory(Handle type) {
          type == n_user_language_category_ ||
          type == n_stub_category_ ||
          type == n_meta_category_ ||
-         type == n_navbox_category_;
+         type == n_navbox_category_ ||
+         type == n_infobox_templates_category_;
 }
 
 bool WikimediaTypes::IsDisambiguation(Handle type) {
@@ -131,6 +134,10 @@ bool WikimediaTypes::IsTemplate(Handle type) {
 
 bool WikimediaTypes::IsInfobox(Handle type) {
   return type == n_infobox_;
+}
+
+bool WikimediaTypes::IsDuplicate(Handle type) {
+  return type == n_permanent_duplicate_item_;
 }
 
 void AuxFilter::Init(Store *store) {

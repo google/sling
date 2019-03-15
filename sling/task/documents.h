@@ -43,6 +43,9 @@ class DocumentProcessor : public FrameProcessor {
   // Output document to output using document id as key.
   void Output(const nlp::Document &document);
 
+  // Document schema.
+  const nlp::DocumentNames *docnames() const { return docnames_; }
+
  private:
   // Document symbol names.
   const nlp::DocumentNames *docnames_ = nullptr;

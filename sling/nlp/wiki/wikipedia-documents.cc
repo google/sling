@@ -213,6 +213,11 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
     annotator.AddToDocument(&document);
     num_article_tokens_->Increment(document.num_tokens());
     document.Update();
+
+    // Output aliases from extractor.
+    for (const auto &alias : annotator.aliases()) {
+      OutputAlias(qid, alias.name, alias.source);
+    }
   }
 
   // Output alias for article title.

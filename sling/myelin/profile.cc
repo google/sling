@@ -322,7 +322,7 @@ static string Rainbow(float value) {
 
   float div = value * 5.999;
   int index = static_cast<int>(div);
-  float mix1 = fmod(div, 1.0);
+  float mix1 = fmodf(div, 1.0);
   float mix0 = 1.0 - mix1;
 
   int r = rainbow[index][0] * mix0 + rainbow[index + 1][0] * mix1;

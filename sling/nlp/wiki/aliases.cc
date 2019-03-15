@@ -76,6 +76,9 @@ class AliasExtractor : public task::FrameProcessor {
                  s.name == n_iso3166_country_code_3_) {
         // Output country codes as alternative names.
         AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NAME);
+      } else if (s.name == n_nickname_) {
+        // Output nicknames as alternative names.
+        AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NAME);
       } else if (s.name == n_short_name_) {
         // Output short names as alternative or foreign names.
         Handle lang = Handle::nil();
@@ -87,12 +90,13 @@ class AliasExtractor : public task::FrameProcessor {
           AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_FOREIGN);
         }
       } else if (s.name == n_instance_of_) {
-        // Discard categories, disambiguations, info boxes and templates.
+        // Discard alias for non-entity items.
         Handle type = store->Resolve(s.value);
         if (wikitypes_.IsCategory(type) ||
             wikitypes_.IsDisambiguation(type) ||
             wikitypes_.IsInfobox(type) ||
-            wikitypes_.IsTemplate(type)) {
+            wikitypes_.IsTemplate(type) ||
+            wikitypes_.IsDuplicate(type)) {
           return;
         }
       }
@@ -140,6 +144,7 @@ class AliasExtractor : public task::FrameProcessor {
   Name n_native_label_{names_, "P1705"};
   Name n_demonym_{names_, "P1549"};
   Name n_short_name_{names_, "P1813"};
+  Name n_nickname_{names_, "P1449"};
   Name n_iso3166_country_code_2_{names_, "P297"};
   Name n_iso3166_country_code_3_{names_, "P298"};
 
@@ -269,7 +274,8 @@ class AliasReducer : public task::Reducer {
     // Keep aliases from "trusted" sources.
     if (alias->sources & (WIKIDATA_LABEL |
                           WIKIPEDIA_TITLE |
-                          WIKIPEDIA_REDIRECT)) {
+                          WIKIPEDIA_REDIRECT |
+                          WIKIPEDIA_NAME)) {
       return true;
     }
 
@@ -278,10 +284,12 @@ class AliasReducer : public task::Reducer {
       return !toxic;
     }
 
-    // Keep foreign, native and demonym aliases supported by Wikipedia aliases.
+    // Keep foreign, native, demonym, and nickname aliases supported by
+    // Wikipedia aliases.
     if (alias->sources & (WIKIDATA_FOREIGN |
                           WIKIDATA_NATIVE |
-                          WIKIDATA_DEMONYM)) {
+                          WIKIDATA_DEMONYM |
+                          WIKIPEDIA_NICKNAME)) {
       if (alias->sources & (WIKIPEDIA_ANCHOR |
                             WIKIPEDIA_LINK |
                             WIKIPEDIA_DISAMBIGUATION)) {
@@ -317,6 +325,8 @@ class AliasReducer : public task::Reducer {
     WIKIDATA_DEMONYM = 1 << SRC_WIKIDATA_DEMONYM,
     WIKIPEDIA_LINK = 1 << SRC_WIKIPEDIA_LINK,
     WIKIDATA_NAME = 1 << SRC_WIKIDATA_NAME,
+    WIKIPEDIA_NAME = 1 << SRC_WIKIPEDIA_NAME,
+    WIKIPEDIA_NICKNAME = 1 << SRC_WIKIPEDIA_NICKNAME,
   };
 
   // Commons store.

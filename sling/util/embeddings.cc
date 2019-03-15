@@ -50,7 +50,7 @@ bool EmbeddingReader::Next() {
     float sum = 0.0;
     for (int i = 0; i < dim_; ++i) sum += embedding_[i] * embedding_[i];
     if (sum > 0.0) {
-      float l2 = sqrt(sum);
+      float l2 = sqrtf(sum);
       for (int i = 0; i < dim_; ++i) embedding_[i] /= l2;
     }
   }

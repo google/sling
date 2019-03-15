@@ -68,6 +68,7 @@ void WikiExtractor::ExtractNode(const Node &node) {
     case WikiParser::MATH: ExtractMath(node); break;
     case WikiParser::GALLERY: ExtractGallery(node); break;
     case WikiParser::REF: ExtractReference(node); break;
+    case WikiParser::NOWIKI: ExtractNoWiki(node); break;
     case WikiParser::HEADING: ExtractHeading(node); break;
     case WikiParser::INDENT: ExtractIndent(node); break;
     case WikiParser::TERM: ExtractTerm(node); break;
@@ -169,6 +170,9 @@ void WikiExtractor::ExtractGallery(const Node &node) {
 
 void WikiExtractor::ExtractReference(const Node &node) {
   sink()->WordBreak();
+}
+
+void WikiExtractor::ExtractNoWiki(const Node &node) {
 }
 
 void WikiExtractor::ExtractHeading(const Node &node) {
@@ -299,50 +303,6 @@ void WikiExtractor::ExtractSkip(const Node &node) {
     }
     child = n.next_sibling;
   }
-}
-
-bool WikiExtractor::ExtractIntro(WikiSink *sink) {
-  // Look for FONT-TEXT-FONT sequence at the top level of the AST.
-  if (parser_.nodes().empty()) return false;
-
-  // Search for FONT node.
-  int index = parser_.node(0).first_child;
-  while (index != -1) {
-    const Node &node = parser_.node(index);
-    if (node.type == WikiParser::FONT) {
-      // FONT node found.
-      index = node.next_sibling;
-      break;
-    } else if (node.type == WikiParser::TEXT) {
-      // No text allowed before intro.
-      for (const char *p = node.begin; p < node.end; ++p) {
-        if (*p != ' ' && *p != '\n') return false;
-      }
-    } else if (node.type == WikiParser::HEADING) {
-      // Intro text must be in the first section.
-      return false;
-    }
-    index = node.next_sibling;
-  }
-  if (index == -1) return false;
-
-  // Find end of bold/italics text.
-  Enter(sink);
-  bool found = false;
-  while (index != -1) {
-    const Node &node = parser_.node(index);
-    if (node.type == WikiParser::FONT) {
-      found = true;
-      break;
-    } else if (node.type == WikiParser::TEXT) {
-      ExtractNode(node);
-    } else {
-      break;
-    }
-    index = node.next_sibling;
-  }
-  Leave(sink);
-  return found;
 }
 
 Text WikiExtractor::GetAttr(const Node &node, Text attrname) {

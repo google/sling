@@ -50,6 +50,7 @@ class WikiParser {
     MATH,        // <math>...</math>
     GALLERY,     // <gallery>...</gallery>
     REF,         // <ref>...</ref>
+    NOWIKI,      // <nowiki>...</nowiki>
 
     // Elements that must be at the start of a line.
     HEADING,     // =h1= ==h2== ===h3===

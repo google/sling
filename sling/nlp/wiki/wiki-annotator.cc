@@ -304,6 +304,10 @@ void WikiAnnotator::AddCategory(Handle category) {
   categories_.push_back(category);
 }
 
+void WikiAnnotator::AddAlias(const string &name, AliasSource source) {
+  aliases_.emplace_back(name, source);
+}
+
 }  // namespace nlp
 }  // namespace sling
 

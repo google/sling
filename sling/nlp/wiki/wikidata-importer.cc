@@ -283,6 +283,7 @@ class WikidataPruner : public task::FrameProcessor {
     // Get parameters.
     task->Fetch("prune_aliases", &prune_aliases_);
     task->Fetch("prune_wiki_links", &prune_wiki_links_);
+    task->Fetch("prune_wiki_maps", &prune_wiki_maps_);
     task->Fetch("prune_category_members", &prune_category_members_);
 
     // Initialize aux filter.
@@ -290,8 +291,8 @@ class WikidataPruner : public task::FrameProcessor {
     aux_output_ = task->GetSink("aux");
 
     // Initialize counters.
-    num_kb_items_ = task->GetCounter("num_kb_items");
-    num_aux_items_ = task->GetCounter("num_aux_items");
+    num_kb_items_ = task->GetCounter("kb_items");
+    num_aux_items_ = task->GetCounter("aux_items");
   }
 
   void Process(Slice key, const Frame &frame) override {
@@ -299,10 +300,11 @@ class WikidataPruner : public task::FrameProcessor {
     // item is pruned.
     bool aux = filter_.IsAux(frame);
 
-    // Remove aliases and wikilinks from item.
+    // Optionally, remove aliases, wikilinks, and categories from item.
     Builder item(frame);
     if (prune_aliases_) item.Delete(n_alias_);
-    if (prune_wiki_links_) item.Delete(n_wikipedia_);
+    if (prune_wiki_links_) item.Delete(n_links_);
+    if (prune_wiki_maps_) item.Delete(n_wikipedia_);
     if (prune_category_members_) item.Delete(n_member_);
     item.Update();
 
@@ -324,6 +326,7 @@ class WikidataPruner : public task::FrameProcessor {
   // Symbols.
   Name n_alias_{names_, "alias"};
   Name n_wikipedia_{names_, "/w/item/wikipedia"};
+  Name n_links_{names_, "/w/item/links"};
   Name n_member_{names_, "/w/item/member"};
 
   // Item filter.
@@ -335,6 +338,7 @@ class WikidataPruner : public task::FrameProcessor {
   // Parameters.
   bool prune_aliases_ = true;
   bool prune_wiki_links_ = true;
+  bool prune_wiki_maps_ = true;
   bool prune_category_members_ = true;
 
   // Statistics.

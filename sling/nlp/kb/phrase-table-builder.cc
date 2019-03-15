@@ -423,7 +423,8 @@ class PhraseTableBuilder : public task::FrameProcessor {
     (1 << SRC_WIKIDATA_LABEL) |
     (1 << SRC_WIKIDATA_ALIAS) |
     (1 << SRC_WIKIDATA_NAME) |
-    (1 << SRC_WIKIDATA_DEMONYM);
+    (1 << SRC_WIKIDATA_DEMONYM) |
+    (1 << SRC_WIKIPEDIA_NAME);
 
   // Phrase tokenizer.
   PhraseTokenizer tokenizer_;
