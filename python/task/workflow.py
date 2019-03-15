@@ -297,7 +297,7 @@ class Workflow(object):
     """Defines a name space for task names."""
     return Scope(self, name)
 
-  def task(self, type, name=None, shard=None):
+  def task(self, type, name=None, shard=None, params=None):
     """A new task to workflow."""
     if name == None: name = type
     if self.scope != None: name = self.scope.prefix() + "/" + name
@@ -307,17 +307,29 @@ class Workflow(object):
       index += 1
       name = basename + "-" + str(index)
     t = Task(type, name, shard)
+    if params != None: t.add_params(params)
     self.tasks.append(t)
     self.task_map[(name, shard)] = t
     return t
 
   def resource(self, file, dir=None, shards=None, ext=None, format=None):
-    """A one or more resources to workflow. The file parameter can be a file
-    name pattern with wild-cards, in which can it is expanded to a list of
+    """Adds one or more resources to workflow. The file parameter can be a file
+    name pattern with wild-cards, in which case it is expanded to a list of
     matching resources. The optional dir and ext are prepended and appended to
     the base file name. The file name can also be a sharded file name (@n),
     which is expanded to a list of resources, one for each shard. The general
     format of a file name is as follows: [<dir>]<file>[@<shards>][ext]"""
+    # Recursively expand comma-separated list of files.
+    if "," in file:
+      resources = []
+      for f in file.split(","):
+        r = self.resource(f, dir=dir, shards=shards, ext=ext, format=format)
+        if isinstance(r, list):
+          resources.extend(r)
+        else:
+          resources.append(r)
+      return resources
+
     # Convert format.
     if type(format) == str: format = Format(format)
 
@@ -568,15 +580,15 @@ class Workflow(object):
 
     return output
 
-  def shuffle(self, input, shards):
+  def shuffle(self, input, shards=None):
     """Shard and sort the input messages."""
-    # Create sharder and connect input.
-    sharder = self.task("sharder")
-    self.connect(input, sharder)
-    pipes = self.channel(sharder, shards=shards, format=format_of(input))
-
-    # Pipe outputs from sharder to sorters.
     if shards != None:
+      # Create sharder and connect input.
+      sharder = self.task("sharder")
+      self.connect(input, sharder)
+      pipes = self.channel(sharder, shards=shards, format=format_of(input))
+
+      # Pipe outputs from sharder to sorters.
       sorters = []
       for i in xrange(shards):
         sorter = self.task("sorter", shard=Shard(i, shards))
@@ -584,7 +596,7 @@ class Workflow(object):
         sorters.append(sorter)
     else:
       sorters = self.task("sorter")
-      self.connect(pipes, sorters)
+      self.connect(input, sorters)
 
     # Return output channel from sorters.
     outputs = self.channel(sorters, format=format_of(input))
@@ -605,6 +617,7 @@ class Workflow(object):
 
     # Write reduce output.
     self.write(reduced, output, params=params)
+    return reducer
 
   def mapreduce(self, input, output, mapper, reducer=None, params=None,
                 format=None):

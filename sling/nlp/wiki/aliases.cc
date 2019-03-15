@@ -19,6 +19,7 @@
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
 #include "sling/file/textmap.h"
+#include "sling/frame/serialization.h"
 #include "sling/nlp/document/phrase-tokenizer.h"
 #include "sling/nlp/wiki/wiki.h"
 #include "sling/task/frames.h"
@@ -165,29 +166,73 @@ class AliasReducer : public task::Reducer {
   void Start(task::Task *task) override {
     Reducer::Start(task);
 
+    // Load commons store.
+    for (task::Binding *binding : task->GetInputs("commons")) {
+      LoadStore(binding->resource()->name(), &commons_);
+    }
+    names_.Bind(&commons_);
+
     // Get parameters.
     string lang = task->Get("language", "en");
     language_ = commons_.Lookup("/lang/" + lang);
-    names_.Bind(&commons_);
-    commons_.Freeze();
     task->Fetch("anchor_threshold", &anchor_threshold_);
     task->Fetch("majority_form_fraction", &majority_form_fraction_);
     CHECK_GE(majority_form_fraction_, 0.5);
 
-    // Read toxic aliases.
-    TextMapInput aliases(task->GetInputFiles("toxic-aliases"));
-    string alias;
-    while (aliases.Read(nullptr, &alias, nullptr)) {
-      uint64 fp = tokenizer_.Fingerprint(alias);
-      toxic_aliases_.insert(fp);
+    // Read alias corrections.
+    Frame aliases(&commons_, "/w/aliases");
+    if (aliases.valid()) {
+      // Get corrections for language.
+      Frame corrections = aliases.GetFrame(language_);
+      if (corrections.valid()) {
+        // Make map of alias corrections for each item.
+        for (const Slot &s : corrections) {
+          item_corrections_[s.name] = s.value;
+        }
+      }
     }
+    commons_.Freeze();
   }
 
   void Reduce(const task::ReduceInput &input) override {
-    // Collect all the aliases for the item.
     Text qid = input.key();
     Store store(&commons_);
     std::unordered_map<uint64, Alias *> aliases;
+
+    // Get alias corrections for item.
+    std::set<uint64> blacklist;
+    auto f = item_corrections_.find(store.Lookup(qid));
+    if (f != item_corrections_.end()) {
+      Frame correction_list(&store, f->second);
+      for (const Slot &s : correction_list) {
+        // Get alias and source.
+        string name = String(&store, s.name).value();
+        Handle source = s.value;
+
+        // Compute fingerprint and case form.
+        uint64 fp;
+        CaseForm form;
+        tokenizer_.FingerprintAndForm(name, &fp, &form);
+
+        if (source == n_blacklist_) {
+          // Blacklist alias for item.
+          blacklist.insert(fp);
+        } else {
+          // Add new alias for item.
+          Alias *a = aliases[fp];
+          if (a == nullptr) {
+            a = new Alias;
+            aliases[fp] = a;
+          }
+          a->sources |= (1 << source.AsInt());
+          a->count += 1;
+          a->variants[name] += 1;
+          a->forms[form] += 1;
+        }
+      }
+    }
+
+    // Collect all the aliases for the item.
     for (task::Message *message : input.messages()) {
       // Get next set of aliases for item.
       Frame batch = DecodeMessage(&store, message);
@@ -211,6 +256,9 @@ class AliasReducer : public task::Reducer {
         CaseForm form;
         tokenizer_.FingerprintAndForm(name, &fp, &form);
 
+        // Check if alias has been blacklisted.
+        if (blacklist.count(fp) > 0) continue;
+
         // Update alias table.
         Alias *a = aliases[fp];
         if (a == nullptr) {
@@ -227,9 +275,8 @@ class AliasReducer : public task::Reducer {
     // Select aliases.
     Builder merged(&store);
     for (auto it : aliases) {
-      bool toxic = toxic_aliases_.count(it.first) != 0;
       Alias *alias = it.second;
-      if (!SelectAlias(alias, toxic)) continue;
+      if (!SelectAlias(alias)) continue;
 
       // Find most common variant.
       int max_count = -1;
@@ -270,21 +317,18 @@ class AliasReducer : public task::Reducer {
   }
 
   // Check if alias should be selected.
-  bool SelectAlias(Alias *alias, bool toxic) {
+  bool SelectAlias(Alias *alias) {
     // Keep aliases from "trusted" sources.
     if (alias->sources & (WIKIDATA_LABEL |
                           WIKIPEDIA_TITLE |
                           WIKIPEDIA_REDIRECT |
-                          WIKIPEDIA_NAME)) {
+                          WIKIPEDIA_NAME |
+                          WIKIDATA_ALIAS |
+                          WIKIDATA_NAME)) {
       return true;
     }
 
-    // Only keep Wikidata alias if it is not toxic.
-    if (alias->sources & (WIKIDATA_ALIAS | WIKIDATA_NAME)) {
-      return !toxic;
-    }
-
-    // Keep foreign, native, demonym, and nickname aliases supported by
+    // Keep foreign, native and demonym, and nickname aliases supported by
     // Wikipedia aliases.
     if (alias->sources & (WIKIDATA_FOREIGN |
                           WIKIDATA_NATIVE |
@@ -340,6 +384,7 @@ class AliasReducer : public task::Reducer {
   Name n_count_{names_, "count"};
   Name n_sources_{names_, "sources"};
   Name n_form_{names_, "form"};
+  Name n_blacklist_{names_, "blacklist"};
 
   // Language.
   Handle language_;
@@ -354,8 +399,8 @@ class AliasReducer : public task::Reducer {
   // be considered the majority form.
   float majority_form_fraction_ = 0.75;
 
-  // Fingerprint for toxic aliases.
-  std::set<uint64> toxic_aliases_;
+  // Mapping from item id to corrections for item.
+  HandleMap<Handle> item_corrections_;
 };
 
 REGISTER_TASK_PROCESSOR("alias-reducer", AliasReducer);

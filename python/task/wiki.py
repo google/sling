@@ -33,15 +33,15 @@ flags.define("--only_known_languages",
              default=False,
              action='store_true')
 
-flags.define("--snapshot_kb",
-             help="create snapshot for knowledge base",
-             default=False,
-             action='store_true')
-
 flags.define("--skip_wikipedia_mapping",
              help="skip wikipedia mapping step",
              default=False,
              action='store_true')
+
+flags.define("--extra_items",
+             help="additional items with info",
+             default=None,
+             metavar="RECFILES")
 
 class WikiWorkflow:
   def __init__(self, name=None, wf=None):
@@ -467,14 +467,29 @@ class WikiWorkflow:
                             dir=corpora.wikidir(),
                             format="records/frame")
 
-  def fuse_items(self, items=None):
+  def fuse_items(self, items=None, extras=None, output=None):
     if items == None:
       items = self.wikidata_items() + [self.wikipedia_items(),
                                        self.wikipedia_members(),
                                        self.item_popularity()]
+    if flags.arg.extra_items:
+      extra = self.wf.resource(flags.arg.extra_items, format="records/frame")
+      if isinstance(extra, list):
+        items.extend(extra)
+      else:
+        items.append(extra)
+
+    if extras != None:
+      if isinstance(extras, list):
+        items.extend(extras)
+      else:
+        items.append(extras)
+
+    if output == None: output = self.fused_items();
+
     with self.wf.namespace("fused-items"):
       return self.wf.mapreduce(input=items,
-                               output=self.fused_items(),
+                               output=output,
                                mapper=None,
                                reducer="item-merger",
                                format="message/frame",
@@ -522,6 +537,17 @@ class WikiWorkflow:
                             dir=corpora.wikidir(),
                             format="store/frame")
 
+  def schema_defs(self):
+    """Resources for schemas included in knowledge base."""
+    return [
+      self.language_defs(),
+      self.calendar_defs(),
+      self.country_defs(),
+      self.unit_defs(),
+      self.wikidata_defs(),
+      self.wikipedia_defs()
+    ]
+
   def build_knowledge_base(self,
                            items=None,
                            properties=None,
@@ -530,13 +556,7 @@ class WikiWorkflow:
     schemas."""
     if items == None: items = self.fused_items()
     if properties == None: properties = self.wikidata_properties()
-    if schemas == None:
-      schemas = [self.language_defs(),
-                 self.calendar_defs(),
-                 self.country_defs(),
-                 self.unit_defs(),
-                 self.wikidata_defs(),
-                 self.wikipedia_defs()]
+    if schemas == None: schemas = self.schema_defs()
 
     with self.wf.namespace("wikidata"):
       # Prune information from Wikidata items.
@@ -551,7 +571,7 @@ class WikiWorkflow:
       # Collect frames into knowledge base store.
       parts = self.wf.collect(pruned_items, property_catalog, schemas)
       return self.wf.write(parts, self.knowledge_base(),
-                          params={"snapshot": flags.arg.snapshot_kb})
+                           params={"snapshot": True})
 
   #---------------------------------------------------------------------------
   # Item names
@@ -576,6 +596,12 @@ class WikiWorkflow:
                             dir=corpora.wikidir(language),
                             format="records/alias")
 
+  def alias_corrections(self):
+    """Resource for alias corrections."""
+    return self.wf.resource("aliases.sling",
+                            dir=corpora.repository("data/wiki"),
+                            format="store/frame")
+
   def extract_names(self, aliases=None, language=None):
     "Task for selecting language-dependent names for items."""
     if language == None: language = flags.arg.language
@@ -599,8 +625,9 @@ class WikiWorkflow:
     merged_aliases = self.wf.shuffle(aliases, len(names))
 
     # Filter and select aliases.
-    self.wf.reduce(merged_aliases, names, "alias-reducer",
-                   params={"language": language})
+    selector = self.wf.reduce(merged_aliases, names, "alias-reducer",
+                              params={"language": language})
+    selector.attach_input("commons", self.alias_corrections())
     return names
 
   #---------------------------------------------------------------------------

@@ -1,0 +1,79 @@
+; Additional aliases and black-listed aliases.
+
+{=/w/aliases
+  /lang/en: /w/aliases/en
+}
+
+{=/w/aliases/en
+  ; Race and ethnicity in the United States Census
+  Q2035701: {
+    "White": blacklist
+    "Latino": blacklist
+    "Latinos": blacklist
+    "Hispanic": blacklist
+    "Black": blacklist
+    "Pacific Islander": blacklist
+    "White American": blacklist
+    "Black or African American": blacklist
+    "African American": blacklist
+    "Asian American": blacklist
+    "Asian": blacklist
+    "American Indian": blacklist
+    "American Indians": blacklist
+    "Native American": blacklist
+    "Caucasian": blacklist
+    "Not Hispanic or Latino": blacklist
+    "other races": blacklist
+    "some other race": blacklist
+  }
+
+  ; American football positions
+  Q694589: {
+    "OL": blacklist
+  }
+
+  ; Types of inhabited localities in Russia
+  Q2578772: {
+    "town": blacklist
+    "city": blacklist
+    "village": blacklist
+    "settlement": blacklist
+    "inhabited localities": blacklist
+    "rural locality": blacklist
+    "rural localities": blacklist
+    "urban locality": blacklist
+    "mestechko": blacklist
+    "posyolok": blacklist
+  }
+
+  ; States and union territories of India
+  Q131541: {
+    "state": blacklist
+  }
+
+  ; Regions of France
+  Q36784: {
+    "region": blacklist
+  }
+
+  ; Win–loss record (pitching)
+  Q1202506: {
+    "record": blacklist
+  }
+
+  ; Has Been exhibition
+  Q55353092: {
+    "Has Been": blacklist
+  }
+
+  ; female
+  Q6581072: {
+    "women": 2
+  }
+
+  ; Luis Félix López
+  Q6700604: {
+    "Political Career": blacklist  ; extra infobox
+  }
+}
+
