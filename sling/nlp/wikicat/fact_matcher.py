@@ -44,54 +44,55 @@ For this parse, we would separately compute and report fact matching
 statistics for each of the two assertions over all members of the category.
 """
 class FactMatcher:
+  # For CONFLICT, SUBSUMES_EXISTING, and EXACT, we store only a handful
+  # of source items. For the rest, we store all source items.
+  MAX_SOURCE_ITEMS = 10
+
+  TYPES_WITH_EXEMPLARS_ONLY = set([
+      FactMatchType.EXACT,
+      FactMatchType.CONFLICT,
+      FactMatchType.SUBSUMES_EXISTING
+  ])
+
+
   """
   Output of match statistics computation across multiple source_qids.
   This is comprised of a histogram over various FactMatchType buckets,
-  and corresponding evidences (if enabled).
+  and corresponding source qids.
   """
   class Output:
-    def __init__(self, max_evidences=0):
-      self.max_evidences = max_evidences
-      self.counts = defaultdict(int)      # match type -> count
-      self.evidences = defaultdict(list)  # match type -> evidences
+    def __init__(self):
+      self.counts = defaultdict(int)         # match type -> count
+      self.source_items = defaultdict(list)  # match type -> [some] source items
 
-    # Adds a match type with corresponding evidence to the output.
-    def add(self, match_type, evidence):
+    # Adds a match type with corresponding source item to the output.
+    def add(self, match_type, source_item):
       self.counts[match_type] += 1
-      if self.max_evidences < 0 or \
-        self.max_evidences > len(self.evidences[match_type]):
-          self.evidences[match_type].append(evidence)
+      if match_type not in FactMatcher.TYPES_WITH_EXEMPLARS_ONLY or \
+          len(self.source_items[match_type]) < FactMatcher.MAX_SOURCE_ITEMS:
+          self.source_items[match_type].append(source_item)
 
-    # Saves and returns the histogram as a frame. For the ADDITIONAL bucket,
-    # the existing fanout is also saved in the frame. This is because when we
-    # propose an ADDITIONAL fact, we may want to compute its likelihood based on
-    # how many facts already exist.
+    # Saves and returns the histogram as a frame.
     def as_frame(self, store):
       buckets = []
       for match_type, count in self.counts.iteritems():
-        buckets.append(store.frame([
+        bucket_frame = store.frame([
           ("match_type", match_type.name),
-          ("count", count)]))
+          ("count", count),
+          ("source_items", self.source_items[match_type])])
+        if match_type in self.source_items:
+          items = []
+        buckets.append(bucket_frame)
       buckets = store.array(buckets)
       frame = store.frame({"buckets": buckets})
 
-      if FactMatchType.ADDITIONAL in self.evidences:
-        fanouts = defaultdict(int)
-        for _, fanout in self.evidences[FactMatchType.ADDITIONAL]:
-          fanouts[fanout] += 1
-
-        fanouts = [\
-          store.frame({"fanout": f, "count": fanouts[f]}) \
-          for f in sorted(fanouts.keys())]
-        frame["fanout_for_additional"] = store.frame(\
-          {"bucket": bucket for bucket in fanouts})
-
       return frame
+
 
     # String representation of the histogram.
     def __repr__(self):
       keys = list(sorted(self.counts.keys()))
-      kv = [(FactMatchType(k), self.counts[k]) for k in keys]
+      kv = [(k, self.counts[k]) for k in keys]
       return '{%s}' % ', '.join(["%s:%d" % (x[0].name, x[1]) for x in kv])
 
 
@@ -198,7 +199,7 @@ class FactMatcher:
   # 'prop' could be a property (sling.Frame) or a pid-path represented either
   # as a sling.Array or a list.
   #
-  # Returns the type of the match along with the corresponding evidence.
+  # Returns the type of the match.
   def for_item(self, item, prop, value, store=None):
     assert isinstance(value, sling.Frame)
     if isinstance(prop, sling.Frame):
@@ -212,10 +213,10 @@ class FactMatcher:
     # Compute existing facts without any backoff.
     exact_facts = self._existing_facts(store, item, prop, False)
     if len(exact_facts) == 0:
-      return (FactMatchType.NEW, item)
+      return FactMatchType.NEW
 
     if value in exact_facts:
-      return (FactMatchType.EXACT, item)
+      return FactMatchType.EXACT
 
     # For date-valued properties, existing dates could be int or string
     # (which won't match 'value', which is a sling.Frame). For them, we do a
@@ -225,54 +226,42 @@ class FactMatcher:
       existing_dates = [sling.Date(e) for e in exact_facts]
       for e in existing_dates:
         if e.value() == proposed_date.value():
-          return (FactMatchType.EXACT, item)
+          return FactMatchType.EXACT
 
     # Check whether the proposed fact subsumes an existing fact.
     closure_facts = self._existing_facts(store, item, prop, True)
     if value in closure_facts:
-      return (FactMatchType.SUBSUMES_EXISTING, item)
+      return FactMatchType.SUBSUMES_EXISTING
 
     # Check whether the proposed fact is subsumed by an existing fact.
     # Again, dates require special treatment.
     if self._date_valued(prop[-1]):
       for e in existing_dates:
         if self._finer_date(proposed_date, e):
-          return (FactMatchType.SUBSUMED_BY_EXISTING, (item, e))
+          return FactMatchType.SUBSUMED_BY_EXISTING
     else:
       for existing in exact_facts:
         if isinstance(existing, sling.Frame):
           if self.subsumes(store, prop[-1], existing, value):
-            return (FactMatchType.SUBSUMED_BY_EXISTING, (item, existing))
+            return FactMatchType.SUBSUMED_BY_EXISTING
 
     # Check for conflicts in case of unique-valued properties.
     if len(prop) == 1 and prop[0] in self.unique_properties:
-      return (FactMatchType.CONFLICT, (item, exact_facts[0]))
+      return FactMatchType.CONFLICT
 
-    # Proposed fact is an additional one. Report the existing fanout.
-    return (FactMatchType.ADDITIONAL, (item, len(exact_facts)))
+    # Proposed fact is an additional one.
+    return FactMatchType.ADDITIONAL
 
 
   # Same as above, but returns a histogram of match types over multiple items.
-  def for_items(self, items, prop, value, store=None, max_evidences=0):
+  def for_items(self, items, prop, value, store=None):
     if store is None:
       store = sling.Store(self.kb)
-    output = FactMatcher.Output(max_evidences)
+    output = FactMatcher.Output()
     for item in items:
-      (match, evidence) = self.for_item(item, prop, value, store)
-      output.add(match, evidence)
+      match = self.for_item(item, prop, value, store)
+      output.add(match, item)
     return output
-
-
-  # Same as above, but returns a match-type histogram separately for each
-  # proposed (pid, qid) span in 'parse'.
-  def for_parse(self, items, parse, store=None, max_evidences=0):
-    if store is None:
-      store = sling.Store(self.kb)
-    retval = []   # ith entry = match statistics for ith span
-    for span in parse.spans:
-      output = self.for_items(items, span.pids, span.qid, store, max_evidences)
-      retval.append(output)
-    return retval
 
 
   # Same as above, but returns one list of match-type histograms per parse
@@ -284,7 +273,7 @@ class FactMatcher:
   #
   # Most parses share a lot of common spans, so this method caches and reuses
   # match statistics for such spans.
-  def for_parses(self, category, store=None, max_evidences=0):
+  def for_parses(self, category, store=None):
     if store is None:
       store = sling.Store(self.kb)
 
@@ -299,8 +288,7 @@ class FactMatcher:
         if key in cache:
           stats = cache[key]
         else:
-          stats = self.for_items(\
-            items, span.pids, span.qid, store, max_evidences)
+          stats = self.for_items(items, span.pids, span.qid, store)
           cache[key] = stats
         parse_stats.append(stats)
       output.append(parse_stats)
@@ -323,7 +311,7 @@ class FactMatcherTask:
     for key, value in reader:
       store = sling.Store(self.kb)
       category = store.parse(value)
-      matches = self.matcher.for_parses(category, store, max_evidences=-1)
+      matches = self.matcher.for_parses(category, store)
       frame_cache = {}   # (pid, qid) -> frame containing their match statistics
       for parse, parse_match in zip(category("parse"), matches):
         for span, span_match in zip(parse.spans, parse_match):
@@ -358,7 +346,7 @@ def shell():
     if value is not None:
       store = sling.Store(kb)
       category = store.parse(value)
-      output = matcher.for_parses(category, store, max_evidences=4)
+      output = matcher.for_parses(category, store)
       print "%s = %s (%d members)" % \
         (item, category.name, len(category.members))
       for idx, (parse, match) in enumerate(zip(category("parse"), output)):
@@ -384,7 +372,5 @@ def shell():
     qid = kb[qid]
 
     output = matcher.for_item(item, pids, qid)
-    print item, "(" + item.name + ") :", \
-      output[0].name, "evidence: ", output[1]
+    print item, "(" + item.name + ") :", output.name
     print ""
-

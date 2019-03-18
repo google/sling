@@ -38,17 +38,18 @@ live in a BrowserGlobals object outside the handler.
 """
 class BrowserGlobals:
   # Initializes the globals from 'parses_filename'.
-  def read(self, parses_filename):
+  def init(self, parses_filename, output_dir):
+    self.output_dir = output_dir
     reader = sling.RecordReader(parses_filename)
     self.category_name_to_qid = {}                      # category name -> qid
     self.category_frame = {}                            # category qid -> frame
     self.full_signature_to_parse = defaultdict(list)    # signature -> parse
     self.coarse_signature_to_parse = defaultdict(list)  # signature -> parse
-    store = sling.Store()
+    self.store = sling.Store()
     for index, (qid, value) in enumerate(reader):
       if index > 0 and index % 20000 == 0:
         log.info("%d categories read" % index)
-      frame = store.parse(value)
+      frame = self.store.parse(value)
       self.category_name_to_qid[frame.name] = qid
       self.category_frame[qid] = frame
       for parse in frame("parse"):
@@ -78,7 +79,7 @@ class SignatureStats:
     self.score = 0.0
 
     # Total fact-matching statistics.
-    self.fact_stats = defaultdict(int)
+    self.fact_matches = util.MatchCounts()
 
     # Non-deduped total number of member items.
     self.members = 0
@@ -213,6 +214,27 @@ class Browser(BaseHTTPRequestHandler):
         td.sep {
           background: #dddddd;
         }
+
+        .fact_match_count {
+          color: blue;
+          position: relative;
+          display: inline-block;
+        }
+
+        .fact_match_examples {
+          visibility: hidden;
+          background-color: white;
+          width: 200px;
+          color: black;
+          position: absolute;
+          text-align: left;
+          padding: 2px 2px;
+          z-index: 1;
+        }
+
+        .fact_match_count:hover .fact_match_examples {
+          visibility: visible;
+        }
       </style>
       '''
     self.wfile.write(styles)
@@ -222,33 +244,7 @@ class Browser(BaseHTTPRequestHandler):
   def write_script(self):
     script = '''
     <script language="javascript">
-    function copy_settings_to_main_form() {
-      var settings = document.getElementById("settings");
-      var main_form = document.getElementById("main_form");
-      for (var i = 0; i < settings.elements.length; ++i) {
-        var field = settings.elements[i];
-        if (field.tagName == "BUTTON") continue;
-        if (field.tagName == "INPUT" && field.type == "submit") continue;
-        var name = "main_form_" + field.name;
-        var main_elem = document.getElementById(name);
-        var value = field.value;
-        if (field.tagName == "INPUT" && field.type == "checkbox") {
-          value = field.checked ? "on" : "";
-        }
-        if (main_elem == null) {
-          main_elem = document.createElement("input");
-          main_form.appendChild(main_elem);
-        }
-        main_elem.id = name;
-        main_elem.name = name;
-        main_elem.type = "hidden";
-        main_elem.size = 100;
-        main_elem.value = value;
-      }
-    }
-
     function onclick_handler(target, submit_main_form) {
-      copy_settings_to_main_form();
       if (target != null) {
         document.getElementById("main_form_input").value = target;
       }
@@ -257,41 +253,41 @@ class Browser(BaseHTTPRequestHandler):
       }
     }
 
-    function onload_handler() {
-      copy_settings_to_main_form();
+    function set_weight(short_name, value) {
+      value = value.toString();
+      document.getElementById('main_form_wt_' + short_name).value = value;
     }
 
     function empty_wts() {
-      var settings = document.getElementById('settings');
-      for (var i = 0; i < settings.elements.length; ++i) {
-        var f = settings.elements[i];
-        if (f.id.startsWith('wt_')) {
-          f.value = 0;
-        }
-      }
+      set_weight('new', 0);
+      set_weight('exact', 0);
+      set_weight('additional', 0);
+      set_weight('conflict', 0);
+      set_weight('subsumes_existing', 0);
+      set_weight('subsumed_by_existing', 0);
     }
 
     function set_headroom() {
       empty_wts();
-      document.getElementById('wt_new').value = "1";
-      document.getElementById('wt_additional').value = "0.5";
+      set_weight('new', 1);
+      set_weight('additional', 0.5);
     }
 
     function set_penalized_headroom() {
       set_headroom();
-      document.getElementById('wt_conflict').value = "-1";
+      set_weight('conflict', -1);
     }
 
     function set_conflicts() {
       empty_wts();
-      document.getElementById('wt_conflict').value = "-1";
+      set_weight('conflict', -50);
     }
 
     function set_existing() {
       empty_wts();
-      document.getElementById('wt_exact').value = "1";
-      document.getElementById('wt_subsumes_existing').value = "1";
-      document.getElementById('wt_subsumed_by_existing').value = "1";
+      set_weight('exact', 1);
+      set_weight('subsumes_existing', 1);
+      set_weight('subsumed_by_existing', 1);
     }
     </script>
     '''
@@ -338,8 +334,8 @@ class Browser(BaseHTTPRequestHandler):
   # for each bucket-type are given in 'weights' (FactMatchType.name -> float).
   def parse_fact_score(self, parse, weights):
     score = 0.0
-    counts = util.fact_matches_for_parse(parse)
-    for match_type, count in counts.iteritems():
+    match_counts = util.fact_matches_for_parse(parse, max_examples=0)
+    for match_type, count in match_counts.counts.iteritems():
       score += count * weights[match_type]
     return score
 
@@ -357,7 +353,7 @@ class Browser(BaseHTTPRequestHandler):
     return weights
 
 
-  # Computes and returns the specified kind of score for the given parse. 
+  # Computes and returns the specified kind of score for the given parse.
   def parse_score(self, category, parse, score_type, fact_match_weights):
     if score_type == "num_members":
       return len(category.members)
@@ -376,7 +372,7 @@ class Browser(BaseHTTPRequestHandler):
     def old_value(name, fallback):
       if main_form is None:
         return fallback
-      return main_form.getvalue("main_form_" + name)
+      return main_form.getvalue(name)
 
     # Makes and returns a <select> list with the given id, options, and value.
     def make_select_list(list_id, option_name_values, default_value):
@@ -388,28 +384,26 @@ class Browser(BaseHTTPRequestHandler):
         else:
           self._tag("option", name, value=value)
       self._end("select")
-   
+
     # Default weights for computing fact-match scores.
     default_weights = {
-      FactMatchType.NEW: 1.1,
+      FactMatchType.NEW: 0.1,
       FactMatchType.EXACT: 1,
-      FactMatchType.SUBSUMES_EXISTING: 1,
-      FactMatchType.SUBSUMED_BY_EXISTING: 1,
-      FactMatchType.CONFLICT: -5,
-      FactMatchType.ADDITIONAL: 0.5
+      FactMatchType.SUBSUMES_EXISTING: 0.5,
+      FactMatchType.SUBSUMED_BY_EXISTING: 0.9,
+      FactMatchType.CONFLICT: -50,
+      FactMatchType.ADDITIONAL: 0.05
     }
 
     self._begin("div", style="background-color:#cccccc")
-
     self._tag("h3", "Settings")
-    self._begin("form", id="settings")
 
     # Options for setting fact-match bucket weights.
     self._tag("b", "Weights for computing fact-matching scores:")
     self._br()
     for t in FactMatchType:
       self._text("&nbsp;" + t.name + ": ")
-      field_name = "wt_" + t.name.lower()
+      field_name = "main_form_wt_" + t.name.lower()
       value = old_value(field_name, default_weights[t])
       self._begin_end("input", type="text", size=5, \
           value=value, id=field_name, name=field_name)
@@ -428,7 +422,7 @@ class Browser(BaseHTTPRequestHandler):
 
     # Option to choose the metric for sorting parses.
     self._tag("b", "Sort categories/parses by: ")
-    make_select_list("sort_metric", [
+    make_select_list("main_form_sort_metric", [
       ("Fact-matching score", "fact_matching_score"),
       ("Number of members", "num_members"),
       ("Prelim parse score", "prelim_parse_score")], "fact_matching_score")
@@ -436,7 +430,7 @@ class Browser(BaseHTTPRequestHandler):
 
     # Option to select the parse signature to use.
     self._tag("b", "Signature type: ")
-    make_select_list("signature_type", [
+    make_select_list("main_form_signature_type", [
       ("Coarse", "coarse"), ("Full", "full")], "full")
     self._br()
 
@@ -451,25 +445,23 @@ class Browser(BaseHTTPRequestHandler):
         ("span-level fact-matching Statistics", "span_fact_match_stats"),
         ("categories with the same signature", "similar_categories")]:
       name = "Show " + name
-      box = "show_" + box
+      box = "main_form_show_" + box
       self._text(" " + name + ": ")
       checked = old_value(box, None)
-      if main_form is None and box == "show_fact_matching_statistics":
+      if main_form is None and box == "main_form_show_fact_matching_statistics":
         checked = "on"
       box_args = {"id": box, "name": box, "type": "checkbox"}
       if checked == "on":
         box_args["checked"] = checked
       self._begin_end("input", **box_args)
       self._br()
-    self._end(["form", "div"])
+    self._end("div")
 
 
   # Writes the main form, which on surface only has the input text field.
   # On submission, this form copies all the settings from the settings form,
   # and then submits.
   def write_main_form(self, form):
-    self._begin("form", id="main_form", method="POST", action="", \
-        onsubmit="onclick_handler(null, false);")
     self._text(" Loaded %d categories with %d full and %d coarse signatures" % \
       (len(browser_globals.category_name_to_qid),
        len(browser_globals.full_signature_to_parse),
@@ -482,6 +474,10 @@ class Browser(BaseHTTPRequestHandler):
     self._begin_end("input", id="main_form_input", name="main_form_input", \
       type="text", size=100, value=value)
 
+    # Set the functionality mode of the main form to 'browse'.
+    self._begin_end("input", type="hidden", id="main_form_functionality", \
+                    name="main_form_functionality", value="browse")
+
     # Submit button.
     self._text("&nbsp;")
     self._begin_end("input", type="submit")
@@ -489,7 +485,6 @@ class Browser(BaseHTTPRequestHandler):
     # Short-cut for showing top signatures.
     self._br()
     self._form_anchor("Top Signatures", "top")
-    self._end("form")
 
 
   # Writes the part of the page before the results. This consists of the
@@ -502,10 +497,80 @@ class Browser(BaseHTTPRequestHandler):
     self._text('\n')
     self.write_script()
     self._text('\n')
-    self._begin("body", onload="onload_handler()")
+    self._end("head")
+    self._begin("body")
+    self._begin("form", id="main_form", method="POST", action="", \
+        onsubmit="onclick_handler(null, false);")
     self.write_settings(form)
     self.write_main_form(form)
-    self._end(["body", "html"])
+    self._end("form")
+    self._br()
+
+
+  # Writes a recordio for facts for a given signature.
+  def write_recordio(self, form):
+    filename = form.getvalue("recordio_filename")
+    signature = form.getvalue("recordio_signature")
+    chosen_categories = form.getvalue("recordio_categories")
+    all_chosen = chosen_categories == 'ALL'
+    chosen_categories = set(chosen_categories.split(","))
+
+    # See which spans in the signature should be focused on.
+    num_spans = int(form.getvalue("recordio_num_spans"))
+    chosen_spans = []
+    for index in xrange(num_spans):
+      if form.getvalue("recordio_span%d" % index) == "on":
+        chosen_spans.append(index)
+
+    parses = None
+    if signature in browser_globals.coarse_signature_to_parse:
+      parses = browser_globals.coarse_signature_to_parse[signature]
+    else:
+      parses = browser_globals.full_signature_to_parse[signature]
+
+    allowed_match_types = set(form.getvalue("recordio_match_types").split(","))
+    store = browser_globals.store
+    writer = sling.RecordWriter(filename)
+
+    counts = {}
+    for (category_qid, category_frame, parse) in parses:
+      # Skip category if we shouldn't extract facts for its members.
+      if not all_chosen and category_qid not in chosen_categories:
+        continue
+
+      for index in chosen_spans:
+        span = parse.spans[index]
+        pid = span.pids
+        qid = span.qid
+
+        # Can't upload multi-hop facts yet.
+        if len(pid) > 1:
+          continue
+
+        pid = pid[0]
+        matches = util.fact_matches_for_span(span, max_examples=-1)
+        counts[pid] = 0
+        for match_type, examples in matches.examples.iteritems():
+          if match_type not in allowed_match_types:
+            continue
+
+          for member in examples:
+            frame = store.frame([("item", member)])
+            frame.facts = store.frame([(pid, qid)])
+            frame.provenance = store.frame([
+                ("category", category_qid),
+                ("method", "Member of Category:%s" % category_frame.name)
+            ])
+            frame.comment = "%s : %s = %s" % \
+                (member.name if member.name is not None else member, \
+                 signature,
+                 qid.name if qid.name is not None else qid)
+            counts[pid] += 1
+            writer.write(member.id, frame.data(binary=True))
+    writer.close()
+    self._text("Wrote recordio to: " + str(filename))
+    self._br()
+    self._text("Fact counts by property: " + str(counts))
 
 
   # Overridden method for generating the head of the response.
@@ -520,6 +585,7 @@ class Browser(BaseHTTPRequestHandler):
     if self.path == "/":
       # For the first landing on the page, just generate the empty form.
       self.write_entry_page()
+      self._end(["body", "html"])
 
 
   # Overridden method for responding to POST requests. This is the main method,
@@ -533,6 +599,11 @@ class Browser(BaseHTTPRequestHandler):
         headers=self.headers,
         environ={'REQUEST_METHOD': 'POST'}
     )
+
+    recordio = form.getvalue("main_form_functionality") == "recordio"
+    if recordio:
+      self.write_recordio(form)
+      return
 
     # Mirror the filled out form in the response.
     self.write_entry_page(form)
@@ -567,12 +638,30 @@ class Browser(BaseHTTPRequestHandler):
 
 
   # Writes fact-match counts as table cells.
-  def write_fact_match_counts(self, counts):
+  # Hovering on the cell exposes a list of examples.
+  def write_fact_match_counts(self, match_counts):
     for t in FactMatchType:
       count = "-"
-      if t.name in counts:
-        count = counts[t.name]
-      self._cell(count, numeric=True)
+      examples = []
+      if t.name in match_counts.counts:
+        count = match_counts.counts[t.name]
+        examples = match_counts.examples[t.name]
+      self._begin("td class='numeric'")
+      self._begin("div class='fact_match_count'")
+      self._text(count)
+      if len(examples) > 0:
+        self._begin("div class='fact_match_examples'")
+        self._tag("b", "Exemplar source items")
+        self._br()
+        self._begin("ul")
+        for example in examples:
+          link = "https://www.wikidata.org/wiki/%s" % example.id
+          self._begin("li")
+          self._tag("a", example.id, target="_blank", href=link)
+          self._end("li")
+        self._end("ul")
+        self._end("div")
+      self._end(["div", "td"])
 
 
   # Writes table header for the main table.
@@ -625,7 +714,7 @@ class Browser(BaseHTTPRequestHandler):
         stats.members += len(category.members)
         stats.score += score
         stats.num += 1
-        util.fact_matches_for_parse(parse, stats.fact_stats)
+        util.fact_matches_for_parse(parse, stats.fact_matches)
 
     # Take only the 'max_rows' top signatures as per the aggregated scores.
     all_stats = list(all_stats.iteritems())
@@ -648,7 +737,7 @@ class Browser(BaseHTTPRequestHandler):
       self._cell(stats.score, numeric=True)
       self._cell("%d / %d" % (stats.members, stats.num), numeric=True)
       self._separator(header=False)
-      self.write_fact_match_counts(stats.fact_stats)
+      self.write_fact_match_counts(stats.fact_matches)
       self._end("tr")
     self._end("table")
 
@@ -669,8 +758,8 @@ class Browser(BaseHTTPRequestHandler):
     # Get fact-matching statistics. Consider only the top parse for a category
     # if it has >1 parses with the same signature.
     category_count = defaultdict(int)
-    match_counts = defaultdict(int)
-    span_match_counts = defaultdict(lambda: defaultdict(int))
+    match_counts = util.MatchCounts()
+    span_match_counts = defaultdict(util.MatchCounts)
     num_members = 0
     for qid, category, parse, score in output:
       category_count[qid] += 1
@@ -694,11 +783,11 @@ class Browser(BaseHTTPRequestHandler):
     self.write_main_table_header(
       ["Span Signature"],
       [t.name for t in FactMatchType])
-    for span_signature, span_stats in span_match_counts.iteritems():
+    for span_signature, span_matches in span_match_counts.iteritems():
       self._begin("tr")
       self._cell(span_signature)
       self._separator(header=False)
-      self.write_fact_match_counts(span_stats)
+      self.write_fact_match_counts(span_matches)
       self._end("tr")
     self._begin("tr")
     self._cell("All")
@@ -706,6 +795,51 @@ class Browser(BaseHTTPRequestHandler):
     self.write_fact_match_counts(match_counts)
     self._end("tr")
     self._end("table")
+
+    # Give an option to generate a recordio file.
+    if signature_type == "full":
+      self._br()
+      self._begin("table", border=1)
+      self._begin("tr")
+      self._begin("td")
+      self._begin("form", id="recordio_form", method="POST", action="", \
+                  target="_blank")
+      self._begin_end("input", type="hidden", name="main_form_functionality", \
+                      value="recordio")
+      self._begin_end("input", type="hidden", name="recordio_signature", \
+                      id="recordio_signature", value=signature)
+      self._tag("b", "Generate recordio for this signature")
+      self._br()
+      self._br()
+      self._text("Filename: ")
+      filename = "local/data/e/wikicat/" + signature.replace("$", "_") + ".rec"
+      self._begin_end("input", type="text", size=100, \
+                      name="recordio_filename", value=filename)
+      self._br()
+      self._text("Category QIDs ('ALL' for all): ")
+      self._begin_end("input", type="text", size=100, value="ALL", \
+                      name="recordio_categories")
+      self._br()
+      self._text("Generate facts for these types:")
+      self._begin_end("input", type="text", size=100, \
+                      value="NEW,ADDITIONAL,SUBSUMED_BY_EXISTING", \
+                      name="recordio_match_types")
+      self._br()
+      self._text("Generate the following facts:")
+      self._br()
+      count = 0
+      for token in signature.split():
+        if token[0] == '$' and token[1:].find("$") >= 0:
+          name = "recordio_span%d" % count
+          self._text("&nbsp;&nbsp;" + token + " ")
+          self._begin_end("input", type="checkbox", name=name, id=name, \
+                          checked="on")
+          self._br()
+          count += 1
+      self._begin_end("input", type="hidden", name="recordio_num_spans", \
+                      id="recordio_total_spans", value=count)
+      self._begin_end("input", type="submit")
+      self._end(["form", "td", "tr", "table"])
 
     # Write the individual parses in a tabular form.
     self._br()
@@ -880,9 +1014,14 @@ if __name__ == "__main__":
                default="local/data/e/wikicat/parses-with-match-statistics.rec",
                type=str,
                metavar="FILE")
+  flags.define("--output",
+               help="Output dir where Wikibot recordios will be generated.",
+               default="local/data/e/wikicat/",
+               type=str,
+               metavar="DIR")
   flags.parse()
   log.info('Reading parses from %s' % flags.arg.parses)
-  browser_globals.read(flags.arg.parses)
+  browser_globals.init(flags.arg.parses, flags.arg.output)
   server_address = ('', flags.arg.port)
   httpd = HTTPServer(server_address, Browser)
   log.info('Starting HTTP Server on port %d' % flags.arg.port)

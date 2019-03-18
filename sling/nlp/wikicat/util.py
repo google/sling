@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import collections
 import sling
 import sling.log as log
 
@@ -73,20 +74,41 @@ def parse_signature(parse, signature_type):
     raise ValueError(signature_type)
 
 
-# Returns a dictionary of FactMatchType -> count for 'span'.
-def fact_matches_for_span(span, counts=None):
+# Stores fact match counts + limited examples from a given parse.
+class MatchCounts:
+  def __init__(self, max_examples=5):
+    self.counts = defaultdict(int)
+    self.examples = defaultdict(list)
+    self.max_examples = max_examples
+
+
+  # Adds a bucket from a parse span to the counts and exemplars.
+  def add(self, bucket):
+    match_type = bucket.match_type
+    self.counts[match_type] += bucket.count
+    existing = len(self.examples[match_type])
+    if self.max_examples < 0:
+      self.examples[match_type].extend(bucket.source_items)
+    elif existing < self.max_examples:
+      diff = self.max_examples - existing
+      diff = min(diff, len(bucket.source_items))
+      self.examples[match_type].extend(bucket.source_items[0:diff])
+
+
+# Returns an instance of MatchCounts for 'span'.
+def fact_matches_for_span(span, counts=None, max_examples=5):
   if counts is None:
-    counts = defaultdict(int)
+    counts = MatchCounts(max_examples)
   if "fact_matches" in span:
     for bucket in span.fact_matches.buckets:
-      counts[bucket.match_type] += bucket.count
+      counts.add(bucket)
   return counts
 
 
-# Returns a dictionary of FactMatchType -> count across all spans of 'parse'.
-def fact_matches_for_parse(parse, counts=None):
+# Returns an instance of MatchCounts across all spans of 'parse'.
+def fact_matches_for_parse(parse, counts=None, max_examples=5):
   if counts is None:
-    counts = defaultdict(int)
+    counts = MatchCounts(max_examples)
   for span in parse.spans:
     fact_matches_for_span(span, counts)
   return counts
