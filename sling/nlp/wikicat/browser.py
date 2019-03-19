@@ -532,12 +532,17 @@ class Browser(BaseHTTPRequestHandler):
     store = browser_globals.store
     writer = sling.RecordWriter(filename)
 
-    counts = {}
+    counts = defaultdict(int)
+    categories_seen = set()
     for (category_qid, category_frame, parse) in parses:
       # Skip category if we shouldn't extract facts for its members.
       if not all_chosen and category_qid not in chosen_categories:
         continue
 
+      if category_qid in categories_seen:
+        continue
+
+      categories_seen.add(category_qid)
       for index in chosen_spans:
         span = parse.spans[index]
         pid = span.pids
@@ -549,7 +554,6 @@ class Browser(BaseHTTPRequestHandler):
 
         pid = pid[0]
         matches = util.fact_matches_for_span(span, max_examples=-1)
-        counts[pid] = 0
         for match_type, examples in matches.examples.iteritems():
           if match_type not in allowed_match_types:
             continue
@@ -563,14 +567,14 @@ class Browser(BaseHTTPRequestHandler):
             ])
             frame.comment = "%s : %s = %s" % \
                 (member.name if member.name is not None else member, \
-                 signature,
+                 span.signature,
                  qid.name if qid.name is not None else qid)
-            counts[pid] += 1
+            counts[(pid, match_type)] += 1
             writer.write(member.id, frame.data(binary=True))
     writer.close()
     self._text("Wrote recordio to: " + str(filename))
     self._br()
-    self._text("Fact counts by property: " + str(counts))
+    self._text("Fact counts by property: %s" % dict(counts))
 
 
   # Overridden method for generating the head of the response.
@@ -799,7 +803,7 @@ class Browser(BaseHTTPRequestHandler):
     # Give an option to generate a recordio file.
     if signature_type == "full":
       self._br()
-      self._begin("table", border=1)
+      self._begin("table class='main_table'")
       self._begin("tr")
       self._begin("td")
       self._begin("form", id="recordio_form", method="POST", action="", \
