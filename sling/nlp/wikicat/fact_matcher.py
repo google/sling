@@ -229,9 +229,16 @@ class FactMatcher:
           return FactMatchType.EXACT
 
     # Check whether the proposed fact subsumes an existing fact.
-    closure_facts = self._existing_facts(store, item, prop, True)
-    if value in closure_facts:
-      return FactMatchType.SUBSUMES_EXISTING
+    # dates require special treatment.
+    if self._date_valued(prop[-1]):
+      for e in existing_dates:
+        if self._finer_date(e, proposed_date):
+          return FactMatchType.SUBSUMES_EXISTING
+    else:
+      for existing in exact_facts:
+        if isinstance(existing, sling.Frame):
+          if self.subsumes(store, prop[-1], value, existing):
+            return FactMatchType.SUBSUMES_EXISTING
 
     # Check whether the proposed fact is subsumed by an existing fact.
     # Again, dates require special treatment.
