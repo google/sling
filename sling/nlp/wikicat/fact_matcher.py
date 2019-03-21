@@ -14,6 +14,7 @@
 
 import sling
 import sling.log as log
+import sys
 
 from collections import defaultdict
 from enum import Enum
@@ -147,10 +148,10 @@ class FactMatcher:
 
   # Returns existing targets for the given property for the given item.
   # The property could be a pid path.
-  def _existing_facts(self, store, item, prop, closure):
+  def _facts_without_backoff(self, store, item, prop):
     assert type(prop) is list
     pid = prop[0]
-    facts = self.extractor.facts_for(store, item, [pid], closure)
+    facts = self.extractor.facts_for(store, item, [pid], closure=False)
     output = []
     for fact in facts:
       if list(fact[:-1]) == prop:
@@ -178,19 +179,55 @@ class FactMatcher:
     return False
 
 
-  # Returns whether 'coarse' subsumes 'fine' by following 'prop' edges.
-  def subsumes(self, store, prop, coarse, fine):
-    coarse = self.kb.resolve(coarse)
-    fine = self.kb.resolve(fine)
+  # Returns if 'coarse' subsumes 'fine' by following 'closure_property' edges.
+  def subsumes(self, store, closure_property, coarse, fine):
     if coarse == fine:
       return True
-    closure_property = self.closure_properties.get(prop, None)
 
     if closure_property is not None:
       return self.extractor.in_closure(store, closure_property, coarse, fine)
     else:
       return self.extractor.in_closure(store, self.p_subclass, coarse, fine) \
           or self.extractor.in_closure(store, self.p_parent_org, coarse, fine)
+
+
+  # Returns a FactMatchType value depending on how 'proposed' compares against
+  # 'existing' as a target of the property 'prop'.
+  # 'existing' should be a list of existing target(s) (possibly empty).
+  def match_type(self, store, prop, existing, proposed):
+    existing = [self.kb.resolve(e) for e in existing]
+    proposed = self.kb.resolve(proposed)
+
+    if len(existing) == 0:
+      return FactMatchType.NEW
+
+    exact = False
+    subsumes = False
+    subsumed = False
+
+    # For date-valued properties, existing dates could be int or string
+    # (which won't match 'proposed', which could be a sling.Frame).
+    # For them, we do a more elaborate matching procedure.
+    if self._date_valued(prop):
+      existing_dates = [sling.Date(e) for e in existing]
+      proposed_date = sling.Date(proposed)
+      for e in existing_dates:
+        exact |= e.value() == proposed_date.value()
+        subsumes |= self._finer_date(e, proposed_date)
+        subsumed |= self._finer_date(proposed_date, e)
+    else:
+      closure_property = self.closure_properties.get(prop, None)
+      for e in existing:
+        exact |= e == proposed
+        if isinstance(e, sling.Frame):
+          subsumes |= self.subsumes(store, closure_property, proposed, e)
+          subsumed |= self.subsumes(store, closure_property, e, proposed)
+
+    if exact: return FactMatchType.EXACT
+    if subsumes: return FactMatchType.SUBSUMES_EXISTING
+    if subsumed: return FactMatchType.SUBSUMED_BY_EXISTING
+    if prop in self.unique_properties: return FactMatchType.CONFLICT
+    return FactMatchType.ADDITIONAL
 
 
   # Reports match type for the proposed fact (item, prop, value) against
@@ -211,53 +248,9 @@ class FactMatcher:
       store = sling.Store(self.kb)
 
     # Compute existing facts without any backoff.
-    exact_facts = self._existing_facts(store, item, prop, False)
-    if len(exact_facts) == 0:
-      return FactMatchType.NEW
+    existing = self._facts_without_backoff(store, item, prop)
 
-    if value in exact_facts:
-      return FactMatchType.EXACT
-
-    # For date-valued properties, existing dates could be int or string
-    # (which won't match 'value', which is a sling.Frame). For them, we do a
-    # more elaborate matching procedure.
-    if self._date_valued(prop[-1]):
-      proposed_date = sling.Date(value)
-      existing_dates = [sling.Date(e) for e in exact_facts]
-      for e in existing_dates:
-        if e.value() == proposed_date.value():
-          return FactMatchType.EXACT
-
-    # Check whether the proposed fact subsumes an existing fact.
-    # dates require special treatment.
-    if self._date_valued(prop[-1]):
-      for e in existing_dates:
-        if self._finer_date(e, proposed_date):
-          return FactMatchType.SUBSUMES_EXISTING
-    else:
-      for existing in exact_facts:
-        if isinstance(existing, sling.Frame):
-          if self.subsumes(store, prop[-1], value, existing):
-            return FactMatchType.SUBSUMES_EXISTING
-
-    # Check whether the proposed fact is subsumed by an existing fact.
-    # Again, dates require special treatment.
-    if self._date_valued(prop[-1]):
-      for e in existing_dates:
-        if self._finer_date(proposed_date, e):
-          return FactMatchType.SUBSUMED_BY_EXISTING
-    else:
-      for existing in exact_facts:
-        if isinstance(existing, sling.Frame):
-          if self.subsumes(store, prop[-1], existing, value):
-            return FactMatchType.SUBSUMED_BY_EXISTING
-
-    # Check for conflicts in case of unique-valued properties.
-    if len(prop) == 1 and prop[0] in self.unique_properties:
-      return FactMatchType.CONFLICT
-
-    # Proposed fact is an additional one.
-    return FactMatchType.ADDITIONAL
+    return self.match_type(store, prop[-1], existing, value)
 
 
   # Same as above, but returns a histogram of match types over multiple items.
@@ -381,3 +374,178 @@ def shell():
     output = matcher.for_item(item, pids, qid)
     print item, "(" + item.name + ") :", output.name
     print ""
+
+
+# Runs a few hard-coded fact-matching tests.
+def test_fact_matcher():
+  RED = "\033[1;31m"
+  GREEN = "\033[0;32m"
+  RESET = "\033[0;0m"
+
+  def error(entry, message):
+    sys.stdout.write(RED)
+    print "[FAILED] ",
+    sys.stdout.write(RESET)
+    print entry, ":", message
+
+  def success(entry):
+    sys.stdout.write(GREEN)
+    print "[SUCCESS] ",
+    sys.stdout.write(RESET)
+    print entry
+
+  kb = load_kb("local/data/e/wiki/kb.sling")
+  extractor = sling.api.FactExtractor(kb)
+  matcher = FactMatcher(kb, extractor)
+
+  # Test cases.
+  tuples = []
+
+  # Adds the given test case and its reverse test case too (if possible).
+  def add(pid, existing, proposed, match_type):
+    tuples.append((pid, existing, proposed, match_type))
+
+    # Add the reverse case.
+    if match_type != FactMatchType.NEW and existing != proposed:
+      rev_type = match_type
+      if match_type == FactMatchType.SUBSUMED_BY_EXISTING:
+        rev_type = FactMatchType.SUBSUMES_EXISTING
+      if match_type == FactMatchType.SUBSUMES_EXISTING:
+        rev_type = FactMatchType.SUBSUMED_BY_EXISTING
+      tuples.append((pid, proposed, existing, rev_type))
+
+  # Place of birth, Kapiolani Medical Center, Honolulu.
+  add("P19", "Q6366688", "Q18094", FactMatchType.SUBSUMES_EXISTING)
+
+  # Place of birth, Kapiolani Medical Center, US.
+  add("P19", "Q6366688", "Q30", FactMatchType.SUBSUMES_EXISTING)
+
+  # Place of birth, <no existing value>, US.
+  add("P19", "", "Q30", FactMatchType.NEW)
+
+  # Place of birth, US, US.
+  add("P19", "Q30", "Q30", FactMatchType.EXACT)
+
+  # Place of birth, Honolulu, Chicago.
+  add("P19", "Q18094", "Q1297", FactMatchType.CONFLICT)
+
+  # Children, Malia Obama, Sasha Obama.
+  add("P40", "Q15070044", "Q15070048", FactMatchType.ADDITIONAL)
+
+  # Date-valued properties: int values.
+  # Note: P585 = point in time (unique valued), P580 = start time (non unique)
+  add("P585", 1961, 19610804, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", 1961, 196108, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", 1961, 1961, FactMatchType.EXACT)
+  add("P585", 1961, 196, FactMatchType.SUBSUMES_EXISTING) # 196 = 196X (decade)
+  add("P585", 1961, 19, FactMatchType.SUBSUMES_EXISTING)  # 19 = 19XX (century)
+  add("P585", 1961, 1, FactMatchType.SUBSUMES_EXISTING)   # 1 = 1XXX (millenium)
+  add("P585", 1962, 19610804, FactMatchType.CONFLICT)
+  add("P585", 1962, 196108, FactMatchType.CONFLICT)
+  add("P585", 1962, 1961, FactMatchType.CONFLICT)
+  add("P580", 1961, 1962, FactMatchType.ADDITIONAL)
+
+  # Date-valued properties: string values.
+  add("P585", "1961", "1961-08-04", FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", "1961", "1961-08", FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", "1961", "1961", FactMatchType.EXACT)
+  add("P585", "1961", "196*", FactMatchType.SUBSUMES_EXISTING)  # decade
+  add("P585", "1961", "19**", FactMatchType.SUBSUMES_EXISTING)  # century
+  add("P585", "1961", "1***", FactMatchType.SUBSUMES_EXISTING)  # millenium
+  add("P585", "1962", "1961-08-04", FactMatchType.CONFLICT)
+  add("P585", "1962", "1961-08", FactMatchType.CONFLICT)
+  add("P585", "1962", "1961", FactMatchType.CONFLICT)
+  add("P580", "1961", "1962-08", FactMatchType.ADDITIONAL)
+
+  # Date-valued properties: QID values. These are only available for years,
+  # decades, and millenia.
+  q1961 = "Q3696"
+  q1962 = "Q2764"
+  q196x = "Q35724"
+  q197x = "Q35014"
+  q19xx = "Q6927"
+  q1xxx = "Q25860"
+  add("P585", q196x, q1961, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", q1xxx, q1961, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", q1961, q1961, FactMatchType.EXACT)
+  add("P585", q1961, q1962, FactMatchType.CONFLICT)
+  add("P585", q196x, q197x, FactMatchType.CONFLICT)
+  add("P585", q19xx, q197x, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P580", q1961, q197x, FactMatchType.ADDITIONAL)
+
+  # Date-valued properties: proposed and existing values have different types.
+  add("P585", q1961, 1961, FactMatchType.EXACT)
+  add("P585", q196x, 196, FactMatchType.EXACT)
+  add("P585", q19xx, 19, FactMatchType.EXACT)
+  add("P585", q1xxx, 1, FactMatchType.EXACT)
+  add("P585", q196x, 1961, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", q1961, 19610804, FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", q1961, 19, FactMatchType.SUBSUMES_EXISTING)
+  add("P585", q1961, "1961", FactMatchType.EXACT)
+  add("P585", q196x, "196*", FactMatchType.EXACT)
+  add("P585", q19xx, "19**", FactMatchType.EXACT)
+  add("P585", q196x, "1961", FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", q196x, "1961-08-04", FactMatchType.SUBSUMED_BY_EXISTING)
+  add("P585", q1961, "196*", FactMatchType.SUBSUMES_EXISTING)
+  add("P585", "", "196*", FactMatchType.NEW)
+  add("P585", q1961, "1962", FactMatchType.CONFLICT)
+  add("P585", 1963, "1962", FactMatchType.CONFLICT)
+  add("P580", q1961, "1962", FactMatchType.ADDITIONAL)
+  add("P580", 1963, "1962", FactMatchType.ADDITIONAL)
+
+  # Genre, melodrama, drama.
+  add("P136", "Q191489", "Q21010853", FactMatchType.SUBSUMES_EXISTING)
+
+  # Genre, trip-hop, electronic music.
+  add("P136", "Q205560", "Q9778", FactMatchType.SUBSUMES_EXISTING)
+
+  # Genre, rock and roll, electronic music.
+  add("P136", "Q7749", "Q9778", FactMatchType.ADDITIONAL)
+
+  # Educated at, Harvard Law School, Harvard University.
+  add("P69", "Q49122", "Q13371", FactMatchType.SUBSUMES_EXISTING)
+
+  # Educated at, Harvard Law School, Yale University.
+  add("P69", "Q49122", "Q49112", FactMatchType.ADDITIONAL)
+
+  # Employer, Airbus, Airbus SE.
+  add("P108", "Q67", "Q2311", FactMatchType.SUBSUMES_EXISTING)
+
+  # Employer, Airbus, Boeing.
+  add("P108", "Q67", "Q66", FactMatchType.ADDITIONAL)
+
+  # Occupation, sports cyclist, cyclist.
+  add("P106", "Q2309784", "Q2125610", FactMatchType.SUBSUMES_EXISTING)
+
+  # Occupation, sports cyclist, cricketer.
+  add("P106", "Q2309784", "Q12299841", FactMatchType.ADDITIONAL)
+
+  store = sling.Store(kb)
+  total_successes = 0
+  for entry in tuples:
+    pid, existing, proposed, expected = entry
+    if pid not in kb:
+      error(entry, "%s not in KB" % pid)
+      continue
+
+    pid = kb[pid]
+    if isinstance(existing, str) and existing != "" and existing in kb:
+      existing = kb[existing]
+    if isinstance(proposed, str) and proposed in kb:
+      proposed = kb[proposed]
+
+    if existing == "":
+      existing = []
+    else:
+      existing = [existing]
+    actual = matcher.match_type(store, pid, existing, proposed)
+    if actual == expected:
+      success(entry)
+      total_successes += 1
+    else:
+      error(entry, "Got %s, but expected %s" % (actual.name, expected.name))
+  print "Total successful tests: %d out of %d" % (total_successes, len(tuples))
+
+
+if __name__ == '__main__':
+  test_fact_matcher()
