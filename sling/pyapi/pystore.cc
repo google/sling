@@ -275,6 +275,7 @@ PyObject *PyStore::Resolve(PyObject *handle) {
     PyFrame *pyhandle = reinterpret_cast<PyFrame *>(handle);
     return PyValue(store->Resolve(pyhandle->handle()));
   }
+  Py_INCREF(handle);
   return handle;
 }
 
