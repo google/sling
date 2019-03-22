@@ -95,6 +95,10 @@ enum UnicodeCategoryMask {
       (1 << CHARCAT_LINE_SEPARATOR) |
       (1 << CHARCAT_PARAGRAPH_SEPARATOR),
 
+  // Dashes.
+  CATMASK_DASH =
+      (1 << CHARCAT_DASH_PUNCTUATION),
+
   // Name punctuation.
   CATMASK_NAME_PUNCTUATION =
     (1 << CHARCAT_DASH_PUNCTUATION),
@@ -315,6 +319,21 @@ class UTF8 {
   }
   static bool IsSpace(const string &str) {
     return IsSpace(str.data(), str.size());
+  }
+
+  // Check if all characters are dash characters.
+  static bool IsDash(const char *s, int len) {
+    return All(s, len, CATMASK_DASH);
+  }
+  static bool IsDash(const string &str) {
+    return IsDash(str.data(), str.size());
+  }
+
+  // Check if word is name initials, i.e. a sequence of upper case letters
+  // with name punctuation in-between.
+  static bool IsInitials(const char *s, int len);
+  static bool IsInitials(const string &str) {
+    return IsInitials(str.data(), str.size());
   }
 
   // Determine case for word. This ignores all non-letter characters.

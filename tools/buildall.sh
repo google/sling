@@ -12,6 +12,7 @@ bazel build -c opt $* \
   sling/nlp/document:* \
   sling/nlp/embedding:* \
   sling/nlp/kb:* \
+  sling/nlp/ner:* \
   sling/nlp/parser:* \
   sling/nlp/parser/tools:* \
   sling/nlp/parser/trainer:* \

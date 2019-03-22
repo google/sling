@@ -22,6 +22,7 @@ import sling.task.corpora as corpora
 import sling.task.download as download
 import sling.task.wiki as wiki
 import sling.task.embedding as embedding
+import sling.task.entity as entity
 import sling.task.workflow as workflow
 
 # Command-line flags.
@@ -119,6 +120,27 @@ flags.define("--train_fact_embeddings",
              help="train fact and category embeddings",
              default=False,
              action='store_true')
+
+flags.define("--extract_wikilinks",
+             help="extract link graph from wikipedias",
+             default=False,
+             action='store_true')
+
+flags.define("--build_idf",
+             help="build IDF table from wikipedia",
+             default=False,
+             action='store_true')
+
+flags.define("--fuse_ner_items",
+             help="fuse items from wikidata, wikipedia, and links",
+             default=False,
+             action='store_true')
+
+flags.define("--build_ner_kb",
+             help="build NER knowledge base",
+             default=False,
+             action='store_true')
+
 
 def download_corpora():
   if flags.arg.download_wikidata or flags.arg.download_wikipedia:
@@ -261,6 +283,37 @@ def train_embeddings():
     workflow.run(wf.wf)
 
 
+def extract_named_entities():
+  # Extract Wikipedia link graph.
+  if flags.arg.extract_wikilinks:
+    log.info("Extract Wikipedia link graph")
+    wf = entity.EntityWorkflow("wiki-links")
+    wf.extract_wikilinks()
+    workflow.run(wf.wf)
+
+  # Extract IDF table.
+  if flags.arg.build_idf:
+    wf = entity.EntityWorkflow("idf-table")
+    for language in flags.arg.languages:
+      log.info("Build " + language + " IDF table")
+      wf.build_idf(language=language)
+    workflow.run(wf.wf)
+
+  # Fuse NER items.
+  if flags.arg.fuse_ner_items:
+    log.info("Fuse NER items")
+    wf = entity.EntityWorkflow("fuse-ner-items")
+    wf.fuse_items()
+    workflow.run(wf.wf)
+
+  # Build NER knowledge base.
+  if flags.arg.build_ner_kb:
+    log.info("Build NER knowledge base")
+    wf = entity.EntityWorkflow("ner-knowledge-base")
+    wf.build_knowledge_base()
+    workflow.run(wf.wf)
+
+
 if __name__ == '__main__':
   # Parse command-line arguments.
   flags.parse()
@@ -286,6 +339,7 @@ if __name__ == '__main__':
   fuse_items()
   build_knowledge_base()
   train_embeddings()
+  extract_named_entities()
   workflow.shutdown()
 
   # Done.

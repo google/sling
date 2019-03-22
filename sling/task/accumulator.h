@@ -34,8 +34,11 @@ class Accumulator {
   // Initialize accumulator.
   void Init(Channel *output, int num_buckets = 1 << 20);
 
-  // Add counts for key.
+  // Add counts for string key.
   void Increment(Text key, int64 count = 1);
+
+  // Add counts for numeric key.
+  void Increment(uint64 key, int64 count = 1);
 
   // Flush remaining counts to output.
   void Flush();
@@ -44,6 +47,7 @@ class Accumulator {
   // Hash buckets for accumulating counts.
   struct Bucket {
     string key;
+    uint64 hash = 0;
     int64 count = 0;
   };
   std::vector<Bucket> buckets_;
@@ -75,6 +79,10 @@ class SumReducer : public Reducer {
  private:
   // Discard keys with counts lower than the threshold.
   int64 threshold_ = 0;
+
+  // Statistics.
+  Counter *num_keys_discarded_ = nullptr;
+  Counter *num_counts_discarded_ = nullptr;
 };
 
 }  // namespace task

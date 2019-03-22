@@ -27,9 +27,9 @@ void DocumentProcessor::Start(Task *task) {
   FrameProcessor::Start(task);
 
   // Statistics.
-  num_document_ = task->GetCounter("num_documents");
-  num_tokens_ = task->GetCounter("num_tokens");
-  num_spans_ = task->GetCounter("num_spans");
+  num_document_ = task->GetCounter("documents");
+  num_tokens_ = task->GetCounter("tokens");
+  num_spans_ = task->GetCounter("spans");
 }
 
 void DocumentProcessor::Process(Slice key, const Frame &frame) {

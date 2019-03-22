@@ -80,6 +80,7 @@ files = {
   'python/task/__init__.py': '$DATA$/sling/task/__init__.py',
   'python/task/corpora.py': '$DATA$/sling/task/corpora.py',
   'python/task/download.py': '$DATA$/sling/task/download.py',
+  'python/task/entity.py': '$DATA$/sling/task/entity.py',
   'python/task/embedding.py': '$DATA$/sling/task/embedding.py',
   'python/task/wiki.py': '$DATA$/sling/task/wiki.py',
   'python/task/workflow.py': '$DATA$/sling/task/workflow.py',

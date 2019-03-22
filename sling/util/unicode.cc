@@ -491,6 +491,28 @@ bool UTF8::Any(const char *s, int len, int mask) {
   return false;
 }
 
+bool UTF8::IsInitials(const char *s, int len) {
+  const char *end = s + len;
+  bool first = true;
+  bool punctuated = false;
+  while (s < end) {
+    int code = Decode(s);
+    bool upper = Unicode::IsUpper(code);
+    bool punct = Unicode::IsNamePunctuation(code);
+
+    if (first) {
+      if (!upper) return false;
+    } else {
+      if (!upper && !punct) return false;
+      if (punct) punctuated = true;
+    }
+
+    first = false;
+    s = Next(s);
+  }
+  return punctuated;
+}
+
 CaseForm UTF8::Case(const char *s, int len) {
   // States:
   //  0: no characters read.

@@ -39,6 +39,19 @@
     source: /w/item
     target: int
   }
+
+  role: {=/w/item/fanin :slot
+    name: "fan-in"
+    description: "Number of times item is a fact target"
+    source: /w/item
+    target: int
+  }
+
+  role: {=/w/item/links :slot
+    name: "links"
+    description: "Out-bound links for item"
+    source: /w/item
+  }
 }
 
 {=/w/property +slot +/w/entity :schema
