@@ -151,7 +151,7 @@ class FactMatcher:
   def _facts_without_backoff(self, store, item, prop):
     assert type(prop) is list
     pid = prop[0]
-    facts = self.extractor.facts_for(store, item, [pid], closure=False)
+    facts = self.extractor.facts_for(store, item, [pid], False)
     output = []
     for fact in facts:
       if list(fact[:-1]) == prop:
