@@ -56,7 +56,9 @@ class CategoryParseGenerator:
     self.main_topic = self.lookup("P301")   # present in topical categories
     self.h_member = self.lookup("/w/item/member")
     self.h_instanceof = self.lookup('P31')
+    self.h_subclassof = self.lookup('P279')
     self.h_category = self.lookup('Q4167836')
+    self.h_category_contains = self.lookup('P4224')
     self.english = task.param("language") == "en"
 
     # The following kinds of categories won't be processed.
@@ -100,10 +102,7 @@ class CategoryParseGenerator:
 
   # Returns whether the item is a category.
   def is_category(self, frame):
-    for value in frame(self.h_instanceof):
-      if value == self.h_category:
-        return True
-    return False
+    return self.h_category in frame(self.h_instanceof)
 
 
   # Returns the category title in the specified language.
@@ -291,11 +290,34 @@ class CategoryParseGenerator:
     return output
 
 
-  # Returns category members that are not categories themselves.
+  # Returns category members that (a) are not categories themselves,
+  # (b) satisfy any category_contains property of the category.
   def get_members(self, frame):
+    members = [m for m in frame(self.h_member) if not self.is_category(m)]
+
+    if self.h_category_contains not in frame:
+      # No other constraint to check.
+      return members
+
+    store = frame.store()
+    allowed = set([store.resolve(c) for c in frame(self.h_category_contains)])
     output = []
-    for member in frame(self.h_member):
-      if not self.is_category(member):
+    for member in members:
+      valid = False
+      for value in member(self.h_instanceof):
+        # Fast-check for whether 'value' satisfies category_contains.
+        if value in allowed:
+          valid = True
+          break
+
+        # Slow-check for whether 'value' satisfies category_contains.
+        for a in allowed:
+          if self.extractor.in_closure(store, self.h_subclassof, a, value):
+            valid = True
+            break
+        if valid:
+          break
+      if valid:
         output.append(member)
     return output
 
