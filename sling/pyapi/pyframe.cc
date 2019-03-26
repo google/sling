@@ -14,6 +14,7 @@
 
 #include "sling/pyapi/pyframe.h"
 
+#include "sling/frame/json.h"
 #include "sling/pyapi/pystore.h"
 
 namespace sling {
@@ -319,6 +320,18 @@ PyObject *PyFrame::Data(PyObject *args, PyObject *kw) {
     encoder.Encode(handle());
     const string &buffer = encoder.buffer();
     return PyString_FromStringAndSize(buffer.data(), buffer.size());
+  } else if (flags.json) {
+    string json;
+    StringOutputStream stream(&json);
+    Output output(&stream);
+    JSONWriter writer(pystore->store, &output);
+    writer.set_indent(flags.pretty ? 2 : 0);
+    writer.set_shallow(flags.shallow);
+    writer.set_global(flags.global);
+    writer.set_byref(flags.byref);
+    writer.Write(handle());
+    output.Flush();
+    return PyString_FromStringAndSize(json.data(), json.size());
   } else {
     StringPrinter printer(pystore->store);
     flags.InitPrinter(printer.printer());

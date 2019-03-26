@@ -692,23 +692,25 @@ void SerializationFlags::InitPrinter(Printer *printer) {
 
 PyObject *SerializationFlags::ParseArgs(PyObject *args, PyObject *kw) {
   static const char *kwlist[] = {
-    "file", "binary", "global", "shallow", "byref", "pretty", "utf8", nullptr
+    "file", "binary", "global", "shallow", "byref", "pretty",
+    "utf8", "json", nullptr
   };
   PyObject *file = nullptr;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "O|bbbbbb", const_cast<char **>(kwlist),
-                &file, &binary, &global, &shallow, &byref, &pretty, &utf8);
+      args, kw, "O|bbbbbbb", const_cast<char **>(kwlist),
+      &file, &binary, &global, &shallow, &byref, &pretty, &utf8, &json);
   if (!ok) return nullptr;
   return file;
 }
 
 bool SerializationFlags::ParseFlags(PyObject *args, PyObject *kw) {
   static const char *kwlist[] = {
-    "binary", "global", "shallow", "byref", "pretty", "utf8", nullptr
+    "binary", "global", "shallow", "byref", "pretty",
+    "utf8", "json", nullptr
   };
   return PyArg_ParseTupleAndKeywords(
-      args, kw, "|bbbbbb", const_cast<char **>(kwlist),
-      &binary, &global, &shallow, &byref, &pretty, &utf8);
+      args, kw, "|bbbbbbb", const_cast<char **>(kwlist),
+      &binary, &global, &shallow, &byref, &pretty, &utf8, &json);
 }
 
 }  // namespace sling
