@@ -460,6 +460,22 @@ The `Mention` class has the following methods and properties:
 * `evoke_type(type)`<br>
   Makes a frame of type `type` and evokes it from this mention.
 
+The `Corpus` class can be used for iterating over a corpus of documents stored in
+record files:
+```
+for document in sling.Corpus("local/data/e/wiki/en/documents@10.rec"):
+  print document.text
+```
+This will create a global store with the document schema symbols and create
+a local store for each document. If you have a global store you can use this
+instead, but it needs to be frozen before iterating over the documents:
+```
+kb = sling.Store()
+corpus = sling.Corpus("local/data/e/wiki/en/documents@10.rec", commons=kb)
+kb.freeze()
+for document in corpus:
+  print document.text
+```
 ### LEX format
 
 While annotated documents can be created using the methods on the `Document`
