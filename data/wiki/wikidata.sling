@@ -109,6 +109,7 @@
   value: /w/math
   value: /w/table
   value: /w/shape
+  value: /w/music
 }
 
 {=/w/string +string :schema
@@ -231,6 +232,12 @@
   simple: 1
 }
 
+{=/w/music :schema
+  name: "Musical notation"
+  family: /schema/wikidata
+  simple: 1
+}
+
 {=/schema/wikidata :schema_family
   name: "Wikidata schemas"
 
@@ -253,4 +260,5 @@
   member_schema: /w/math
   member_schema: /w/table
   member_schema: /w/shape
+  member_schema: /w/music
 }
