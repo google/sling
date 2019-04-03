@@ -192,7 +192,7 @@ class WikidataConverter {
   Name s_math_{names_, "math"};
   Name s_tabular_data_{names_, "tabular-data"};
   Name s_geo_shape_{names_, "geo-shape"};
-  Name s_musical_notation_{names_, "geo-shape"};
+  Name s_musical_notation_{names_, "musical-notation"};
   // ... plus string, time, quantity, monolingualtext
 
   // Entity prefix.
