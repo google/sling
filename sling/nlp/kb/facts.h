@@ -86,6 +86,7 @@ class FactCatalog {
   Name p_start_time_{names_, "P580"};
   Name p_end_time_{names_, "P582"};
   Name p_described_by_source_{names_, "P1343"};
+  Name p_different_from_{names_, "P1889"};
 
   Name n_time_{names_, "/w/time"};
   Name n_item_{names_, "/w/item"};

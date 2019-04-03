@@ -139,12 +139,19 @@ class WikiExtractor {
   // Return parser for extractor.
   const WikiParser &parser() const { return parser_; }
 
+  // Skip tables for extraction.
+  bool skip_tables() const { return skip_tables_; }
+  void set_skip_tables(bool skip_tables) { skip_tables_ = skip_tables; }
+
  private:
   // Wiki text parser with AST.
   const WikiParser &parser_;
 
   // Stack of output sinks for collecting extracted text and annotations.
   std::vector<WikiSink *> sinks_;
+
+  // Skip tables in extraction.
+  bool skip_tables_ = false;
 };
 
 // Sink for collecting plain text extracted from Wikipedia page.

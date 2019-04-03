@@ -108,6 +108,7 @@ export class DocumentViewer extends Component {
     this.active_callout = null;
     this.highlighted = null;
     this.labeled = null;
+    this.panels = {};
   }
 
   docno() {
@@ -269,6 +270,7 @@ export class DocumentViewer extends Component {
   componentDidUpdate() {
     let panels = document.getElementById("panels" + this.docno());
     while (panels.firstChild) panels.removeChild(panels.firstChild);
+    this.panels = {}
     this.Initialize();
   }
 
@@ -514,6 +516,7 @@ export class DocumentViewer extends Component {
     let panel = document.createElement("div");
     panel.className = "panel";
     panel.id = "p" + next_panel++;
+    panel.setAttribute("frame", fidx);
 
     let titlebar = document.createElement("div");
     titlebar.className = "panel-titlebar";
@@ -560,8 +563,12 @@ export class DocumentViewer extends Component {
   }
 
   AddPanel(phrase, fidx) {
-    let panel = this.BuildPanel(phrase, fidx);
-    document.getElementById("panels" + this.docno()).appendChild(panel);
+    var panel = this.panels[fidx];
+    if (panel == undefined) {
+      panel = this.BuildPanel(phrase, fidx);
+      document.getElementById("panels" + this.docno()).appendChild(panel);
+      this.panels[fidx] = panel;
+    }
     panel.scrollIntoView();
   }
 
@@ -580,6 +587,7 @@ export class DocumentViewer extends Component {
   ClosePanel(e) {
     let pid = e.currentTarget.getAttribute("panel");
     let panel =  document.getElementById(pid);
+    delete this.panels[panel.getAttribute("frame")];
     document.getElementById("panels" + this.docno()).removeChild(panel);
   }
 

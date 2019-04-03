@@ -36,6 +36,9 @@ class SpanChart {
     // Check span flag.
     bool is(int flag) const { return flags & flag; }
 
+    // Check if span has matches.
+    bool matched() const { return !aux.IsNil() || matches != nullptr; }
+
     // Phrase matches in phrase table.
     const PhraseTable::Phrase *matches = nullptr;
 
@@ -68,6 +71,10 @@ class SpanChart {
 
   // Return item for token span (0 <= begin < size, 0 < end <= size).
   Item &item(int begin, int end) {
+    DCHECK_GE(begin, 0);
+    DCHECK_LT(begin, size_);
+    DCHECK_GT(end, begin);
+    DCHECK_LE(end, size_);
     return items_[begin * size_ + end - 1];
   }
 
@@ -93,6 +100,11 @@ class SpanChart {
   // Return token for chart item. The index is relative to the chart.
   const Token &token(int index) const {
     return document_->token(index + begin_);
+  }
+
+  // Return fingerprint for phrase. The index is relative to the chart.
+  uint64 fingerprint(int b, int e) const {
+    return document_->PhraseFingerprint(b + begin_, e + begin_);
   }
 
  private:

@@ -217,18 +217,22 @@ void WikiExtractor::ExtractSwitch(const Node &node) {
 }
 
 void WikiExtractor::ExtractTable(const Node &node) {
-  Emit("<table border=1>");
-  int child = node.first_child;
-  while (child != -1) {
-    const Node &n = parser_.node(child);
-    if (n.type == WikiParser::ROW) {
-      ExtractTableRow(n);
-    } else {
-      ExtractNode(n);
+  if (skip_tables_) {
+    ExtractSkip(node);
+  } else {
+    Emit("<table border=1>");
+    int child = node.first_child;
+    while (child != -1) {
+      const Node &n = parser_.node(child);
+      if (n.type == WikiParser::ROW) {
+        ExtractTableRow(n);
+      } else {
+        ExtractNode(n);
+      }
+      child = n.next_sibling;
     }
-    child = n.next_sibling;
+    Emit("</table>");
   }
-  Emit("</table>");
 }
 
 void WikiExtractor::ExtractTableCaption(const Node &node) {

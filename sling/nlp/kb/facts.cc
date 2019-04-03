@@ -58,6 +58,7 @@ void FactCatalog::Init(Store *store) {
   SetExtractor(p_member_of_sports_team_, &Facts::ExtractTeam);
   SetExtractor(p_time_period_, &Facts::ExtractTimePeriod);
   SetExtractor(p_described_by_source_, &Facts::ExtractNothing);
+  SetExtractor(p_different_from_, &Facts::ExtractNothing);
 
   // Set up items that stops closure expansion.
   static const char *baseids[] = {

@@ -620,7 +620,7 @@ static const char *kAbbreviations[] = {
 
   "e.", "ed.", "eds.", "eff.", "eg.", "ei.", "eks.", "el.", "em.", "en.",
   "ene.", "eng.", "engl.", "env.", "environ.", "eq.", "equiv.", "er.", "es.",
-  "esp.", "esq.", "est.", "et.", "etc.", "eur.", "ev.", "ex.", "exec.", "exp.",
+  "esp.", "esq.", "est.", "et.", "etc.", "ev.", "ex.", "exec.", "exp.",
   "ext.",
 
   "f.", "farbf.", "fax.", "feat.", "feb.", "fed.", "fest.", "ff.", "fides.",

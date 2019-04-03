@@ -54,6 +54,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
     CHECK(langinfo.valid());
     category_prefix_ = langinfo.GetString(n_lang_category_);
     template_prefix_ = langinfo.GetString(n_lang_template_);
+    task->Fetch("skip_tables", &skip_tables_);
 
     // Load redirects.
     task::Binding *redir = CHECK_NOTNULL(task->GetInput("redirects"));
@@ -347,6 +348,9 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
   Name n_page_item_{names_, "/wp/page/item"};
   Name n_link_{names_, "/wp/link"};
   Name n_redirect_{names_, "/wp/redirect"};
+
+  // Skip tables in Wikipedia documents.
+  bool skip_tables_ = false;
 
   // Statistics.
   task::Counter *num_article_pages_;

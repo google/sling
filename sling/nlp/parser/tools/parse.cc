@@ -42,6 +42,7 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-source.h"
 #include "sling/nlp/document/document-tokenizer.h"
+#include "sling/nlp/document/lex.h"
 #include "sling/nlp/parser/parser.h"
 #include "sling/nlp/parser/trainer/frame-evaluation.h"
 #include "sling/string/printf.h"
@@ -54,6 +55,7 @@ DEFINE_string(corpus, "", "Input corpus");
 DEFINE_bool(parse, false, "Parse input corpus");
 DEFINE_bool(trace, false, "Trace or not");
 DEFINE_bool(benchmark, false, "Benchmark parser");
+DEFINE_bool(lex, false, "Output documents in LEX format");
 DEFINE_bool(evaluate, false, "Evaluate parser");
 DEFINE_int32(maxdocs, -1, "Maximum number of documents to process");
 
@@ -156,7 +158,11 @@ int main(int argc, char *argv[]) {
     document.Update();
     clock.stop();
 
-    std::cout << ToText(document.top(), FLAGS_indent) << "\n";
+    if (FLAGS_lex) {
+      std::cout << ToLex(document) << "\n";
+    } else {
+      std::cout << ToText(document.top(), FLAGS_indent) << "\n";
+    }
     LOG(INFO) << document.num_tokens() / clock.secs() << " tokens/sec";
   }
 
@@ -185,6 +191,8 @@ int main(int argc, char *argv[]) {
       document->Update();
       if (writer != nullptr) {
         writer->Write(std::to_string(num_documents), Encode(document->top()));
+      } else if (FLAGS_lex) {
+        std::cout << ToLex(*document) << "\n";
       } else {
         std::cout << ToText(document->top(), FLAGS_indent) << "\n";
       }

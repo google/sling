@@ -17,6 +17,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "sling/base/types.h"
@@ -37,25 +38,29 @@ enum SpanFlags {
   SPAN_NUMBER            = (1 << 1),
   SPAN_NATURAL_NUMBER    = (1 << 2),
   SPAN_UNIT              = (1 << 3),
-  SPAN_CURRENCY          = (1 << 4),
-  SPAN_MEASURE           = (1 << 5),
-  SPAN_GEO               = (1 << 6),
-  SPAN_YEAR              = (1 << 7),
-  SPAN_YEAR_BC           = (1 << 8),
-  SPAN_MONTH             = (1 << 9),
-  SPAN_WEEKDAY           = (1 << 10),
-  SPAN_CALENDAR_MONTH    = (1 << 11),
-  SPAN_CALENDAR_DAY      = (1 << 12),
-  SPAN_DAY_OF_YEAR       = (1 << 13),
-  SPAN_DECADE            = (1 << 14),
-  SPAN_CENTURY           = (1 << 15),
-  SPAN_DATE              = (1 << 16),
-  SPAN_FAMILY_NAME       = (1 << 17),
-  SPAN_GIVEN_NAME        = (1 << 18),
-  SPAN_INITIALS          = (1 << 19),
-  SPAN_DASH              = (1 << 20),
-  SPAN_SUFFIX            = (1 << 21),
-  SPAN_ART               = (1 << 22),
+  SPAN_UNIT_OF_AMOUNT    = (1 << 4),
+  SPAN_CURRENCY          = (1 << 5),
+  SPAN_MEASURE           = (1 << 6),
+  SPAN_GEO               = (1 << 7),
+  SPAN_YEAR              = (1 << 8),
+  SPAN_YEAR_BC           = (1 << 9),
+  SPAN_MONTH             = (1 << 10),
+  SPAN_WEEKDAY           = (1 << 11),
+  SPAN_CALENDAR_MONTH    = (1 << 12),
+  SPAN_CALENDAR_DAY      = (1 << 13),
+  SPAN_DAY_OF_YEAR       = (1 << 14),
+  SPAN_DECADE            = (1 << 15),
+  SPAN_CENTURY           = (1 << 16),
+  SPAN_DATE              = (1 << 17),
+  SPAN_FAMILY_NAME       = (1 << 18),
+  SPAN_GIVEN_NAME        = (1 << 19),
+  SPAN_INITIALS          = (1 << 20),
+  SPAN_DASH              = (1 << 21),
+  SPAN_SUFFIX            = (1 << 22),
+  SPAN_ABBREVIATED       = (1 << 23),
+  SPAN_ABBREVIATION      = (1 << 24),
+  SPAN_PERSON            = (1 << 25),
+  SPAN_ART               = (1 << 26),
 };
 
 // Span markers.
@@ -63,6 +68,8 @@ extern Handle kItalicMarker;
 extern Handle kBoldMarker;
 extern Handle kPersonMarker;
 extern Handle kRedlinkMarker;
+extern Handle kAbbreviatedMarker;
+extern Handle kAbbreviationMarker;
 
 // Populate chart with phrase matches. It looks up all spans (up to the maximum
 // span length) in the alias table and adds the matches to the chart. Spans
@@ -253,6 +260,10 @@ class NumberScaleAnnotator {
  private:
   // Mapping from item for scale to scalar.
   HandleMap<float> scalars_;
+
+  // Symbols.
+  Names names_;
+  Name n_numeric_value_{names_, "P1181"};
 };
 
 // Annotate measures in the document. A measure is a number followed by a
@@ -266,6 +277,9 @@ class MeasureAnnotator {
   void Annotate(const PhraseTable &aliases, SpanChart *chart);
 
  private:
+  // Check if item is a unit.
+  bool IsUnit(const Frame &item);
+
   // Add quantity with amount and unit to chart.
   void AddQuantity(SpanChart *chart, int begin, int end,
                    Handle amount, Handle unit);
@@ -325,6 +339,25 @@ class DateAnnotator {
   Name n_century_{names_, "Q578"};
 };
 
+// Annotate abbreviated phrases and their abbreviations.
+class AbbreviationAnnotator {
+ public:
+  typedef std::unordered_map<uint64, uint64> Abbreviations;
+
+  // Initialize annotator.
+  void Init();
+
+  // Annotate abbreviations.
+  void Annotate(SpanChart *chart, Abbreviations *abbreviations);
+
+ private:
+  // Convert word to sequence of Unicode code points.
+  static std::vector<int> Letters(Text word);
+
+  // Fingerprints for words that can be skipped in abbreviated phrases.
+  std::unordered_set<uint64> skipwords_;
+};
+
 // Span annotator for annotating a (pre-annotated) document with annotations
 // based on a knowledge base and an alias table. This runs the annotators above
 // on each sentence to create a fully annotated output document.
@@ -338,8 +371,6 @@ class SpanAnnotator {
     bool resolve = false;  // resolve spans to entities in knowledge base
   };
 
-  ~SpanAnnotator() { if (resolver_names_) resolver_names_->Release(); }
-
   // Initialize annotator.
   void Init(Store *commons, const Resources &resources);
 
@@ -350,6 +381,14 @@ class SpanAnnotator {
   void Annotate(const Document &document, Document *output);
 
  private:
+  // Check if item is a human.
+  bool IsHuman(const Frame &item) const;
+
+  // Add person name parts as local mentions to context.
+  void AddNameParts(const Document &document, int begin, int end,
+                    ResolverContext *context,
+                    Handle entity, int count);
+
   // Phrase table with aliases.
   PhraseTable aliases_;
 
@@ -359,8 +398,8 @@ class SpanAnnotator {
   // Resolve spans to entities in the knowledge base.
   bool resolve_ = false;
 
-  // Schema for entity resolver.
-  ResolverNames *resolver_names_ = nullptr;
+  // Entity resolver.
+  EntityResolver resolver_;
 
   // Annotators.
   SpanPopulator populator_;
@@ -375,6 +414,7 @@ class SpanAnnotator {
   CommonWordPruner pruner_;
   CaseScorer case_;
   EmphasisAnnotator emphasis_;
+  AbbreviationAnnotator abbreviated_;
 
   // Symbols.
   Names names_;
@@ -382,6 +422,7 @@ class SpanAnnotator {
   Name n_amount_{names_, "/w/amount"};
   Name n_instance_of_{names_, "P31"};
   Name n_person_{names_, "Q215627"};
+  Name n_human_{names_, "Q5"};
   Name n_page_item_{names_, "/wp/page/item"};
 
   // Maximum phrase length.

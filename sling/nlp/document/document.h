@@ -327,8 +327,8 @@ class Document {
   // Returns the fingerprint for [begin, end).
   uint64 PhraseFingerprint(int begin, int end) const;
 
-  // Returns case form forphrase [begin, end).
-  CaseForm Form(int begin, int end) const;
+  // Returns case form for phrase [begin, end).
+  CaseForm PhraseForm(int begin, int end) const;
 
   // Returns the phrase text for span.
   string PhraseText(int begin, int end) const;

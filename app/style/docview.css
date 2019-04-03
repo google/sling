@@ -125,6 +125,7 @@ blockquote {
   text-align: center;
   float: right;
   cursor: default;
+  user-select: none;
 }
 
 .panel-content {

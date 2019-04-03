@@ -27,45 +27,70 @@
 namespace sling {
 namespace nlp {
 
-// Symbol names for entity resolver.
-struct ResolverNames : public SharedNames {
-  ResolverNames(Store *store) { CHECK(Bind(store)); }
+class ResolverContext;
 
-  Name n_popularity{*this, "/w/item/popularity"};
-  Name n_links{*this, "/w/item/links"};
+// Entity resolver.
+class EntityResolver {
+ public:
+  // Initialize entity resolver.
+  void Init(Store *commons, const PhraseTable *aliases);
+
+ private:
+  // Phrase table with aliases for entities.
+  const PhraseTable *aliases_ = nullptr;
+
+  // Symbols
+  Names names_;
+  Name n_popularity{names_, "/w/item/popularity"};
+  Name n_links{names_, "/w/item/links"};
+
+  // Hyperparameters.
+  float mention_weight_ = 100.0;
+  float base_context_score = 1e-3;
+  float case_form_penalty = 0.1;
+  int mention_boost_ = 10;
+
+  friend class ResolverContext;
 };
 
-// Entity resolver using a phrase table for alias candidates and the link
-// graph for context scoring.
-class Resolver {
+// Entity resolver context. It uses a phrase table for alias candidates and the
+// link graph for incrementally scoring entity mentions. It builds up a mention
+// and context representation to model the discourse.
+class ResolverContext {
  public:
   // Entity resolution candidate.
   struct Candidate {
-    Candidate(Handle entity, float score) : entity(entity), score(score) {}
+    Candidate(Handle entity, float score, int count, float context, bool local)
+        : entity(entity), score(score), count(count), context(context),
+          local(local) {}
 
     // Candidate comparison operator.
     bool operator >(const Candidate &other) const {
       return score > other.score;
     }
 
-    Handle entity;  // item for candidate entity
-    float score;    // score for candidate
+    Handle entity;       // item for candidate entity
+    float score;         // score for candidate
+    int count;           // entity prior frequency
+    float context;       // context score
+    bool local;          // local mention
   };
 
   // List of top candidates with scores.
   typedef Top<Candidate> Candidates;
 
-  // Initialize resolver.
-  Resolver(Store *store,
-           const PhraseTable *aliases,
-           const ResolverNames *names = nullptr);
-  ~Resolver() { if (names_) names_->Release(); }
+  // Initialize resolver context.
+  ResolverContext(Store *store, const EntityResolver *resolver)
+      : store_(store), resolver_(resolver) {}
 
   // Add entity topic to context.
   void AddTopic(Handle entity);
 
   // Add entity and output-bound links to context.
   void AddEntity(Handle entity);
+
+  // Add mention to mention model.
+  void AddMention(uint64 fp, CaseForm form, Handle entity, int count);
 
   // Score candidates for alias. The alias is specified using the fingerprint
   // and case form. Returns a the top-k entities with the highest score.
@@ -75,28 +100,34 @@ class Resolver {
   // no matching entity is found.
   Handle Resolve(uint64 fp, CaseForm form) const;
 
+  // Get entity popularity.
+  int GetPopularity(Handle entity) const;
+
  private:
+  // Resolved mention phrase.
+  struct Mention {
+    Handle entity = Handle::nil();  // resolved entity
+    CaseForm form = CASE_INVALID;   // case form for mention phrase
+    int count = 0;                  // number of mentions
+  };
+
+  // Look up context score for entity.
   float ContextScore(Handle entity, float defval = 0.0) const {
     auto f = context_.find(entity);
     return f != context_.end() ? f->second : defval;
   }
 
-  // Knowledge base with link graph.
+  // Frame store for resolved entities.
   Store *store_;
 
-  // Phrase table for looking up aliases.
-  const PhraseTable *aliases_;
+  // Entity resolver.
+  const EntityResolver *resolver_;
 
-  // Symbols for resolver.
-  const ResolverNames *names_ = nullptr;
-
-  // Context scores for entities in resolver.
+  // Scores for entities in resolver context.
   HandleMap<float> context_;
 
-  // Hyperparameters.
-  float mention_weight_ = 100.0;
-  float base_context_score = 1e-3;
-  float case_form_penalty = 0.1;
+  // Local mention phrases mapping from phrase fingerprint to entity.
+  std::unordered_map<uint64, Mention> mentions_;
 };
 
 }  // namespace nlp

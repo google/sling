@@ -134,7 +134,7 @@ uint64 Span::Fingerprint() const {
 }
 
 CaseForm Span::Form() const {
-  if (form_ == CASE_INVALID) form_ = document_->Form(begin_, end_);
+  if (form_ == CASE_INVALID) form_ = document_->PhraseForm(begin_, end_);
   return form_;
 }
 
@@ -545,7 +545,7 @@ uint64 Document::PhraseFingerprint(int begin, int end) const {
   return fp;
 }
 
-CaseForm Document::Form(int begin, int end) const {
+CaseForm Document::PhraseForm(int begin, int end) const {
   CaseForm form = CASE_INVALID;
   for (int t = begin; t < end; ++t) {
     if (token(t).skipped()) continue;

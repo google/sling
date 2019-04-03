@@ -141,6 +141,10 @@ flags.define("--build_ner_kb",
              default=False,
              action='store_true')
 
+flags.define("--label_wiki",
+             help="annotate wikipedia documents with NER labeling",
+             default=False,
+             action='store_true')
 
 def download_corpora():
   if flags.arg.download_wikidata or flags.arg.download_wikipedia:
@@ -312,6 +316,14 @@ def extract_named_entities():
     wf = entity.EntityWorkflow("ner-knowledge-base")
     wf.build_knowledge_base()
     workflow.run(wf.wf)
+
+  # Run NER labeling of Wikipedia documents.
+  if flags.arg.label_wiki:
+    for language in flags.arg.languages:
+      log.info("Label " + language + " wikipedia")
+      wf = entity.EntityWorkflow(language + "-wiki-label")
+      wf.label_documents(language=language)
+      workflow.run(wf.wf)
 
 
 if __name__ == '__main__':

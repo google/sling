@@ -146,3 +146,30 @@ class EntityWorkflow:
       return self.wf.write(parts, self.knowledge_base(),
                            params={"snapshot": True})
 
+  #---------------------------------------------------------------------------
+  # Labeled documents
+  #---------------------------------------------------------------------------
+
+  def labeled_documents(self, language=None):
+    """Resource for labeled documents."""
+    if language == None: language = flags.arg.language
+    return self.wf.resource("documents@10.rec",
+                            dir=self.workdir(language),
+                            format="records/document")
+
+  def label_documents(self, language=None):
+    if language == None: language = flags.arg.language
+    input_documents = self.wiki.wikipedia_documents(language)
+    output_documents = self.labeled_documents(language)
+
+    with self.wf.namespace(language + "-ner"):
+      mapper = self.wf.task("document-ner-labeler", "labeler")
+      mapper.add_param("resolve", True)
+      mapper.attach_input("commons", self.knowledge_base())
+      mapper.attach_input("aliases", self.wiki.phrase_table(language))
+      mapper.attach_input("dictionary", self.idftable(language))
+
+      self.wf.connect(self.wf.read(input_documents), mapper)
+      output = self.wf.channel(mapper, format="message/document")
+      self.wf.write(output, output_documents)
+

@@ -13,8 +13,10 @@ cc_binary(
     "//sling/nlp/document",
     "//sling/nlp/document:document-source",
     "//sling/nlp/document:document-tokenizer",
+    "//sling/nlp/document:lex",
     "//sling/nlp/parser",
     "//sling/nlp/parser/trainer:frame-evaluation",
     "//sling/string:printf",
   ],
 )
+

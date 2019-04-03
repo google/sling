@@ -59,6 +59,16 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "labeler",
+  srcs = ["labeler.cc"],
+  deps = [
+    ":annotators",
+    "//sling/task:documents",
+  ],
+  alwayslink = 1,
+)
+
 cc_binary(
   name = "parse-chart",
   srcs = ["parse-chart.cc"],

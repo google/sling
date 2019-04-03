@@ -24,6 +24,8 @@ SpanChart::SpanChart(const Document *document, int begin, int end, int maxlen)
     : document_(document), begin_(begin), end_(end), maxlen_(maxlen),
       tracking_(document->store()) {
   // The chart height is equal to the number of tokens.
+  DCHECK_GE(begin, 0);
+  DCHECK_LT(begin, end);
   size_ = end_ - begin_;
 
   // Phrase matches cannot be longer than the number of document tokens.
@@ -32,7 +34,7 @@ SpanChart::SpanChart(const Document *document, int begin, int end, int maxlen)
   // Initialize chart.
   items_.resize(size_ * size_);
   for (int b = 0; b < size_; ++b) {
-    for (int e = 1; e <= size_; ++e) {
+    for (int e = b + 1; e <= size_; ++e) {
       item(b, e).cost = e - b;
     }
   }
@@ -42,6 +44,7 @@ void SpanChart::Add(int begin, int end, Handle match, int flags) {
   Item &span = item(begin - begin_, end - begin_);
   span.aux = match;
   span.flags |= flags;
+  span.cost = 1;
   if (match.IsRef()) tracking_.push_back(match);
   if (end - begin > maxlen_) maxlen_ = end - begin;
 }
