@@ -83,14 +83,20 @@ struct PyNetwork : public PyBase {
   // Look up global tensor in network.
   PyObject *LookupTensor(PyObject *key);
 
+  // Get global tensor value.
+  PyObject *GetTensor(PyObject *key);
+
+  // Assign value to tensor.
+  int SetTensor(PyObject *key, PyObject *value);
+
   // Look up cell in network.
   PyObject *LookupCell(PyObject *key);
 
   // Return profile report if profiling is enabled.
   PyObject *Profile();
 
-  // Get named tensor in cell or a global tensor is cell is null.
-  myelin::Tensor *GetTensor(PyObject *key, const myelin::Cell *cell);
+  // Find named tensor in cell or a global tensor if cell is null.
+  myelin::Tensor *FindTensor(PyObject *key, const myelin::Cell *cell);
 
   // Myelin network.
   myelin::Network *net;
@@ -120,6 +126,9 @@ struct PyCell : public PyBase {
   // tensors in instances.
   PyObject *Index(PyObject *key);
 
+  // Check if parameter is in cell.
+  int Contains(PyObject *key);
+
   // Myelin cell.
   myelin::Cell *cell;
 
@@ -128,6 +137,7 @@ struct PyCell : public PyBase {
 
   // Registration.
   static PyTypeObject type;
+  static PySequenceMethods sequence;
   static PyMethodTable methods;
   static void Define(PyObject *module);
 };
@@ -142,6 +152,12 @@ struct PyInstance : public PyBase {
 
   // Look up local tensor in instance.
   PyObject *LookupTensor(PyObject *key);
+
+  // Get tensor value.
+  PyObject *GetTensor(PyObject *key);
+
+  // Assign value to tensor.
+  int SetTensor(PyObject *key, PyObject *value);
 
   // Connect channel element to reference tensor in instance.
   PyObject *Connect(PyObject *args);
@@ -177,7 +193,7 @@ struct PyChannel : public PyBase {
   void Dealloc();
 
   // Return channel size.
-  PyObject *Size();
+  Py_ssize_t Size();
 
   // Return channel element.
   PyObject *Lookup(PyObject *key);
@@ -219,6 +235,9 @@ struct PyTensor : public PyBase {
 
   // Return tensor rank.
   PyObject *Rank();
+
+  // Return number of elements in tensor.
+  Py_ssize_t Size();
 
   // Return tensor shape.
   PyObject *Shape();

@@ -31,10 +31,11 @@ static string basename(const string &name) {
 
 Gradients::Gradients(Flow *flow,
                      Flow::Function *primal,
-                     std::vector<Flow::Variable *> &vars)
+                     const std::vector<Flow::Variable *> &vars)
     : FlowBuilder(flow, "gradients/" + primal->name) {
   // Add instance reference.
   instance_ = Name(Instance(primal), "primal");
+  instance_->set_in();
 
   // Create adjoints.
   for (Flow::Variable *v : vars) {
@@ -90,12 +91,16 @@ Flow::Function *Gradients::Finalize() {
     Flow::Variable *dv = it.second;
     Flow::Variable *terms = terms_[dv];
     if (terms != nullptr) {
+      // The gradients need to be summed when backpropagating through a
+      // broadcast input. Only simple broadcasting is supported.
+      bool unexpand = dv->elements() == 1 && terms->elements() > 1;
+      if (unexpand) terms = Sum(terms);
       if (v->learnable()) {
         // Accumulate gradients for learnable variables.
         CHECK(dv->consumers.empty());
         AssignAdd(dv, terms);
         dv->set_out();
-      } else if (v->in() && !v->unique() && dv->consumers.empty()) {
+      } else if (v->in() && v->ref() && !v->unique() && dv->consumers.empty()) {
         // Accumulate output gradient.
         AssignAdd(dv, terms);
       } else {

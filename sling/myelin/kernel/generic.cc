@@ -144,14 +144,15 @@ class IdentityTransformer : public Transformer {
           op->type == "Enter") {
         noops.push_back(op);
       } else if (op->type == "Identity") {
-        // Eliminate identity if there is no implicit broadcasting involved.
+        // Eliminate identity if there is no implicit broadcasting involved or
+        // assignment of global constant to outputs.
         if (op->indegree() == 1 && op->outdegree() == 1) {
           Flow::Variable *in = op->inputs[0];
           Flow::Variable *out = op->outputs[0];
-          if ((in->shape == out->shape  || out->shape.missing()) &&
-              in->type == out->type) {
-            noops.push_back(op);
-          }
+          if (!out->shape.missing() && in->shape != out->shape) continue;
+          if (in->type != out->type) continue;
+          if (out->out() && in->global()) continue;
+          noops.push_back(op);
         }
       } else if (op->type == "Reshape") {
         // Eliminate reshaping if input and output shapes are equal.

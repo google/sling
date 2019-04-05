@@ -139,6 +139,9 @@ class ConstantFolding : public Transformer {
         // Operation must have both inputs and outputs.
         if (op->inputs.empty() || op->outputs.empty()) continue;
 
+        // Identity op elimination is handled elsewhere.
+        if (op->type == "Identity") continue;
+
         // Shape, Type, and Size can be pre-computed.
         if ((op->type == "Shape" || op->type == "Rank" || op->type == "Size") &&
              op->inputs[0]->shape.defined()) {
@@ -151,18 +154,15 @@ class ConstantFolding : public Transformer {
           CHECK_EQ(output->type, DT_INT32);
 
           // Allocate space for constant in flow.
+          int size = sizeof(int32);
           if (op->type == "Shape") {
             CHECK_EQ(shape.rank(), output->elements());
-            output->size = shape.rank() * sizeof(int32);
-          } else {
-            output->size = sizeof(int32);
+            size = shape.rank() * sizeof(int32);
           }
           char *data = flow->AllocateMemory(output->size);
-          output->data = data;
-          output->set_in();
           int32 *result = reinterpret_cast<int32 *>(data);
 
-          // Create constant variable with the pre-computed value.
+          // Set constant variable to the pre-computed value.
           if (op->type == "Shape") {
             for (int d = 0; d < shape.rank(); ++d) {
               result[d] = shape.dim(d);
@@ -177,6 +177,25 @@ class ConstantFolding : public Transformer {
           op->RemoveInput(input);
           op->RemoveOutput(output);
           remove.push_back(op);
+
+          // An output variable cannot be converted into a constant, so in that
+          // case the output is assigned to the constant with an identity op.
+          if (output->out()) {
+            Flow::Variable *c = flow->AddVariable(output->name + "/value",
+                                                  output->type, output->shape);
+            c->data = data;
+            c->size = size;
+            flow->AddOperation(op->func, op->name, "Identity", {c}, {output});
+          } else {
+            output->data = data;
+            output->size = size;
+          }
+
+          // Make sure input variable is not abandoned.
+          if (input->in() && input->detached()) {
+            op->func->unused.push_back(input);
+          }
+
           again = true;
           continue;
         }
@@ -208,8 +227,8 @@ class ConstantFolding : public Transformer {
             op->RemoveOutput(output);
             remove.push_back(op);
             again = true;
-            continue;
           }
+          continue;
         }
 
         // Check if all inputs are constants.
@@ -249,7 +268,6 @@ class ConstantFolding : public Transformer {
               output->size = size;
               output->type = result->type();
               output->shape = result->shape();
-              output->set_in();
             }
 
             // Mark constant op for removal.

@@ -29,7 +29,7 @@ class Gradients : public FlowBuilder {
  public:
   // Initialize adjoints for gradient derivation.
   Gradients(Flow *flow, Flow::Function *primal,
-            std::vector<Flow::Variable *> &vars);
+            const std::vector<Flow::Variable *> &vars);
 
   // Get adjoint for primal variable.
   Flow::Variable *d(Flow::Variable *x) {

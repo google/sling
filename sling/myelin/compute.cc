@@ -1132,8 +1132,25 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   // Let linker configure network before compilation.
   linker_->BeginNetwork(this);
 
-  // Create steps for all the operations.
+  // Create cells for all functions.
   std::unordered_map<Flow::Function *, Cell *> cells;
+  for (Flow::Function *func : flow.funcs()) {
+    // Set or create cell for step.
+    Cell *cell = new Cell();
+    cell->network_ = this;
+    cell->name_ = func->name;
+    cells_.push_back(cell);
+    cells[func] = cell;
+
+    // Add unused input variables to cell. Unused input variables still need to
+    // be allocated in the instance block. For example, identity functions does
+    // not have any operations, but the inputs and outputs are aliased.
+    for (Flow::Variable *v : func->unused) {
+      tensors[v]->cell_ = cell;
+    }
+  }
+
+  // Create steps for all the operations.
   for (Flow::Operation *op : flow.ops()) {
     // Create step for operation.
     Step *step = new Step();
@@ -1142,15 +1159,8 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     step->type_ = op->type;
     step->CopyAttrsFrom(*op);
 
-    // Set or create cell for step.
+    // Set cell for step.
     Cell *cell = cells[op->func];
-    if (cell == nullptr) {
-      cell = new Cell();
-      cell->network_ = this;
-      cell->name_ = op->func->name;
-      cells_.push_back(cell);
-      cells[op->func] = cell;
-    }
     cell->steps_.push_back(step);
     step->cell_ = cell;
 
@@ -1866,9 +1876,6 @@ bool Network::Compile(const string &flowfile, const Library &library) {
 }
 
 void Network::ComputeLiveRanges() {
-  // Check that the network is not empty.
-  if (steps_.empty()) return;
-
   // All inputs and outputs from the network must be alive before and after the
   // computation.
   for (Tensor *t : parameters_) {

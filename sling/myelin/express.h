@@ -79,6 +79,7 @@ class Express {
     // Functions.
     NEG,         // negative, r=-x
     ABS,         // absolute value, r=|x|=max(x,neg(x))
+    SIGN,        // sign of value, r=x<0?-x:x
     RELU,        // rectified linear unit, r=max(0,a)
     SOFTSIGN,    // softsign, r=x/(|x|+1)
     SOFTPLUS,    // softplus, r=log(exp(x)+1)
@@ -87,12 +88,13 @@ class Express {
     SQUARE,      // square, r=x*x
     SQRT,        // square root, r=x^(1/2)
 
-    LOG,         // natural logarithm, r=log(a)
-    EXP,         // natural exponential function, r=exp(a)
-    SIGMOID,     // sigmoid function, r=1/(1+exp(-a))
-    TANH,        // hyperbolic tangent, r=tanh(a)
-    LOG2,        // base-2 logarithm, r=log2(a)
-    EXP2,        // base-2 exponential function, r=2^a
+    LOG,         // natural logarithm, r=log(x)
+    EXP,         // natural exponential function, r=exp(x)
+    SIGMOID,     // sigmoid function, r=1/(1+exp(-x))
+    TANH,        // hyperbolic tangent, r=tanh(x)
+    ERF,         // error function, r=erf(x)
+    LOG2,        // base-2 logarithm, r=log2(x)
+    EXP2,        // base-2 exponential function, r=2^x
 
     // Fused multiply.
     MULADD132,   // fused multiply/add, r=a*c+b
@@ -153,6 +155,7 @@ class Express {
     CEPHES_EXP_P4, CEPHES_EXP_P5,
     ALPHA_1, ALPHA_3, ALPHA_5, ALPHA_7, ALPHA_9, ALPHA_11, ALPHA_13,
     BETA_0, BETA_2, BETA_4, BETA_6,
+    ERF_A1, ERF_A2, ERF_A3, ERF_A4, ERF_A5, ERF_P,
     NUM_CONSTANTS,
   };
 
@@ -486,6 +489,7 @@ class Express {
   Var *Maximum(Var *x, Var *y) { return Do(MAXIMUM, x, y); }
   Var *Zero() { return Number(ZERO); }
   Var *One() { return Number(ONE); }
+  Var *Two() { return Number(TWO); }
 
   Var *CmpEq(Var *x, Var *y) { return Do(CMPEQOQ, x, y); }
   Var *CmpNe(Var *x, Var *y) { return Do(CMPNEUQ, x, y); }
@@ -505,12 +509,17 @@ class Express {
   Var *Log(Var *x);
   Var *Exp(Var *x);
   Var *Tanh(Var *x);
+  Var *Erf(Var *x);
 
   // Build expressions for composite functions.
   Var *MulAdd(Var *x, Var *y, Var *z) { return Add(Mul(x, y), z); }
   Var *Neg(Var *x) { return target_ == NVIDIA ? Do(NEG, x) : Sub(Zero(), x); }
   Var *Abs(Var *x) {
     return target_ == NVIDIA ? Do(ABS, x) : Maximum(x, Neg(x));
+  }
+  Var *Sign(Var *x) {
+    return Cond(CmpLt(x, Zero()), Number(N1),
+                                  Cond(CmpGt(x, Zero()), One(), Zero()));
   }
   Var *Relu(Var *x) { return Maximum(x, Zero()); }
   Var *Softsign(Var *x) { return Div(x, Add(Abs(x), One())); }

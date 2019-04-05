@@ -513,11 +513,13 @@ class CUDACalculate : public CUDAKernel {
   int arity_;               // number of inputs
 };
 
-// CUDA-based argmax using reduction.
+// CUDA-based argmax/argmin using reduction.
 class CUDAArgMax : public CUDAKernel {
  public:
-  string Name() override { return "CUDAArgMax"; }
-  string Operation() override { return "ArgMax"; }
+  CUDAArgMax(bool minimum) : minimum_(minimum) {}
+
+  string Name() override { return minimum_ ? "CUDAArgMin" : "CUDAArgMax"; }
+  string Operation() override { return minimum_ ? "ArgMin" : "ArgMax"; }
 
   bool Supports(Step *step) override {
     // Requires CUDA support.
@@ -599,7 +601,7 @@ class CUDAArgMax : public CUDAKernel {
     // Initially set m = x[idx] and b = idx.
     ptx_decl(b64, xiptr);
     ptx_emit(mad.wide.u32, xiptr, idx, PTXImm(sizeof(float)), xptr);
-    ptx_decl(pred, larger);
+    ptx_decl(pred, select);
     ptx_decl(f32, m);
     ptx_decl(u32, b);
     ptx_emit(ld.global.f32, m, PTXAddr(xiptr));
@@ -624,9 +626,14 @@ class CUDAArgMax : public CUDAKernel {
       ptx_decl(f32, value);
       ptx_emit(ld.global.f32, value, PTXAddr(sptr));
 
-      // Update max element if x[s] is larger than m.
-      ptx_emit(setp.gt.f32, larger, value, m);
-      ptx_if(larger);
+      if (minimum_) {
+        // Update min element if x[s] is smaller than m.
+        ptx_emit(setp.lt.f32, select, value, m);
+      } else {
+        // Update max element if x[s] is larger than m.
+        ptx_emit(setp.gt.f32, select, value, m);
+      }
+      ptx_if(select);
       ptx_emit(mov.f32, m, value);
       ptx_emit(mov.u32, b, s);
       ptx_endif();
@@ -644,7 +651,7 @@ class CUDAArgMax : public CUDAKernel {
     ptx_emit(mad.wide.u32, bptr, idx, PTXImm(sizeof(int)), best);
     ptx_emit(st.shared.u32, PTXAddr(bptr), b);
 
-    // The input has now been reduced down to the block size and the largest
+    // The input has now been reduced down to the block size and the extremum
     // element in each block, together with its index, is now stored in shared
     // memory. The block is reduced in a number of steps that reduce the problem
     // in half. This is done until there is only one element left.
@@ -671,17 +678,26 @@ class CUDAArgMax : public CUDAKernel {
       //    maxval[idx] = maxval[idx + block_size];
       //    best[idx] = best[idx + block_size];
       //  }
+      // or for argmin:
+      //  if (minval[idx + block_size] < minval[idx]) {
+      //    minval[idx] = minval[idx + block_size];
+      //    best[idx] = best[idx + block_size];
+      //  }
       ptx_emit(ld.shared.f32, m, PTXAddr(mptr));
       ptx_emit(ld.shared.f32, ms, PTXAddr(mptr, block_size * sizeof(float)));
-      ptx_emit(setp.gt.f32, larger, ms, m);
-      ptx_if(larger);
+      if (minimum_) {
+        ptx_emit(setp.lt.f32, select, ms, m);
+      } else {
+        ptx_emit(setp.gt.f32, select, ms, m);
+      }
+      ptx_if(select);
       ptx_emit(ld.shared.u32, bs, PTXAddr(bptr, block_size * sizeof(int)));
       ptx_emit(st.shared.f32, PTXAddr(mptr), ms);
       ptx_emit(st.shared.u32, PTXAddr(bptr), bs);
       ptx_endif();
     }
 
-    // ArgMax is now in the first element.
+    // Argmax/min is now in the first element.
     ptx_decl(u32, result);
     ptx_emit(ld.shared.u32, result, PTXAddr(best));
     ptx_decl(b64, yptr);
@@ -696,6 +712,9 @@ class CUDAArgMax : public CUDAKernel {
   int64 Complexity(const Step *step) override {
     return 0;
   }
+
+ private:
+  bool minimum_;  // compute argmin instead of argmax
 };
 
 // Register CUDA arithmetic library.
@@ -739,7 +758,8 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
   library->Register(new CUDACalculate("CUDACond", "Cond", 3));
   library->Register(new CUDACalculate("CUDASelect", "Select", 2));
 
-  library->Register(new CUDAArgMax());
+  library->Register(new CUDAArgMax(false));
+  library->Register(new CUDAArgMax(true));
 }
 
 }  // namespace myelin

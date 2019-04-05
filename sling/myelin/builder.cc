@@ -135,6 +135,32 @@ Flow::Variable *FlowBuilder::Const(const void *data, Type type,
   return var;
 }
 
+Flow::Variable *FlowBuilder::Zero(Type type) {
+  switch (type) {
+    case DT_FLOAT: return Const(0.0f);
+    case DT_DOUBLE: return Const(0.0);
+    default: return Const(nullptr, type, {});
+  }
+}
+
+Flow::Variable *FlowBuilder::One(Type type) {
+  switch (type) {
+    case DT_FLOAT: return Const(1.0f);
+    case DT_DOUBLE: return Const(1.0);
+    case DT_INT32: return Const(1);
+    default: LOG(FATAL) << "Constant type not supported";
+  }
+}
+
+Flow::Variable *FlowBuilder::Two(Type type) {
+  switch (type) {
+    case DT_FLOAT: return Const(2.0f);
+    case DT_DOUBLE: return Const(2.0);
+    case DT_INT32: return Const(2);
+    default: LOG(FATAL) << "Constant type not supported";
+  }
+}
+
 Flow::Variable *FlowBuilder::Instance(Function *func) {
   Variable *instance = Var(func->name, DT_RESOURCE, {});
   instance->set_ref();

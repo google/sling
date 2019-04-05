@@ -21,6 +21,7 @@ import sling.myelin as myelin
 import numpy as np
 import sys
 import struct
+import math
 
 flags.define("--dt", default=myelin.DT_FLOAT)
 flags.define("--test")
@@ -68,6 +69,9 @@ def sigmoid(x):
 def relu(x):
   return np.maximum(x, 0)
 
+def erf(x):
+  return np.array([math.erf(v) for v in x])
+
 # Compute flow function using numpy.
 def simulate(flow, f, data):
   # Copy input tensors.
@@ -76,7 +80,7 @@ def simulate(flow, f, data):
     if i.data != None:
       v[i] = np.array(i.data, dtype=nptypes[i.type])
     else:
-      v[i] = np.asarray(data[i])
+      v[i] = np.asarray(data.tensor(i))
 
   # Get ops in computation order.
   _, ops = flow.order(f)
@@ -96,6 +100,8 @@ def simulate(flow, f, data):
       v[o[0]] = np.log(v[i[0]])
     elif op.type == "Tanh":
       v[o[0]] = np.tanh(v[i[0]])
+    elif op.type == "Erf":
+      v[o[0]] = erf(v[i[0]])
     elif op.type == "Sin":
       v[o[0]] = np.sin(v[i[0]])
     elif op.type == "Cos":
@@ -110,6 +116,8 @@ def simulate(flow, f, data):
       v[o[0]] = -v[i[0]]
     elif op.type == "Abs":
       v[o[0]] = np.abs(v[i[0]])
+    elif op.type == "Sign":
+      v[o[0]] = np.sign(v[i[0]])
     elif op.type == "Add":
       v[o[0]] = v[i[0]] + v[i[1]]
     elif op.type == "Sub":
@@ -132,6 +140,8 @@ def simulate(flow, f, data):
       v[o[0]] = np.min(v[i[0]])
     elif op.type == "Product":
       v[o[0]] = np.prod(v[i[0]])
+    elif op.type == "ArgMin":
+      v[o[0]] = np.argmin(v[i[0]])
     elif op.type == "ArgMax":
       v[o[0]] = np.argmax(v[i[0]])
     elif op.type == "Equal":
@@ -154,8 +164,18 @@ def simulate(flow, f, data):
       v[o[0]] = np.logical_xor(v[i[0]], v[i[1]])
     elif op.type == "Not":
       v[o[0]] = np.logical_not(v[i[0]])
+    elif op.type == "Cond":
+      v[o[0]] = np.where((v[i[0]] != 0), v[i[1]], v[i[2]])
+    elif op.type == "Select":
+      v[o[0]] = np.where((v[i[0]] != 0), v[i[1]], 0)
     elif op.type == "Transpose":
       v[o[0]] = np.transpose(v[i[0]])
+    elif op.type == "Shape":
+      v[o[0]] = np.array(v[i[0]].shape)
+    elif op.type == "Size":
+      v[o[0]] = np.array(v[i[0]].size)
+    elif op.type == "Rank":
+      v[o[0]] = np.array(len(v[i[0]].shape))
     elif op.type == "ConcatV2":
       n = int(op.attr("N"))
       axis = v[i[n]]
@@ -172,7 +192,7 @@ def simulate(flow, f, data):
   return v
 
 # Compare flow functions against numpy.
-def check(flow, variant, lo=-10.0, hi=10.0):
+def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8):
   # Ensure that inputs are not overwritten.
   for i in flow.inputs(): i.output = True
 
@@ -190,7 +210,7 @@ def check(flow, variant, lo=-10.0, hi=10.0):
     # Fill inputs.
     for i in flow.inputs(f):
       if i.data != None: continue
-      a = np.asarray(data[i])
+      a = np.asarray(data.tensor(i))
       if type(lo) == int and type(hi) == int:
         r = np.random.randint(lo, hi, a.shape)
       else:
@@ -211,23 +231,25 @@ def check(flow, variant, lo=-10.0, hi=10.0):
       tests[f.name] = test
     test.runs += 1
     for o in flow.outputs(f):
-      t = data[o]
+      t = data.tensor(o)
       b = baseline[o]
       if b.dtype == bool: t = np.array(t, dtype=bool)
-      if not np.allclose(t, b):
+      if not np.allclose(t, b, rtol=rtol, atol=atol):
         test.errors += 1
         print
         print "mismatch in", f.name, variant, "for", o.name
         print "inputs:"
         for i in flow.inputs(f):
-          if i.data == None: print i.name, np.asarray(data[i])
+          if i.data == None: print i.name, np.asarray(data.tensor(i))
         print "myelin:"
         print np.asarray(t)
         print "numpy:"
         print b
         if b.dtype != bool:
-          print "diff:"
+          print "abs error:"
           print b - np.asarray(t)
+          print "rel error:"
+          print (b - np.asarray(t)) / np.asarray(t)
 
   if flags.arg.profile:
     print net.profile()
@@ -322,6 +344,13 @@ def abs_test(n):
   y = f.abs(x)
   check(flow, n, -10.0, 10.0)
 
+def sign_test(n):
+  flow = myelin.Flow()
+  f = flow.define("sign")
+  x = f.var("x", dt, [n])
+  y = f.sign(x)
+  check(flow, n, -10.0, 10.0)
+
 def exp_test(n):
   flow = myelin.Flow()
   f = flow.define("exp")
@@ -342,6 +371,13 @@ def tanh_test(n):
   x = f.var("x", dt, [n])
   y = f.tanh(x)
   check(flow, n, -1.0, 1.0)
+
+def erf_test(n):
+  flow = myelin.Flow()
+  f = flow.define("erf")
+  x = f.var("x", dt, [n])
+  y = f.erf(x)
+  check(flow, n, -2.0, 2.0, 1e-6, 1e-4)
 
 def sin_test(n):
   flow = myelin.Flow()
@@ -427,6 +463,13 @@ def norm_test(n):
   y = f.norm(x)
   check(flow, n, 0.0, 1.0)
 
+def argmin_test(n):
+  flow = myelin.Flow()
+  f = flow.define("argmin")
+  x = f.var("x", dt, [n])
+  y = f.argmin(x)
+  check(flow, n)
+
 def argmax_test(n):
   flow = myelin.Flow()
   f = flow.define("argmax")
@@ -455,6 +498,27 @@ def bcast_test(n):
   f = flow.define("bcast")
   x = f.var("x", dt, [n])
   y = f.mul(x, f.const(7, dt))
+  check(flow, n)
+
+def shape_test(n):
+  flow = myelin.Flow()
+  f = flow.define("shape")
+  x = f.var("x", dt, [n])
+  y = f.shape(x)
+  check(flow, n)
+
+def size_test(n):
+  flow = myelin.Flow()
+  f = flow.define("size")
+  x = f.var("x", dt, [n])
+  y = f.size(x)
+  check(flow, n)
+
+def rank_test(n):
+  flow = myelin.Flow()
+  f = flow.define("size")
+  x = f.var("x", dt, [1] * n)
+  y = f.rank(x)
   check(flow, n)
 
 def concat_test(n, m):
@@ -522,6 +586,23 @@ def logic_test(n):
   f.logical_and(f.logical_not(eq), gt, name="andn")
   check(flow, n, 0, 10)
 
+def cond_test(n):
+  flow = myelin.Flow()
+  f = flow.define("cond")
+  c = f.var("c", dt, [n])
+  x = f.var("x", dt, [n])
+  y = f.var("y", dt, [n])
+  f.cond(f.equal(c, f.const(0, dtype=dt)), x, y)
+  check(flow, n, -5, 5)
+
+def select_test(n):
+  flow = myelin.Flow()
+  f = flow.define("select")
+  c = f.var("c", dt, [n])
+  x = f.var("x", dt, [n])
+  f.select(f.equal(c, f.const(0, dtype=dt)), x)
+  check(flow, n, -5, 5)
+
 def add_const_test(n, c):
   flow = myelin.Flow()
   f = flow.define("add_const")
@@ -578,6 +659,9 @@ for i in sizes:
   square_test(i)
   relu_test(i)
   bcast_test(i)
+  shape_test(i)
+  size_test(i)
+  if i < 32: rank_test(i)
 
   for c in [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8]:
     add_const_test(i, c)
@@ -588,8 +672,9 @@ for i in sizes:
     rcp_test(i)
     sqrt_test(i)
     exp_test(i)
-    tanh_test(i)
     log_test(i)
+    tanh_test(i)
+    erf_test(i)
     sigmoid_test(i)
     softmax_test(i)
     sum_test(i)
@@ -597,6 +682,7 @@ for i in sizes:
     min_test(i)
     max_test(i)
     norm_test(i)
+    sign_test(i)
 
     equal_test(i)
     not_equal_test(i)
@@ -605,12 +691,15 @@ for i in sizes:
     greater_test(i)
     greater_equal_test(i)
     logic_test(i)
+    cond_test(i)
+    select_test(i)
 
     if dt != myelin.DT_DOUBLE:
-      # No support yet for argmax, sin, and cos for doubles.
+      # No support yet for argmax, argmin, sin, and cos for doubles.
       sin_test(i)
       cos_test(i)
       argmax_test(i)
+      argmin_test(i)
 
 for i in sizes:
   for j in sizes:

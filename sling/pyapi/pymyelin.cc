@@ -15,6 +15,7 @@
 #include "sling/pyapi/pymyelin.h"
 
 #include "sling/myelin/flow.h"
+#include "sling/myelin/gradient.h"
 
 namespace sling {
 
@@ -29,6 +30,7 @@ PyMappingMethods PyNetwork::mapping;
 PyMethodTable PyNetwork::methods;
 
 PyTypeObject PyCell::type;
+PySequenceMethods PyCell::sequence;
 PyMethodTable PyCell::methods;
 
 PyTypeObject PyInstance::type;
@@ -43,6 +45,132 @@ PyTypeObject PyTensor::type;
 PyMappingMethods PyTensor::mapping;
 PyBufferProcs PyTensor::buffer;
 PyMethodTable PyTensor::methods;
+
+// Assign Python value to element.
+static int AssignElement(char *ptr, Type type, PyObject *value) {
+  switch (type) {
+    case DT_FLOAT: {
+      float v = PyFloat_AsDouble(value);
+      if (v == -1.0 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<float *>(ptr) = v;
+      break;
+    }
+    case DT_DOUBLE: {
+      double v = PyFloat_AsDouble(value);
+      if (v == -1.0 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<double *>(ptr) = v;
+      break;
+    }
+    case DT_INT32: {
+      int v = PyInt_AsLong(value);
+      if (v == -1 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<int32 *>(ptr) = v;
+      break;
+    }
+    case DT_UINT8: {
+      int v = PyInt_AsLong(value);
+      if (v == -1 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<uint8 *>(ptr) = v;
+      break;
+    }
+    case DT_INT16: {
+      int v = PyInt_AsLong(value);
+      if (v == -1 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<int16 *>(ptr) = v;
+      break;
+    }
+    case DT_INT8: {
+      int v = PyInt_AsLong(value);
+      if (v == -1 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<int8 *>(ptr) = v;
+      break;
+    }
+    case DT_INT64: {
+      int64 v = PyLong_AsLongLong(value);
+      if (v == -1 && PyErr_Occurred()) return -1;
+      *reinterpret_cast<int64 *>(ptr) = v;
+      break;
+    }
+    case DT_BOOL: {
+      int v = PyObject_IsTrue(value);
+      if (v == -1) return -1;
+      *reinterpret_cast<bool *>(ptr) = v;
+      break;
+    }
+    default:
+      PyErr_SetString(PyExc_ValueError, "Unsupported element type");
+      return -1;
+  }
+
+  return 0;
+}
+
+// Get Python value from element.
+static PyObject *RetrieveElement(char *ptr, Type type) {
+  switch (type) {
+    case DT_FLOAT:
+      return PyFloat_FromDouble(*reinterpret_cast<float *>(ptr));
+    case DT_DOUBLE:
+      return PyFloat_FromDouble(*reinterpret_cast<double *>(ptr));
+    case DT_INT32:
+      return PyInt_FromLong(*reinterpret_cast<int32 *>(ptr));
+    case DT_UINT8:
+      return PyInt_FromLong(*reinterpret_cast<uint8 *>(ptr));
+    case DT_INT16:
+      return PyInt_FromLong(*reinterpret_cast<int16 *>(ptr));
+    case DT_INT8:
+      return PyInt_FromLong(*reinterpret_cast<int8 *>(ptr));
+    case DT_INT64:
+      return PyLong_FromLongLong(*reinterpret_cast<int64 *>(ptr));
+    case DT_BOOL:
+      return PyBool_FromLong(*reinterpret_cast<bool *>(ptr));
+    default:
+      PyErr_SetString(PyExc_ValueError, "Unsupported element type");
+      return nullptr;
+  }
+}
+
+// Assign Python buffer to tensor.
+static int AssignTensorBuffer(char *ptr, Tensor *format, Py_buffer *view) {
+  // Check type, rank, shape, and layout.
+  const char *pytype = myelin::TypeTraits::of(format->type()).pytype();
+  if (view->format != nullptr && pytype != nullptr) {
+    if (strcmp(view->format, pytype) != 0) {
+      PyErr_SetString(PyExc_TypeError, "Incompatible tensor types");
+      return -1;
+    }
+  } else if (view->itemsize != format->element_size()) {
+    PyErr_SetString(PyExc_TypeError, "Incompatible tensor elements");
+    return -1;
+  }
+  if (view->ndim != format->rank()) {
+    PyErr_SetString(PyExc_TypeError, "Incompatible tensor ranks");
+    return -1;
+  }
+  for (int d = 0; d < format->rank(); d++) {
+    if (format->dim(d) != view->shape[d]) {
+      PyErr_SetString(PyExc_TypeError, "Incompatible tensor shapes");
+      return -1;
+    }
+    if (format->stride(d) != view->strides[d]) {
+      PyErr_SetString(PyExc_TypeError, "Incompatible tensor layout");
+      return -1;
+    }
+  }
+
+  if (format->ref()) {
+    // Set reference to data in buffer.
+    if (format->ref_placement() == DEVICE) {
+      PyErr_SetString(PyExc_ValueError, "Cannot set tensor on device");
+      return -1;
+    }
+    *reinterpret_cast<void **>(ptr) = view->buf;
+  } else {
+    // Copy data from buffer.
+    memcpy(ptr, view->buf, view->len);
+  }
+  return 0;
+}
 
 void PyCompiler::Define(PyObject *module) {
   InitType(&type, "sling.Compiler", sizeof(PyCompiler), true);
@@ -73,6 +201,13 @@ PyObject *PyCompiler::Compile(PyObject *arg) {
   Flow flow;
   PyBuffers buffers(&flow);
   if (!ImportFlow(arg, &flow, &buffers)) return nullptr;
+
+  // Create gradient functions.
+  for (Flow::Function *func : flow.funcs()) {
+    if (func->backprop()) {
+      Gradient(&flow, func, *compiler->library());
+    }
+  }
 
   // Compile flow to network.
   Network *net = new Network();
@@ -263,8 +398,10 @@ void PyNetwork::Define(PyObject *module) {
   type.tp_dealloc = method_cast<destructor>(&PyNetwork::Dealloc);
 
   type.tp_as_mapping = &mapping;
-  mapping.mp_subscript = method_cast<binaryfunc>(&PyNetwork::LookupTensor);
+  mapping.mp_subscript = method_cast<binaryfunc>(&PyNetwork::GetTensor);
+  mapping.mp_ass_subscript = method_cast<objobjargproc>(&PyNetwork::SetTensor);
 
+  methods.AddO("tensor", &PyNetwork::LookupTensor);
   methods.AddO("cell", &PyNetwork::LookupCell);
   methods.Add("profile", &PyNetwork::Profile);
   type.tp_methods = methods.table();
@@ -284,7 +421,7 @@ void PyNetwork::Dealloc() {
 
 PyObject *PyNetwork::LookupTensor(PyObject *key) {
   // Look up tensor in network.
-  Tensor *tensor = GetTensor(key, nullptr);
+  Tensor *tensor = FindTensor(key, nullptr);
   if (tensor == nullptr) return nullptr;
 
   // Get tensor data buffer.
@@ -303,6 +440,74 @@ PyObject *PyNetwork::LookupTensor(PyObject *key) {
   return pytensor->AsObject();
 }
 
+PyObject *PyNetwork::GetTensor(PyObject *key) {
+  // Look up tensor in network.
+  Tensor *tensor = FindTensor(key, nullptr);
+  if (tensor == nullptr) return nullptr;
+
+  // Get tensor data buffer.
+  if (tensor->placement() == DEVICE) Py_RETURN_NONE;
+  char *ptr = tensor->data();
+  if (ptr == nullptr) Py_RETURN_NONE;
+  if (tensor->ref()) {
+    if (tensor->ref_placement() == DEVICE) Py_RETURN_NONE;
+    ptr = *reinterpret_cast<char **>(ptr);
+  }
+  if (ptr == nullptr) Py_RETURN_NONE;
+
+  // Return tensor data.
+  if (tensor->elements() == 1) {
+    return RetrieveElement(ptr, tensor->type());
+  } else {
+    PyTensor *pytensor = PyObject_New(PyTensor, &PyTensor::type);
+    pytensor->Init(this->AsObject(), ptr, tensor);
+    return pytensor->AsObject();
+  }
+}
+
+int PyNetwork::SetTensor(PyObject *key, PyObject *value) {
+  // Look up tensor in network.
+  Tensor *tensor = FindTensor(key, nullptr);
+  if (tensor == nullptr) return -1;
+
+  // Get tensor data buffer.
+  if (tensor->placement() == DEVICE) {
+    PyErr_SetString(PyExc_ValueError, "Cannot set tensor on device");
+    return -1;
+  }
+  char *ptr = tensor->data();
+
+  // Try to set data from Python buffer.
+  if (PyObject_CheckBuffer(value)) {
+    Py_buffer view;
+    if (PyObject_GetBuffer(value, &view, PyBUF_RECORDS_RO) == -1) return -1;
+
+    if (AssignTensorBuffer(ptr, tensor, &view) == -1) {
+      PyBuffer_Release(&view);
+      return -1;
+    }
+
+    PyBuffer_Release(&view);
+    return 0;
+  }
+
+  // Assign scalars.
+  if (tensor->elements() == 1) {
+    if (tensor->ref()) {
+      if (tensor->ref_placement() == DEVICE) {
+        PyErr_SetString(PyExc_ValueError, "Cannot set tensor on device");
+        return -1;
+      }
+      ptr = *reinterpret_cast<char **>(ptr);
+    }
+
+    return AssignElement(ptr, tensor->type(), value);
+  }
+
+  PyErr_SetString(PyExc_ValueError, "Cannot assign tensor");
+  return -1;
+}
+
 PyObject *PyNetwork::LookupCell(PyObject *key) {
   // Get cell name.
   const char *name = PyString_AsString(key);
@@ -311,7 +516,7 @@ PyObject *PyNetwork::LookupCell(PyObject *key) {
   // Look up cell in network.
   Cell *cell = net->LookupCell(name);
   if (cell == nullptr) {
-    PyErr_SetString(PyExc_TypeError, "Unknown cell");
+    PyErr_SetString(PyExc_IndexError, "Unknown cell");
     return nullptr;
   }
 
@@ -325,7 +530,7 @@ PyObject *PyNetwork::Profile() {
   return AllocateString(ProfileReport(*net));
 }
 
-Tensor *PyNetwork::GetTensor(PyObject *key, const Cell *cell) {
+Tensor *PyNetwork::FindTensor(PyObject *key, const Cell *cell) {
   // Get tensor name. If the key is a string, this used for looking up the
   // tensor by name. If key is an integer, it is used as an index into the
   // parameter array of the network. Otherwise, Otherwise, the repr() method
@@ -362,9 +567,9 @@ Tensor *PyNetwork::GetTensor(PyObject *key, const Cell *cell) {
 
   if (tensor->cell() != cell) {
     if (cell == nullptr) {
-      PyErr_SetString(PyExc_TypeError, "Tensor is not a global tensor");
+      PyErr_SetString(PyExc_IndexError, "Tensor is not a global tensor");
     } else {
-      PyErr_SetString(PyExc_TypeError, "Tensor does not belong to cell");
+      PyErr_SetString(PyExc_IndexError, "Tensor does not belong to cell");
     }
     return nullptr;
   }
@@ -376,6 +581,9 @@ void PyCell::Define(PyObject *module) {
   InitType(&type, "sling.Cell", sizeof(PyCell), false);
   type.tp_init = method_cast<initproc>(&PyCell::Init);
   type.tp_dealloc = method_cast<destructor>(&PyCell::Dealloc);
+
+  type.tp_as_sequence = &sequence;
+  sequence.sq_contains = method_cast<objobjproc>(&PyCell::Contains);
 
   methods.Add("instance", &PyCell::NewInstance);
   methods.Add("channel", &PyCell::NewChannel);
@@ -410,7 +618,7 @@ PyObject *PyCell::NewChannel(PyObject *args) {
   if (!PyArg_ParseTuple(args, "O|i", &key, &size)) return nullptr;
 
   // Look up tensor in network.
-  Tensor *tensor = pynet->GetTensor(key, cell);
+  Tensor *tensor = pynet->FindTensor(key, cell);
   if (tensor == nullptr) return nullptr;
 
   // Create new channel.
@@ -421,7 +629,7 @@ PyObject *PyCell::NewChannel(PyObject *args) {
 
 PyObject *PyCell::Index(PyObject *key) {
   // Look up tensor in network.
-  Tensor *tensor = pynet->GetTensor(key, cell);
+  Tensor *tensor = pynet->FindTensor(key, cell);
   if (tensor == nullptr) return nullptr;
 
   // Find parameter tensor index.
@@ -436,6 +644,13 @@ PyObject *PyCell::Index(PyObject *key) {
   return PyInt_FromLong(index);
 }
 
+int PyCell::Contains(PyObject *key) {
+  // Look up tensor in network.
+  Tensor *tensor = pynet->FindTensor(key, cell);
+  PyErr_Clear();
+  return tensor != nullptr;
+}
+
 void PyInstance::Define(PyObject *module) {
   InitType(&type, "sling.Instance", sizeof(PyInstance), false);
   type.tp_init = method_cast<initproc>(&PyInstance::Init);
@@ -444,8 +659,10 @@ void PyInstance::Define(PyObject *module) {
   type.tp_repr = method_cast<reprfunc>(&PyInstance::Str);
 
   type.tp_as_mapping = &mapping;
-  mapping.mp_subscript = method_cast<binaryfunc>(&PyInstance::LookupTensor);
+  mapping.mp_subscript = method_cast<binaryfunc>(&PyInstance::GetTensor);
+  mapping.mp_ass_subscript = method_cast<objobjargproc>(&PyInstance::SetTensor);
 
+  methods.AddO("tensor", &PyInstance::LookupTensor);
   methods.Add("compute", &PyInstance::Compute);
   methods.Add("clear", &PyInstance::Clear);
   methods.Add("connect", &PyInstance::Connect);
@@ -470,7 +687,28 @@ void PyInstance::Dealloc() {
 
 PyObject *PyInstance::LookupTensor(PyObject *key) {
   // Look up tensor in network.
-  Tensor *tensor = pycell->pynet->GetTensor(key, data->cell());
+  Tensor *tensor = pycell->pynet->FindTensor(key, data->cell());
+  if (tensor == nullptr) return nullptr;
+
+  // Get tensor data buffer.
+  if (tensor->placement() == DEVICE) Py_RETURN_NONE;
+  char *ptr = data->GetAddress(tensor);
+  if (ptr == nullptr) Py_RETURN_NONE;
+  if (tensor->ref()) {
+    if (tensor->ref_placement() == DEVICE) Py_RETURN_NONE;
+    ptr = *reinterpret_cast<char **>(ptr);
+  }
+  if (ptr == nullptr) Py_RETURN_NONE;
+
+  // Return tensor value.
+  PyTensor *pytensor = PyObject_New(PyTensor, &PyTensor::type);
+  pytensor->Init(this->AsObject(), ptr, tensor);
+  return pytensor->AsObject();
+}
+
+PyObject *PyInstance::GetTensor(PyObject *key) {
+  // Look up tensor in network.
+  Tensor *tensor = pycell->pynet->FindTensor(key, data->cell());
   if (tensor == nullptr) return nullptr;
 
   // Get tensor data buffer.
@@ -484,9 +722,77 @@ PyObject *PyInstance::LookupTensor(PyObject *key) {
   if (ptr == nullptr) Py_RETURN_NONE;
 
   // Return tensor data.
-  PyTensor *pytensor = PyObject_New(PyTensor, &PyTensor::type);
-  pytensor->Init(this->AsObject(), ptr, tensor);
-  return pytensor->AsObject();
+  if (tensor->elements() == 1) {
+    if (tensor->ref()) {
+      if (tensor->ref_placement() == DEVICE) {
+        PyErr_SetString(PyExc_ValueError, "Cannot get tensor from device");
+        return nullptr;
+      }
+      ptr = *reinterpret_cast<char **>(ptr);
+    }
+
+    return RetrieveElement(ptr, tensor->type());
+  } else {
+    PyTensor *pytensor = PyObject_New(PyTensor, &PyTensor::type);
+    pytensor->Init(this->AsObject(), ptr, tensor);
+    return pytensor->AsObject();
+  }
+}
+
+int PyInstance::SetTensor(PyObject *key, PyObject *value) {
+  // Look up tensor in network.
+  Tensor *tensor = pycell->pynet->FindTensor(key, data->cell());
+  if (tensor == nullptr) return -1;
+
+  // Get tensor data buffer.
+  if (tensor->placement() == DEVICE) {
+    PyErr_SetString(PyExc_ValueError, "Cannot set tensor on device");
+    return -1;
+  }
+  char *ptr = data->GetAddress(tensor);
+
+  // Try to set instance reference.
+  if (PyObject_TypeCheck(value, &PyInstance::type)) {
+    if (tensor->type() != DT_RESOURCE || !tensor->ref()) {
+      PyErr_SetString(PyExc_IndexError, "Invalid reference tensor");
+      return -1;
+    }
+
+    // Set reference to other instance.
+    PyInstance *pyinstance = reinterpret_cast<PyInstance *>(value);
+    data->Set(tensor, pyinstance->data);
+    return 0;
+  }
+
+  // Try to set data from Python buffer.
+  if (PyObject_CheckBuffer(value)) {
+    Py_buffer view;
+    if (PyObject_GetBuffer(value, &view, PyBUF_RECORDS_RO) == -1) return -1;
+
+    if (AssignTensorBuffer(ptr, tensor, &view) == -1) {
+      PyBuffer_Release(&view);
+      return -1;
+    }
+
+    PyBuffer_Release(&view);
+    return 0;
+  }
+
+  // Assign scalars.
+  if (tensor->elements() == 1) {
+    if (tensor->ref()) {
+      if (tensor->ref_placement() == DEVICE) {
+        PyErr_SetString(PyExc_ValueError, "Cannot set tensor on device");
+        return -1;
+      }
+      ptr = *reinterpret_cast<char **>(ptr);
+    }
+
+    return AssignElement(ptr, tensor->type(), value);
+  }
+
+  PyErr_SetString(PyExc_TypeError, "Cannot assign tensor");
+  return -1;
 }
 
 PyObject *PyInstance::Connect(PyObject *args) {
@@ -498,7 +804,7 @@ PyObject *PyInstance::Connect(PyObject *args) {
   if (!PyChannel::TypeCheck(pychannel)) return nullptr;
 
   // Look up tensor in network.
-  Tensor *tensor = pycell->pynet->GetTensor(key, data->cell());
+  Tensor *tensor = pycell->pynet->FindTensor(key, data->cell());
   if (tensor == nullptr) return nullptr;
 
   // Check index.
@@ -556,8 +862,8 @@ void PyChannel::Dealloc() {
   Free();
 }
 
-PyObject *PyChannel::Size() {
-  return PyInt_FromLong(channel->size());
+Py_ssize_t PyChannel::Size() {
+  return channel->size();
 }
 
 PyObject *PyChannel::Lookup(PyObject *key) {
@@ -599,6 +905,7 @@ void PyTensor::Define(PyObject *module) {
   type.tp_repr = method_cast<reprfunc>(&PyTensor::Str);
 
   type.tp_as_mapping = &mapping;
+  mapping.mp_length = method_cast<lenfunc>(&PyTensor::Size);
   mapping.mp_subscript = method_cast<binaryfunc>(&PyTensor::GetElement);
   mapping.mp_ass_subscript = method_cast<objobjargproc>(&PyTensor::SetElement);
 
@@ -643,6 +950,10 @@ PyObject *PyTensor::Rank() {
   return PyInt_FromLong(format->rank());
 }
 
+Py_ssize_t PyTensor::Size() {
+  return format->elements();
+}
+
 PyObject *PyTensor::Shape() {
   PyObject *dims = PyList_New(format->rank());
   for (int d = 0; d < format->rank(); ++d) {
@@ -665,27 +976,7 @@ PyObject *PyTensor::GetElement(PyObject *index) {
   if (ptr == nullptr) return nullptr;
 
   // Return element.
-  switch (format->type()) {
-    case DT_FLOAT:
-      return PyFloat_FromDouble(*reinterpret_cast<float *>(ptr));
-    case DT_DOUBLE:
-      return PyFloat_FromDouble(*reinterpret_cast<double *>(ptr));
-    case DT_INT32:
-      return PyInt_FromLong(*reinterpret_cast<int32 *>(ptr));
-    case DT_UINT8:
-      return PyInt_FromLong(*reinterpret_cast<uint8 *>(ptr));
-    case DT_INT16:
-      return PyInt_FromLong(*reinterpret_cast<int16 *>(ptr));
-    case DT_INT8:
-      return PyInt_FromLong(*reinterpret_cast<int8 *>(ptr));
-    case DT_INT64:
-      return PyLong_FromLongLong(*reinterpret_cast<int64 *>(ptr));
-    case DT_BOOL:
-      return PyBool_FromLong(*reinterpret_cast<bool *>(ptr));
-    default:
-      PyErr_SetString(PyExc_ValueError, "Unsupported element type");
-      return nullptr;
-  }
+  return RetrieveElement(ptr, format->type());
 }
 
 int PyTensor::SetElement(PyObject *index, PyObject *value) {
@@ -699,62 +990,8 @@ int PyTensor::SetElement(PyObject *index, PyObject *value) {
   char *ptr = GetAddress(index);
   if (ptr == nullptr) return -1;
 
-  // Return element.
-  switch (format->type()) {
-    case DT_FLOAT: {
-      float v = PyFloat_AsDouble(value);
-      if (v == -1.0 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<float *>(ptr) = v;
-      break;
-    }
-    case DT_DOUBLE: {
-      double v = PyFloat_AsDouble(value);
-      if (v == -1.0 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<double *>(ptr) = v;
-      break;
-    }
-    case DT_INT32: {
-      int v = PyInt_AsLong(value);
-      if (v == -1 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<int32 *>(ptr) = v;
-      break;
-    }
-    case DT_UINT8: {
-      int v = PyInt_AsLong(value);
-      if (v == -1 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<uint8 *>(ptr) = v;
-      break;
-    }
-    case DT_INT16: {
-      int v = PyInt_AsLong(value);
-      if (v == -1 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<int16 *>(ptr) = v;
-      break;
-    }
-    case DT_INT8: {
-      int v = PyInt_AsLong(value);
-      if (v == -1 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<int8 *>(ptr) = v;
-      break;
-    }
-    case DT_INT64: {
-      int64 v = PyLong_AsLongLong(value);
-      if (v == -1 && PyErr_Occurred()) return -1;
-      *reinterpret_cast<int64 *>(ptr) = v;
-      break;
-    }
-    case DT_BOOL: {
-      int v = PyObject_IsTrue(value);
-      if (v == -1) return -1;
-      *reinterpret_cast<bool *>(ptr) = v;
-      break;
-    }
-    default:
-      PyErr_SetString(PyExc_ValueError, "Unsupported element type");
-      return -1;
-  }
-
-  return 0;
+  // Assign element.
+  return AssignElement(ptr, format->type(), value);
 }
 
 char *PyTensor::GetAddress(PyObject *index) {
@@ -765,7 +1002,7 @@ char *PyTensor::GetAddress(PyObject *index) {
   } else if (rank == 1) {
     // Get single-dimensional index.
     int idx = PyInt_AsLong(index);
-    if (idx == -1 &&  PyErr_Occurred()) return nullptr;
+    if (idx == -1 && PyErr_Occurred()) return nullptr;
     if (idx < 0) idx += format->dim(0);
     if (idx < 0 || idx >= format->dim(0)) {
       PyErr_SetString(PyExc_IndexError, "Invalid tensor index");
@@ -782,7 +1019,7 @@ char *PyTensor::GetAddress(PyObject *index) {
     size_t ofs = 0;
     for (int d = 0; d < rank; ++d) {
       int idx = PyInt_AsLong(PyTuple_GetItem(index, d));
-      if (idx == -1 &&  PyErr_Occurred()) return nullptr;
+      if (idx == -1 && PyErr_Occurred()) return nullptr;
       if (idx < 0) idx += format->dim(d);
       if (idx < 0 || idx >= format->dim(d)) {
         PyErr_SetString(PyExc_IndexError, "Invalid tensor index");
@@ -792,8 +1029,14 @@ char *PyTensor::GetAddress(PyObject *index) {
     }
     return data + ofs;
   } else {
-    PyErr_SetString(PyExc_IndexError, "Invalid tensor index");
-    return nullptr;
+    // Linear indexing into multi-dimensional tensor.
+    int idx = PyInt_AsLong(index);
+    if (idx == -1 && PyErr_Occurred()) return nullptr;
+    if (idx < 0 || idx >= format->elements()) {
+      PyErr_SetString(PyExc_IndexError, "Invalid tensor index");
+      return nullptr;
+    }
+    return data + format->LinearOffset(idx);
   }
 }
 
@@ -820,13 +1063,13 @@ int PyTensor::GetBuffer(Py_buffer *view, int flags) {
     if (flags & PyBUF_STRIDES) {
       if ((flags & PyBUF_C_CONTIGUOUS) == PyBUF_C_CONTIGUOUS) {
         if (format->order() != ROW_MAJOR) {
-          PyErr_SetString(PyExc_TypeError, "Buffer is not row-major");
+          PyErr_SetString(PyExc_BufferError, "Buffer is not row-major");
           return -1;
         }
       }
       if ((flags & PyBUF_F_CONTIGUOUS) == PyBUF_F_CONTIGUOUS) {
         if (format->order() != COLUMN_MAJOR) {
-          PyErr_SetString(PyExc_TypeError, "Buffer is not column-major");
+          PyErr_SetString(PyExc_BufferError, "Buffer is not column-major");
           return -1;
         }
       }
@@ -882,7 +1125,7 @@ char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
     *size = view->len;
     return static_cast<char *>(view->buf);
   }
-  
+
   // Try to get buffer from string.
   if (PyString_Check(obj)) {
     // Get string buffer.
@@ -894,7 +1137,7 @@ char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
     *size = length;
     return data;
   }
-  
+
   // Determine type.
   if (type == DT_INVALID) {
     if (PyFloat_Check(obj)) {
@@ -903,7 +1146,7 @@ char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
       type = DT_INT32;
     }
   }
-  
+
   // Get data by converting it to the expected type.
   switch (type) {
     case DT_FLOAT: {

@@ -313,16 +313,24 @@ class OneHot : public Kernel {
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
-    if (step->indegree() != 1 || step->outdegree() != 1) return false;
+    if (step->indegree() != 1 && step->indegree() != 2) return false;
+    if (step->outdegree() != 1) return false;
     Tensor *index = step->input(0);
+    Tensor *value = step->indegree() > 1 ? step->input(1) : nullptr;
     Tensor *onehot = step->output(0);
     if (index->type() != DT_INT32) return false;
+    if (index->elements() != 1) return false;
     if (onehot->type() != DT_FLOAT) return false;
+    if (value != nullptr) {
+      if (value->type() != DT_FLOAT) return false;
+      if (value->elements() != 1) return false;
+    }
     return true;
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
     Tensor *index = step->input(0);
+    Tensor *value = step->indegree() > 1 ? step->input(1) : nullptr;
     Tensor *onehot = step->output(0);
 
     // Allocate registers.
@@ -342,7 +350,15 @@ class OneHot : public Kernel {
     // Set one-hot index.
     __ LoadTensorAddress(input, index);
     __ movsxlq(acc, Operand(input));
-    __ movq(Operand(output, acc, times_4), Immediate(0x3F800000));
+    if (value != nullptr) {
+      Register vaddr = masm->rr().alloc();
+      __ LoadTensorAddress(vaddr, value);
+      XMMRegister v = masm->mm().allocx();
+      __ movss(v, Operand(vaddr));
+      __ movss(Operand(output, acc, times_4), v);
+    } else {
+      __ movq(Operand(output, acc, times_4), Immediate(0x3F800000));
+    }
   }
 
   int64 Complexity(const Step *step) override {

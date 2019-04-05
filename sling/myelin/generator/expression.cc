@@ -50,7 +50,10 @@ void ExpressionGenerator::Initialize(const Express &expression,
   expression_.Optimize(fma, spare);
 
   // Convert expression to instructions using instruction model.
-  CHECK(expression_.Generate(model_, &instructions_));
+  if (!expression_.Generate(model_, &instructions_)) {
+    LOG(FATAL) << "Expression not supported by " << Name()
+               << ": " << expression_.AsRecipe();
+  }
 
   // Initialize index generator.
   index->Initialize(VectorSize());

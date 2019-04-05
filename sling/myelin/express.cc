@@ -37,6 +37,7 @@ static std::map<string, Express::OpType> optypes = {
 
   {"Neg", Express::NEG},
   {"Abs", Express::ABS},
+  {"Sign", Express::SIGN},
   {"Relu", Express::RELU},
   {"Softsign", Express::SOFTSIGN},
   {"Softplus", Express::SOFTPLUS},
@@ -48,6 +49,7 @@ static std::map<string, Express::OpType> optypes = {
   {"Exp", Express::EXP},
   {"Sigmoid", Express::SIGMOID},
   {"Tanh", Express::TANH},
+  {"Erf", Express::ERF},
   {"Log2", Express::LOG2},
   {"Exp2", Express::EXP2},
 
@@ -93,9 +95,9 @@ static const string opname[] = {
   "Id",
   "Add", "Sub", "Mul", "Div",
   "Minimum", "Maximum",
-  "Neg", "Abs", "Relu", "Softsign", "Softplus", "LogSigmoid",
+  "Neg", "Abs", "Sign", "Relu", "Softsign", "Softplus", "LogSigmoid",
   "Reciprocal", "Square", "Sqrt",
-  "Log", "Exp", "Sigmoid", "Tanh", "Log2", "Exp2",
+  "Log", "Exp", "Sigmoid", "Tanh", "Erf", "Log2", "Exp2",
   "MulAdd132", "MulAdd213", "MulAdd231",
   "MulSub132", "MulSub213", "MulSub231",
   "CmpEq", "CmpNe", "CmpLt", "CmpLe", "CmpGt", "CmpGe",
@@ -465,6 +467,14 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(1.18534705686654e-04),  // BETA_2
   FLTCONST(2.26843463243900e-03),  // BETA_4
   FLTCONST(4.89352518554385e-03),  // BETA_6
+
+  // Polynomial coefficients for error function.
+  FLTCONST(0.254829592),           // ERF_A1
+  FLTCONST(-0.284496736),          // ERF_A2
+  FLTCONST(1.421413741),           // ERF_A3
+  FLTCONST(-1.453152027),          // ERF_A4
+  FLTCONST(1.061405429),           // ERF_A5
+  FLTCONST(0.3275911),             // ERF_P
 };
 
 int Express::IdentityValue(OpType type) {
@@ -572,6 +582,7 @@ Express::Op *Express::Function(OpType type,
       switch (type) {
         case Express::NEG: result = Neg(args[0]); break;
         case Express::ABS: result = Abs(args[0]); break;
+        case Express::SIGN: result = Sign(args[0]); break;
         case Express::RELU: result = Relu(args[0]); break;
         case Express::SOFTSIGN: result = Softsign(args[0]); break;
         case Express::SOFTPLUS: result = Softplus(args[0]); break;
@@ -582,6 +593,7 @@ Express::Op *Express::Function(OpType type,
         case Express::EXP: result = Exp(args[0]); break;
         case Express::SIGMOID: result = Sigmoid(args[0]); break;
         case Express::TANH: result = Tanh(args[0]); break;
+        case Express::ERF: result = Erf(args[0]); break;
         default: ;
       }
     }
@@ -1187,7 +1199,10 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
                 break;
               case CONST:
               case NUMBER:
-                if (!model.mov_mem_imm) success = false;
+                if (!model.mov_mem_imm) {
+                  // Add temp variable for constant.
+                  destination = rewritten->Temp();
+                }
                 break;
             }
             break;
@@ -1738,7 +1753,7 @@ Express::Var *Express::Log(Var *x) {
     return Mul(Do(LOG2, x), Number(LN2));
   } else {
     // Logarithm of negative input is NaN.
-    Var *valid = CmpGe(x, Number(ZERO));
+    Var *valid = CmpGe(x, Zero());
 
     // Truncate input values to the minimum positive normal.
     x = Maximum(x, Number(MIN_NORM_POS));
@@ -1746,7 +1761,7 @@ Express::Var *Express::Log(Var *x) {
     // Part 1: x = frexpf(x, e).
     Var *emm0 = Do(CVTEXPINT, x);
     emm0 = Do(SUBINT, emm0, Number(MAX_MANT));
-    Var *e = Add(Do(CVTINTFLT, emm0), Number(ONE));
+    Var *e = Add(Do(CVTINTFLT, emm0), One());
 
     // Keep only the fractional part.
     x = Do(BITAND, x, Number(INV_MANT_MASK));
@@ -1763,8 +1778,8 @@ Express::Var *Express::Log(Var *x) {
     //   }
     Var *mask = CmpLt(x, Number(CEPHES_SQRTHF));
     Var *tmp = Select(mask, x);
-    x = Sub(x, Number(ONE));
-    e = Sub(e, Select(mask, Number(ONE)));
+    x = Sub(x, One());
+    e = Sub(e, Select(mask, One()));
     x = Add(x, tmp);
     Var *z = Square(x);
 
@@ -1827,7 +1842,7 @@ Express::Var *Express::Exp(Var *x) {
     y = MulAdd(y, r, Number(CEPHES_EXP_P4));
     y = MulAdd(y, r, Number(CEPHES_EXP_P5));
     y = MulAdd(y, r2, r);
-    y = Add(y, Number(ONE));
+    y = Add(y, One());
 
     // Compute emm0 = 2^m.
     Var *emm0 = Do(CVTINTEXP, Do(CVTFLTINT, Add(m, Number(EXP_BIAS))));
@@ -1844,7 +1859,7 @@ Express::Var *Express::Exp(Var *x) {
 Express::Var *Express::Tanh(Var *x) {
   if (target_ == NVIDIA) {
     // Compute tanh(x) = 2*sigmoid(2*x) - 1.
-    return Sub(Mul(Sigmoid(Mul(x, Number(TWO))), Number(TWO)), Number(ONE));
+    return Sub(Mul(Sigmoid(Mul(x, Two())), Two()), One());
   } else {
     // Clamp the inputs to the range [-9, 9] since anything outside this range
     // is +/-1.0.
@@ -1872,6 +1887,24 @@ Express::Var *Express::Tanh(Var *x) {
     // Divide the numerator by the denominator.
     return Div(p, q);
   }
+}
+
+// Gauss error function.
+// See: Abramowitz & Stegun: Handbook of Mathematical Functions, formula 7.1.26.
+Express::Var *Express::Erf(Var *x) {
+  // Get sign and absolute value.
+  Var *sign = Cond(CmpLt(x, Zero()), Number(N1), One());
+  x = Abs(x);
+
+  // A&S formula 7.1.26.
+  Var *t = Div(One(), Add(One(), Mul(Number(ERF_P), x)));
+  Var *p = MulAdd(Number(ERF_A5), t, Number(ERF_A4));
+  p = MulAdd(p, t, Number(ERF_A3));
+  p = MulAdd(p, t, Number(ERF_A2));
+  p = MulAdd(p, t, Number(ERF_A1));
+  Var *y = Sub(One(), Mul(Mul(p, t), Exp(Neg(Square(x)))));
+
+  return Mul(sign, y);
 }
 
 void Express::Var::Redirect(Var *other) {

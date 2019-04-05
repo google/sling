@@ -113,6 +113,7 @@ class FlowBuilder : public Scope {
   // Add constant to flow.
   Variable *Const(const void *data, Type type, const Shape &shape);
   Variable *Const(float value) { return Const(&value, DT_FLOAT, {}); }
+  Variable *Const(double value) { return Const(&value, DT_DOUBLE, {}); }
   Variable *Const(int value) { return Const(&value, DT_INT32, {}); }
   Variable *Const(std::vector<float> &value) {
     int size = value.size();
@@ -131,10 +132,13 @@ class FlowBuilder : public Scope {
   Variable *OneHot(Variable *index, int size) {
     return Op("OneHot", {index}, DT_FLOAT, {size});
   }
+  Variable *OneHot(Variable *index, Variable *value, int size) {
+    return Op("OneHot", {index, value}, DT_FLOAT, {size});
+  }
 
-  Variable *Zero() { return Const(0.0f); }
-  Variable *One() { return Const(1.0f); }
-  Variable *Two() { return Const(2.0f); }
+  Variable *Zero(Type type = DT_FLOAT);
+  Variable *One(Type type = DT_FLOAT);
+  Variable *Two(Type type = DT_FLOAT);
 
   // Add instance reference to other function.
   Variable *Instance(Function *func);
@@ -154,9 +158,11 @@ class FlowBuilder : public Scope {
   Variable *Sqrt(Variable *x) { return Op("Sqrt", {x}); }
   Variable *Reciprocal(Variable *x) { return Op("Reciprocal", {x}); }
   Variable *Abs(Variable *x) { return Op("Abs", {x}); }
+  Variable *Sign(Variable *x) { return Op("Sign", {x}); }
   Variable *Log(Variable *x) { return Op("Log", {x}); }
   Variable *Exp(Variable *x) { return Op("Exp", {x}); }
   Variable *Tanh(Variable *x) { return Op("Tanh", {x}); }
+  Variable *Erf(Variable *x) { return Op("Erf", {x}); }
   Variable *Sigmoid(Variable *x) { return Op("Sigmoid", {x}); }
   Variable *Relu(Variable *x) { return Op("Relu", {x}); }
   Variable *Identity(Variable *x) { return Op("Identity", {x}); }
@@ -183,9 +189,9 @@ class FlowBuilder : public Scope {
     return NoGradient(Op("GreaterEqual", {x, y}));
   }
 
-  Variable *IsZero(Variable *x) { return Equal(x, Zero()); }
-  Variable *IsPositive(Variable *x) { return Greater(x, Zero()); }
-  Variable *IsNegative(Variable *x) { return Less(x, Zero()); }
+  Variable *IsZero(Variable *x) { return Equal(x, Zero(x->type)); }
+  Variable *IsPositive(Variable *x) { return Greater(x, Zero(x->type)); }
+  Variable *IsNegative(Variable *x) { return Less(x, Zero(x->type)); }
 
   // Logic operators.
   Variable *And(Variable *x, Variable *y) {
@@ -232,6 +238,8 @@ class FlowBuilder : public Scope {
     float size = x->elements();
     return Div(Sum(x), Const(size));
   }
+  Variable *ArgMin(Variable *x) { return Op("ArgMin", {x}, DT_INT32, {}); }
+  Variable *ArgMax(Variable *x) { return Op("ArgMax", {x}, DT_INT32, {}); }
 
   // Dot product between two vectors.
   Variable *DotProduct(Variable *x, Variable *y) {
@@ -258,7 +266,17 @@ class FlowBuilder : public Scope {
   Variable *Softmax(Variable *x) { return Normalize(Exp(Sub(x, Max(x)))); }
   Variable *LogSoftmax(Variable *x) { return Log(Softmax(x)); }
 
-  // Reshaping.
+  // Shape.
+  Variable *TensorShape(Variable *x) {
+    return Op("Shape", {x}, DT_INT32, {x->rank()});
+  }
+  Variable *TensorSize(Variable *x) {
+    return Op("Size", {x}, DT_INT32, {});
+  }
+  Variable *TensorRank(Variable *x) {
+    return Op("Rank", {x}, DT_INT32, {});
+  }
+
   Variable *Reshape(Variable *x, Variable *shape) {
     return Op("Reshape", {x, shape});
   }

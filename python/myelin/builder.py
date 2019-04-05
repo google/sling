@@ -184,6 +184,12 @@ class Builder:
   def maximum(self, x, y, name=None):
     return self.op("Maximum", [x, y], name)
 
+  def argmin(self, x, name=None):
+    result = self.op("ArgMin", [x], name)
+    result.shape = []
+    result.type = DT_INT
+    return result
+
   def argmax(self, x, name=None):
     result = self.op("ArgMax", [x], name)
     result.shape = []
@@ -246,6 +252,9 @@ class Builder:
   def tanh(self, x, name=None):
     return self.op("Tanh", [x], name)
 
+  def erf(self, x, name=None):
+    return self.op("Erf", [x], name)
+
   def sigmoid(self, x, name=None):
     return self.op("Sigmoid", [x], name)
 
@@ -269,6 +278,9 @@ class Builder:
 
   def abs(self, x, name=None):
     return self.op("Abs", [x], name)
+
+  def sign(self, x, name=None):
+    return self.op("Sign", [x], name)
 
   def rcp(self, x, name=None):
     return self.op("Reciprocal", [x], name)
@@ -330,10 +342,10 @@ class Builder:
     return self.reduce("Max", x, name)
 
   def norm(self, x, name=None):
-    return self.sqrt(self.sum(self.square(x)))
+    return self.sqrt(self.sum(self.square(x)), name)
 
   def normalize(self, x, name=None):
-    return self.mul(x, self.rcp(self.sum(x)), name)
+    return self.mul(x, self.rcp(self.norm(x)), name)
 
   def softmax(self, x, name=None):
     return self.normalize(self.exp(self.sub(x, self.max(x))), name)
@@ -344,6 +356,24 @@ class Builder:
     r.type = var.type
     r.shape = var.shape
     return r
+
+  def shape(self, x, name=None):
+    result = self.op("Shape", [x], name)
+    result.shape = [x.rank()]
+    result.type = DT_INT
+    return result
+
+  def size(self, x, name=None):
+    result = self.op("Size", [x], name)
+    result.shape = []
+    result.type = DT_INT
+    return result
+
+  def rank(self, x, name=None):
+    result = self.op("Rank", [x], name)
+    result.shape = []
+    result.type = DT_INT
+    return result
 
 # Set builder factory for flows.
 def builder_factory(flow, name):

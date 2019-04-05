@@ -216,11 +216,13 @@ class GenericFltRelu : public GenericFltMathFunction {
   string FunctionSymbol() override { return "relu"; }
 };
 
-// Compute argmax of input.
+// Compute argmax (or argmin) of input.
 class GenericFltArgMax : public Kernel {
  public:
-  string Name() override { return "GenFltArgMax"; }
-  string Operation() override { return "ArgMax"; }
+  GenericFltArgMax(bool minimum) : minimum_(minimum) {}
+
+  string Name() override { return minimum_ ? "GenFltArgMin" : "GenFltArgMax"; }
+  string Operation() override { return minimum_ ? "ArgMin" : "ArgMax"; }
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
@@ -256,7 +258,8 @@ class GenericFltArgMax : public Kernel {
 
     // Initialize max value.
     __ movq(best, Immediate(-1));
-    __ movss(maxval, Operand(masm->GetConstant<float>(-INFINITY)->address()));
+    float inf = minimum_ ? INFINITY : -INFINITY;
+    __ movss(maxval, Operand(masm->GetConstant<float>(inf)->address()));
 
     // Loop over elements in tensor.
     __ xorq(idx, idx);
@@ -266,10 +269,10 @@ class GenericFltArgMax : public Kernel {
     // Get next input value.
     __ movss(value, Operand(input, idx, times_4));
 
-    // Check if value is greater than current max value.
+    // Check if value is greater/less than current max value.
     Label l1;
     __ ucomiss(value, maxval);
-    __ j(below_equal, &l1);
+    __ j(minimum_ ? above_equal : below_equal, &l1);
     __ movss(maxval, value);
     __ movq(best, idx);
     __ bind(&l1);
@@ -290,6 +293,9 @@ class GenericFltArgMax : public Kernel {
   int64 Complexity(const Step *step) override {
     return step->input(0)->elements();
   }
+
+ private:
+  bool minimum_;  // compute argmin instead of argmax
 };
 
 void RegisterGenericMath(Library *library) {
@@ -356,7 +362,12 @@ void RegisterGenericMath(Library *library) {
   // Computes  : y = argmax(x)
   // Input     : x: float32[d1,...,dn]
   // Output    : y: int32/int64
-  library->Register(new GenericFltArgMax());
+  library->Register(new GenericFltArgMax(false));
+
+  // Computes  : y = argmin(x)
+  // Input     : x: float32[d1,...,dn]
+  // Output    : y: int32/int64
+  library->Register(new GenericFltArgMax(true));
 }
 
 }  // namespace myelin

@@ -354,33 +354,41 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
     CHECK(instr->mask != -1);
 
     // Mask first argument.
-    if (instr->src != -1) {
-      __ movaps(xmmaux(0), xmm(instr->src));
-    } else {
-      __ movaps(xmmaux(0), addr(instr->args[1]));
-    }
+    __ movaps(xmmaux(0), xmm(instr->mask));
     switch (type_) {
       case DT_FLOAT:
-        __ andps(xmmaux(0), xmm(instr->mask));
+        if (instr->src != -1) {
+          __ andps(xmmaux(0), xmm(instr->src));
+        } else {
+          __ andps(xmmaux(0), addr(instr->args[1]));
+        }
         break;
       case DT_DOUBLE:
-        __ andpd(xmmaux(0), xmm(instr->mask));
+        if (instr->src != -1) {
+          __ andpd(xmmaux(0), xmm(instr->src));
+        } else {
+          __ andpd(xmmaux(0), addr(instr->args[1]));
+        }
         break;
       default: UNSUPPORTED;
     }
 
     // Mask second argument.
-    if (instr->src2 != -1) {
-      __ movaps(xmmaux(1), xmm(instr->src2));
-    } else {
-      __ movaps(xmmaux(1), addr(instr->args[2]));
-    }
+    __ movaps(xmmaux(1), xmm(instr->mask));
     switch (type_) {
       case DT_FLOAT:
-        __ andnps(xmmaux(1), xmm(instr->mask));
+        if (instr->src2 != -1) {
+          __ andnps(xmmaux(1), xmm(instr->src2));
+        } else {
+          __ andnps(xmmaux(1), addr(instr->args[2]));
+        }
         break;
       case DT_DOUBLE:
-        __ andnpd(xmmaux(1), xmm(instr->mask));
+        if (instr->src != -1) {
+          __ andnpd(xmmaux(1), xmm(instr->src2));
+        } else {
+          __ andnpd(xmmaux(1), addr(instr->args[2]));
+        }
         break;
       default: UNSUPPORTED;
     }

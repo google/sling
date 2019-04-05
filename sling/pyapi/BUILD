@@ -43,6 +43,7 @@ cc_library(
     "//sling/myelin:flow",
     "//sling/myelin:compiler",
     "//sling/myelin:compute",
+    "//sling/myelin:gradient",
     "//sling/nlp/document",
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",

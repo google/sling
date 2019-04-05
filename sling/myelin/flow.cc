@@ -1318,6 +1318,12 @@ void Flow::Eliminate(Operation *op) {
 
     // Delete output variable.
     DeleteVariable(output);
+
+    // Check for unused input. The local input variable still needs to be
+    // generated even if there are no consumers.
+    if (input->local() && input->in() && input->detached()) {
+      op->func->unused.push_back(input);
+    }
   } else {
     // Clear producer for outputs.
     for (Variable *var : op->outputs) var->producer = nullptr;
@@ -1889,6 +1895,7 @@ string Flow::ToString() const {
   }
   for (const Function *func : funcs_) {
     if (func->training()) StringAppendF(&str, "training ");
+    if (func->backprop()) StringAppendF(&str, "backprop ");
     StringAppendF(&str, "func %s {\n", func->name.c_str());
     for (const Operation *op : func->ops) {
       StringAppendF(&str, "  %s : %s\n", op->name.c_str(), op->type.c_str());
