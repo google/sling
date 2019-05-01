@@ -124,6 +124,7 @@ class ExtractWikipediaDates:
         if m is None: continue
         if text.find("(baptised") >= 0 or text.find("throne") >= 0: continue
         if text.find("(baptized") >= 0 or text.find("partner") >= 0: continue
+        if text.find("disappeared") >= 0 or text.find("Minister") >= 0: continue
         if m.group(2) or m.group(5):
           first = self.date_from_match(1, m)
           if first.year < 1753: continue # possibly Julian calendar date

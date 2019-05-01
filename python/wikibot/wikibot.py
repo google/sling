@@ -71,6 +71,16 @@ class StoreFactsBot:
     self.status_file = sling.RecordWriter(status_file_name)
 
     self.store = sling.Store()
+    self.store.lockgc()
+    print "loading kb"
+    self.store.load("local/data/e/wiki/kb.sling")
+    print "kb loaded"
+
+    self.page_cat = self.store["/wp/page/category"]
+
+    self.date_of_birth = self.store['P569']
+    self.date_of_death = self.store['P570']
+
     self.n_item = self.store["item"]
     self.n_facts = self.store["facts"]
     self.n_provenance = self.store["provenance"]
@@ -82,6 +92,23 @@ class StoreFactsBot:
     self.n_skipped = self.store["skipped"]
     self.store.freeze()
     self.rs = sling.Store(self.store)
+
+    self.wiki = {'fr': 'Q8447',    'en': 'Q328',    'da': 'Q181163', \
+                 'pt': 'Q11921',   'fi': 'Q175482', 'es': 'Q8449', \
+                 'pl': 'Q1551807', 'de': 'Q48183',  'nl': 'Q10000', \
+                 'sv': 'Q169514',  'it': 'Q11920',  'no': 'Q191769'}
+    self.languages = self.wiki.keys()
+    self.wiki_sources = {}
+    for lang, wp in self.wiki.iteritems():
+      # P143 means 'imported from Wikimedia project'
+      source_claim = pywikibot.Claim(self.repo, "P143")
+      target = pywikibot.ItemPage(self.repo, wp)
+      source_claim.setTarget(target)
+      self.wiki_sources[lang] = source_claim
+    self.record_db = {}
+    fname = "local/data/e/wiki/{}/documents@10.rec"
+    for lang in self.languages:
+      self.record_db[lang] = sling.RecordDatabase(fname.format(lang))
 
     # inferred from
     self.source_claim = pywikibot.Claim(self.repo, "P3452")
@@ -100,14 +127,33 @@ class StoreFactsBot:
                                    day=today.day)
     self.time_claim.setTarget(time_target)
 
+    self.uniq_prop = {self.date_of_birth, self.date_of_death}
+    kb = self.store
+    # Collect unique-valued properties.
+    # They will be used to update claims in Wikidata accordingly.
+    constraint_role = kb["P2302"]
+    unique = kb["Q19474404"]         # single-value constraint
+    for prop in kb["/w/entity"]("role"):
+      for constraint_type in prop(constraint_role):
+        if kb.resolve(constraint_type) == unique:
+          self.uniq_prop.add(prop)
+
   def __del__(self):
     self.status_file.close()
     self.record_file.close()
 
-  def get_sources(self, category):
-    source_target = pywikibot.ItemPage(self.repo, category)
-    self.source_claim.setTarget(source_target)
-    return [self.source_claim, self.time_claim]
+  def get_sources(self, h_item, category):
+    h_cat = self.store[category]
+    source_claim = pywikibot.Claim(self.repo, "P3452") # inferred from
+    source_claim.setTarget(pywikibot.ItemPage(self.repo, category))
+    sources = [source_claim, self.time_claim]
+    for lang in self.languages:
+      item_doc = self.record_db[lang].lookup(h_item.id)
+      if item_doc is None: continue
+      item_frame = sling.Store(self.store).parse(item_doc)
+      if h_cat in item_frame(self.page_cat):
+        sources.append(self.wiki_sources[lang])
+    return sources
 
   def get_url_sources(self, url):
     if '"' in url: url = "https://en.wikipedia.org"
@@ -167,6 +213,21 @@ class StoreFactsBot:
     })
     self.status_file.write(str(item), status_record.data(binary=True))
 
+  def get_wbtime(self, date):
+    precision = precision_map[date.precision] # sling to wikidata
+    if date.precision <= sling.YEAR:
+      return pywikibot.WbTime(year=date.year, precision=precision)
+    if date.precision == sling.MONTH:
+      return pywikibot.WbTime(year=date.year,
+                              month=date.month,
+                              precision=precision)
+    if date.precision == sling.DAY:
+      return pywikibot.WbTime(year=date.year,
+                              month=date.month,
+                              day=date.day,
+                              precision=precision)
+    return None
+
   def store_records(self, records, batch_size=3):
     updated = 0
     recno = 0
@@ -204,61 +265,72 @@ class StoreFactsBot:
       for prop, val in facts:
         prop_str = str(prop)
         fact = self.rs.frame({prop: val})
-        if prop_str not in wd_claims and self.ever_had_prop(wd_item, prop_str):
-          self.log_status_skip(item, fact, "already had property")
-          continue
         claim = pywikibot.Claim(self.repo, prop_str)
-        if claim.type == "time":
-          date = sling.Date(val) # parse date from record
-          precision = precision_map[date.precision] # sling to wikidata
-          if date.precision <= sling.YEAR:
-            target = pywikibot.WbTime(year=date.year, precision=precision)
-          elif date.precision == sling.MONTH:
-            target = pywikibot.WbTime(year=date.year,
-                                      month=date.month,
-                                      precision=precision)
-          elif date.precision == sling.DAY:
-            target = pywikibot.WbTime(year=date.year,
-                                      month=date.month,
-                                      day=date.day,
-                                      precision=precision)
-          else:
-            self.log_status_skip(item, facts, "date precision exception")
-            continue
-          if prop_str in wd_claims:
-            if len(wd_claims[prop_str]) > 1: # more than one property already
-              self.log_status_skip(item, fact, "has property more than once")
+        if prop in self.uniq_prop:
+          if prop_str not in wd_claims:
+            if self.ever_had_prop(wd_item, prop_str):
+              self.log_status_skip(item, fact, "already had property")
               continue
-            old = wd_claims[prop_str][0].getTarget()
-            if old is not None:
-              if old.precision >= precision:
-                self.log_status_skip(item, fact, "precise date already exists")
+          if claim.type == "time":
+            date = sling.Date(val) # parse date from val
+            target = self.get_wbtime(date)
+            if target is None:
+              self.log_status_skip(item, facts, "date precision exception")
+              continue
+            if prop_str in wd_claims:
+              if len(wd_claims[prop_str]) > 1: # more than one property already
+                self.log_status_skip(item, fact, "has property more than once")
                 continue
-              if old.year != date.year:
-                self.log_status_skip(item, fact, "conflicting year in date")
-                continue
-              if old.precision >= pywikibot.WbTime.PRECISION['month'] and \
-                 old.month != date.month:
-                self.log_status_skip(item, fact, "conflicting month in date")
-                continue
-              # item already has property with a same year less precise date
-              # check that sources are all WP or empty
-              if not self.all_WP(wd_claims[prop_str][0].getSources()):
-                self.log_status_skip(item, fact, "date with non-WP source(s)")
-                continue
-            wd_item.removeClaims(wd_claims[prop_str])
-        elif claim.type == 'wikibase-item':
-          if prop_str in wd_claims:
-            self.log_status_skip(item, fact, "already has property")
+              old = wd_claims[prop_str][0].getTarget()
+              if old is not None:
+                if old.precision >= target.precision:
+                  err_str = "precise date already exists"
+                  self.log_status_skip(item, fact, err_str)
+                  continue
+                if old.year != date.year:
+                  self.log_status_skip(item, fact, "conflicting year in date")
+                  continue
+                if old.precision >= pywikibot.WbTime.PRECISION['month'] and \
+                   old.month != date.month:
+                  self.log_status_skip(item, fact, "conflicting month in date")
+                  continue
+                # Item already has property with a same year less precise date.
+                # Ensure sources are all WP or empty
+                if not self.all_WP(wd_claims[prop_str][0].getSources()):
+                  self.log_status_skip(item, fact, "date with non-WP source(s)")
+                  continue
+              wd_item.removeClaims(wd_claims[prop_str])
+          elif claim.type == 'wikibase-item':
+            if prop_str in wd_claims:
+              self.log_status_skip(item, fact, "already has property")
+              continue
+            target = pywikibot.ItemPage(self.repo, val)
+          else:
+            # TODO add location and possibly other types
+            print "Error: Unknown claim type", claim.type
             continue
-          target = pywikibot.ItemPage(self.repo, val)
-        else:
-          # TODO add location and possibly other types
-          print "Error: Unknown claim type", claim.type
-          continue
+        else: # property not unique
+          if claim.type == 'wikibase-item':
+            target = pywikibot.ItemPage(self.repo, val.id)
+          elif claim.type == "time":
+            target = self.get_wbtime(val)
+            if target is None:
+              self.log_status_skip(item, facts, "date precision exception")
+              continue
+          else:
+            # TODO add location and possibly other types
+            print "Error: Unknown claim type", claim.type
+            continue
+          if prop_str in wd_claims:
+            old_fact = False
+            for clm in wd_claims[prop_str]:
+              if clm.target_equals(target):
+                self.log_status_skip(item, fact, "already has fact")
+                old_fact = True
+            if old_fact: continue
         if provenance[self.n_category]:
           s = str(provenance[self.n_category])
-          sources = self.get_sources(s)
+          sources = self.get_sources(item, s)
         elif provenance[self.n_url]:
           s = str(provenance[self.n_url])
           sources = self.get_wp_sources()
@@ -268,7 +340,8 @@ class StoreFactsBot:
         claim.setTarget(target)
         wd_item.addClaim(claim, summary=summary)
         rev_id = str(wd_item.latest_revision_id)
-        if len(sources) > 0: claim.addSources(sources)
+        if len(sources) > 0:
+          claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
       print item, recno
