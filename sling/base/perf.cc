@@ -16,6 +16,7 @@
 
 #include <glob.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/resource.h>
 #include <string>
 #include <vector>
@@ -33,18 +34,33 @@ float Perf::peak_cputemp = 0;
 // Thermal devices for measuring CPU temperature.
 static std::vector<string> thermal_devices;
 
+// Page size.
+static int page_size = 4096;
+
+// Get memory usage for process.
+static int64 GetMemoryUsage() {
+  FILE *f = fopen("/proc/self/statm", "r");
+  if (!f) return 0;
+  char buffer[64];
+  int64 ram = atoi(fgets(buffer, 64, f));
+  fclose(f);
+  return ram * page_size;
+}
+
 void Perf::Sample() {
   // Get resource usage for process.
   struct rusage ru;
   if (getrusage(RUSAGE_SELF, &ru) == 0) {
     utime_ = ru.ru_utime.tv_sec * 1000000LL + ru.ru_utime.tv_usec;
     stime_ = ru.ru_stime.tv_sec * 1000000LL + ru.ru_stime.tv_usec;
-    memory_ = ru.ru_maxrss * 1024LL;
     ioread_ = ru.ru_inblock;
     iowrite_ = ru.ru_oublock;
   } else {
-    utime_ = stime_ = memory_ = ioread_ = iowrite_ = 0;
+    utime_ = stime_ = ioread_ = iowrite_ = 0;
   }
+
+  // Get memory usage.
+  memory_ = GetMemoryUsage();
   if (memory_ > peak_memory) peak_memory = memory_;
 
   // Get flops_FLOP counter value.
@@ -64,6 +80,9 @@ void Perf::Sample() {
 }
 
 static void InitPerf() {
+  // Get memory page size.
+  page_size = sysconf(_SC_PAGESIZE);
+
   // Get proc files for thermal zones.
   glob_t globbuf;
   glob("/sys/class/thermal/thermal_zone*/temp", 0, nullptr, &globbuf);

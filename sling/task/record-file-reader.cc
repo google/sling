@@ -51,6 +51,10 @@ class RecordFileReader : public Process {
     Counter *key_bytes_read = task->GetCounter("key_bytes_read");
     Counter *value_bytes_read = task->GetCounter("value_bytes_read");
 
+    // The "limit" parameter can be used to limit the number of records read.
+    int64 limit = -1;
+    task->Fetch("limit", &limit);
+
     // Read records from file and output to output channel.
     Record record;
     while (!reader.Done()) {
@@ -67,6 +71,9 @@ class RecordFileReader : public Process {
       // Send message with record to output channel.
       Message *message = new Message(record.key, record.value);
       output->Send(message);
+
+      // Check for early stopping.
+      if (limit != -1 && records_read->value() >= limit) break;
     }
 
     // Close reader.

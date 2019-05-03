@@ -205,9 +205,6 @@ class IDFTableBuilder : public SumReducer {
     float idf = 0.0;         // inverse document frequency
   };
 
-  // Threshold for discarding words.
-  int threshold_;
-
   // List of word entries in IDF table.
   std::vector<RepositoryMapItem *> vocabulary_;
 

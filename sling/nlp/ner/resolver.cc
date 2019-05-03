@@ -22,25 +22,33 @@ void EntityResolver::Init(Store *commons, const PhraseTable *aliases) {
   CHECK(names_.Bind(commons));
 }
 
+ResolverContext::ResolverContext(Store *store, const EntityResolver *resolver)
+    : store_(store), resolver_(resolver), tracking_(store),
+      n_popularity_(resolver->n_popularity_.handle()),
+      n_links_(resolver->n_links_.handle()) {}
+
 void ResolverContext::AddTopic(Handle entity) {
   // Add entity to context model.
   context_[entity] += 1.0;
+  Track(entity);
 }
 
 void ResolverContext::AddEntity(Handle entity) {
   // Add entity to context model.
-  Frame item(store_, entity);
-  float popularity = item.GetInt(resolver_->n_popularity, 1);
+  float popularity = GetPopularity(entity);
   context_[entity] += resolver_->mention_weight_ / popularity;
+  Track(entity);
 
   // Add outbound links to context model.
-  Frame links = item.GetFrame(resolver_->n_links);
-  if (links.valid()) {
-    for (const Slot &s : links) {
-      Frame link(store_, s.name);
-      float popularity = link.GetInt(resolver_->n_popularity, 1);
-      float count = s.value.AsInt();
-      context_[link.handle()] += count / popularity;
+  FrameDatum *item = store_->GetFrame(entity);
+  Handle item_links = item->get(n_links_);
+  if (!item_links.IsNil()) {
+    FrameDatum *links = store_->GetFrame(item_links);
+    for (const Slot *s = links->begin(); s != links->end(); ++s) {
+      Handle link = s->name;
+      float count = s->value.AsInt();
+      float popularity = GetPopularity(link);
+      context_[link] += count / popularity;
     }
   }
 }
@@ -53,6 +61,7 @@ void ResolverContext::AddMention(uint64 fp, CaseForm form,
     mention.entity = entity;
     mention.form = form;
     mention.count = count * resolver_->mention_boost_;
+    Track(entity);
   } else if (entity == mention.entity) {
     mention.count += count * resolver_->mention_boost_;
   }
@@ -90,16 +99,19 @@ void ResolverContext::Score(uint64 fp, CaseForm form,
   // Score candidates.
   candidates->clear();
   for (auto &m : matches) {
+    if (m.item.IsNil()) continue;
+
     // Compute score for candidate.
     float context = ContextScore(m.item, resolver_->base_context_score);
 
     // Add scores from outbound links for candidate.
-    Frame item(store_, m.item);
-    if (item.valid()) {
-      Frame links = item.GetFrame(resolver_->n_links);
-      if (links.valid()) {
-        for (const Slot &s : links) {
-          context += ContextScore(s.name) * s.value.AsInt();
+    if (!m.item.IsNil()) {
+      FrameDatum *item = store_->GetFrame(m.item);
+      Handle item_links = item->get(n_links_);
+      if (!item_links.IsNil()) {
+        FrameDatum *links = store_->GetFrame(item_links);
+        for (const Slot *s = links->begin(); s != links->end(); ++s) {
+          context += ContextScore(s->name) * s->value.AsInt();
         }
       }
     }
@@ -122,11 +134,6 @@ Handle ResolverContext::Resolve(uint64 fp, CaseForm form) const {
   Candidates best(1);
   Score(fp, form, &best);
   return best.empty() ? Handle::nil() : best[0].entity;
-}
-
-int ResolverContext::GetPopularity(Handle entity) const {
-  Frame item(store_, entity);
-  return item.GetInt(resolver_->n_popularity, 1);
 }
 
 }  // namespace nlp

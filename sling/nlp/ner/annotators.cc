@@ -269,6 +269,12 @@ void SpanTaxonomy::Annotate(const PhraseTable &aliases, SpanChart *chart) {
                                              e + chart->begin());
         bool matches = false;
         for (const auto &match : matchlist) {
+          // Skip unknown items.
+          if (match.item.IsNil()) {
+            LOG(WARNING) << "Unknown item: " << match.id;
+            continue;
+          }
+
           // Skip candidate if case forms conflict.
           if (match.form != CASE_NONE &&
               form != CASE_NONE &&
@@ -586,6 +592,7 @@ void SpelledNumberAnnotator::Annotate(const PhraseTable &aliases,
       aliases.GetMatches(span.matches, &matches);
       Handle value = Handle::nil();
       for (Handle item : matches) {
+        if (item.IsNil()) continue;
         Frame f(store, item);
         value = f.GetHandle(n_numeric_value_);
         if (!value.IsNil()) {
@@ -635,6 +642,7 @@ void NumberScaleAnnotator::Annotate(const PhraseTable &aliases,
         Handles matches(store);
         aliases.GetMatches(span.matches, &matches);
         for (Handle item : matches) {
+          if (item.IsNil()) continue;
           auto f = scalars_.find(item);
           if (f != scalars_.end()) {
             scale = f->second;
@@ -645,6 +653,7 @@ void NumberScaleAnnotator::Annotate(const PhraseTable &aliases,
         Handles matches(store);
         aliases.GetMatches(span.matches, &matches);
         for (Handle item : matches) {
+          if (item.IsNil()) continue;
           Frame unit(store, item);
           Handle value = unit.GetHandle(n_numeric_value_);
           if (value.IsInt()) {
@@ -726,6 +735,7 @@ void MeasureAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         PhraseTable::MatchList matches;
         aliases.GetMatches(span.matches, &matches);
         for (auto &match : matches) {
+          if (match.item.IsNil()) continue;
           if (!match.reliable) continue;
           Frame item(store, match.item);
           if (IsUnit(item)) {
@@ -844,6 +854,7 @@ Handle DateAnnotator::FindMatch(const PhraseTable &aliases,
 
   // Find first match with the specified type.
   for (Handle h : matches) {
+    if (h.IsNil()) continue;
     Frame item(store, h);
     for (const Slot &s : item) {
       if (s.name == n_instance_of_ && store->Resolve(s.value) == type) {
@@ -1224,7 +1235,6 @@ void SpanAnnotator::Annotate(const Document &document, Document *output) {
 
       // Resolve span to entity in knowledge base.
       bool resolved = false;
-
       if (resolve_span && item.matched()) {
         // Resolve mentioned entity.
         int k = FLAGS_resolver_trace == 0 ? 1 : FLAGS_resolver_trace;
@@ -1273,12 +1283,12 @@ void SpanAnnotator::Annotate(const Document &document, Document *output) {
       if (!resolved && item.aux == kPersonMarker) {
         Builder b(output->store());
         b.Add(n_instance_of_, n_person_);
-        Handle person = b.Create().handle();
+        Frame person = b.Create();
         span->Evoke(person);
 
         if (resolve_) {
           // Add first and last name mentions.
-          AddNameParts(document, begin, end, &context, person, 1);
+          AddNameParts(document, begin, end, &context, person.handle(), 1);
         }
       }
     });

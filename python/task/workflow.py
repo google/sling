@@ -455,7 +455,7 @@ class Workflow(object):
                    consumer,
                    name=name)
 
-  def read(self, input, name=None):
+  def read(self, input, name=None, params=None):
     """Add readers for input resource(s). The format of the input resource is
     used for selecting an appropriate reader task for the format."""
     if isinstance(input, list):
@@ -469,6 +469,7 @@ class Workflow(object):
         if tasktype == None: raise Exception("No reader for " + str(format))
 
         reader = self.task(tasktype, name=name, shard=Shard(shard, shards))
+        reader.add_params(params)
         reader.attach_input("input", input[shard])
         output = self.channel(reader, format=format.as_message())
         outputs.append(output)
@@ -481,6 +482,7 @@ class Workflow(object):
       if tasktype == None: raise Exception("No reader for " + str(format))
 
       reader = self.task(tasktype, name=name)
+      reader.add_params(params)
       reader.attach_input("input", input)
       output = self.channel(reader, format=format.as_message())
       return output
