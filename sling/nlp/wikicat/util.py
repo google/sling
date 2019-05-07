@@ -74,12 +74,24 @@ def parse_signature(parse, signature_type):
     raise ValueError(signature_type)
 
 
+# Returns list of span signatures from 'parse_signature'.
+def parse_to_span_signatures(parse_signature):
+  ls = parse_signature.split(' ')
+  return [x for x in ls if x[0] == '$' and x[1:].find('=$') != -1]
+
+
 # Stores fact match counts + limited examples from a given parse.
 class MatchCounts:
   def __init__(self, max_examples=5):
     self.counts = defaultdict(int)
-    self.examples = defaultdict(list)
+    self.examples = defaultdict(set)
     self.max_examples = max_examples
+
+
+  # Clears all counts.
+  def clear(self):
+    self.counts.clear()
+    self.examples.clear()
 
 
   # Adds a bucket from a parse span to the counts and exemplars.
@@ -88,11 +100,36 @@ class MatchCounts:
     self.counts[match_type] += bucket.count
     existing = len(self.examples[match_type])
     if self.max_examples < 0:
-      self.examples[match_type].extend(bucket.source_items)
+      self.examples[match_type].update(bucket.source_items)
     elif existing < self.max_examples:
       diff = self.max_examples - existing
       diff = min(diff, len(bucket.source_items))
-      self.examples[match_type].extend(bucket.source_items[0:diff])
+      self.examples[match_type].update(bucket.source_items[0:diff])
+
+
+  # Merges counts and examples from 'other' into self.
+  def merge(self, other):
+    for k, v in other.counts.iteritems():
+      self.counts[k] += v
+      existing = len(self.examples[k])
+      if existing < self.max_examples:
+        diff = self.max_examples - existing
+        diff = min(diff, len(other.examples[k]))
+        for x in other.examples[k]:
+          self.examples[k].add(x)
+          if len(self.examples[k]) >= self.max_examples:
+            break
+
+
+  # Returns a dictionary representation of the counts.
+  def to_dict(self):
+    result = {}
+    for k, v in self.counts.iteritems():
+      d = {}
+      d["count"] = v
+      d["examples"] = [e.id for e in self.examples.get(k, [])]
+      result[k] = d
+    return result
 
 
 # Returns an instance of MatchCounts for 'span'.

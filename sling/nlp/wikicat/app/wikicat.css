@@ -1,0 +1,105 @@
+.background {
+  background-color: #eeeeee;
+}
+
+.card {
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.16), 0 2px 4px rgba(0,0,0,0.23);
+  padding: 10px 10px 10px 10px;
+  margin: 5px 5px 5px 5px;
+}
+
+.card-toolbar {
+  margin-top: 3px;
+  margin-bottom: 8px;
+}
+
+.image {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.description {
+  font-size: 11pt;
+  margin-bottom: 8px;
+}
+
+.search {
+  width: 400px;
+  margin: 0 !important;
+}
+
+.extref {
+  font-size: 12pt;
+  color: #888888;
+  margin-left: 5px;
+}
+
+.extref a {
+  color: #888888;
+  text-decoration: none;
+}
+
+.fact_match_count {
+  color: blue;
+  position: relative;
+  display: inline-block;
+}
+
+.fact_match_examples {
+  visibility: hidden;
+  background-color: white;
+  width: 200px;
+  color: black;
+  position: absolute;
+  text-align: left;
+  padding: 2px 2px;
+  z-index: 1;
+  border: 1px solid black;
+}
+
+.fact_match_count:hover .fact_match_examples {
+  visibility: visible;
+}
+
+table.span_fact_match {
+  color:#333333;
+  border-top: 2px solid #dddddd;
+  background-color: #efefef;
+  text-align: center;
+  border-collapse: collapse;
+}
+
+span.span_qid {
+  background-color: #eeeeee;
+  border: 1px solid #cccccc;
+  padding-left: 2px;
+  padding-right: 2px;
+  display: inline-block;
+}
+
+tr.selected_spans_row {
+  background-color: rgb(232, 240, 254);
+}
+
+div.settings {
+  background-color: #eeeeee
+}
+
+div.error {
+  color: red
+}
+
+code {
+  color: blue
+}
+
+[pointer] {
+  cursor: pointer;
+  color: red
+}
+
+body.waiting * {
+  cursor: wait;
+}

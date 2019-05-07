@@ -1,0 +1,380 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="/wikicat/">
+  <link rel="shortcut icon" href="appicon.ico" type="image/x-icon" />
+
+  <!-- AngularJS libraries -->
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular-animate.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular-route.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular-aria.min.js"></script>
+
+  <!-- Angular Material library -->
+  <script src="http://ajax.googleapis.com/ajax/libs/angular_material/1.1.1/angular-material.min.js"></script>
+
+  <!-- Angular Material style sheet -->
+  <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/angular_material/1.1.1/angular-material.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,400italic">
+  <link rel="stylesheet" href="https://code.getmdl.io/1.1.3/material.indigo-pink.min.css">
+
+  <link rel="stylesheet" href="wikicat.css">
+  <script src="wikicat.js"></script>
+</head>
+
+<body ng-app="WikicatBrowserApp" ng-controller="SearchCtrl">
+  <!-- Header toolbar -->
+  <md-toolbar md-whiteframe="3">
+    <div class="md-toolbar-tools" layout="row" layout-align="start center">
+      <h2>
+        <span>Wikicat Browser ({{num_parses}} parses over
+        {{num_categories}} categories)</span>
+      </h2>
+    </div>
+  </md-toolbar>
+
+  <!-- Top level container -->
+  <div flex layout="column" layout-padding>
+
+    <!-- Container for user-modifiable settings -->
+    <div flex layout="column" class="settings">
+
+      <!-- Main input text box -->
+      <div flex layout="row" layout-padding>
+        <md-input-container flex>
+          <label>Signature / Category / "Top"</label>
+          <input type='text' ng-model="query">
+        </md-input-container>
+
+        <!-- Hack Alert: Without style="100%",the button is very high -->
+        <md-button class="md-raised md-primary"
+         style='height:100%' ng-click="search()">
+          Search
+        </md-button>
+
+        <md-button class="md-raised md-primary"
+         style='height:100%' ng-click="query='top';search()">
+          Top Signatures
+        </md-button>
+
+        <!-- Ensure that the textbox doesn't take all the space -->
+        <span flex="50"></span>
+      </div>
+
+      <!-- Textboxes to enter weights for all match types -->
+      <div flex layout="row" layout-padding>
+        <md-input-container flex ng-repeat='type in match_types'>
+          <label>{{type}}</label>
+          <input type='text' placeholder='{{default_weight[type]}}'
+           size=6 ng-model="user_weights[type]">
+        </md-input-container>
+        <span flex="20"></span>
+      </div>
+
+      <!-- Checkboxes to select spans of interest in a signature -->
+      <!-- Only relevant if the previous query was a signature -->
+      <div flex layout-padding layout='row' ng-show='hasSignatureResults()'>
+        <md-checkbox ng-repeat='span in query_results.per_span'
+         ng-model='span.selected'>
+         {{span.signature}}
+        </md-checkbox>
+      </div>
+
+      <!-- Inputs to enter parse selection formula, and button to
+           generate recordio files -->
+      <div flex layout-padding layout='row'>
+        <md-input-container flex>
+          <label>Parse selection formula</label>
+          <input type='text' ng-model="parse_selector" placeholder="True">
+          <span pointer ng-click='formulaHelp($event)'>(examples)</span>
+        </md-input-container>
+
+        <md-button class="md-raised md-primary" style='height:100%'
+         ng-click="search()">
+          Refresh
+        </md-button>
+
+        <md-button class="md-raised md-primary" style='height:100%'
+         ng-click="recordio()"
+         ng-show="hasRecordioResults() || !hasCategoryResults()">
+          Generate RecordIO
+        </md-button>
+        <span flex="20"></span>
+      </div>
+
+    <!-- End of settings -->
+    </div>
+
+    <!-- Container for showing top-signatures -->
+    <div flex ng-show='hasTopResults()' layout-padding>
+      <table class='mdl-data-table mdl-shadow--2dp'>
+        <caption>
+          Top Signatures
+        </caption>
+        <thead>
+          <th>Index</th>
+          <th>Parse Signature</th>
+          <th>Example</th>
+          <th>Score</th>
+          <th>Selected Parses</th>
+          <th>Rejected Parses</th>
+          <th>Selected Match Counts</th>
+        </thead>
+        <tr ng-repeat='result in query_results.stats track by $index'>
+          <td>{{$index}}</td>
+          <td>
+            <span pointer ng-click='browseSignature(result.signature)'>
+            {{result.signature}}
+            </span>
+          </td>
+          <td>{{result.example_category}}</td>
+          <td>{{result.score}}</td>
+          <td>{{result.selected}}</td>
+          <td>{{result.rejected}}</td>
+          <td>
+            <match-counts types='match_types' counts='result.counts' />
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Container for any error message from the previous query -->
+    <div flex ng-show='hasError()' layout-padding class='error'>
+      {{query_results.error}}
+    </div>
+
+    <!-- Containers to display results if the previous query was a category -->
+    <div flex layout-padding
+     ng-show='hasCategoryResults() && (query_results.parses.length == 0)'
+     class='error'>
+     No parses for this category ({{query_results.rejected}} rejected).
+     Consider loosening the parse selection formula.
+    </div>
+    <div flex layout-padding
+     ng-show='hasCategoryResults() && (query_results.parses.length > 0)'>
+      <table class='mdl-data-table mdl-shadow--2dp'>
+        <caption>
+          Category: {{query}}, Total
+          {{query_results.parses.length + query_results.extra}}
+          selected parses, excluding {{query_results.rejected}} rejected.
+          Showing top
+          {{query_results.parses.length}} selected parses below.
+        </caption>
+        <thead>
+          <th>Index</th>
+          <th>Parse Signature</th>
+          <th>Score</th>
+          <th>Fact Match Counts</th>
+        </thead>
+        <tr ng-repeat='parse in query_results.parses track by $index'>
+          <td>{{$index}}</td>
+          <td>
+            <span pointer ng-click='browseSignature(parse.signature)'>
+            {{parse.signature}}
+            </span>
+          </td>
+          <td>{{parse.score}}</td>
+          <td>
+            <match-counts types='match_types' counts='parse.counts' />
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Container to display recordio generation summary, if the user
+      previously clicked on the 'Generate RecordIO' button -->
+    <div flex layout-padding layout='row' ng-show='hasRecordioResults()'>
+      <table class='mdl-data-table mdl-shadow--2dp'>
+        <caption>Facts written to {{recordio_results.output_file}}</caption>
+        <thead>
+          <th>Property ID</th>
+          <th>Match Type</th>
+          <th>Number of facts</th>
+        </thead>
+        <tr ng-repeat='tuple in recordio_results.counts | orderBy'>
+          <td>
+            <a ng-href='https://wikidata.org/wiki/Property:{{tuple[0]}}'>
+            {{tuple[0]}}
+            </a>
+          </td>
+          <td>{{tuple[1]}}</td>
+          <td>{{tuple[2]}}</td>
+        </tr>
+      </table>
+    </div>
+
+    <p></p>
+
+    <!-- Aggregated signature search results per span in the signature.
+         Only relevant if the user entered a signature. -->
+    <table class='mdl-data-table mdl-shadow--2dp'
+      ng-show='hasSignatureResults()'>
+      <caption>Span-level statistics for the signature</caption>
+      <thead>
+        <th class="mdl-data-table__cell--non-numeric">&nbsp;</th>
+        <th class="mdl-data-table__cell--non-numeric">Span</th>
+        <th class="mdl-data-table__cell--non-numeric">Fact Match Counts</th>
+      </thead>
+
+      <!-- One row per span -->
+      <tr ng-repeat='span in query_results.per_span'>
+        <td class="mdl-data-table__cell--non-numeric">
+          <md-checkbox ng-model='span.selected' />
+        </td>
+        <td class="mdl-data-table__cell--non-numeric">{{span.signature}}</td>
+        <td>
+          <match-counts types='match_types' counts='span.counts' />
+        </td>
+      </tr>
+
+      <!-- Aggregated results across all selected spans -->
+      <tr class='selected_spans_row'>
+        <td>&nbsp;</td>
+        <td class="mdl-data-table__cell--non-numeric">All selected spans</td>
+        <td>
+          <match-counts types='match_types'
+           counts='query_results.selected_spans' />
+        </td>
+      </tr>
+
+      <!-- Aggregated results across all spans (selected or not) -->
+      <tr>
+        <td>&nbsp;</td>
+        <td class="mdl-data-table__cell--non-numeric">All spans</td>
+        <td>
+          <match-counts types='match_types'
+           counts='query_results.total_spans' />
+        </td>
+      </tr>
+    </table>
+
+    <p></p>
+
+    <!-- Parses matching the signature.
+         Only relevant if the results are for a signature. -->
+    <table class='mdl-data-table mdl-shadow--2dp'
+     ng-show='hasSignatureResults()'>
+      <caption>
+        Parses matching the signature and meeting the selection criteria
+      </caption>
+      <thead>
+        <th>Index</th>
+        <th class="mdl-data-table__cell--non-numeric">Category QID</th>
+        <th class="mdl-data-table__cell--non-numeric">Category Name</th>
+        <th>Score</th>
+        <th class="mdl-data-table__cell--non-numeric">Fact Match Counts</th>
+      </thead>
+
+      <!-- One row per topk parse matching the signature and selected by the
+           parse selection formula. -->
+      <tr ng-repeat="parse in query_results.parses track by $index">
+        <td>{{$index}}</td>
+        <td class="mdl-data-table__cell--non-numeric">
+          <a ng-href='https://wikidata.org/wiki/{{parse.category_qid}}'
+           style='text-decoration:none' target='_blank'>
+          {{parse.category_qid}}
+          </a>
+        </td>
+        <td class="mdl-data-table__cell--non-numeric">
+          <span pointer ng-click='browseCategory(parse.name)'>
+            <span ng-repeat='part in parse.name_parts'
+             class='{{part.pqid == "" ? "" : "span_qid"}}'
+             title='{{part.pqid == "" ? "" : part.pqid}}'>
+             {{part.text}}
+            </span>
+          </span>
+        </td>
+        <td>{{parse.score}}</td>
+        <td><match-counts types='match_types' counts='parse.counts' /></td>
+      </tr>
+
+      <!-- Summary of non-topk parses matching the signature and selected by
+           the parse selection formula.-->
+      <tr>
+        <td>&nbsp;</td>
+        <td>-</td>
+        <td class="mdl-data-table__cell--non-numeric">
+          {{query_results.parses_not_shown.num}} other selected parses
+        </td>
+        <td>-</td>
+        <td>
+          <match-counts types='match_types'
+            counts='query_results.parses_not_shown.counts' />
+        </td>
+      </tr>
+
+      <!-- Summary of parses matching the signature, but rejected by the
+           parse selection formula.-->
+      <tr>
+        <td>&nbsp;</td>
+        <td>-</td>
+        <td class="mdl-data-table__cell--non-numeric">
+          {{query_results.parses_not_selected.num}} rejected parses
+        </td>
+        <td>-</td>
+        <td>
+          <match-counts types='match_types'
+            counts='query_results.parses_not_selected.counts' />
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Popover that illustrates how parse selection formula can be written -->
+  <div style="visibility: hidden">
+    <div class="md-dialog-container" id="formulaHelpDialog">
+      <md-dialog layout-padding>
+        <h2>Parse Selection Formula</h2>
+        <section>
+          This is any Python formula that can be evaluated to a boolean.
+          Besides using Python literals, built-in functions and operators,
+          there is support for special variables:
+          <code>$NEW</code>, <code>$EXACT</code>, etc.
+          denote the counts of the corresponding match types for the parse,
+          <code>$SCORE</code> denotes the score of the parse per the current
+          metric, <code>$INTERESTING</code> is shorthand for
+          <code>$NEW + $ADDITIONAL + $SUBSUMED_BY_EXISTING</code>.
+
+          Additionally <code>$QID</code> and <code>$NAME</code> are
+          are placeholders respectively for the QID and name of the category
+          behind the parse.
+
+          <br/>
+        </section>
+        <section>
+        Examples:
+        <ul>
+          <li><code>True</code>: Selects all parses.</li>
+          <li><code>$EXACT &gt; 100 and ($NEW + $ADDITIONAL) &gt; 10</code>:
+            Selects parses with at least 100 EXACT matches, and more than 10
+            NEW and ADDITIONAL matches (combined).
+          </li>
+          <li>
+            <code>$EXACT &gt; 10 and $SCORE &gt; 50.0</code>
+          </li>
+          <li>
+            <code>$INTERESTING &gt; 5 and $EXACT &gt; 0.2 * $INTERESTING</code>
+          </li>
+          <li>
+            <code>$NAME in ["Politicians from Montreal",
+             "Writers from San Francisco"]</code>: Selects parses only
+             for either of these two categories.
+          </li>
+          <li>
+            <code>$QID == "Q10020604"</code>: Selects parses only for category
+            with this QID.
+          </li>
+          <li>
+            <code>$NAME.find("Politicians") == 0 and $SCORE &gt; 0</code>
+            : Selects parses only for categories whose names start with
+            "Politicians" and have a positive score as per the current metric.
+          </li>
+        </ul>
+        </section>
+      </md-dialog>
+    </div>
+  </div>
+</body>
+</html>
