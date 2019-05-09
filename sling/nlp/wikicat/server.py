@@ -74,7 +74,8 @@ class SpanSubset:
 
 # Wrapper around a parse.
 class Parse:
-  def __init__(self, category, frame, parse):
+  def __init__(self, unique_id, category, frame, parse):
+    self.id = unique_id          # unique int id for the parse
     self.parse = parse           # the parse itself
     self.category = category     # QID for the category
     self.frame = frame           # frame of the category
@@ -102,6 +103,38 @@ class Parse:
       if span_subset is None or span_subset.is_allowed(index):
         counts.merge(count)
     return counts
+
+  # Computes a list of name-parts for 'parse'.
+  def name_parts(self, span_subset=None, use_span_signature=False):
+    def _word(text, token):
+      size = token.size if token.size is not None else 1
+      return text[token.start:token.start + size]
+
+    tokens = self.frame.document.tokens
+    text = self.frame.document.text
+    begin = 0
+    parts = []
+    for index, span in enumerate(self.parse.spans):
+      if begin < span.begin:
+        words = ' '.join([_word(text, t) for t in tokens[begin:span.begin]])
+        parts.append((words, "", ""))
+
+      words = ' '.join([_word(text, t) for t in tokens[span.begin:span.end]])
+      if span_subset is None or span_subset.is_allowed(index):
+        if use_span_signature:
+          words = span.signature
+        parts.append((words, '.'.join([x.id for x in span.pids]), span.qid.id))
+      else:
+        parts.append((words, "", ""))
+      begin = span.end
+    if begin < len(tokens):
+      words = ' '.join([_word(text, t) for t in tokens[begin:]])
+      parts.append((words, "", ""))
+
+    return [{
+        "text": p[0],
+        "pqid": p[1] + "=" + p[2] if p[1] != "" else "",
+      } for p in parts]
 
 
 # Decides whether a parse should be selected for further processing.
@@ -152,28 +185,6 @@ class Request:
     self.span_subset = SpanSubset(span_subset)
     self.parse_selector = ParseSelector(parse_selector)
     self.topk = topk
-
-
-# Returns match counts for 'parse' only across spans allowed by 'span_subset'.
-def get_parse_match_counts(parse, span_subset=None, max_examples=5):
-  result = util.MatchCounts(max_examples=5)
-  for index, span_counts in enumerate(parse.span_counts):
-    if span_subset is None or span_subset.is_allowed(index):
-      result.merge(span_counts)
-  return result
-
-
-# Generator for parses in 'candidates' for 'request' with counts computed. 
-def parses_for_request(request, candidates):
-  seen = set()
-  for parse in candidates:
-    if parse.category in seen:
-      continue
-    seen.add(parse.category)
-
-    parse.compute_span_counts()
-    parse.counts = get_parse_match_counts(parse, request.span_subset)
-    yield parse
 
 
 # Response to a signature query.
@@ -230,37 +241,7 @@ class SignatureResponse:
   def error(self, message):
     self.error_message = message
 
-
-  # Computes a list of name-parts for 'parse'.
-  def _parse_name_parts(self, parse):
-    def _word(text, token):
-      size = token.size if token.size is not None else 1
-      return text[token.start:token.start + size]
-
-    tokens = parse.frame.document.tokens
-    text = parse.frame.document.text
-    begin = 0
-    parts = []
-    for index, span in enumerate(parse.parse.spans):
-      if begin < span.begin:
-        words = ' '.join([_word(text, t) for t in tokens[begin:span.begin]])
-        parts.append((words, "", ""))
-      words = ' '.join([_word(text, t) for t in tokens[span.begin:span.end]])
-      if self.request.span_subset.is_allowed(index):
-        parts.append((words, '.'.join([x.id for x in span.pids]), span.qid.id))
-      else:
-        parts.append((words, "", ""))
-      begin = span.end
-    if begin < len(tokens):
-      words = ' '.join([_word(text, t) for t in tokens[begin:]])
-      parts.append((words, "", ""))
-
-    return [{
-        "text": p[0],
-        "pqid": p[1] + "=" + p[2] if p[1] != "" else "",
-      } for p in parts]
-
-  
+ 
   # Converts the response to JSON for communicating back to the front-end.
   def to_json(self):
     data = {}
@@ -280,9 +261,10 @@ class SignatureResponse:
     data["selected_spans"] = self.counts_across_selected_spans.to_dict()
     
     data["parses"] = [{
+      "parse_id": p.id,
       "category_qid": p.category,
       "name": p.frame.name,
-      "name_parts": self._parse_name_parts(p),
+      "name_parts": p.name_parts(self.request.span_subset),
       "score": round(p.score, 2),
       "counts": p.counts.to_dict()
     } for p in self.top_parses]
@@ -333,10 +315,14 @@ class CategoryResponse:
     d["extra"] = self.num_extra
     parses = []
     for parse in self.parses:
-      entry = {}
-      entry["signature"] = " ".join(parse.parse.signature)
-      entry["score"] = round(parse.score, 2)
-      entry["counts"] = parse.counts.to_dict()
+      entry = {
+        "signature" : " ".join(parse.parse.signature),
+        "name_parts" : parse.name_parts(span_subset=None, \
+            use_span_signature=True),
+        "parse_id" : parse.id,
+        "score" : round(parse.score, 2),
+        "counts" : parse.counts.to_dict()
+      }
       parses.append(entry)
     d["parses"] = parses
     return json.dumps(d)
@@ -433,7 +419,7 @@ class SignatureStats:
   def add_parse(self, parse, request):
     self.selected += 1
     self.counts.merge(parse.counts)
-    self.score += request.metric.score(parse.counts)
+    self.score += parse.score
     if self.example_category is None:
       self.example_category = parse.frame.name
 
@@ -471,7 +457,7 @@ class ServerGlobals:
       self.category_frame[qid] = frame
       self.category_parses[qid] = []
       for parse in frame("parse"):
-        element = Parse(qid, frame, parse)
+        element = Parse(self.num_parses, qid, frame, parse)
         signature = util.full_parse_signature(parse)
         self.signature_to_parse[signature].append(element)
         self.category_parses[qid].append(element)
@@ -485,14 +471,37 @@ class ServerGlobals:
   def is_category(self, key):
     return key in self.category_frame or key in self.category_name_to_qid
 
+  # Returns a list of (parse, selected?) tuples for each parse matching
+  # 'signature'. Selection and scoring is done as per 'request'.
+  # parse.counts and parse.score are filled in for each parse.
+  #
+  # If multiple parses matching 'signature' belong to the same category, then
+  # only the highest scoring one (as per 'request') is returned.
+  def parses_for_signature(self, signature, request):
+    parses = []
+    for parse in self.signature_to_parse[signature]:
+      parse.compute_span_counts()
+      parse.counts = parse.counts_for(request.span_subset)
+      parse.score = request.metric.score(parse.counts)
+      parses.append((parse, request.parse_selector.select(parse)))
+    parses.sort(key=lambda t: -t[0].score)
+
+    output = []
+    seen = set()
+    for parse, selected in parses:
+      if parse.category not in seen:
+        output.append((parse, selected))
+        seen.add(parse.category)
+    return output
+
 
   # Returns the JSON response for a top signatures request.
   def handle_top(self, request):
     all_stats = []   # i -> SignatureStats for ith signature
-    for signature, parses in self.signature_to_parse.iteritems():
+    for signature in self.signature_to_parse:
       signature_stats = SignatureStats(signature)
-      for parse in parses_for_request(request, parses):
-        if request.parse_selector.select(parse):
+      for parse, selected in self.parses_for_signature(signature, request):
+        if selected:
           signature_stats.add_parse(parse, request)
         else:
           signature_stats.reject_parse(parse)
@@ -510,10 +519,8 @@ class ServerGlobals:
     response = SignatureResponse(request)
     signature = request.query
     if signature in self.signature_to_parse:
-      for parse in parses_for_request(\
-        request, self.signature_to_parse[signature]):
-        if request.parse_selector.select(parse):
-          parse.score = request.metric.score(parse.counts)
+      for parse, selected in self.parses_for_signature(signature, request):
+        if selected:
           response.add(parse)
         else:
           response.reject(parse)
@@ -532,10 +539,10 @@ class ServerGlobals:
 
     parses = self.category_parses[qid]
     for parse in parses:
+      parse.compute_span_counts()
+      parse.counts = parse.counts_for(span_subset=None)
+      parse.score = request.metric.score(parse.counts)
       if request.parse_selector.select(parse):
-        parse.compute_span_counts()
-        parse.counts = parse.counts_for(span_subset=None)
-        parse.score = request.metric.score(parse.counts)
         response.add(parse)
       else:
         response.reject(parse)
@@ -551,15 +558,14 @@ class ServerGlobals:
     if signature in self.signature_to_parse:
       filename = ""
       first = True
-      candidates = self.signature_to_parse[signature]
-      for parse in parses_for_request(request, candidates):
+      for parse, selected in self.parses_for_signature(signature, request):
         if first:
           # Make an appropriate filename from the PID(s) involved.
           first = False
           for index, span in enumerate(parse.parse.spans):
             if request.span_subset.is_allowed(index):
               filename = filename + ".".join([p.id for p in span.pids]) + "_"
-        if request.parse_selector.select(parse):
+        if selected:
           response.add(parse)
 
       # Generate the full filename for the recordio.

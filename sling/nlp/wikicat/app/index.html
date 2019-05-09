@@ -172,7 +172,11 @@
           <td>{{$index}}</td>
           <td>
             <span pointer ng-click='browseSignature(parse.signature)'>
-            {{parse.signature}}
+              <span ng-repeat='part in parse.name_parts'
+               class='{{part.pqid == "" ? "" : "span_qid"}}'
+               title='{{part.pqid == "" ? "" : part.pqid}}'>
+               {{part.text}}
+              </span>
             </span>
           </td>
           <td>{{parse.score}}</td>
