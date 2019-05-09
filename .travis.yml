@@ -3,7 +3,7 @@ language:
   - cpp
   - python
 compiler: gcc
-python: "2.7"
+python: "3.5"
 
 addons:
   apt:
@@ -13,10 +13,11 @@ addons:
       - wget
       - pkg-config
       - g++-4.8
+      - python3.5-dev
 
 before_install:
-  - wget https://github.com/bazelbuild/bazel/releases/download/0.8.0/bazel_0.8.0-linux-x86_64.deb
-  - sudo dpkg -i bazel_0.8.0-linux-x86_64.deb
+  - wget https://github.com/bazelbuild/bazel/releases/download/0.13.0/bazel_0.13.0-linux-x86_64.deb
+  - sudo dpkg -i bazel_0.13.0-linux-x86_64.deb
 
 script:
   - tools/buildall.sh

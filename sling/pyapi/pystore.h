@@ -41,8 +41,8 @@ struct PyStore : public PyBase {
   // Parse string as binary or ascii encoded frames.
   PyObject *Parse(PyObject *args, PyObject *kw);
 
-  // Resolves the given handle.
-  PyObject *Resolve(PyObject *handle);
+  // Resolves the given object.
+  PyObject *Resolve(PyObject *object);
 
   // Return the number of objects in the symbol table.
   Py_ssize_t Size();
@@ -70,7 +70,7 @@ struct PyStore : public PyBase {
   PyObject *UnlockGC();
 
   // Create new Python object for handle value.
-  PyObject *PyValue(Handle handle);
+  PyObject *PyValue(Handle handle, bool binary=false);
 
   // Check if store can be modified.
   bool Writable();
@@ -149,8 +149,8 @@ struct SerializationFlags {
   // Set flags for printer.
   void InitPrinter(Printer *printer);
 
-  // Parse arguments for methods taking one argument.
-  PyObject *ParseArgs(PyObject *args, PyObject *kw);
+  // Parse arguments for methods taking a filename argument.
+  char *ParseArgs(PyObject *args, PyObject *kw);
 
   // Parse arguments for methods taking no fixed arguments.
   bool ParseFlags(PyObject *args, PyObject *kw);

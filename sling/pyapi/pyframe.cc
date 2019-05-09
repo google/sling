@@ -46,6 +46,7 @@ void PyFrame::Define(PyObject *module) {
   type.tp_as_sequence = &sequence;
   sequence.sq_contains = method_cast<objobjproc>(&PyFrame::Contains);
 
+  methods.Add("get", &PyFrame::Get);
   methods.Add("data", &PyFrame::Data);
   methods.Add("append", &PyFrame::Append);
   methods.AddO("extend", &PyFrame::Extend);
@@ -132,6 +133,25 @@ PyObject *PyFrame::Lookup(PyObject *key) {
   return pystore->PyValue(value);
 }
 
+PyObject *PyFrame::Get(PyObject *args, PyObject *kw) {
+  static const char *kwlist[] = {"role", "binary", nullptr};
+  PyObject *key = nullptr;
+  bool binary = false;
+  if (!PyArg_ParseTupleAndKeywords(args, kw, "O|b",
+          const_cast<char **>(kwlist), &key, &binary)) return nullptr;
+
+  // Look up role.
+  Handle role = pystore->RoleValue(key, true);
+  if (role.IsError()) return nullptr;
+
+  // Return None if the role name does not exist.
+  if (role.IsNil()) Py_RETURN_NONE;
+
+  // Look up (first) value for role.
+  Handle value = frame()->get(role);
+  return pystore->PyValue(value, binary);
+}
+
 int PyFrame::Assign(PyObject *key, PyObject *v) {
   // Check that frame is writable.
   if (!Writable()) return -1;
@@ -177,14 +197,14 @@ int PyFrame::Contains(PyObject *key) {
 }
 
 PyObject *PyFrame::GetAttr(PyObject *key) {
-  // Get attribute name.
-  char *name = PyString_AsString(key);
-  if (name == nullptr) return nullptr;
-
   // Resolve methods.
-  PyObject *method = Py_FindMethod(methods.table(), AsObject(), name);
+  PyObject *method = PyObject_GenericGetAttr(AsObject(), key);
   if (method != nullptr) return method;
   PyErr_Clear();
+
+  // Get attribute name.
+  const char *name = PyUnicode_AsUTF8(key);
+  if (name == nullptr) return nullptr;
 
   // Lookup role.
   Handle role = pystore->store->LookupExisting(name);
@@ -200,7 +220,7 @@ int PyFrame::SetAttr(PyObject *key, PyObject *v) {
   if (!Writable()) return -1;
 
   // Get role name.
-  char *name = PyString_AsString(key);
+  const char *name = PyUnicode_AsUTF8(key);
   if (name == nullptr) return -1;
 
   // Lookup role.
@@ -298,13 +318,13 @@ PyObject *PyFrame::Str() {
     Handle id = f->get(Handle::id());
     SymbolDatum *symbol = pystore->store->Deref(id)->AsSymbol();
     StringDatum *name = pystore->store->GetString(symbol->name);
-    return PyString_FromStringAndSize(name->data(), name->size());
+    return PyUnicode_FromStringAndSize(name->data(), name->size());
   } else {
     // Return frame as text.
     StringPrinter printer(pystore->store);
     printer.Print(handle());
     const string &text = printer.text();
-    return PyString_FromStringAndSize(text.data(), text.size());
+    return PyUnicode_FromStringAndSize(text.data(), text.size());
   }
 }
 
@@ -319,7 +339,7 @@ PyObject *PyFrame::Data(PyObject *args, PyObject *kw) {
     flags.InitEncoder(encoder.encoder());
     encoder.Encode(handle());
     const string &buffer = encoder.buffer();
-    return PyString_FromStringAndSize(buffer.data(), buffer.size());
+    return PyBytes_FromStringAndSize(buffer.data(), buffer.size());
   } else if (flags.json) {
     string json;
     StringOutputStream stream(&json);
@@ -331,13 +351,13 @@ PyObject *PyFrame::Data(PyObject *args, PyObject *kw) {
     writer.set_byref(flags.byref);
     writer.Write(handle());
     output.Flush();
-    return PyString_FromStringAndSize(json.data(), json.size());
+    return PyUnicode_FromStringAndSize(json.data(), json.size());
   } else {
     StringPrinter printer(pystore->store);
     flags.InitPrinter(printer.printer());
     printer.Print(handle());
     const string &text = printer.text();
-    return PyString_FromStringAndSize(text.data(), text.size());
+    return PyUnicode_FromStringAndSize(text.data(), text.size());
   }
 }
 

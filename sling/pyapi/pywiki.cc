@@ -268,11 +268,11 @@ int PyTaxonomy::Init(PyFactExtractor *extractor, PyObject *typelist) {
     std::vector<Text> types;
     for (int i = 0; i < size; ++i) {
       PyObject *item = PyList_GetItem(typelist, i);
-      if (!PyString_Check(item)) {
+      if (!PyUnicode_Check(item)) {
         PyErr_BadArgument();
         return -1;
       }
-      const char *name = PyString_AsString(item);
+      const char *name = PyUnicode_AsUTF8(item);
       if (name == nullptr) {
         PyErr_BadArgument();
         return -1;

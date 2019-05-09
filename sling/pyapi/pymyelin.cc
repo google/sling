@@ -62,25 +62,25 @@ static int AssignElement(char *ptr, Type type, PyObject *value) {
       break;
     }
     case DT_INT32: {
-      int v = PyInt_AsLong(value);
+      int v = PyLong_AsLong(value);
       if (v == -1 && PyErr_Occurred()) return -1;
       *reinterpret_cast<int32 *>(ptr) = v;
       break;
     }
     case DT_UINT8: {
-      int v = PyInt_AsLong(value);
+      int v = PyLong_AsUnsignedLong(value);
       if (v == -1 && PyErr_Occurred()) return -1;
       *reinterpret_cast<uint8 *>(ptr) = v;
       break;
     }
     case DT_INT16: {
-      int v = PyInt_AsLong(value);
+      int v = PyLong_AsLong(value);
       if (v == -1 && PyErr_Occurred()) return -1;
       *reinterpret_cast<int16 *>(ptr) = v;
       break;
     }
     case DT_INT8: {
-      int v = PyInt_AsLong(value);
+      int v = PyLong_AsLong(value);
       if (v == -1 && PyErr_Occurred()) return -1;
       *reinterpret_cast<int8 *>(ptr) = v;
       break;
@@ -113,13 +113,13 @@ static PyObject *RetrieveElement(char *ptr, Type type) {
     case DT_DOUBLE:
       return PyFloat_FromDouble(*reinterpret_cast<double *>(ptr));
     case DT_INT32:
-      return PyInt_FromLong(*reinterpret_cast<int32 *>(ptr));
+      return PyLong_FromLong(*reinterpret_cast<int32 *>(ptr));
     case DT_UINT8:
-      return PyInt_FromLong(*reinterpret_cast<uint8 *>(ptr));
+      return PyLong_FromUnsignedLong(*reinterpret_cast<uint8 *>(ptr));
     case DT_INT16:
-      return PyInt_FromLong(*reinterpret_cast<int16 *>(ptr));
+      return PyLong_FromLong(*reinterpret_cast<int16 *>(ptr));
     case DT_INT8:
-      return PyInt_FromLong(*reinterpret_cast<int8 *>(ptr));
+      return PyLong_FromLong(*reinterpret_cast<int8 *>(ptr));
     case DT_INT64:
       return PyLong_FromLongLong(*reinterpret_cast<int64 *>(ptr));
     case DT_BOOL:
@@ -238,7 +238,7 @@ bool PyCompiler::ImportFlow(PyObject *pyflow, Flow *flow, PyBuffers *buffers) {
     PyObject *pyshape = PyAttr(pyvar, "shape");
     Shape shape;
     for (int i = 0; i < PyList_Size(pyshape); ++i) {
-      int dim = PyInt_AsLong(PyList_GetItem(pyshape, i));
+      int dim = PyLong_AsLong(PyList_GetItem(pyshape, i));
       if (dim == -1) dim = 1;
       shape.add(dim);
     }
@@ -361,9 +361,9 @@ bool PyCompiler::ImportAttributes(PyObject *obj, Attributes *attrs) {
   PyObject *pyname;
   PyObject *pyvalue;
   while (PyDict_Next(pyattrs, &pos, &pyname, &pyvalue)) {
-    const char *name = PyString_AsString(pyname);
+    const char *name = PyUnicode_AsUTF8(pyname);
     if (name == nullptr) return false;
-    const char *value = PyString_AsString(pyvalue);
+    const char *value = PyUnicode_AsUTF8(pyvalue);
     if (value == nullptr) return false;
     attrs->SetAttr(name, value);
   }
@@ -373,7 +373,7 @@ bool PyCompiler::ImportAttributes(PyObject *obj, Attributes *attrs) {
 
 const char *PyCompiler::PyStrAttr(PyObject *obj, const char *name) {
   PyObject *attr = PyAttr(obj, name);
-  const char *str = attr == Py_None ? "" : PyString_AsString(attr);
+  const char *str = attr == Py_None ? "" : PyUnicode_AsUTF8(attr);
   CHECK(str != nullptr) << name;
   Py_DECREF(attr);
   return str;
@@ -510,7 +510,7 @@ int PyNetwork::SetTensor(PyObject *key, PyObject *value) {
 
 PyObject *PyNetwork::LookupCell(PyObject *key) {
   // Get cell name.
-  const char *name = PyString_AsString(key);
+  const char *name = PyUnicode_AsUTF8(key);
   if (name == nullptr) return nullptr;
 
   // Look up cell in network.
@@ -536,22 +536,22 @@ Tensor *PyNetwork::FindTensor(PyObject *key, const Cell *cell) {
   // parameter array of the network. Otherwise, Otherwise, the repr() method
   // is used for computing the name of the tensor.
   Tensor *tensor;
-  if (PyInt_Check(key)) {
-    int index = PyInt_AsLong(key);
+  if (PyLong_Check(key)) {
+    int index = PyLong_AsLong(key);
     auto &params = net->parameters();
     if (index < 0 || index >= params.size()) {
       PyErr_SetString(PyExc_IndexError, "Invalid parameter tensor index");
       return nullptr;
     }
     tensor = params[index];
-  } else if (PyString_Check(key)) {
-    const char *name = PyString_AsString(key);
+  } else if (PyUnicode_Check(key)) {
+    const char *name = PyUnicode_AsUTF8(key);
     if (name == nullptr) return nullptr;
     tensor = net->LookupParameter(name);
   } else {
     PyObject *repr = PyObject_Repr(key);
     if (repr == nullptr) return nullptr;
-    const char *name = PyString_AsString(repr);
+    const char *name = PyUnicode_AsUTF8(repr);
     if (name == nullptr) {
       Py_DECREF(repr);
       return nullptr;
@@ -641,7 +641,7 @@ PyObject *PyCell::Index(PyObject *key) {
       break;
     }
   }
-  return PyInt_FromLong(index);
+  return PyLong_FromLong(index);
 }
 
 int PyCell::Contains(PyObject *key) {
@@ -868,7 +868,7 @@ Py_ssize_t PyChannel::Size() {
 
 PyObject *PyChannel::Lookup(PyObject *key) {
   // Get index.
-  int index = PyInt_AsLong(key);
+  int index = PyLong_AsLong(key);
   if (index == -1 && PyErr_Occurred()) return nullptr;
   if (index < 0 || index >= channel->size()) {
     PyErr_SetString(PyExc_IndexError, "Invalid channel element index");
@@ -910,7 +910,6 @@ void PyTensor::Define(PyObject *module) {
   mapping.mp_ass_subscript = method_cast<objobjargproc>(&PyTensor::SetElement);
 
   type.tp_as_buffer = &buffer;
-  type.tp_flags |= Py_TPFLAGS_HAVE_NEWBUFFER;
   buffer.bf_getbuffer =
       method_cast<getbufferproc>(&PyTensor::GetBuffer);
   buffer.bf_releasebuffer =
@@ -947,7 +946,7 @@ PyObject *PyTensor::Name() {
 }
 
 PyObject *PyTensor::Rank() {
-  return PyInt_FromLong(format->rank());
+  return PyLong_FromLong(format->rank());
 }
 
 Py_ssize_t PyTensor::Size() {
@@ -957,7 +956,7 @@ Py_ssize_t PyTensor::Size() {
 PyObject *PyTensor::Shape() {
   PyObject *dims = PyList_New(format->rank());
   for (int d = 0; d < format->rank(); ++d) {
-    PyList_SetItem(dims, d, PyInt_FromLong(format->dim(d)));
+    PyList_SetItem(dims, d, PyLong_FromLong(format->dim(d)));
   }
   return dims;
 }
@@ -1001,7 +1000,7 @@ char *PyTensor::GetAddress(PyObject *index) {
     return data;
   } else if (rank == 1) {
     // Get single-dimensional index.
-    int idx = PyInt_AsLong(index);
+    int idx = PyLong_AsLong(index);
     if (idx == -1 && PyErr_Occurred()) return nullptr;
     if (idx < 0) idx += format->dim(0);
     if (idx < 0 || idx >= format->dim(0)) {
@@ -1018,7 +1017,7 @@ char *PyTensor::GetAddress(PyObject *index) {
     }
     size_t ofs = 0;
     for (int d = 0; d < rank; ++d) {
-      int idx = PyInt_AsLong(PyTuple_GetItem(index, d));
+      int idx = PyLong_AsLong(PyTuple_GetItem(index, d));
       if (idx == -1 && PyErr_Occurred()) return nullptr;
       if (idx < 0) idx += format->dim(d);
       if (idx < 0 || idx >= format->dim(d)) {
@@ -1030,7 +1029,7 @@ char *PyTensor::GetAddress(PyObject *index) {
     return data + ofs;
   } else {
     // Linear indexing into multi-dimensional tensor.
-    int idx = PyInt_AsLong(index);
+    int idx = PyLong_AsLong(index);
     if (idx == -1 && PyErr_Occurred()) return nullptr;
     if (idx < 0 || idx >= format->elements()) {
       PyErr_SetString(PyExc_IndexError, "Invalid tensor index");
@@ -1126,12 +1125,12 @@ char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
     return static_cast<char *>(view->buf);
   }
 
-  // Try to get buffer from string.
-  if (PyString_Check(obj)) {
-    // Get string buffer.
+  // Try to get buffer from bytes.
+  if (PyBytes_Check(obj)) {
+    // Get byte buffer.
     char *data;
     Py_ssize_t length;
-    if (PyString_AsStringAndSize(obj, &data, &length) == -1) return nullptr;
+    if (PyBytes_AsStringAndSize(obj, &data, &length) == -1) return nullptr;
     Py_INCREF(obj);
     refs_.push_back(obj);
     *size = length;
@@ -1142,7 +1141,7 @@ char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
   if (type == DT_INVALID) {
     if (PyFloat_Check(obj)) {
       type = DT_FLOAT;
-    } else if (PyInt_Check(obj)) {
+    } else if (PyLong_Check(obj)) {
       type = DT_INT32;
     }
   }
@@ -1160,22 +1159,22 @@ char *PyBuffers::GetData(PyObject *obj, Type type, size_t *size) {
       return flow_->AllocateMemory(&v, sizeof(double));
     }
     case DT_INT32: {
-      int v = PyInt_AsLong(obj);
+      int v = PyLong_AsLong(obj);
       *size = sizeof(int);
       return flow_->AllocateMemory(&v, sizeof(int));
     }
     case DT_INT64: {
-      int64 v = PyLong_AsLong(obj);
+      int64 v = PyLong_AsLongLong(obj);
       *size = sizeof(int64);
       return flow_->AllocateMemory(&v, sizeof(int64));
     }
     case DT_INT16: {
-      int16 v = PyInt_AsLong(obj);
+      int16 v = PyLong_AsLong(obj);
       *size = sizeof(int16);
       return flow_->AllocateMemory(&v, sizeof(int16));
     }
     case DT_INT8: {
-      int8 v = PyInt_AsLong(obj);
+      int8 v = PyLong_AsLong(obj);
       *size = sizeof(int8);
       return flow_->AllocateMemory(&v, sizeof(int8));
     }

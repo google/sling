@@ -14,10 +14,10 @@
 
 """Workflow builder for embedding processing"""
 
-from workflow import *
-from wiki import WikiWorkflow
 import sling.flags as flags
-import corpora
+import sling.task.corpora as corpora
+from sling.task.workflow import *
+from sling.task.wiki import WikiWorkflow
 
 class EmbeddingWorkflow:
   def __init__(self, name=None, wf=None):

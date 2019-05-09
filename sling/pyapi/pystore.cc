@@ -19,7 +19,6 @@
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/stream/file.h"
-#include "sling/stream/unix-file.h"
 
 namespace sling {
 
@@ -110,22 +109,38 @@ PyObject *PyStore::Freeze() {
 
 PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
   // Parse arguments.
-  static const char *kwlist[] = {"file", "binary", "snapshot", nullptr};
-  PyObject *file = nullptr;
+  static const char *kwlist[] = {"filename", "binary", "snapshot", nullptr};
+  char *filename = nullptr;
   bool force_binary = false;
   bool snapshot = true;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "O|bb", const_cast<char **>(kwlist),
-                &file, &force_binary, &snapshot);
+                args, kw, "s|bb", const_cast<char **>(kwlist),
+                &filename, &force_binary, &snapshot);
   if (!ok) return nullptr;
 
   // Check that store is writable.
   if (!Writable()) return nullptr;
 
   // Read frames from file.
-  if (PyFile_Check(file)) {
-    // Load store from file object.
-    StdFileInputStream stream(PyFile_AsFile(file), false);
+  if (snapshot && store->Pristine() && Snapshot::Valid(filename)) {
+    // Load store from snapshot.
+    Status st = Snapshot::Read(store, filename);
+    if (!st.ok()) {
+      PyErr_SetString(PyExc_IOError, st.message());
+      return nullptr;
+    }
+    Py_RETURN_NONE;
+  } else {
+    // Load store store from file. First, open input file.
+    File *f;
+    Status st = File::Open(filename, "r", &f);
+    if (!st.ok()) {
+      PyErr_SetString(PyExc_IOError, st.message());
+      return nullptr;
+    }
+
+    // Load frames from file.
+    FileInputStream stream(f);
     InputParser parser(store, &stream, force_binary);
     store->LockGC();
     Object result = parser.ReadAll();
@@ -135,69 +150,26 @@ PyObject *PyStore::Load(PyObject *args, PyObject *kw) {
       return nullptr;
     }
     return PyValue(result.handle());
-  } else if (PyString_Check(file)) {
-    char *filename = PyString_AsString(file);
-    if (snapshot && store->Pristine() && Snapshot::Valid(filename)) {
-      // Load store from snapshot.
-      Status st = Snapshot::Read(store, filename);
-      if (!st.ok()) {
-        PyErr_SetString(PyExc_IOError, st.message());
-        return nullptr;
-      }
-      Py_RETURN_NONE;
-    } else {
-      // Load store store from file. First, open input file.
-      File *f;
-      Status st = File::Open(filename, "r", &f);
-      if (!st.ok()) {
-        PyErr_SetString(PyExc_IOError, st.message());
-        return nullptr;
-      }
-
-      // Load frames from file.
-      FileInputStream stream(f);
-      InputParser parser(store, &stream, force_binary);
-      store->LockGC();
-      Object result = parser.ReadAll();
-      store->UnlockGC();
-      if (parser.error()) {
-        PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
-        return nullptr;
-      }
-      return PyValue(result.handle());
-    }
-  } else {
-    PyErr_SetString(PyExc_ValueError, "File or string argument expected");
-    return nullptr;
   }
 }
 
 PyObject *PyStore::Save(PyObject *args, PyObject *kw) {
   // Get arguments.
   SerializationFlags flags(store);
-  PyObject *file = flags.ParseArgs(args, kw);
+  char *filename = flags.ParseArgs(args, kw);
+  if (filename == nullptr) return nullptr;
 
   // Get output stream.
-  OutputStream *stream;
-  if (PyFile_Check(file)) {
-    // Create stream from stdio file.
-    stream = new StdFileOutputStream(PyFile_AsFile(file), false);
-  } else if (PyString_Check(file)) {
-    // Open output file.
-    File *f;
-    Status st = File::Open(PyString_AsString(file), "w", &f);
-    if (!st.ok()) {
-      PyErr_SetString(PyExc_IOError, st.message());
-      return nullptr;
-    }
-    stream = new FileOutputStream(f);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "File or string argument expected");
+  File *f;
+  Status st = File::Open(filename, "w", &f);
+  if (!st.ok()) {
+    PyErr_SetString(PyExc_IOError, st.message());
     return nullptr;
   }
 
   // Write frames to output.
-  Output output(stream);
+  FileOutputStream stream(f);
+  Output output(&stream);
   if (flags.binary) {
     Encoder encoder(store, &output);
     flags.InitEncoder(&encoder);
@@ -209,7 +181,6 @@ PyObject *PyStore::Save(PyObject *args, PyObject *kw) {
   }
 
   output.Flush();
-  delete stream;
   Py_RETURN_NONE;
 }
 
@@ -221,7 +192,7 @@ PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
   bool json = false;
   bool xml = false;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "S|bbb", const_cast<char **>(kwlist),
+                args, kw, "O|bbb", const_cast<char **>(kwlist),
                 &object, &force_binary, &json, &xml);
   if (!ok) return nullptr;
 
@@ -229,9 +200,16 @@ PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
   if (!Writable()) return nullptr;
 
   // Get data buffer.
-  char *data;
+  const char *data;
   Py_ssize_t length;
-  PyString_AsStringAndSize(object, &data, &length);
+  if (PyUnicode_Check(object)) {
+    data = PyUnicode_AsUTF8AndSize(object, &length);
+    if (data == nullptr) return nullptr;
+  } else {
+    char *ptr;
+    if (PyBytes_AsStringAndSize(object, &ptr, &length) == -1) return nullptr;
+    data = ptr;
+  }
   ArrayInputStream stream(data, length);
 
   if (xml) {
@@ -262,7 +240,7 @@ Py_ssize_t PyStore::Size() {
 
 PyObject *PyStore::Lookup(PyObject *key) {
   // Get symbol name.
-  char *name = PyString_AsString(key);
+  const char *name = PyUnicode_AsUTF8(key);
   if (name == nullptr) return nullptr;
 
   // Lookup name in symbol table.
@@ -270,18 +248,20 @@ PyObject *PyStore::Lookup(PyObject *key) {
   return PyValue(handle);
 }
 
-PyObject *PyStore::Resolve(PyObject *handle) {
-  if (PyObject_TypeCheck(handle, &PyFrame::type)) {
-    PyFrame *pyhandle = reinterpret_cast<PyFrame *>(handle);
-    return PyValue(store->Resolve(pyhandle->handle()));
+PyObject *PyStore::Resolve(PyObject *object) {
+  if (PyObject_TypeCheck(object, &PyFrame::type)) {
+    PyFrame *pyframe = reinterpret_cast<PyFrame *>(object);
+    Handle handle = pyframe->handle();
+    Handle qua = store->Resolve(handle);
+    if (qua != handle) return PyValue(qua);
   }
-  Py_INCREF(handle);
-  return handle;
+  Py_INCREF(object);
+  return object;
 }
 
 int PyStore::Contains(PyObject *key) {
   // Get symbol name.
-  char *name = PyString_AsString(key);
+  const char *name = PyUnicode_AsUTF8(key);
   if (name == nullptr) return -1;
 
   // Lookup name in symbol table.
@@ -303,7 +283,7 @@ PyObject *PyStore::NewFrame(PyObject *arg) {
   std::vector<Slot> slots;
 
   // If the argument is a string, create a frame with that id.
-  if (PyString_Check(arg)) {
+  if (PyUnicode_Check(arg)) {
     slots.emplace_back(Handle::id(), SymbolValue(arg));
   } else {
     // Parse data into slot list.
@@ -339,7 +319,7 @@ PyObject *PyStore::NewArray(PyObject *arg) {
       *array->at(i) = value;
     }
   } else {
-    int size = PyInt_AsLong(arg);
+    int size = PyLong_AsLong(arg);
     if (size < 0) return nullptr;
     handle = store->AllocateArray(size);
   }
@@ -376,7 +356,7 @@ PyObject *PyStore::UnlockGC() {
   Py_RETURN_NONE;
 }
 
-PyObject *PyStore::PyValue(Handle handle) {
+PyObject *PyStore::PyValue(Handle handle, bool binary) {
   switch (handle.tag()) {
     case Handle::kGlobal:
     case Handle::kLocal: {
@@ -386,15 +366,28 @@ PyObject *PyStore::PyValue(Handle handle) {
       // Get datum for object.
       Datum *datum = store->Deref(handle);
 
+      // Convert SLING object to Python object.
       if (datum->IsFrame()) {
         // Return new frame wrapper for handle.
         PyFrame *frame = PyObject_New(PyFrame, &PyFrame::type);
         frame->Init(this, handle);
         return frame->AsObject();
       } else if (datum->IsString()) {
-        // Return string object.
         StringDatum *str = datum->AsString();
-        return PyString_FromStringAndSize(str->data(), str->size());
+        PyObject *pystr;
+        if (binary) {
+          // Return string as bytes.
+          pystr = PyBytes_FromStringAndSize(str->data(), str->size());
+        } else {
+          // Return unicode string object.
+          pystr = PyUnicode_FromStringAndSize(str->data(), str->size());
+          if (pystr == nullptr) {
+            // Fall back to bytes if string is not valid UTF8.
+            PyErr_Clear();
+            pystr = PyBytes_FromStringAndSize(str->data(), str->size());
+          }
+        }
+        return pystr;
       } else if (datum->IsArray()) {
         // Return new frame array for handle.
         PyArray *array = PyObject_New(PyArray, &PyArray::type);
@@ -404,7 +397,7 @@ PyObject *PyStore::PyValue(Handle handle) {
         // Return symbol name.
         SymbolDatum *symbol = datum->AsSymbol();
         StringDatum *str = store->Deref(symbol->name)->AsString();
-        return PyString_FromStringAndSize(str->data(), str->size());
+        return PyUnicode_FromStringAndSize(str->data(), str->size());
       } else {
         // Unsupported type.
         PyErr_SetString(PyExc_ValueError, "Unsupported object type");
@@ -414,7 +407,7 @@ PyObject *PyStore::PyValue(Handle handle) {
 
     case Handle::kIntTag:
       // Return integer object.
-      return PyInt_FromLong(handle.AsInt());
+      return PyLong_FromLong(handle.AsInt());
 
     case Handle::kFloatTag:
       // Return floating point number object.
@@ -436,27 +429,22 @@ Handle PyStore::Value(PyObject *object) {
       return Handle::error();
     }
     return frame->handle();
-  } else if (PyString_Check(object)) {
+  } else if (PyUnicode_Check(object)) {
     // Create string and return handle.
     if (!Writable()) return Handle::error();
-    char *data;
     Py_ssize_t length;
-    PyString_AsStringAndSize(object, &data, &length);
+    const char *data = PyUnicode_AsUTF8AndSize(object, &length);
     return  store->AllocateString(Text(data, length));
-  } else if (PyUnicode_Check(object)) {
-    // Create string from Unicode and return handle.
+  } else if (PyBytes_Check(object)) {
+    // Create string from bytes and return handle.
     if (!Writable()) return Handle::error();
-    PyObject *str = PyUnicode_AsUTF8String(object);
-    if (str == nullptr) return Handle::error();
     char *data;
     Py_ssize_t length;
-    PyString_AsStringAndSize(str, &data, &length);
-    Handle h = store->AllocateString(Text(data, length));
-    Py_DECREF(str);
-    return h;
-  } else if (PyInt_Check(object)) {
+    PyBytes_AsStringAndSize(object, &data, &length);
+    return store->AllocateString(Text(data, length));
+  } else if (PyLong_Check(object)) {
     // Return integer handle.
-    return Handle::Integer(PyInt_AsLong(object));
+    return Handle::Integer(PyLong_AsLong(object));
   } else if (PyFloat_Check(object)) {
     // Return floating point number handle.
     return Handle::Float(PyFloat_AsDouble(object));
@@ -485,7 +473,7 @@ Handle PyStore::Value(PyObject *object) {
 
       // Get slot value.
       Handle value;
-      if (name.IsId() && PyString_Check(v)) {
+      if (name.IsId() && PyUnicode_Check(v)) {
         value = SymbolValue(v);
       } else {
         value = Value(v);
@@ -521,45 +509,24 @@ Handle PyStore::Value(PyObject *object) {
 }
 
 Handle PyStore::RoleValue(PyObject *object, bool existing) {
-  if (PyString_Check(object)) {
-    char *name = PyString_AsString(object);
+  if (PyUnicode_Check(object)) {
+    const char *name = PyUnicode_AsUTF8(object);
     if (name == nullptr) return Handle::error();
     if (existing) {
       return store->LookupExisting(name);
     } else {
       return store->Lookup(name);
     }
-  } else if (PyUnicode_Check(object)) {
-    Handle h;
-    PyObject *str = PyUnicode_AsUTF8String(object);
-    if (str == nullptr) return Handle::error();
-    char *name = PyString_AsString(str);
-    if (name == nullptr) {
-      h = Handle::error();
-    } else if (existing) {
-      h = store->LookupExisting(name);
-    } else {
-      h = store->Lookup(name);
-    }
-    Py_DECREF(str);
-    return h;
   } else {
     return Value(object);
   }
 }
 
 Handle PyStore::SymbolValue(PyObject *object) {
-  if (PyString_Check(object)) {
-    char *name = PyString_AsString(object);
+  if (PyUnicode_Check(object)) {
+    const char *name = PyUnicode_AsUTF8(object);
     if (name == nullptr) return Handle::error();
     return store->Symbol(name);
-  } else if (PyUnicode_Check(object)) {
-    PyObject *str = PyUnicode_AsUTF8String(object);
-    if (str == nullptr) return Handle::error();
-    char *name = PyString_AsString(str);
-    Handle h = name == nullptr ? Handle::error() :  store->Symbol(name);
-    Py_DECREF(str);
-    return h;
   } else {
     return Value(object);
   }
@@ -579,7 +546,7 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
 
       // Get slot value.
       Handle value;
-      if (name.IsId() && (PyString_Check(v) || PyUnicode_Check(v))) {
+      if (name.IsId() && PyUnicode_Check(v)) {
         value = SymbolValue(v);
       } else {
         value = Value(v);
@@ -609,7 +576,7 @@ bool PyStore::SlotList(PyObject *object, std::vector<Slot> *slots) {
       // Get slot value.
       PyObject *v = PyTuple_GetItem(item, 1);
       Handle value;
-      if (name.IsId() && (PyString_Check(v) || PyUnicode_Check(v))) {
+      if (name.IsId() && PyUnicode_Check(v)) {
         value = SymbolValue(v);
       } else {
         value = Value(v);
@@ -690,17 +657,17 @@ void SerializationFlags::InitPrinter(Printer *printer) {
   printer->set_utf8(utf8);
 }
 
-PyObject *SerializationFlags::ParseArgs(PyObject *args, PyObject *kw) {
+char *SerializationFlags::ParseArgs(PyObject *args, PyObject *kw) {
   static const char *kwlist[] = {
-    "file", "binary", "global", "shallow", "byref", "pretty",
+    "filename", "binary", "global", "shallow", "byref", "pretty",
     "utf8", "json", nullptr
   };
-  PyObject *file = nullptr;
+  char *filename = nullptr;
   bool ok = PyArg_ParseTupleAndKeywords(
-      args, kw, "O|bbbbbbb", const_cast<char **>(kwlist),
-      &file, &binary, &global, &shallow, &byref, &pretty, &utf8, &json);
+      args, kw, "s|bbbbbbb", const_cast<char **>(kwlist),
+      &filename, &binary, &global, &shallow, &byref, &pretty, &utf8, &json);
   if (!ok) return nullptr;
-  return file;
+  return filename;
 }
 
 bool SerializationFlags::ParseFlags(PyObject *args, PyObject *kw) {

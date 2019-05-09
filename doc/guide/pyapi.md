@@ -3,14 +3,9 @@
 A number of components in SLING can be accessed through the Python SLING API.
 You can install the SLING Python wheel using pip:
 ```
-sudo pip install http://www.jbox.dk/sling/sling-2.0.0-cp27-none-linux_x86_64.whl
+sudo pip3 install http://www.jbox.dk/sling/sling-2.0.0-cp35-none-linux_x86_64.whl
 ```
-or you can [clone the repo and build SLING from sources](install.md). You can
-then link the `sling` Python module directly to the Python source directory to
-use it in "developer mode":
-```
-sudo ln -s $(realpath python) /usr/lib/python2.7/dist-packages/sling
-```
+or you can [clone the repo and build SLING from sources](install.md).
 
 # Table of contents
 
@@ -61,25 +56,25 @@ doc = store['document']
 ```
 Role values for frames can be accessed as attributes:
 ```
-print doc.name
+print(doc.name)
 ```
 or using indexing:
 ```
-print doc['name']
+print(doc['name'])
 ```
 You can also use a frame value to access roles:
 ```
-print doc[name]
+print(doc[name])
 ```
 You can test if a frame has a role:
 ```
-if 'name' in doc: print "doc has 'name'"
-if name in doc: print "doc has name"
+if 'name' in doc: print("doc has 'name'")
+if name in doc: print("doc has name")
 ```
 You can iterate over all the named frames (i.e. frames with an `id:` slot)
 in a store:
 ```
-for f in store: print f.id
+for f in store: print(f.id)
 ```
 The `parse()` method can be used for adding new frames to the store:
 ```
@@ -121,24 +116,24 @@ f.extend([('foo', 10), ('bar': 20)])
 All the slots in a frame can be iterated:
 ```
 for name, value in f:
-  print "slot", name,"=", value
+  print("slot", name,"=", value)
 ```
 or just the roles with a particular name:
 ```
 for r in doc('role'):
-  print "doc role", r
+  print("doc role", r)
 ```
 Frames can be encoded in text format with the `data()` method:
 ```
-print f.data()
+print(f.data())
 ```
 and with indentation:
 ```
-print f.data(pretty=True)
+print(f.data(pretty=True))
 ```
 or with binary encoding:
 ```
-print len(f.data(binary=True))
+print(len(f.data(binary=True)))
 ```
 Arrays can be created with the `array()` method:
 ```
@@ -154,9 +149,9 @@ a[2] = 3
 SLING arrays work much in the same way as Python lists except that they have
 a fixed size:
 ```
-print len(a)
-print a[1]
-for item in a: print item
+print(len(a))
+print(a[1])
+for item in a: print(item)
 ```
 Finally, a store can be save to a file in textual encoding:
 ```
@@ -181,7 +176,7 @@ import sling
 
 recin = sling.RecordReader("test.rec")
 for key,value in recin:
-  print key, value
+  print(key, value)
 recin.close()
 ```
 The `RecordReader` class has the following methods:
@@ -236,7 +231,7 @@ writer.close()
 # Look up each record in record database.
 db = sling.RecordDatabase("/tmp/test.rec")
 for i in range(N):
-  print db.lookup(str(i))
+  print(db.lookup(str(i)))
 db.close()
 ```
 
@@ -310,7 +305,7 @@ for _,rec in corpus:
   num_docs += 1
   num_tokens += len(doc.tokens)
 
-print "docs:", num_docs, "tokens:", num_tokens
+print("docs:", num_docs, "tokens:", num_tokens)
 ```
 
 Example: read text from a file and create a corpus of tokenized documents:
@@ -464,7 +459,7 @@ The `Corpus` class can be used for iterating over a corpus of documents stored i
 record files:
 ```
 for document in sling.Corpus("local/data/e/wiki/en/documents@10.rec"):
-  print document.text
+  print(document.text)
 ```
 This will create a global store with the document schema symbols and create
 a local store for each document. If you have a global store you can use this
@@ -474,7 +469,7 @@ kb = sling.Store()
 corpus = sling.Corpus("local/data/e/wiki/en/documents@10.rec", commons=kb)
 kb.freeze()
 for document in corpus:
-  print document.text
+  print(document.text)
 ```
 ### LEX format
 
@@ -560,11 +555,11 @@ kb.freeze()
 
 # Lookup entities with name 'Annette Stroyberg'.
 for entity in names.lookup("Annette Stroyberg"):
-  print entity.id, entity.name
+  print(entity.id, entity.name)
 
 # Query all entities named 'Funen' with frequency counts.
 for m in names.query("Funen"):
-  print m.count(), m.id(), m.item().name, "(", m.item().description, ")"
+  print(m.count(), m.id(), m.item().name, "(", m.item().description, ")")
 ```
 
 The `lookup()` and `query()` methods return the matches in decreasing
@@ -593,7 +588,7 @@ for Annette Stroyberg ([Q2534120](https://www.wikidata.org/wiki/Q2534120)):
 ```
 entity = kb["Q2534120"]
 dob = sling.Date(entity["P569"])
-print dob.year, dob.month, dob.day
+print(dob.year, dob.month, dob.day)
 ```
 
 The `Date` class has the following properties and methods:
@@ -688,7 +683,7 @@ The `flags.define()` function takes the same arguments as the standard Python
 method. You can then access the flags as variables in the flags module, e.g.:
 ```
   if flags.verbose:
-    print "verbose output..."
+    print("verbose output...")
 ```
 
 The flags parser must be initialized in the main method of your Python program:
@@ -712,5 +707,5 @@ url = "https://www.wikidata.org/wiki/Special:EntityData/" + qid + ".json"
 json = urllib2.urlopen(url).read()[len(qid) + 16:-2]
 
 item = wikiconv.convert_wikidata(store, json)
-print item.data(pretty=True)
+print(item.data(pretty=True))
 ```

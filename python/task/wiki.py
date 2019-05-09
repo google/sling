@@ -14,9 +14,9 @@
 
 """Workflow builder for Wikidata and Wikipedia processing"""
 
-from workflow import *
-import corpora
 import sling.flags as flags
+from sling.task import *
+import sling.task.corpora as corpora
 
 flags.define("--index",
              help="index wiki data sets",

@@ -15,8 +15,8 @@
 import os
 import tempfile
 
-import builder
-import nn
+import sling.myelin.flow as flow
+import sling.myelin.nn as nn
 
 # Adds a lexical encoder to 'flow', as per 'spec' (which is a Spec object).
 # 'lstm_feature_embeddings' is a list of embeddings data (e.g. numpy arrays),

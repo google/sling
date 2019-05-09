@@ -36,8 +36,8 @@ PyObject *PyGetFlags() {
     Flag *flag = flags[i];
 
     // Get name and help string.
-    PyObject *name = PyString_FromString(flag->name);
-    PyObject *help = PyString_FromString(flag->help);
+    PyObject *name = PyUnicode_FromString(flag->name);
+    PyObject *help = PyUnicode_FromString(flag->help);
 
     // Get default flag value.
     PyObject *defval = nullptr;
@@ -46,22 +46,22 @@ PyObject *PyGetFlags() {
         defval = PyBool_FromLong(flag->value<bool>());
         break;
       case Flag::INT32:
-        defval = PyInt_FromLong(flag->value<int32>());
+        defval = PyLong_FromLong(flag->value<int32>());
         break;
       case Flag::UINT32:
-        defval = PyInt_FromLong(flag->value<uint32>());
+        defval = PyLong_FromLong(flag->value<uint32>());
         break;
       case Flag::INT64:
-        defval = PyLong_FromLong(flag->value<int64>());
+        defval = PyLong_FromLongLong(flag->value<int64>());
         break;
       case Flag::UINT64:
-        defval = PyLong_FromUnsignedLong(flag->value<uint64>());
+        defval = PyLong_FromUnsignedLongLong(flag->value<uint64>());
         break;
       case Flag::DOUBLE:
         defval = PyFloat_FromDouble(flag->value<double>());
         break;
       case Flag::STRING:
-        defval = PyString_FromStringAndSize(
+        defval = PyUnicode_FromStringAndSize(
             flag->value<string>().data(), flag->value<string>().size());
         break;
     }
@@ -92,10 +92,10 @@ PyObject *PySetFlag(PyObject *self, PyObject *args) {
       flag->value<bool>() = (value == Py_True);
       break;
     case Flag::INT32:
-      flag->value<int32>() = PyInt_AsLong(value);
+      flag->value<int32>() = PyLong_AsLong(value);
       break;
     case Flag::UINT32:
-      flag->value<uint32>() = PyInt_AsUnsignedLongMask(value);
+      flag->value<uint32>() = PyLong_AsLong(value);
       break;
     case Flag::INT64:
       flag->value<int64>() = PyLong_AsLongLong(value);
@@ -107,7 +107,7 @@ PyObject *PySetFlag(PyObject *self, PyObject *args) {
       flag->value<double>() = PyFloat_AsDouble(value);
       break;
     case Flag::STRING:
-      flag->value<string>() = PyString_AsString(value);
+      flag->value<string>() = PyUnicode_AsUTF8(value);
       break;
   }
 

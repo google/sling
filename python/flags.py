@@ -15,7 +15,7 @@
 """Command-line flags"""
 
 import argparse
-import pysling as api
+import sling.pysling as api
 
 # Command line flag arguments.
 arg = argparse.Namespace()

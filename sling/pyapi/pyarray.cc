@@ -43,6 +43,7 @@ void PyArray::Define(PyObject *module) {
   sequence.sq_ass_item = method_cast<ssizeobjargproc>(&PyArray::SetItem);
   sequence.sq_contains = method_cast<objobjproc>(&PyArray::Contains);
 
+  methods.Add("get", &PyArray::Get);
   methods.Add("store", &PyArray::GetStore);
   methods.Add("data", &PyArray::Data);
   type.tp_methods = methods.table();
@@ -89,15 +90,33 @@ PyObject *PyArray::GetItem(Py_ssize_t index) {
   return pystore->PyValue(arr->get(pos(index)));
 }
 
+PyObject *PyArray::Get(PyObject *args, PyObject *kw) {
+  static const char *kwlist[] = {"index", "binary", nullptr};
+  int index = 0;
+  bool binary = false;
+  if (!PyArg_ParseTupleAndKeywords(args, kw, "i|b",
+          const_cast<char **>(kwlist), &index, &binary)) return nullptr;
+
+  // Check array bounds.
+  ArrayDatum *arr = array();
+  if (index < 0) index = length() + index;
+  if (index < 0 || index >= length()) {
+    PyErr_SetString(PyExc_IndexError, "Array index out of bounds");
+    return nullptr;
+  }
+
+  // Return array element.
+  return pystore->PyValue(arr->get(pos(index)), binary);
+}
+
 PyObject *PyArray::GetItems(PyObject *key) {
-  if (PyInt_Check(key)) {
+  if (PyLong_Check(key)) {
     // Simple integer index.
-    return GetItem(PyInt_AS_LONG(key));
+    return GetItem(PyLong_AS_LONG(key));
   } else if (PySlice_Check(key)) {
     // Get index slice.
-    PySliceObject *pyslice = reinterpret_cast<PySliceObject *>(key);
     Slice *subset = new Slice();
-    if (subset->Init(pyslice, length()) == -1) {
+    if (subset->Init(key, length()) == -1) {
       delete subset;
       return nullptr;
     }
@@ -215,7 +234,7 @@ PyObject *PyArray::Str() {
   StringPrinter printer(pystore->store);
   printer.Print(h);
   const string &text = printer.text();
-  return PyString_FromStringAndSize(text.data(), text.size());
+  return PyUnicode_FromStringAndSize(text.data(), text.size());
 }
 
 PyObject *PyArray::Data(PyObject *args, PyObject *kw) {
@@ -231,13 +250,13 @@ PyObject *PyArray::Data(PyObject *args, PyObject *kw) {
     flags.InitEncoder(encoder.encoder());
     encoder.Encode(h);
     const string &buffer = encoder.buffer();
-    return PyString_FromStringAndSize(buffer.data(), buffer.size());
+    return PyUnicode_FromStringAndSize(buffer.data(), buffer.size());
   } else {
     StringPrinter printer(pystore->store);
     flags.InitPrinter(printer.printer());
     printer.Print(h);
     const string &text = printer.text();
-    return PyString_FromStringAndSize(text.data(), text.size());
+    return PyUnicode_FromStringAndSize(text.data(), text.size());
   }
 }
 

@@ -17,15 +17,16 @@
 # The Python wheel produced by this script can be installed with the following
 # command:
 #
-#   sudo pip install /tmp/sling-2.0.0-cp27-none-linux_x86_64.whl
+#   sudo pip install /tmp/sling-2.0.0-cp35-none-linux_x86_64.whl
 #
 # If you are developing the SLING system, it is convenient to just add a
 # link to the SLING repository directly from the Python package directory
 # instead:
 #
-#   sudo ln -s $(realpath python) /usr/local/lib/python2.7/dist-packages/sling
+#   sudo ln -s $(realpath python) /usr/lib/python3/dist-packages/sling
 
 import os
+import sys
 import hashlib
 import base64
 import zipfile
@@ -45,9 +46,14 @@ def sha256_content_checksum(data):
   sha256.update(data)
   return base64.urlsafe_b64encode(sha256.digest()).rstrip(b'=')
 
+# Python version.
+pymajor = str(sys.version_info.major)
+pyminor = str(sys.version_info.minor)
+pyversion = pymajor + "." + pyminor
+
 # Wheel package information.
 platform = distutils.util.get_platform().replace("-", "_")
-tag = "cp27-none-" + platform
+tag = "cp" + pymajor + pyminor + "-none-" + platform
 package = "sling"
 version = "2.0.0"
 dist_dir = package + "-" + version + ".dist-info"
@@ -94,10 +100,10 @@ record = ""
 wheel_metadata_filename = dist_dir + "/WHEEL"
 wheel_metadata = """Wheel-Version: 1.0
 Root-Is-Purelib: false
-Tag: $TAG$""".replace("$TAG$", tag)
+Tag: $TAG$""".replace("$TAG$", tag).encode()
 
 record += wheel_metadata_filename + ",sha256=" + \
-          sha256_content_checksum(wheel_metadata) + "," + \
+          sha256_content_checksum(wheel_metadata).decode() + "," + \
           str(len(wheel_metadata)) + "\n"
 wheel.writestr(wheel_metadata_filename, wheel_metadata)
 
@@ -114,14 +120,18 @@ License: Apache 2.0
 Download-URL: https://github.com/google/sling/releases
 Platform: UNKNOWN
 Classifier: Programming Language :: Python
-Classifier: Programming Language :: Python :: 2
-Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: $PYMAJOR$
+Classifier: Programming Language :: Python :: $PYVERSION$
 
 Google SLING frame semantic parsing framework
-""".replace("$VERSION$", version)
+"""
+package_metadata = package_metadata.replace("$VERSION$", version)
+package_metadata = package_metadata.replace("$PYMAJOR$", pymajor)
+package_metadata = package_metadata.replace("$PYVERSION$", pyversion)
+package_metadata = package_metadata.encode()
 
 record += package_metadata_filename + ",sha256=" + \
-          sha256_content_checksum(package_metadata) + "," + \
+          sha256_content_checksum(package_metadata).decode() + "," + \
           str(len(package_metadata)) + "\n"
 wheel.writestr(package_metadata_filename, package_metadata)
 
@@ -131,21 +141,21 @@ for source in files:
   destination = files[source]
   destination = destination.replace("$INFO$", dist_dir)
   destination = destination.replace("$DATA$", data_dir)
-  print "Install", source, "as", destination
+  print("Install", source, "as", destination)
 
   # Write entry to RECORD file.
   size = os.path.getsize(source)
-  checksum = sha256_checksum(source)
+  checksum = sha256_checksum(source.encode()).decode()
   record += destination + ",sha256=" + checksum + "," + str(size)  + "\n"
 
   # Add file to wheel zip archive.
   wheel.write(source, destination)
 
 # Add RECORD file to wheel.
-print "Add", record_filename
+print("Add", record_filename)
 wheel.writestr(record_filename, record)
 
 # Done.
 wheel.close()
-print "Wheel written to", wheel_filename
+print("Wheel written to", wheel_filename)
 

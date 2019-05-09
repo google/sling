@@ -152,15 +152,15 @@ data = cell.instance()
 
 # Set input.
 xdata = data[x]
-for i in xrange(64): xdata[0, i] = 5
+for i in range(64): xdata[0, i] = 5
 
 # Run computation for data instance.
 data.compute()
 
 # Print result.
 ydata = data[y]
-print "y", ydata
-print "argmax", np.asarray(ydata).argmax()
+print("y", ydata)
+print("argmax", np.asarray(ydata).argmax())
 ```
 
 The index operator on the cell object (e.g. `data[x]`) returns a _tensor_ object
@@ -217,15 +217,15 @@ data = cell.instance()
 
 # Set input.
 xdata = data[x]
-for i in xrange(64): xdata[0, i] = 5
+for i in range(64): xdata[0, i] = 5
 
 # Run computation for data instance.
 data.compute()
 
 # Print result.
 ydata = data[y]
-print "y", ydata
-print "argmax", np.asarray(ydata).argmax()
+print("y", ydata)
+print("argmax", np.asarray(ydata).argmax())
 ```
 
 ## Creating a flow file from a Tensorflow graph

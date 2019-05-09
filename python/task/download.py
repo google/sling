@@ -15,14 +15,15 @@
 """Workflow builder for downloading wiki dumps"""
 
 import os
-import urllib2
+from urllib.request import urlopen
 import _strptime
 import time
 
-from workflow import *
-import corpora
+import sling
+import sling.task.corpora as corpora
 import sling.flags as flags
 import sling.log as log
+from sling.task.workflow import *
 
 # Number of concurrent downloads.
 download_concurrency = 0
@@ -59,7 +60,7 @@ class UrlDownload:
 
     # Download from url to file.
     if ratelimit > 0: log.info("Start download of " + url)
-    conn = urllib2.urlopen(url)
+    conn = urlopen(url)
     last_modified = time.mktime(time.strptime(conn.headers['last-modified'],
                                               "%a, %d %b %Y %H:%M:%S GMT"))
     total_bytes = "bytes_downloaded"

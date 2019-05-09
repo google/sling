@@ -65,7 +65,7 @@ class Token(object):
       if start != None:
         size = self.frame[self.schema.token_size]
         if size == None: size = 1
-        text = self.document._text[start : start + size]
+        text = self.document._text[start : start + size].decode()
     return text
 
   @word.setter
@@ -159,7 +159,7 @@ class Document(object):
     # Initialize document from frame.
     self.frame = frame
     self.schema = schema
-    self._text = frame[schema.document_text]
+    self._text = frame.get(schema.document_text, binary=True)
     self.tokens = []
     self.mentions = []
     self.themes = []
@@ -252,6 +252,7 @@ class Document(object):
 
   @text.setter
   def text(self, value):
+    if isinstance(value, str): value = value.encode()
     self._text = value
     self.frame[self.schema.document_text] = value
 
@@ -322,8 +323,8 @@ class Corpus:
   def __iter__(self):
     return self
 
-  def next(self):
-    _, data = self.input.next()
+  def __next__(self):
+    _, data = self.input.__next__()
     f = sling.Store(self.commons).parse(data)
     return sling.Document(f, schema=self.docschema)
 

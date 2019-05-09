@@ -18,10 +18,20 @@
 #ifdef SLING_GOOGLE3
 #include <Python.h>
 #include <structmember.h>
+#elif PYVER==35
+#include <python3.5/Python.h>
+#include <python3.5/structmember.h>
+#elif PYVER==36
+#include <python3.6/Python.h>
+#include <python3.6/structmember.h>
+#elif PYVER==37
+#include <python3.7/Python.h>
+#include <python3.7/structmember.h>
 #else
-#include <python2.7/Python.h>
-#include <python2.7/structmember.h>
+#include <Python.h>
+#include <structmember.h>
 #endif
+
 #include <vector>
 
 #include "sling/string/text.h"
@@ -112,7 +122,7 @@ struct PyBase : public PyVarObject {
 
   // Allocate string.
   static PyObject *AllocateString(Text text) {
-    return PyString_FromStringAndSize(text.data(), text.size());
+    return PyUnicode_FromStringAndSize(text.data(), text.size());
   }
 
   // Type checking.

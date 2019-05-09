@@ -18,7 +18,7 @@
 This tools converts the instruction op code table to a header file with methods
 for encoding each instruction.
 
-python tools/optohdr.py > third_party/jit/avx512.inc
+python3 tools/optohdr.py > third_party/jit/avx512.inc
 
 """
 
@@ -64,7 +64,7 @@ def find_method(name, args):
   return None
 
 # Parse all the op definitions.
-print "// Auto-generated from Intel instruction tables."
+print("// Auto-generated from Intel instruction tables.")
 fin = open("third_party/jit/avx512ops.txt", "r")
 for line in fin.readlines():
   line = line.strip()
@@ -96,7 +96,7 @@ for line in fin.readlines():
     elif flag == "W0" or flag == "W1" or flag == "WIG":
       flags.append("EVEX_" + flag)
     else:
-      print "flag:", flag
+      print("flag:", flag)
 
   # Parse op code.
   opcode = tokens[1]
@@ -126,7 +126,7 @@ for line in fin.readlines():
 
   # vsib encoding not supported.
   if vsib:
-    if warnings: print "// vsib encoding not supported for " + mnemonic
+    if warnings: print("// vsib encoding not supported for " + mnemonic)
     continue
 
   # Parse instruction arguments.
@@ -283,9 +283,9 @@ for line in fin.readlines():
     methods.append(method)
   else:
     if warnings and opcode != method.opcode:
-      print "// Hmm! opcode mismatch", method.name, method.opcode
+      print("// Hmm! opcode mismatch", method.name, method.opcode)
     if warnings and numargs != method.numargs:
-      print "// Hmm! numargs mismatch"
+      print("// Hmm! numargs mismatch")
     method.add_flags(flags)
 
   if dt != 0: method.add_flag("EVEX_DT" + str(dt / 8))
@@ -304,7 +304,7 @@ for method in methods:
   for i in range(len(method.args)):
     arg = method.args[i]
     if arg == "zmm/mem" or arg == "reg/mem":
-      if warnings and reg_mem_arg != -1: print "// Oops!! multi reg/mem"
+      if warnings and reg_mem_arg != -1: print("// Oops!! multi reg/mem")
       reg_mem_arg = i
 
   if reg_mem_arg != -1:
@@ -374,6 +374,6 @@ for method in sorted(methods, key=lambda x: x.name):
 
   sig = "void " + method.name + "(" + ", ".join(argsigs) + ")"
   if sig not in signatures:
-    print sig + " {\n  " + body + "\n}"
+    print(sig + " {\n  " + body + "\n}")
     signatures.append(sig)
 

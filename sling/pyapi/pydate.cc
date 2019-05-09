@@ -79,15 +79,14 @@ int PyDate::Init(PyObject *args, PyObject *kwds) {
       PyFrame *frame = reinterpret_cast<PyFrame *>(time);
       Store *store = frame->pystore->store;
       date.Init(Object(store, store->Resolve(frame->handle())));
-    } else if (PyString_Check(time)) {
+    } else if (PyUnicode_Check(time)) {
       // Parse date from string.
-      char *data;
       Py_ssize_t length;
-      PyString_AsStringAndSize(time, &data, &length);\
+      const char *data = PyUnicode_AsUTF8AndSize(time, &length);
       date.ParseFromString(Text(data, length));
-    } else if (PyInt_Check(time)) {
+    } else if (PyLong_Check(time)) {
       // Parse date from number.
-      date.ParseFromNumber(PyInt_AsLong(time));
+      date.ParseFromNumber(PyLong_AsLong(time));
     } else {
       PyErr_SetString(PyExc_ValueError, "Cannot create date from value");
       return -1;
@@ -107,7 +106,7 @@ PyObject *PyDate::Str() {
 
 PyObject *PyDate::Value() {
   int number = date.AsNumber();
-  if (number != -1) return PyInt_FromLong(number);
+  if (number != -1) return PyLong_FromLong(number);
   return AllocateString(date.AsString());
 }
 
@@ -120,6 +119,7 @@ void PyCalendar::Define(PyObject *module) {
   type.tp_init = method_cast<initproc>(&PyCalendar::Init);
   type.tp_dealloc = method_cast<destructor>(&PyCalendar::Dealloc);
 
+  methods.AddO("str", &PyCalendar::Str);
   methods.AddO("day", &PyCalendar::Day);
   methods.AddO("month", &PyCalendar::Month);
   methods.AddO("year", &PyCalendar::Year);
@@ -154,7 +154,6 @@ void PyCalendar::Dealloc() {
 PyObject *PyCalendar::Str(PyObject *obj) {
   PyDate *pydate = GetDate(obj);
   if (pydate == nullptr) return nullptr;
-
   return AllocateString(calendar->DateAsString(pydate->date));
 }
 

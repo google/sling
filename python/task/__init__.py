@@ -1,2 +1,2 @@
-from workflow import *
+from sling.task.workflow import *
 

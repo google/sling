@@ -57,7 +57,7 @@ void PyPhraseMatch::Dealloc() {
 }
 
 PyObject *PyPhraseMatch::Id() {
-  return PyString_FromStringAndSize(info.id.data(), info.id.size());
+  return PyUnicode_FromStringAndSize(info.id.data(), info.id.size());
 }
 
 PyObject *PyPhraseMatch::Item() {
@@ -66,11 +66,11 @@ PyObject *PyPhraseMatch::Item() {
 }
 
 PyObject *PyPhraseMatch::Form() {
-  return PyInt_FromLong(info.form);
+  return PyLong_FromLong(info.form);
 }
 
 PyObject *PyPhraseMatch::Count() {
-  return PyInt_FromLong(info.count);
+  return PyLong_FromLong(info.count);
 }
 
 PyObject *PyPhraseMatch::Reliable() {
@@ -120,7 +120,7 @@ void PyPhraseTable::Dealloc() {
 
 PyObject *PyPhraseTable::Lookup(PyObject *obj) {
   // Get phrase.
-  char *phrase = PyString_AsString(obj);
+  const char *phrase = PyUnicode_AsUTF8(obj);
   if (phrase == nullptr) return nullptr;
 
   // Compute phrase fingerprint.
@@ -141,7 +141,7 @@ PyObject *PyPhraseTable::Lookup(PyObject *obj) {
 
 PyObject *PyPhraseTable::Query(PyObject *obj) {
   // Get phrase.
-  char *phrase = PyString_AsString(obj);
+  const char *phrase = PyUnicode_AsUTF8(obj);
   if (phrase == nullptr) return nullptr;
 
   // Compute phrase fingerprint.
@@ -164,7 +164,7 @@ PyObject *PyPhraseTable::Query(PyObject *obj) {
 
 PyObject *PyPhraseTable::Fingerprint(PyObject *obj) {
   // Get phrase.
-  char *phrase = PyString_AsString(obj);
+  const char *phrase = PyUnicode_AsUTF8(obj);
   if (phrase == nullptr) return nullptr;
 
   // Compute phrase fingerprint.
@@ -176,7 +176,7 @@ PyObject *PyPhraseTable::Fingerprint(PyObject *obj) {
 
 PyObject *PyPhraseTable::Form(PyObject *obj) {
   // Get phrase.
-  char *phrase = PyString_AsString(obj);
+  const char *phrase = PyUnicode_AsUTF8(obj);
   if (phrase == nullptr) return nullptr;
 
   // Determine case form.
@@ -185,7 +185,7 @@ PyObject *PyPhraseTable::Form(PyObject *obj) {
   tokenizer->FingerprintAndForm(phrase, &fp, &form);
 
   // Return case form.
-  return PyInt_FromLong(form);
+  return PyLong_FromLong(form);
 }
 
 }  // namespace sling

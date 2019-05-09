@@ -14,9 +14,9 @@
 
 """Workflow builder for named entity recognition"""
 
-from workflow import *
-from wiki import WikiWorkflow
 import sling.flags as flags
+from sling.task import *
+from sling.task.wiki import WikiWorkflow
 
 class EntityWorkflow:
   def __init__(self, name=None, wf=None):

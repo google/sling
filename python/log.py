@@ -16,7 +16,7 @@
 
 import inspect
 import os
-import pysling as api
+import sling.pysling as api
 
 INFO = 0
 WARNING = 1

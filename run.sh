@@ -1,4 +1,4 @@
 #!/bin/sh
 
-python python/run.py $*
+python3 python/run.py $*
 

@@ -35,6 +35,9 @@ struct PyFrame : public PyBase, public Root {
   // Look up role value for frame.
   PyObject *Lookup(PyObject *key);
 
+  // Get role value for frame with options.
+  PyObject *Get(PyObject *args, PyObject *kw);
+
   // Assign value to slot.
   int Assign(PyObject *key, PyObject *v);
 

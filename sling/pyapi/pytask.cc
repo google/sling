@@ -102,8 +102,8 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
     PyObject *k;
     PyObject *v;
     while (PyDict_Next(params, &pos, &k, &v)) {
-      const char *key = PyString_AsString(k);
-      const char *value = PyString_AsString(v);
+      const char *key = PyUnicode_AsUTF8(k);
+      const char *value = PyUnicode_AsUTF8(v);
       task->AddParameter(key, value);
     }
     Py_DECREF(params);
@@ -226,7 +226,7 @@ PyObject *PyJob::Counters() {
 
   // Gather current counter values.
   job->IterateCounters([counters](const string &name, Counter *counter) {
-    PyObject *key = PyString_FromStringAndSize(name.data(), name.size());
+    PyObject *key = PyUnicode_FromStringAndSize(name.data(), name.size());
     PyObject *val = PyLong_FromLong(counter->value());
     PyDict_SetItem(counters, key, val);
     Py_DECREF(key);
@@ -266,7 +266,7 @@ Shard PyJob::PyGetShard(PyObject *obj) {
 
 const char *PyJob::PyStrAttr(PyObject *obj, const char *name) {
   PyObject *attr = PyAttr(obj, name);
-  const char *str = attr == Py_None ? "" : PyString_AsString(attr);
+  const char *str = attr == Py_None ? "" : PyUnicode_AsUTF8(attr);
   CHECK(str != nullptr) << name;
   Py_DECREF(attr);
   return str;
@@ -414,12 +414,12 @@ PyObject *PyTask::GetParameter(PyObject *args) {
 
   if (pydefval == nullptr) {
     return AllocateString(task->Get(name, ""));
-  } else if (PyString_Check(pydefval)) {
-    const char *defval = PyString_AsString(pydefval);
+  } else if (PyUnicode_Check(pydefval)) {
+    const char *defval = PyUnicode_AsUTF8(pydefval);
     return AllocateString(task->Get(name, defval));
-  } else if (PyInt_Check(pydefval)) {
-    int64 defval = PyInt_AsLong(pydefval);
-    return PyInt_FromLong(task->Get(name, defval));
+  } else if (PyLong_Check(pydefval)) {
+    int64 defval = PyLong_AsLong(pydefval);
+    return PyLong_FromLong(task->Get(name, defval));
   } else if (PyFloat_Check(pydefval)) {
     double defval = PyFloat_AsDouble(pydefval);
     return PyFloat_FromDouble(task->Get(name, defval));
@@ -449,11 +449,8 @@ void PyProcessor::Run(Task *task) {
   PyGILState_STATE gstate = PyGILState_Ensure();
 
   // Create Python task object.
-  PyObject *args = PyTuple_New(0);
-  CHECK(args != nullptr);
-  PyObject *pyproc = PyInstance_New(pycls_, args, nullptr);
+  PyObject *pyproc = PyObject_CallObject(pycls_, nullptr);
   CHECK(pyproc != nullptr);
-  Py_DECREF(args);
 
   // Create task wrapper.
   PyTask *pytask = PyObject_New(PyTask, &PyTask::type);
@@ -479,9 +476,9 @@ PyObject *PyRegisterTask(PyObject *self, PyObject *args) {
   PyObject *cls;
   if (!PyArg_ParseTuple(args, "sO", &name, &cls)) return nullptr;
 
-  // Check for class object.
-  if (!PyClass_Check(cls)) {
-    PyErr_SetString(PyExc_ValueError, "Class object expected");
+  // Check for type object.
+  if (!PyType_Check(cls)) {
+    PyErr_SetString(PyExc_ValueError, "Type object expected");
     return nullptr;
   }
 
@@ -532,7 +529,7 @@ PyObject *PyStartTaskMonitor(PyObject *self, PyObject *args) {
 PyObject *PyGetJobStatistics() {
   if (dashboard == nullptr) Py_RETURN_NONE;
   string stats = dashboard->GetStatus();
-  return PyString_FromStringAndSize(stats.data(), stats.size());
+  return PyUnicode_FromStringAndSize(stats.data(), stats.size());
 }
 
 PyObject *PyFinalizeDashboard() {

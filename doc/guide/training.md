@@ -195,7 +195,7 @@ the same script to create the commons store behind the scenes. But we mention
 this here in case one wishes to inspect the automatically created commons.
 
 ```shell
-python sling/nlp/parser/tools/commons_from_corpora.py \
+python3 sling/nlp/parser/tools/commons_from_corpora.py \
   --input=<path to train.rec>,<path to dev.rec>,<any other rec files> \
   --output=<path where commons will be written>
 ```

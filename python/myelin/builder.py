@@ -15,10 +15,7 @@
 
 """Myelin function builder and expression evaluator."""
 
-import flow
-from flow import Variable
-from flow import Function
-from flow import Flow
+from .flow import set_builder_factory, Variable
 
 DT_FLOAT32 = "float32"
 DT_FLOAT64 = "float64"
@@ -160,7 +157,7 @@ class Builder:
     shape = x.shape[:]
     shape[axis] = x.shape[axis] / splits
     results = []
-    for n in xrange(splits):
+    for n in range(splits):
       o = self.var(op.name + ":" + str(n), x.type, shape)
       op.add_output(o)
       results.append(o)
@@ -379,5 +376,5 @@ class Builder:
 def builder_factory(flow, name):
   return Builder(flow, name)
 
-flow.builder_factory = builder_factory
+set_builder_factory(builder_factory)
 

@@ -19,6 +19,7 @@ import glob
 import os
 import re
 import time
+
 import sling
 import sling.pysling as api
 import sling.flags as flags
@@ -232,7 +233,7 @@ class Task:
   def add_params(self, params):
     """Add configuration parameters to task."""
     if params != None:
-      for name, value in params.iteritems():
+      for name, value in params.items():
         self.add_param(name, value)
 
   def __repr__(self):
@@ -351,7 +352,7 @@ class Workflow(object):
         prefix = m.group(1)
         shards = int(m.group(2))
         suffix = m.group(3)
-        for shard in xrange(shards):
+        for shard in range(shards):
           fn = "%s-%05d-of-%05d%s" % (prefix, shard, shards, suffix)
           filenames.append(fn)
       else:
@@ -373,7 +374,7 @@ class Workflow(object):
     else:
       filenames.sort()
       resources = []
-      for shard in xrange(n):
+      for shard in range(n):
         key = (filenames[shard], str(Shard(shard, n)), str(format))
         r = self.resource_map.get(key)
         if r == None:
@@ -392,7 +393,7 @@ class Workflow(object):
       channels = []
       for p in producer:
         if shards != None:
-          for shard in xrange(shards):
+          for shard in range(shards):
             ch = Channel(format, Port(p, name, Shard(shard, shards)), None)
             p.connect_sink(ch)
             channels.append(ch)
@@ -405,7 +406,7 @@ class Workflow(object):
       return channels
     elif shards != None:
       channels = []
-      for shard in xrange(shards):
+      for shard in range(shards):
         sink = Port(producer, name, Shard(shard, shards))
         ch = Channel(format, sink, None)
         producer.connect_sink(ch)
@@ -430,7 +431,7 @@ class Workflow(object):
     elif multi_channel and not multi_task:
       # Connect multiple channels to single task.
       shards = len(channel)
-      for shard in xrange(shards):
+      for shard in range(shards):
         if channel[shard].consumer != None: raise Exception("already connected")
         port = Port(consumer, name, Shard(shard, shards))
         channel[shard].consumer = port
@@ -439,7 +440,7 @@ class Workflow(object):
       # Connect multiple channels to multiple tasks.
       shards = len(channel)
       if len(consumer) != shards: raise Exception("size mismatch")
-      for shard in xrange(shards):
+      for shard in range(shards):
         if channel[shard].consumer != None: raise Exception("already connected")
         port = Port(consumer[shard], name, None)
         channel[shard].consumer = port
@@ -461,7 +462,7 @@ class Workflow(object):
     if isinstance(input, list):
       outputs = []
       shards = len(input)
-      for shard in xrange(shards):
+      for shard in range(shards):
         format = input[shard].format
         if type(format) == str: format = Format(format)
         if format == None: format = Format("text")
@@ -513,7 +514,7 @@ class Workflow(object):
 
     # Create writer tasks for writing to output.
     writer_tasks = []
-    for shard in xrange(fanout):
+    for shard in range(fanout):
       format = output[shard].format
       if type(format) == str: format = Format(format)
       if format == None: format = Format("text")
@@ -592,7 +593,7 @@ class Workflow(object):
 
       # Pipe outputs from sharder to sorters.
       sorters = []
-      for i in xrange(shards):
+      for i in range(shards):
         sorter = self.task("sorter", shard=Shard(i, shards))
         self.connect(pipes[i], sorter)
         sorters.append(sorter)
@@ -740,7 +741,7 @@ def save_workflow_log(path):
 def run(wf):
   # In dryrun mode the workflow is just dumped without running it.
   if flags.arg.dryrun:
-    print wf.dump()
+    print(wf.dump())
     return
 
   # Start workflow.

@@ -59,13 +59,12 @@ cc_library(
     "//sling/task:process",
     "//sling/stream:file",
     "//sling/stream:memory",
-    "//sling/stream:unix-file",
     "//sling/string:text",
   ],
   copts = [
-    "-Wno-pmf-conversions",
     "-Wno-write-strings",
     "-Wno-invalid-offsetof",
+    "-DPYVER=35"
   ],
 )
 

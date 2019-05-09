@@ -16,15 +16,16 @@
 """Myelin computation flows."""
 
 import os
-from struct import calcsize
-from struct import pack
-from struct import unpack
-from struct import unpack_from
+from struct import calcsize, pack, unpack, unpack_from
 
 def dummy_factory_builder(flow, name):
   raise Exception("No flow builder defined")
 
-builder_factory = dummy_factory_builder
+builder_factory_method = dummy_factory_builder
+
+def set_builder_factory(factory):
+  global builder_factory_method
+  builder_factory_method = factory
 
 class FileWriter:
   """Flow file writer."""
@@ -430,7 +431,7 @@ class Flow:
 
   def define(self, name):
     """Create a builder for a new funtion."""
-    return builder_factory(self, name)
+    return builder_factory_method(self, name)
 
   def rename_prefix(self, prefix, replacement):
     """Replace prefix in all names."""
@@ -623,13 +624,13 @@ class Flow:
     if version >= 5: self.flags = f.read_int()
 
     num_vars = f.read_int()
-    for _ in xrange(num_vars):
+    for _ in range(num_vars):
       flags = 0
       if version >= 5: flags = f.read_int()
       name = f.read_string()
       num_aliases = f.read_int()
       aliases = []
-      for i in xrange(num_aliases):
+      for i in range(num_aliases):
         aliases.append(f.read_string())
       t = f.read_string()
       if t[0] == '&':
@@ -637,7 +638,7 @@ class Flow:
         t = t[1:]
       shape_size = f.read_int()
       shape = []
-      for _ in xrange(shape_size):
+      for _ in range(shape_size):
         shape.append(f.read_int())
       var = self.var(name, type=t, shape=shape)
       var.flags = flags
@@ -646,7 +647,7 @@ class Flow:
         var.data = f.slice(size)  # avoid creating a copy
 
     num_ops = f.read_int()
-    for _ in xrange(num_ops):
+    for _ in range(num_ops):
       flags = 0
       if version >= 5: flags = f.read_int()
       name = f.read_string()
@@ -655,43 +656,43 @@ class Flow:
       op.type = f.read_string()
 
       num_in = f.read_int()
-      for _ in xrange(num_in):
+      for _ in range(num_in):
         op.add_input(self.var(name=f.read_string()))
 
       num_out = f.read_int()
-      for _ in xrange(num_out):
+      for _ in range(num_out):
         op.add_output(self.var(name=f.read_string()))
 
       num_attr = f.read_int()
-      for _ in xrange(num_attr):
+      for _ in range(num_attr):
         attr_name = f.read_string()
         attr_val = f.read_string()
         op.add_attr(attr_name, attr_val)
 
     num_funcs = f.read_int()
-    for _ in xrange(num_funcs):
+    for _ in range(num_funcs):
       flags = 0
       if version >= 5: flags = f.read_int()
       name = f.read_string()
       func = self.func(name)
       func.flags = flags
       n = f.read_int()
-      for _ in xrange(n):
+      for _ in range(n):
         func.add(self.op(f.read_string()))
 
     num_cnxs = f.read_int()
-    for _ in xrange(num_cnxs):
+    for _ in range(num_cnxs):
       flags = 0
       if version >= 5: flags = f.read_int()
       name = f.read_string()
       cnx = self.cnx(name)
       cnx.flags = flags
       n = f.read_int()
-      for _ in xrange(n):
+      for _ in range(n):
         cnx.add(self.var(f.read_string()))
 
     num_blobs = f.read_int()
-    for _ in xrange(num_blobs):
+    for _ in range(num_blobs):
       flags = 0
       if version >= 5: flags = f.read_int()
       name = f.read_string()
@@ -699,7 +700,7 @@ class Flow:
       blob.flags = flags
       blob.type = f.read_string()
       n = f.read_int()
-      for _ in xrange(n):
+      for _ in range(n):
         name = f.read_string()
         val = f.read_string()
         blob.add_attr(name, val)

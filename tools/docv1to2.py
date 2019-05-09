@@ -20,7 +20,7 @@ import sys
 
 # Check arguments.
 if len(sys.argv) != 3:
-  print "usage:", sys.argv[0], "<v1 doc rec input>", "<v2 doc rec output>"
+  print("usage:", sys.argv[0], "<v1 doc rec input>", "<v2 doc rec output>")
   sys.exit(1)
 
 # Intialize commons store.
@@ -58,5 +58,5 @@ for key, value in fin:
 
 fin.close()
 fout.close()
-print num_docs, "documents converted"
+print(num_docs, "documents converted")
 

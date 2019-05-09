@@ -174,7 +174,7 @@ PyObject *PyToLex(PyObject *self, PyObject *args) {
   string lex = nlp::ToLex(document);
 
   // Return LEX representation.
-  return PyString_FromStringAndSize(lex.data(), lex.size());
+  return PyUnicode_FromStringAndSize(lex.data(), lex.size());
 }
 
 PyObject *PyEvaluateFrames(PyObject *self, PyObject *args) {
