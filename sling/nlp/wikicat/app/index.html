@@ -108,7 +108,14 @@
     </div>
 
     <!-- Container for showing top-signatures -->
-    <div flex ng-show='hasTopResults()' layout-padding>
+    <div flex layout-padding
+     ng-show='hasTopResults() && (query_results.stats.length == 0)'
+     class='error'>
+     No signatures chosen.
+     Consider loosening the parse selection formula.
+    </div>
+    <div flex ng-show='hasTopResults() && (query_results.stats.length > 0)'
+      layout-padding>
       <table class='mdl-data-table mdl-shadow--2dp'>
         <caption>
           Top Signatures
@@ -117,7 +124,10 @@
           <th>Index</th>
           <th>Parse Signature</th>
           <th>Example</th>
-          <th>Score</th>
+          <th>
+            Score
+            <span pointer ng-click='signatureScoreHelp($event)'>(?)</span>
+          </th>
           <th>Selected Parses</th>
           <th>Rejected Parses</th>
           <th>Selected Match Counts</th>
@@ -199,7 +209,8 @@
         </thead>
         <tr ng-repeat='tuple in recordio_results.counts | orderBy'>
           <td>
-            <a ng-href='https://wikidata.org/wiki/Property:{{tuple[0]}}'>
+            <a target='_blank'
+              ng-href='https://wikidata.org/wiki/Property:{{tuple[0]}}'>
             {{tuple[0]}}
             </a>
           </td>
@@ -380,5 +391,31 @@
       </md-dialog>
     </div>
   </div>
+
+  <!-- Popover that clarifies signature score computation -->
+  <div style="visibility: hidden">
+    <div class="md-dialog-container" id="signatureScoreDialog">
+      <md-dialog layout-padding>
+        <h2>Aggregate Signature Score</h2>
+        <section>
+          The aggregate score for a signature is sum of the scores of all its
+          selected parses. A parse is deemed selected if it passes the selection
+          formula (if any).
+
+          This clarification is specially useful e.g. if the user is browsing
+          top signatures. A selection formula, e.g. <code>$SCORE &lt; 10</code>
+          entered by the user applies to the individual parse scores and not
+          the signature level scores. In this particular example, we will first
+          select parses with scores less than 10 and compute the signature
+          scores by summing over the parse scores, and the resulting signature
+          score could very well be more than 10.
+
+          The same logic also applies to match counts such as $NEW. They apply
+          to the individual parse counts and not the aggregated counts.
+        </section>
+      </md-dialog>
+    </div>
+  </div>
+
 </body>
 </html>

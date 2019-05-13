@@ -76,7 +76,7 @@ class FactMatcher:
     # Saves and returns the histogram as a frame.
     def as_frame(self, store):
       buckets = []
-      for match_type, count in self.counts.iteritems():
+      for match_type, count in self.counts.items():
         bucket_frame = store.frame([
           ("match_type", match_type.name),
           ("count", count),
@@ -347,16 +347,16 @@ def shell():
       store = sling.Store(kb)
       category = store.parse(value)
       output = matcher.for_parses(category, store)
-      print "%s = %s (%d members)" % \
-        (item, category.name, len(category.members))
+      print("%s = %s (%d members)" % \
+            (item, category.name, len(category.members)))
       for idx, (parse, match) in enumerate(zip(category("parse"), output)):
-        print "%d. %s" % (idx, ' '.join(parse.signature))
+        print("%d. %s" % (idx, ' '.join(parse.signature)))
         for span, span_match in zip(parse.spans, match):
-          print "  %s = (%s=%s) : %s" % \
-            (span.signature, str(list(span.pids)), span.qid, \
-             str(span_match))
-        print ""
-      print ""
+          print("  %s = (%s=%s) : %s" % \
+                (span.signature, str(list(span.pids)), span.qid, \
+                 str(span_match)))
+        print()
+      print()
       continue
 
     item = kb[item]
@@ -372,8 +372,8 @@ def shell():
     qid = kb[qid]
 
     output = matcher.for_item(item, pids, qid)
-    print item, "(" + item.name + ") :", output.name
-    print ""
+    print(item, "(" + item.name + ") :", output.name)
+    print()
 
 
 # Runs a few hard-coded fact-matching tests.
@@ -384,15 +384,15 @@ def test_fact_matcher():
 
   def error(entry, message):
     sys.stdout.write(RED)
-    print "[FAILED] ",
+    print("[FAILED] ", end='')
     sys.stdout.write(RESET)
-    print entry, ":", message
+    print(entry, ":", message)
 
   def success(entry):
     sys.stdout.write(GREEN)
-    print "[SUCCESS] ",
+    print("[SUCCESS] ", end='')
     sys.stdout.write(RESET)
-    print entry
+    print(entry)
 
   kb = load_kb("local/data/e/wiki/kb.sling")
   extractor = sling.api.FactExtractor(kb)
@@ -544,7 +544,7 @@ def test_fact_matcher():
       total_successes += 1
     else:
       error(entry, "Got %s, but expected %s" % (actual.name, expected.name))
-  print "Total successful tests: %d out of %d" % (total_successes, len(tuples))
+  print("Total successful tests: %d out of %d" % (total_successes, len(tuples)))
 
 
 if __name__ == '__main__':

@@ -162,14 +162,14 @@ class CategoryParseGenerator:
   def compute_spans(self, document, qp_counts):
     tokens = document.tokens
     size = len(tokens)
-    begin_to_spans = [[] for _ in xrange(size)]
-    for begin in xrange(size):
+    begin_to_spans = [[] for _ in range(size)]
+    for begin in range(size):
       # Ignore spans starting in punctuation.
       begin_word = tokens[begin].word
       if begin_word in string.punctuation and begin_word != "(":
         continue
 
-      for end in xrange(begin + 1, size + 1):
+      for end in range(begin + 1, size + 1):
         # Ignore spans ending in punctuation.
         end_word = tokens[begin].word
         if end_word in string.punctuation and end_word != ")":
@@ -209,7 +209,7 @@ class CategoryParseGenerator:
           qid = match.item()
           prior = match.count() * total_denom
           if qid in qp_counts:
-            for pids, count in qp_counts[qid].iteritems():
+            for pids, count in qp_counts[qid].items():
               # Ignore low frequency (pid, qid) pairs.
               if count < CategoryParseGenerator.MIN_PID_QID_COUNT:
                 continue
@@ -233,7 +233,7 @@ class CategoryParseGenerator:
     parses = {}          # i -> parses starting at token i
     parses[end] = [[]]   # no parses can start after the last token
 
-    for begin in xrange(end - 1, -1, -1):
+    for begin in range(end - 1, -1, -1):
       if len(begin_to_spans[begin]) == 0:
         # No spans start at 'begin', so report parses starting at begin + 1.
         parses[begin] = copy.copy(parses[begin + 1])

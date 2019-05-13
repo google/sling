@@ -109,7 +109,7 @@ class MatchCounts:
 
   # Merges counts and examples from 'other' into self.
   def merge(self, other):
-    for k, v in other.counts.iteritems():
+    for k, v in other.counts.items():
       self.counts[k] += v
       existing = len(self.examples[k])
       if existing < self.max_examples:
@@ -124,7 +124,7 @@ class MatchCounts:
   # Returns a dictionary representation of the counts.
   def to_dict(self):
     result = {}
-    for k, v in self.counts.iteritems():
+    for k, v in self.counts.items():
       d = {}
       d["count"] = v
       d["examples"] = [e.id for e in self.examples.get(k, [])]

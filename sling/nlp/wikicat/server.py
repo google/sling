@@ -26,12 +26,11 @@ import sling.flags as flags
 import sling.log as log
 import tempfile
 import util
-import SocketServer
 
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from collections import defaultdict
 from fact_matcher import FactMatchType
-from urlparse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs
 
 
 # Returns the list of fact match types.
@@ -47,14 +46,14 @@ class Metric:
       self.weights[t] = 0.0
 
     d = dict([x.split(':') for x in metric_str.split(',')])
-    for (k, v) in d.iteritems():
+    for (k, v) in d.items():
       self.weights[k] = float(v)
 
 
   # Returns the score of 'match_counts' as per the weights.
   def score(self, match_counts):
     s = 0.0
-    for match_type, count in match_counts.counts.iteritems():
+    for match_type, count in match_counts.counts.items():
       s += self.weights[match_type] * count
     return s
 
@@ -208,7 +207,7 @@ class SignatureResponse:
     # Statistics of unselected parses.
     self.unselected_parses = {"num": 0, "counts": util.MatchCounts()}
 
-  
+
   # Adds 'parse' to the response.
   def add(self, parse):
     for index, span in enumerate(parse.parse.spans):
@@ -241,7 +240,7 @@ class SignatureResponse:
   def error(self, message):
     self.error_message = message
 
- 
+
   # Converts the response to JSON for communicating back to the front-end.
   def to_json(self):
     data = {}
@@ -259,7 +258,7 @@ class SignatureResponse:
     ]
     data["total_spans"] = self.counts_across_spans.to_dict()
     data["selected_spans"] = self.counts_across_selected_spans.to_dict()
-    
+
     data["parses"] = [{
       "parse_id": p.id,
       "category_qid": p.category,
@@ -390,7 +389,7 @@ class RecordioResponse:
   # Returns a JSON-formatted summary of recordio generation.
   def to_json(self):
     ls = []
-    for (pid, match_type), count in self.num_facts.iteritems():
+    for (pid, match_type), count in self.num_facts.items():
       ls.append((pid, match_type, count))
     d = {}
     d["counts"] = ls
@@ -409,7 +408,7 @@ class SignatureStats:
     self.rejected = 0                  # no. of parses rejected by the formula
     self.selected = 0                  # no. of parses allowed by the formula
 
-  
+
   # Records 'parse' as a rejected parse for the signature.
   def reject_parse(self, parse):
     self.rejected += 1
@@ -452,6 +451,7 @@ class ServerGlobals:
     for index, (qid, value) in enumerate(reader):
       if (index + 1) % 20000 == 0:
         log.info("%d categories read" % index)
+      qid = qid.decode('utf-8')
       frame = self.store.parse(value)
       self.category_name_to_qid[frame.name] = qid
       self.category_frame[qid] = frame
@@ -505,8 +505,9 @@ class ServerGlobals:
           signature_stats.add_parse(parse, request)
         else:
           signature_stats.reject_parse(parse)
-      all_stats.append(signature_stats)
-    all_stats.sort(key=lambda s: s.score)
+      if signature_stats.selected > 0:
+        all_stats.append(signature_stats)
+    all_stats.sort(key=lambda s: -s.score)
 
     if request.topk >= 0:
       all_stats = all_stats[:request.topk]
@@ -548,7 +549,7 @@ class ServerGlobals:
         response.reject(parse)
 
     response.trim(request.topk)
-    return response 
+    return response
 
 
   # Handles a recordio generation request and returns a summary.
@@ -595,6 +596,14 @@ class BrowserService(BaseHTTPRequestHandler):
   }
 
 
+    # Writes 'obj', which could be bytes or a string, to the response.
+  def write(self, obj):
+    if type(obj) is bytes:
+      self.wfile.write(obj)
+    else:
+      self.wfile.write(bytes(obj, 'utf-8'))
+
+
   # Sends default HTTP response headers.
   def _set_headers(self, mimetype="text/html"):
     self.send_response(200)
@@ -607,7 +616,7 @@ class BrowserService(BaseHTTPRequestHandler):
   def parse_fact_score(self, parse, weights):
     score = 0.0
     match_counts = util.fact_matches_for_parse(parse, max_examples=0)
-    for match_type, count in match_counts.counts.iteritems():
+    for match_type, count in match_counts.counts.items():
       score += count * weights[match_type]
     return score
 
@@ -668,13 +677,15 @@ class BrowserService(BaseHTTPRequestHandler):
     self._set_headers()
 
 
-  # Overridden GET request handler. 
+  # Overridden GET request handler.
   def do_GET(self):
+    print(self.client_address)
     # Accept only local requests.
     if self.client_address[0] not in ['127.0.0.1', 'localhost']:
       return
 
     params = parse_qs(urlparse(self.path).query)
+    print(params, self.path)
     if self.path.startswith("/wikicat/"):
       (mime_type, static) = self.get_mime_type(self.path)
       if static and mime_type != "":
@@ -683,7 +694,7 @@ class BrowserService(BaseHTTPRequestHandler):
         self._set_headers(mime_type)
         path = os.getcwd() + "/sling/nlp/wikicat/app/" + self.path[9:]
         with open(path, "rb") as f:
-          self.wfile.write(f.read())
+          self.write(f.read())
       elif not static:
         self._set_headers(mime_type)
         if self.path.startswith("/wikicat/basic"):
@@ -701,7 +712,7 @@ class BrowserService(BaseHTTPRequestHandler):
         elif self.path.startswith("/wikicat/recordio?"):
           request = self.params_to_request(params)
           response = server_globals.handle_recordio(request).to_json()
-        self.wfile.write(response)
+        self.write(response)
 
 
   # Overridden method for responding to POST requests.
@@ -737,5 +748,5 @@ if __name__ == "__main__":
 
   server_address = ('', flags.arg.port)
   httpd = HTTPServer(server_address, BrowserService)
-  log.info('Starting HTTP Server on port %d' % flags.arg.port)
+  log.info('Running: http://localhost:%d/wikicat/index.html' % flags.arg.port)
   httpd.serve_forever()

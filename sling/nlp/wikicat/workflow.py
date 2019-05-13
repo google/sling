@@ -132,7 +132,7 @@ if __name__ == '__main__':
                action='store_true')
 
   flags.parse()
-  print "skip generation", flags.arg.skip_generation
+  print("skip generation", flags.arg.skip_generation)
   categories = CategoryParsingWorkflow("category-parsing", flags.arg.output)
   if not flags.arg.skip_generation:
     generated = categories.generate_parses(
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     generated = categories.generated_parses_resource()
   filtered = categories.prelim_rank_parses(generated, flags.arg.topk)
   matched = categories.attach_fact_matches(filtered)
-  print categories.wf.dump()
+  print(categories.wf.dump())
 
   start_monitor(flags.arg.port)
   categories.wf.start()

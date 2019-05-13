@@ -45,6 +45,17 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
     });
   }
 
+  // Function that shows clarification-text for computing signature scores.
+  $scope.signatureScoreHelp = function(ev) {
+    ev.stopPropagation();
+    $mdDialog.show({
+      contentElement: '#signatureScoreDialog',
+      parent: angular.element(document.body),
+      targetEvent: ev,
+      clickOutsideToClose: true
+    });
+  }
+
   // Returns whether there was an error in processing the previous query.
   $scope.hasError = function() {
     return $scope.query_results != null &&
