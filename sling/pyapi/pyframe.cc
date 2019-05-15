@@ -203,7 +203,7 @@ PyObject *PyFrame::GetAttr(PyObject *key) {
   PyErr_Clear();
 
   // Get attribute name.
-  const char *name = PyUnicode_AsUTF8(key);
+  const char *name = GetString(key);
   if (name == nullptr) return nullptr;
 
   // Lookup role.
@@ -220,7 +220,7 @@ int PyFrame::SetAttr(PyObject *key, PyObject *v) {
   if (!Writable()) return -1;
 
   // Get role name.
-  const char *name = PyUnicode_AsUTF8(key);
+  const char *name = GetString(key);
   if (name == nullptr) return -1;
 
   // Lookup role.

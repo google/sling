@@ -125,6 +125,15 @@ struct PyBase : public PyVarObject {
     return PyUnicode_FromStringAndSize(text.data(), text.size());
   }
 
+  // Get string from Python string or bytes.
+  static const char *GetString(PyObject *obj) {
+    if (PyBytes_Check(obj)) {
+      return PyBytes_AsString(obj);
+    } else {
+      return PyUnicode_AsUTF8(obj);
+    }
+  }
+
   // Type checking.
   static bool TypeCheck(PyObject *object, PyTypeObject *type) {
     if (!PyObject_TypeCheck(object, type)) {

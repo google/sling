@@ -240,7 +240,7 @@ Py_ssize_t PyStore::Size() {
 
 PyObject *PyStore::Lookup(PyObject *key) {
   // Get symbol name.
-  const char *name = PyUnicode_AsUTF8(key);
+  const char *name = GetString(key);
   if (name == nullptr) return nullptr;
 
   // Lookup name in symbol table.
@@ -261,7 +261,7 @@ PyObject *PyStore::Resolve(PyObject *object) {
 
 int PyStore::Contains(PyObject *key) {
   // Get symbol name.
-  const char *name = PyUnicode_AsUTF8(key);
+  const char *name = GetString(key);
   if (name == nullptr) return -1;
 
   // Lookup name in symbol table.
@@ -510,7 +510,7 @@ Handle PyStore::Value(PyObject *object) {
 
 Handle PyStore::RoleValue(PyObject *object, bool existing) {
   if (PyUnicode_Check(object)) {
-    const char *name = PyUnicode_AsUTF8(object);
+    const char *name = GetString(object);
     if (name == nullptr) return Handle::error();
     if (existing) {
       return store->LookupExisting(name);
@@ -524,7 +524,7 @@ Handle PyStore::RoleValue(PyObject *object, bool existing) {
 
 Handle PyStore::SymbolValue(PyObject *object) {
   if (PyUnicode_Check(object)) {
-    const char *name = PyUnicode_AsUTF8(object);
+    const char *name = GetString(object);
     if (name == nullptr) return Handle::error();
     return store->Symbol(name);
   } else {

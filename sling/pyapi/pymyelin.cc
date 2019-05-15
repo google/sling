@@ -361,9 +361,9 @@ bool PyCompiler::ImportAttributes(PyObject *obj, Attributes *attrs) {
   PyObject *pyname;
   PyObject *pyvalue;
   while (PyDict_Next(pyattrs, &pos, &pyname, &pyvalue)) {
-    const char *name = PyUnicode_AsUTF8(pyname);
+    const char *name = GetString(pyname);
     if (name == nullptr) return false;
-    const char *value = PyUnicode_AsUTF8(pyvalue);
+    const char *value = GetString(pyvalue);
     if (value == nullptr) return false;
     attrs->SetAttr(name, value);
   }
@@ -373,7 +373,7 @@ bool PyCompiler::ImportAttributes(PyObject *obj, Attributes *attrs) {
 
 const char *PyCompiler::PyStrAttr(PyObject *obj, const char *name) {
   PyObject *attr = PyAttr(obj, name);
-  const char *str = attr == Py_None ? "" : PyUnicode_AsUTF8(attr);
+  const char *str = attr == Py_None ? "" : GetString(attr);
   CHECK(str != nullptr) << name;
   Py_DECREF(attr);
   return str;
@@ -510,7 +510,7 @@ int PyNetwork::SetTensor(PyObject *key, PyObject *value) {
 
 PyObject *PyNetwork::LookupCell(PyObject *key) {
   // Get cell name.
-  const char *name = PyUnicode_AsUTF8(key);
+  const char *name = GetString(key);
   if (name == nullptr) return nullptr;
 
   // Look up cell in network.
@@ -544,14 +544,14 @@ Tensor *PyNetwork::FindTensor(PyObject *key, const Cell *cell) {
       return nullptr;
     }
     tensor = params[index];
-  } else if (PyUnicode_Check(key)) {
-    const char *name = PyUnicode_AsUTF8(key);
+  } else if (PyUnicode_Check(key) || PyBytes_Check(key)) {
+    const char *name = GetString(key);
     if (name == nullptr) return nullptr;
     tensor = net->LookupParameter(name);
   } else {
     PyObject *repr = PyObject_Repr(key);
     if (repr == nullptr) return nullptr;
-    const char *name = PyUnicode_AsUTF8(repr);
+    const char *name = GetString(repr);
     if (name == nullptr) {
       Py_DECREF(repr);
       return nullptr;

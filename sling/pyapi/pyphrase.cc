@@ -120,7 +120,7 @@ void PyPhraseTable::Dealloc() {
 
 PyObject *PyPhraseTable::Lookup(PyObject *obj) {
   // Get phrase.
-  const char *phrase = PyUnicode_AsUTF8(obj);
+  const char *phrase = GetString(obj);
   if (phrase == nullptr) return nullptr;
 
   // Compute phrase fingerprint.
@@ -141,7 +141,7 @@ PyObject *PyPhraseTable::Lookup(PyObject *obj) {
 
 PyObject *PyPhraseTable::Query(PyObject *obj) {
   // Get phrase.
-  const char *phrase = PyUnicode_AsUTF8(obj);
+  const char *phrase = GetString(obj);
   if (phrase == nullptr) return nullptr;
 
   // Compute phrase fingerprint.
@@ -164,7 +164,7 @@ PyObject *PyPhraseTable::Query(PyObject *obj) {
 
 PyObject *PyPhraseTable::Fingerprint(PyObject *obj) {
   // Get phrase.
-  const char *phrase = PyUnicode_AsUTF8(obj);
+  const char *phrase = GetString(obj);
   if (phrase == nullptr) return nullptr;
 
   // Compute phrase fingerprint.
@@ -176,7 +176,7 @@ PyObject *PyPhraseTable::Fingerprint(PyObject *obj) {
 
 PyObject *PyPhraseTable::Form(PyObject *obj) {
   // Get phrase.
-  const char *phrase = PyUnicode_AsUTF8(obj);
+  const char *phrase = GetString(obj);
   if (phrase == nullptr) return nullptr;
 
   // Determine case form.
