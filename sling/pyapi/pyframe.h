@@ -76,6 +76,7 @@ struct PyFrame : public PyBase, public Root {
 
   // Return frame as string.
   PyObject *Str();
+  PyObject *Repr();
 
   // Return frame in ascii or binary encoding.
   PyObject *Data(PyObject *args, PyObject *kw);

@@ -19,11 +19,11 @@ import sling
 
 parser = sling.Parser("caspar.flow")
 
-text = raw_input("text: ")
+text = input("text: ")
 doc = parser.parse(text)
 print doc.frame.data(pretty=True)
 for m in doc.mentions:
-  print "mention", doc.phrase(m.begin, m.end)
+  print("mention", doc.phrase(m.begin, m.end))
 ```
 
 ## Installation
