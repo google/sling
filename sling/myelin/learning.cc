@@ -107,6 +107,40 @@ void Optimizer::Build(Flow *flow) {
     gradmap[var] = tf.Ref(instance_[func], dvar);
   }
 
+  // Optionally add gradient clipping.
+  if (clipping_threshold_ != 0.0 && !gradmap.empty()) {
+    auto *threshold = tf.Name(tf.Const(clipping_threshold_), "threshold");
+    if (local_clipping_) {
+      // Clip each weight tensor separately.
+      for (auto &it : gradmap) {
+        auto &dv = it.second;
+        auto *norm = tf.Norm(dv);
+        auto *clip = tf.Div(threshold, tf.Maximum(norm, threshold));
+        dv = tf.Mul(dv, clip);
+      }
+    } else {
+      // Compute global norm over all gradient tensors.
+      Flow::Variable *sum = nullptr;
+      for (auto &it : gradmap) {
+        auto &dv = it.second;
+        auto *squared_sum = tf.Sum(tf.Square(dv));
+        if (sum == nullptr) {
+          sum = squared_sum;
+        } else {
+          sum = tf.Add(sum, squared_sum);
+        }
+      }
+      auto *norm = tf.Sqrt(sum);
+
+      // Clip gradients by global norm.
+      auto *clip = tf.Div(threshold, tf.Maximum(norm, threshold));
+      for (auto &it : gradmap) {
+        auto &dv = it.second;
+        dv = tf.Mul(dv, clip);
+      }
+    }
+  }
+
   // Build optimizer.
   BuildOptimizer(gradmap, &tf);
 
@@ -152,34 +186,17 @@ void GradientDescentOptimizer::BuildOptimizer(const GradientMap &gradmap,
   auto *alpha = tf.Var("alpha", DT_FLOAT, {})->set_in()->set_out();
   auto *multiplier = tf.Neg(alpha);
 
-  // Optionally add hyperparameter for gradient clipping.
-  Flow::Variable *threshold = nullptr;
-  if (clipping_threshold_ != 0.0) {
-    threshold = tf.Name(tf.Const(clipping_threshold_), "threshold");
-  }
-
   // Update learnable variables from gradients.
   for (auto it : gradmap) {
     auto *v = it.first;
     auto *dv = it.second;
 
-    // Optionally add clipping.
-    auto *weight = multiplier;
-    if (threshold != nullptr) {
-      // Compute L2 norm of threshold.
-      auto *norm = tf.Norm(dv);
-
-      // Compute clipping factor.
-      auto *clip = tf.Div(threshold, tf.Maximum(norm, threshold));
-      weight = tf.Mul(multiplier, clip);
-    }
-
     // Add scaled gradient to parameters.
     if (lambda_ != 0.0) {
       tf.Assign(v, tf.Add(tf.Mul(tf.Sub(tf.One(), tf.Const(lambda_)), v),
-                          tf.Mul(dv, weight)));
+                          tf.Mul(dv, multiplier)));
     } else {
-      tf.AssignAdd(v, tf.Mul(dv, weight));
+      tf.AssignAdd(v, tf.Mul(dv, multiplier));
     }
   }
 }
@@ -210,12 +227,6 @@ void MomentumOptimizer::BuildOptimizer(const GradientMap &gradmap,
   auto *alpha = tf.Var("alpha", DT_FLOAT, {})->set_in()->set_out();
   auto *gamma = tf.Name(tf.Const(momentum_), "gamma");
 
-  // Optionally add hyperparameter for gradient clipping.
-  Flow::Variable *threshold = nullptr;
-  if (clipping_threshold_ != 0.0) {
-    threshold = tf.Name(tf.Const(clipping_threshold_), "threshold");
-  }
-
   // Update learnable variables from gradients.
   int i = 0;
   for (auto it : gradmap) {
@@ -226,19 +237,8 @@ void MomentumOptimizer::BuildOptimizer(const GradientMap &gradmap,
     auto *v_in = tf.Var("vin" + std::to_string(i), DT_FLOAT, var->shape);
     v_in->set_in()->set_ref();
 
-    // Optionally add clipping.
-    Flow::Variable *clip = nullptr;
-    if (threshold != nullptr) {
-      // Compute L2 norm of threshold.
-      auto *norm = tf.Norm(dv);
-
-      // Compute clipping factor.
-      clip = tf.Div(threshold, tf.Maximum(norm, threshold));
-    }
-
     // Blend current and new update.
     auto *v_out = tf.Add(tf.Mul(gamma, v_in), tf.Mul(alpha, dv));
-    if (clip != nullptr) v_out = tf.Mul(v_out, clip);
     v_out->set_out();
     tf.Name(v_out, "vout" + std::to_string(i));
 
@@ -306,38 +306,20 @@ void AdamOptimizer::BuildOptimizer(const GradientMap &gradmap,
   auto *lr = tf.Mul(alpha, tf.Div(tf.Sqrt(tf.Sub(tf.One(), beta2_t)),
                                   tf.Sub(tf.One(), beta1_t)));
 
-  // Optionally add hyperparameter for gradient clipping.
-  Flow::Variable *threshold = nullptr;
-  if (clipping_threshold_ != 0.0) {
-    threshold = tf.Name(tf.Const(clipping_threshold_), "threshold");
-  }
-
   // Update learnable variables from gradients.
   int i = 0;
   for (auto it : gradmap) {
     auto *var = it.first;
     auto *dv = it.second;
 
-    // Optionally add clipping.
-    Flow::Variable *clip = nullptr;
-    if (threshold != nullptr) {
-      // Compute L2 norm of threshold.
-      auto *norm = tf.Norm(dv);
-
-      // Compute clipping factor.
-      clip = tf.Div(threshold, tf.Maximum(norm, threshold));
-    }
-
     // Aggregate mean and variance.
     auto *m_var = tf.Var("m" + std::to_string(i), dv->type, dv->shape);
     auto *mw = one_minus_beta1;
-    if (clip != nullptr) mw = tf.Mul(mw, clip);
     auto *m = tf.Accumulate(m_var, tf.Add(tf.Mul(m_var, beta1),
                                           tf.Mul(dv, mw)));
 
     auto *v_var = tf.Var("v" + std::to_string(i), dv->type, dv->shape);
     auto *vw = one_minus_beta2;
-    if (clip != nullptr) vw = tf.Mul(vw, clip);
     auto *v = tf.Accumulate(v_var, tf.Add(tf.Mul(v_var, beta2),
                                           tf.Square(tf.Mul(dv, vw))));
 

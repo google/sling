@@ -78,6 +78,14 @@ class Optimizer {
   // Data instance for optimizer.
   Instance *data() const { return data_; }
 
+  // Norm clipping threshold.
+  float clipping_threshold() const { return clipping_threshold_; }
+  void set_clipping_threshold(float t) { clipping_threshold_ = t; }
+
+  // Local or global norm clipping.
+  bool local_clipping() const { return local_clipping_; }
+  void set_local_clipping(bool b) { local_clipping_ = b; }
+
  protected:
   // Let subclass build the parameter update using the gradient map.
   virtual void BuildOptimizer(const GradientMap &gradmap,
@@ -100,6 +108,9 @@ class Optimizer {
 
   // Data instance for updating the learnable parameters from the gradients.
   Instance *data_ = nullptr;
+
+  float clipping_threshold_ = 0.0;  // norm clipping threshold (0=no clipping)
+  bool local_clipping_ = false;     // compute norm per tensor
 };
 
 // Stochastic gradient descent optimizer.
@@ -120,10 +131,6 @@ class GradientDescentOptimizer : public Optimizer {
   float lambda() const { return lambda_; }
   void set_lambda(float lambda) { lambda_ = lambda; }
 
-  // Norm clipping threshold.
-  float clipping_threshold() const { return clipping_threshold_; }
-  void set_clipping_threshold(float t) { clipping_threshold_ = t; }
-
  protected:
   void BuildOptimizer(const GradientMap &gradmap, FlowBuilder *update) override;
   void InitializeOptimizer() override;
@@ -131,7 +138,6 @@ class GradientDescentOptimizer : public Optimizer {
   Tensor *alpha_ = nullptr;         // current learning rate
   float lr_ = 0.01;                 // initial learning rate
   float decay_  = 1.0;              // learning rate decay
-  float clipping_threshold_ = 0.0;  // norm clipping threshold (0=no clipping)
   float lambda_ = 0.0;              // regularization parameter (0=none)
 };
 
@@ -154,10 +160,6 @@ class MomentumOptimizer : public Optimizer {
   float decay() const { return decay_; }
   void set_decay(float decay) { decay_ = decay; }
 
-  // Norm clipping threshold.
-  float clipping_threshold() const { return clipping_threshold_; }
-  void set_clipping_threshold(float t) { clipping_threshold_ = t; }
-
   // Momentum for blending in previous updates.
   float momentum() const { return momentum_; }
   void set_momentum(float momentum) { momentum_ = momentum; }
@@ -170,7 +172,6 @@ class MomentumOptimizer : public Optimizer {
   float lr_ = 0.01;                 // initial learning rate
   float decay_  = 1.0;              // learning rate decay
   float momentum_ = 0.9;            // blending ratio for previous update
-  float clipping_threshold_ = 0.0;  // norm clipping threshold (0=no clipping)
   int num_linked_ = 0;              // number of linked updates
 };
 
@@ -192,10 +193,6 @@ class AdamOptimizer : public Optimizer {
   // Learning rate decay.
   float decay() const { return decay_; }
   void set_decay(float decay) { decay_ = decay; }
-
-  // Norm clipping threshold.
-  float clipping_threshold() const { return clipping_threshold_; }
-  void set_clipping_threshold(float t) { clipping_threshold_ = t; }
 
   // The exponential decay rate for the first moment estimates.
   float beta1() const { return beta1_; }
@@ -220,8 +217,6 @@ class AdamOptimizer : public Optimizer {
   float beta1_ = 0.9;               // mean decay rate
   float beta2_ = 0.999;             // variance decay rate
   float epsilon_ = 1e-8;            // underflow correction
-
-  float clipping_threshold_ = 0.0;  // norm clipping threshold (0=no clipping)
 };
 
 }  // namespace myelin
