@@ -22,9 +22,9 @@ class ExtractWikipediaDates:
   def __init__(self):
     self.kb = sling.Store()
     self.kb.lockgc()
-    print "loading kb"
+    print("loading kb")
     self.kb.load("local/data/e/wiki/kb.sling")
-    print "kb loaded"
+    print("kb loaded")
     self.instanceof = self.kb['P31']
     self.date_of_birth = self.kb['P569']
     self.date_of_death = self.kb['P570']
@@ -102,7 +102,7 @@ class ExtractWikipediaDates:
 
     for i in range(10):
       i_file = "local/data/e/wiki/en/documents-0000"+str(i)+"-of-00010.rec"
-      print i_file, records
+      print(i_file, records)
       for (item_id, record) in sling.RecordReader(i_file):
         item = self.kb[item_id]
         if self.human not in item(self.instanceof): continue
@@ -174,7 +174,7 @@ class ExtractWikipediaDates:
         })
         record_file.write(item.id, fact.data(binary=True))
     record_file.close()
-    print records, "birth/death date records written to file:", self.out_file
+    print(records, "birth/death date records written to file:", self.out_file)
 
 if __name__ == '__main__':
   flags.parse()

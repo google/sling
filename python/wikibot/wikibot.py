@@ -27,7 +27,7 @@ flags.define("--first",
 
 flags.define("--last",
              help="last record to update",
-             default=sys.maxint,
+             default=sys.maxsize,
              type=int)
 
 flags.define("--test",
@@ -72,9 +72,9 @@ class StoreFactsBot:
 
     self.store = sling.Store()
     self.store.lockgc()
-    print "loading kb"
+    print("loading kb")
     self.store.load("local/data/e/wiki/kb.sling")
-    print "kb loaded"
+    print("kb loaded")
 
     self.page_cat = self.store["/wp/page/category"]
 
@@ -99,7 +99,7 @@ class StoreFactsBot:
                  'sv': 'Q169514',  'it': 'Q11920',  'no': 'Q191769'}
     self.languages = self.wiki.keys()
     self.wiki_sources = {}
-    for lang, wp in self.wiki.iteritems():
+    for lang, wp in self.wiki.items():
       # P143 means 'imported from Wikimedia project'
       source_claim = pywikibot.Claim(self.repo, "P143")
       target = pywikibot.ItemPage(self.repo, wp)
@@ -189,7 +189,7 @@ class StoreFactsBot:
     return False
 
   def log_status_skip(self, item, facts, error):
-    print "Skipping", str(item), " -- ", str(facts), error
+    print("Skipping", str(item), " -- ", str(facts), error)
     status_record = self.rs.frame({
       self.n_item: item,
       self.n_facts: facts,
@@ -198,7 +198,7 @@ class StoreFactsBot:
     self.status_file.write(str(item), status_record.data(binary=True))
 
   def log_status_stored(self, item, facts, rev_id):
-    print "Storing", str(item), " -- ", str(facts)
+    print("Storing", str(item), " -- ", str(facts))
     url = "https://www.wikidata.org/w/index.php?title="
     url += str(item)
     url += "&type=revision&diff="
@@ -231,16 +231,17 @@ class StoreFactsBot:
   def store_records(self, records, batch_size=3):
     updated = 0
     recno = 0
-    for item_str, record in records:
+    for item_bytes, record in records:
+      item_str = item_bytes.decode()
       recno += 1
       if recno < flags.arg.first:
-        print "Skipping record number", recno
+        print("Skipping record number", recno)
         continue
       if recno > flags.arg.last: break
       if updated >= batch_size:
-        print "Hit batch size of", batch_size
+        print("Hit batch size of", batch_size)
         break
-      print "Processing https://www.wikidata.org/wiki/" + item_str
+      print("Processing https://www.wikidata.org/wiki/" + item_str)
       fact_record = self.rs.parse(record)
       item = fact_record[self.n_item]
       facts = fact_record[self.n_facts]
@@ -307,7 +308,7 @@ class StoreFactsBot:
             target = pywikibot.ItemPage(self.repo, val)
           else:
             # TODO add location and possibly other types
-            print "Error: Unknown claim type", claim.type
+            print("Error: Unknown claim type", claim.type)
             continue
         else: # property not unique
           if claim.type == 'wikibase-item':
@@ -319,7 +320,7 @@ class StoreFactsBot:
               continue
           else:
             # TODO add location and possibly other types
-            print "Error: Unknown claim type", claim.type
+            print("Error: Unknown claim type", claim.type)
             continue
           if prop_str in wd_claims:
             old_fact = False
@@ -344,8 +345,8 @@ class StoreFactsBot:
           claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
-      print item, recno
-    print "Last record:", recno, "Total:", updated, "records updated."
+      print(item, recno)
+    print("Last record:", recno, "Total:", updated, "records updated.")
 
 
   def run(self):
