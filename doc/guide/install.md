@@ -55,7 +55,7 @@ This will perform the following steps:
 The parser trainer uses PyTorch for training, so it also needs to be installed:
 
 ```shell
-sudo pip3 install http://download.pytorch.org/whl/cpu/torch-0.3.1-cp35-cp35mu-linux_x86_64.whl
+sudo pip3 install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl
 ```
 
 ## Building
