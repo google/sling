@@ -35,12 +35,12 @@ def frame_evaluation(gold_corpus_path, test_corpus_path, commons):
   eval_output = {}
   for metric in metrics:
     name = metric[0]
-    print "Evaluation Metric: ", metric
+    print("Evaluation Metric: ", metric)
     eval_output[name] = metric[1]
     if name == "SLOT_F1":
       eval_output['eval_metric'] = metric
 
-  assert eval_output.has_key('eval_metric'), "%r" % str(eval_output)
+  assert 'eval_metric' in eval_output, "%r" % str(eval_output)
   return eval_output
 
 

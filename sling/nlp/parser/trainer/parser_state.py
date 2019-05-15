@@ -71,7 +71,7 @@ class ParserState:
     self.elaborate = []              # current elaborated frames
 
     # Token -> Spans over it.
-    self.token_to_spans = [[] for _ in xrange(len(document.tokens))]
+    self.token_to_spans = [[] for _ in range(len(document.tokens))]
 
 
   # Returns a string representation of the parser state.
@@ -101,7 +101,7 @@ class ParserState:
     del self.graph
     self.graph = []
     limit = min(self.spec.frame_limit, len(self.attention))
-    for i in xrange(limit):
+    for i in range(limit):
       frame = self.attention[i]
       for role, value in frame.edges:
         role_id = self.spec.actions.role_indices.get(role, None)
@@ -127,7 +127,7 @@ class ParserState:
 
   # Returns whether [start, end) crosses an existing span.
   def _crosses(self, start, end):
-    for token in xrange(start, end):
+    for token in range(start, end):
       for s in self.token_to_spans[token]:
         if (s.start - start) * (s.end - end) > 0:
           return True
@@ -141,7 +141,7 @@ class ParserState:
     cover = [None] * len(self.document.tokens)
     for s in spans:
       c = cover[s[0]]
-      for i in xrange(s[0], s[1]):
+      for i in range(s[0], s[1]):
         assert c == cover[i], (c, cover[i], spans, self.actions)
         cover[i] = s
 
@@ -219,7 +219,7 @@ class ParserState:
 
   # Returns the attention index of 'frame'.
   def index(self, frame):
-    for i in xrange(len(self.attention)):
+    for i in range(len(self.attention)):
       if self.attention[i] is frame:
         return i
     return -1
@@ -345,7 +345,7 @@ class ParserState:
           assert type(value) == sling.Frame, "%r" % value
           frame.append(role, value)
 
-    for _, s in self.spans.iteritems():
+    for _, s in self.spans.items():
       # Note: mention.frame is the actual mention frame.
       mention = document.add_mention(s.start, s.end)
       for f in s.evoked:
@@ -397,7 +397,7 @@ class ParserState:
     if existing is not None: return existing
     s = ParserState.Span(begin, end - begin)
     self.spans[key] = s
-    for i in xrange(begin, end):
+    for i in range(begin, end):
       self.token_to_spans[i].append(s)
     return s
 

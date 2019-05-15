@@ -108,14 +108,14 @@ class Lexicon:
 
   # Returns a string representation of the lexicon.
   def __str__(self):
-    s = [self.index_to_item[i] for i in xrange(self.size())]
+    s = [self.index_to_item[i] for i in range(self.size())]
     return "\n".join(s)
 
 
   # Returns the string representation of the first 'n' keys in the lexicon.
   def first_few(self, prefix="", n=100):
     s = []
-    for i in xrange(min(n, self.size())):
+    for i in range(min(n, self.size())):
       s.append(prefix + str(i) + " = " + self.index_to_item[i])
     return "\n".join(s)
 

@@ -41,14 +41,14 @@ def train(args):
   if args.commons == '' or not os.path.exists(args.commons):
     if args.commons == '':
       fname = os.path.join(args.output_folder, "commons")
-      print "Will create a commons store at", fname
+      print("Will create a commons store at", fname)
       args.commons = fname
     else:
-      print "No commons found at", args.commons, ", creating it..."
+      print("No commons found at", args.commons, ", creating it...")
     _, symbols = commons_builder.build(
       [args.train_corpus, args.dev_corpus], args.commons)
-    print "Commons created at", args.commons, "with", len(symbols), \
-      "symbols besides the usual ones."
+    print("Commons created at", args.commons, "with", len(symbols), \
+        "symbols besides the usual ones.")
 
   # Make the training spec.
   spec = Spec()
@@ -68,7 +68,7 @@ def train(args):
 
   output_file_prefix = os.path.join(args.output_folder, "caspar")
   hyperparams = Hyperparams(args)
-  print "Using hyperparameters:", hyperparams
+  print("Using hyperparameters:", hyperparams)
 
   trainer = Trainer(caspar, hyperparams, evaluator, output_file_prefix)
   train = Corpora(args.train_corpus, spec.commons, gold=True)

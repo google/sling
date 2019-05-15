@@ -90,7 +90,7 @@ class Action:
     }
 
     s = names[self.type]
-    for k, v in sorted(self.__dict__.iteritems()):
+    for k, v in sorted(self.__dict__.items()):
       if v is not None and k != "type":
         if s != "":
           s = s + ", "

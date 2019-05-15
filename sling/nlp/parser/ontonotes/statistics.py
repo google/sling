@@ -81,7 +81,7 @@ class Histogram:
     def mark(self):
       self._mark = True
 
-    
+
   # Initializes the histogram.
   def __init__(self, name, max_examples=-1, max_examples_per_bin=0):
     self.name = name
@@ -115,7 +115,7 @@ class Histogram:
     if key not in self.bins:
       self.bins[key] = Histogram.Bin()
     self.bins[key].mark()
-    
+
   # Increments the count of bin 'key' and also stores an example for it.
   def increment(self, key, count=1, example=None):
     self.total += count
@@ -154,7 +154,7 @@ class Histogram:
       output.append('')
 
     # Output bin counts in requested order.
-    items = self.bins.items()
+    items = list(self.bins.items())
 
     if self._sort_by in ['count', 'value']:
       # Sort in descending order of count.
@@ -166,7 +166,7 @@ class Histogram:
     length = len(items)
     running_total = 0
     denom = self.total / 100.0
-    for i in xrange(length):
+    for i in range(length):
       key, val = items[i]
       skip = self._max_output_bins >= 0 and i != length - 1 \
           and i >= self._max_output_bins

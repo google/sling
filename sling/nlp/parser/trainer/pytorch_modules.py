@@ -177,7 +177,7 @@ class DragnnLSTM(nn.Module):
     cell = []
 
     length = input_tensors.size(0)
-    for i in xrange(length):
+    for i in range(length):
       (h, c) = self.forward_one_step(input_tensors[i].view(1, -1), h, c)
       hidden.append(h)
       cell.append(c)
@@ -202,8 +202,8 @@ class DragnnLSTM(nn.Module):
       var = fl.var(func_name + "/" + p)
       param = getattr(self, "_" + p)
       parameter_from_flow(var, param)
-    
-    
+
+
   # Returns a string specification of the module.
   def __repr__(self):
     return self.__class__.__name__ + "(in=" + str(self.input_dim) + \
@@ -244,17 +244,17 @@ class Losses:
       self.losses[delegate_index] = [Var(torch.Tensor([0.0])), 0]
     self.losses[delegate_index][0] += step_loss
     self.losses[delegate_index][1] += count
-    
+
   # Adds losses in 'other' to itself.
   def aggregate(self, other):
-    for delegate, value in other.losses.iteritems():
+    for delegate, value in other.losses.items():
       self.add(delegate, value[0], value[1])
 
   # Returns (total loss, total number of transitions).
   def total(self):
     loss = 0
     count = 0
-    for _,v in self.losses.iteritems():
+    for _,v in self.losses.items():
       loss += v[0]
       count += v[1]
     return (loss, count)
@@ -282,13 +282,11 @@ class Losses:
     output = {}
     total = 0
     total_count = 0
-    for k,v in self.losses.iteritems():
+    for k,v in self.losses.items():
       output[k] = (v[0].data[0], v[1])
       total += v[0].data[0]
       total_count += v[1]
-      assert type(total) is float 
-      assert type(total_count) is int
-    output["total"] = (total, total_count)
+    output["total"] = (total.item(), total_count)
     return output
 
 
@@ -344,16 +342,16 @@ class Caspar(nn.Module):
 
     # Only regularize the FF hidden layer weights.
     self.regularized_params = [self.ff_layer.weight]
-    print "Caspar:", self
+    print("Caspar:", self)
 
-  
+
   # Prints the first and last few elements of each parameter.
   def print_parameters(self):
     for name, p in self.named_parameters():
       tensor = p.data.view([-1]).numpy()
       s1 = ["%.3f" % f for f in tensor[0:5]]
       s2 = ["%.3f" % f for f in tensor[-5:]]
-      print name, ' '.join(s1), "...", ' '.join(s2)
+      print(name, ' '.join(s1), "...", ' '.join(s2))
 
 
   # Initializes various module parameters.
@@ -382,8 +380,8 @@ class Caspar(nn.Module):
 
         # Copy the normalized embeddings at appropriate indices.
         matrix.index_copy_(0, indices, data)
-        print "Overwrote", len(word_embeddings), f.name, \
-            "embedding vectors with normalized pre-trained vectors."
+        print("Overwrote", len(word_embeddings), f.name, \
+            "embedding vectors with normalized pre-trained vectors.")
 
     # Initialize the FF's fixed and link embeddings like those in the LSTMs.
     for f in self.spec.ff_fixed_features:
@@ -597,7 +595,7 @@ class Caspar(nn.Module):
               final = shift
               if state.current == state.end:
                 final = stop
-                
+
           if trace:
             trace.action(best, final)
           if not final.is_cascade():
@@ -777,4 +775,3 @@ class Caspar(nn.Module):
       best.shape = [1]
       best_op.add_output(best)
       best.producer.add_attr("output", 1)
-

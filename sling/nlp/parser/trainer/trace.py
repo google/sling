@@ -89,7 +89,7 @@ class Trace:
     store = self.document.store
     tokens = self.document.tokens
     frames = []
-    for i in xrange(len(tokens)):
+    for i in range(len(tokens)):
       frames.append(store.frame(\
         {"/trace/index": i, "/trace/token": tokens[i].word}))
 
@@ -169,7 +169,7 @@ if __name__ == "__main__":
       # Sanity check: the two documents should have the same tokens.
       if len(base_doc.tokens) != len(expt_doc.tokens):
         self.error('Differing number of tokens at document %d' % index)
-      for i in xrange(len(base_doc.tokens)):
+      for i in range(len(base_doc.tokens)):
         self.check_eq(base_doc.tokens[i].word, expt_doc.tokens[i].word, \
           'token %d word' % i)
         self.check_eq(base_doc.tokens[i].brk, expt_doc.tokens[i].brk, \
@@ -188,7 +188,7 @@ if __name__ == "__main__":
           f.write(self.expt_doc.frame.data(pretty=True))
           f.write('\n\n')
           f.write(message)
-          print "One pair of differing docs written to", self.diff_file
+          print("One pair of differing docs written to", self.diff_file)
       raise ValueError(message)
 
     # Checks that lhs == rhs.
@@ -257,7 +257,7 @@ if __name__ == "__main__":
       base_lstm = base["/trace/lstm_features"]
       expt_lstm = expt["/trace/lstm_features"]
       checker.check_eq(len(base_lstm), len(expt_lstm), "LSTM Features Length")
-      for i in xrange(len(base_lstm)):
+      for i in range(len(base_lstm)):
         checker.frame_eq(base_lstm[i], expt_lstm[i], \
           "LSTM features for token %d (%s)" % (i, base_doc.tokens[i].word))
 
@@ -265,7 +265,7 @@ if __name__ == "__main__":
       base_steps = base["/trace/steps"]
       expt_steps = expt["/trace/steps"]
       min_steps = min(len(base_steps), len(expt_steps))
-      for i in xrange(min_steps):
+      for i in range(min_steps):
         message = "Step %d's current token index" % i
         checker.check_eq(base_steps[i]["/trace/current"], \
           expt_steps[i]["/trace/current"], message)
@@ -278,19 +278,19 @@ if __name__ == "__main__":
 
         base_dict = {f["/trace/feature"] : f["/trace/values"] for f in base_ff}
         expt_dict = {f["/trace/feature"] : f["/trace/values"] for f in expt_ff}
-        for k, v in base_dict.iteritems():
+        for k, v in base_dict.items():
           checker.check_eq(k in expt_dict, True, \
             "Step %d: FF feature %s not in expt" % (i, k))
           checker.check_eq(v, expt_dict[k], \
             "Step %d: FF feature %s has a different value in expt" % (i, k))
-        for k, v in expt_dict.iteritems():
+        for k, v in expt_dict.items():
           checker.check_eq(k in base_dict, True, \
             "Step %d: FF feature %s not in base" % (i, k))
 
         # Check action(s) in the step.
         base_actions = base_steps[i]["/trace/actions"]
         expt_actions = expt_steps[i]["/trace/actions"]
-        for idx in xrange(min(len(base_actions), len(expt_actions))):
+        for idx in range(min(len(base_actions), len(expt_actions))):
           checker.frame_eq(base_actions[idx]["/trace/predicted"], \
             expt_actions[idx]["/trace/predicted"],
             "Step %d, predicted action %d" % (i, idx),

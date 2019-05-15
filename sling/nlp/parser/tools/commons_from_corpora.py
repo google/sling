@@ -62,7 +62,7 @@ def build(recordio_filenames, output_filename, text=False):
   output = sling.Store()
   schema = sling.DocumentSchema(output)
 
-  for name, count in symbol_names.iteritems():
+  for name, count in symbol_names.items():
     output.frame({"id": name})
   output.freeze()
   output.save(output_filename, binary=not text)
@@ -90,6 +90,6 @@ if __name__ == "__main__":
   flags.parse()
   inputs = flags.arg.input.split(",")
   _, symbols = build(inputs, flags.arg.output, flags.arg.text)
-  print "Commons written to", flags.arg.output, "with", len(symbols), "symbols"
+  print("Commons written to", flags.arg.output, "with", len(symbols), "symbols")
 
 

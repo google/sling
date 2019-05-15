@@ -188,7 +188,7 @@ class SpanEnds:
 
   # Returns the last end token strictly before 'index'.
   def last_end_before(self, index):
-    for i in xrange(index - 1, -1, -1):
+    for i in range(index - 1, -1, -1):
       if self.end[i]:
         return i
     return -1
@@ -416,7 +416,7 @@ class Annotations:
 
     # Add one stack per SRL predicate in the new sentence.
     self.current_srl = []
-    for _ in xrange(num_srl_predicates):
+    for _ in range(num_srl_predicates):
       self.current_srl.append(Stack())
 
     # Set sentence index.
@@ -425,7 +425,7 @@ class Annotations:
     else:
       self.sentence += 1
 
-  
+
   # Called at the end of the document. Writes the annotations to a SLING
   # document and invokes 'callback' with it.
   def _end_document(self, callback=None):
@@ -459,7 +459,7 @@ class Annotations:
       self.write(document)
       callback(document)
 
-  
+
   # Saves the current sentence's SRL annotations.
   def _save_srl_annotations(self):
     # SRL spans should be complete.
@@ -467,7 +467,7 @@ class Annotations:
       assert stack.all_ended()
     self.srl.extend(self.current_srl)
     self.current_srl = []
- 
+
 
   # Complete the children constituents array by inserting tokens:
   # - When there are holes in the token range of the parent.
@@ -477,13 +477,13 @@ class Annotations:
       children = []
       begin = constituent.begin
       for child in constituent.children:
-        for i in xrange(begin, child.begin):
+        for i in range(begin, child.begin):
           s = self.tokens.spans[i]
           children.append(s)
           s.parent = constituent
         children.append(child)
         begin = child.end
-      for i in xrange(begin, constituent.end):
+      for i in range(begin, constituent.end):
         s = self.tokens.spans[i]
         children.append(s)
         s.parent = constituent
@@ -544,14 +544,14 @@ class Annotations:
     # Disallow existing NER spans.
     disallowed = [False] * len(self.tokens.spans)
     for span in self.ner.spans:
-      for i in xrange(span.begin, span.end):
+      for i in range(span.begin, span.end):
         disallowed[i] = True
 
     # Also disallow predicates, since we also have nominal predicates.
     for srl in self.srl:
       for span in srl.spans:
         if span.predicate:
-          for i in xrange(span.begin, span.end):
+          for i in range(span.begin, span.end):
             disallowed[i] = True
 
     # Break noun phrase expansion at conjunctions and commas.
@@ -575,9 +575,9 @@ class Annotations:
           example = (self.docid, self._phrase(added), self._pos_sequence(added))
           norm_summary.nml_titles.increment(\
             self._child_sequence(span), example=example)
-          for i in xrange(added.begin, added.end):
+          for i in range(added.begin, added.end):
             disallowed[i] = True
-        
+
     # Get noun phrase(s) from each base NML span.
     base = {}  # NML span boundaries -> base NML or not
     for span in spans:
@@ -609,7 +609,7 @@ class Annotations:
 
       # An NML span should be off-limits upon during subsequent NP-span
       # processing, so mark each NML span (base or recursive) as disallowed.
-      for i in xrange(span.begin, span.end):
+      for i in range(span.begin, span.end):
         disallowed[i] = True
 
     # Output noun phrase(s) from each base NP.
@@ -637,7 +637,7 @@ class Annotations:
           norm_summary.base_np.increment(end - begin, example=example)
 
           # Disallow the range of the added NP.
-          for i in xrange(added.begin, added.end):
+          for i in range(added.begin, added.end):
             disallowed[i] = True
 
     # Handle NPs of the form [Base NP ending in POS, token constituents].
@@ -649,7 +649,7 @@ class Annotations:
         continue
 
       other_children_tokens = True
-      for i in xrange(0, len(span.children)):
+      for i in range(0, len(span.children)):
         if i > 0 and len(span.children[i].children) > 0:
           other_children_tokens = False
           break
@@ -665,11 +665,11 @@ class Annotations:
         self.ner.start(begin, self.options.backoff_type)
         self.ner.finish(end)
         added = self.ner.spans[-1]
-        pos_seq = ' '.join([self.pos(i) for i in xrange(begin, end)])
+        pos_seq = ' '.join([self.pos(i) for i in range(begin, end)])
         example = (self.docid, \
           self._phrase(span) + " -> " + self._phrase(added), child_seq)
         norm_summary.recursive_np.increment(pos_seq, example=example)
-        for i in xrange(begin, end):
+        for i in range(begin, end):
           disallowed[i] = True
 
     # Mark pronouns.
@@ -687,7 +687,7 @@ class Annotations:
   # (S(VP*  : S and VP spans begin here.
   # (NP*))) : NP span begins and ends here, 2 other spans end here.
   # *))))   : 4 spans end here.
-  # 
+  #
   # Beginning and ending spans are assumed to be separated by '*'.
   def _parse_constituents(self, parse_bit):
     if parse_bit == '' or parse_bit == '*' or parse_bit == '-':
@@ -700,7 +700,7 @@ class Annotations:
       if begin_tag != '':
         output.append((Annotations.CONSTITUENCY_BEGIN, begin_tag))
 
-    for _ in xrange(len(parse_bit[index + 1:])):
+    for _ in range(len(parse_bit[index + 1:])):
       output.append((Annotations.CONSTITUENCY_END, ''))
 
     return output
@@ -791,11 +791,11 @@ class Annotations:
       heads[span.head] = (span, label)
     return heads
 
-  
+
   # Returns the POS sequence string for the span's token range.
   def _pos_sequence(self, span):
     seq = []
-    for i in xrange(span.begin, span.end):
+    for i in range(span.begin, span.end):
       pos = self.pos(i)
       if i == span.head: pos = '[' + pos + ']'
       seq.append(pos)
@@ -833,7 +833,7 @@ class Annotations:
           span_ends.add(span.end - 1)
         else:
           norm_summary.arguments.increment()
-    
+
     # Normalize Coref spans.
     for span in self.spans(COREF):
       if self._normalize_span(span, constituents, key="COREF", example=False):
@@ -916,7 +916,7 @@ class Annotations:
       covered = set()
       for span in srl.spans:
         if not span.predicate:
-          for t in xrange(span.begin, span.end):
+          for t in range(span.begin, span.end):
             covered.add(t)
       for span in srl.spans:
         if span.predicate and tokens[span.begin].label.startswith('VB'):
@@ -932,7 +932,7 @@ class Annotations:
       if s.end in ends and s.begin == s.end - 1:
         s.end += 1
 
- 
+
   # Summarizes CONLL annotation statistics for the current document.
   def _summarize_input(self):
     input_stats = self.summary.input
@@ -996,11 +996,11 @@ class Annotations:
       input_stats.coref_length.increment(span.length())
       clusters.setdefault(span.label, []).append(span)
     input_stats.clusters.increment(len(clusters))
-    for _, cluster in clusters.iteritems():
+    for _, cluster in clusters.items():
       input_stats.coref_size.increment(len(cluster))
 
     # Compute exact span overlap statistics.
-    for span, t in span_labels.iteritems():
+    for span, t in span_labels.items():
       if len(t) == 1:
         input_stats.exact_overlaps.increment(t[0] + ' alone')
         continue
@@ -1029,7 +1029,7 @@ class Annotations:
     document.frame[constituency_schema.constituents] = constituents
 
     # Add one frame per constituent.
-    for i in xrange(len(spans)):
+    for i in range(len(spans)):
       span = spans[i]
 
       frame = store.frame({schema.isa: constituency_schema.constituent})
@@ -1074,7 +1074,7 @@ class Annotations:
 
     # Left context.
     if b < begin:
-      for i in xrange(b, begin):
+      for i in range(b, begin):
         t = self.tokens.spans[i]
         if t.brk > sling.NO_BREAK and output != '':
           output += ' '
@@ -1083,7 +1083,7 @@ class Annotations:
 
     # Span itself.
     output += '['
-    for i in xrange(begin, end):
+    for i in range(begin, end):
       t = self.tokens.spans[i]
       if t.brk > sling.NO_BREAK and i > begin:
         output += ' '
@@ -1092,7 +1092,7 @@ class Annotations:
 
     # Right context.
     if end < e:
-      for i in xrange(end, e):
+      for i in range(end, e):
         t = self.tokens.spans[i]
         if t.brk > sling.NO_BREAK and output != '':
           output += ' '
@@ -1109,7 +1109,7 @@ class Annotations:
   # Returns a span's text with the head marked with brackets.
   def _phrase_with_head(self, s):
     result = []
-    for i in xrange(s.begin, s.end):
+    for i in range(s.begin, s.end):
       word = self.tokens.spans[i].text
       if i == s.head: word = '[' + word + ']'
       result.append(word)
@@ -1120,7 +1120,7 @@ class Annotations:
   class FrameType:
     def __init__(self, span, type, refer=None):
       self.span = (span.begin, span.end)   # span itself
-      self.type = type                     # frame type          
+      self.type = type                     # frame type
       self.refer = refer                   # referring frame, only for coref
       self.frame = None                    # if already evoked, the frame
 
@@ -1206,7 +1206,7 @@ class Annotations:
     # Span -> list of FrameType objects.
     frame_types = {}
 
-    # Adds 'type' as to the list of frame types for 'span'. 
+    # Adds 'type' as to the list of frame types for 'span'.
     def _add_type(span, type, refer=None):
       key = (span.begin, span.end)
       if key not in frame_types:
@@ -1241,7 +1241,7 @@ class Annotations:
       coref[span.label].append(span)
 
     # Sort each cluster.
-    for cluster_id, cluster in coref.iteritems():
+    for cluster_id, cluster in coref.items():
       cluster.sort(key=lambda span: span.begin)
       head_type = None
       head = None
@@ -1253,7 +1253,7 @@ class Annotations:
           head = span
           head_type = frame_types[key][0]
           break
-      
+
       # Fallback to the first span, and use a generic type.
       if head is None:
         head = cluster[0]
@@ -1290,7 +1290,7 @@ class Annotations:
 
     # Start making spans and evoking frames in the document.
     # Evoke cluster head frames, followed by non-heads.
-    for cluster_id, cluster in coref.iteritems():
+    for cluster_id, cluster in coref.items():
       head = cluster_heads[cluster_id]
       _evoke(head)
       for span in cluster:

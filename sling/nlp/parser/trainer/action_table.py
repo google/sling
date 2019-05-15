@@ -164,11 +164,9 @@ class Actions:
       actions_array[index] = f
     table["/table/actions"] = actions_array
 
-    symbols = map(
-        lambda i: "/table/action/" + i,
-        ["type", "length", "source", "target", "role", "label", "delegate", \
-          "count", "disallowed"])
-    table["/table/symbols"] = symbols
+    table["/table/symbols"] = ["/table/action/" + i for i in [
+        "type", "length", "source", "target", "role", \
+        "label", "delegate", "count", "disallowed"]]
     return table
 
   # Decodes the action table afresh from 'frame'.
@@ -186,7 +184,7 @@ class Actions:
 
     actions = frame["/table/actions"]
     self.disallowed = []
-    for i in xrange(len(actions)):
+    for i in range(len(actions)):
       action = Action()
       action.from_frame(actions[i])
       self.add(action, count=actions[i]["/table/action/count"])

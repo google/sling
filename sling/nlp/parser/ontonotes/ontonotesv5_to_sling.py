@@ -301,7 +301,7 @@ class Converter:
   # Multiple consecutive tokens with the same tag T are represented as T+.
   def _pos_sequence(self, document, mention):
     seq = []
-    for i in xrange(mention.begin, mention.end):
+    for i in range(mention.begin, mention.end):
       pos = document.tokens[i].frame[document.schema.token_pos].id
       if pos.startswith('/postag/'): pos = pos[8:]
       if len(seq) == 0 or (seq[-1] != pos and seq[-1] != pos + '+'):
@@ -333,7 +333,7 @@ class Converter:
 
     frame_counts = {}
     for m in document.mentions:
-      # Histogram of evoked types. 
+      # Histogram of evoked types.
       num = len([_ for _ in m.evokes()])
       types = [f[self.schema.isa].id for f in m.evokes()]
       types.sort()
@@ -368,7 +368,7 @@ class Converter:
         frame_counts[f] += 1
 
     # Histogram of coref cluster sizes.
-    for _, count in frame_counts.iteritems():
+    for _, count in frame_counts.items():
       output.cluster_size.increment(count)
 
     # Histogram of span nesting depth.
@@ -385,7 +385,7 @@ class Converter:
       # Since we are iterating over spans in decreasing order of length,
       # all tokens in [begin, end) should be covered by the same span (if any).
       # Otherwise [begin, end) represents a crossing span.
-      for token in xrange(mention.begin, mention.end):
+      for token in range(mention.begin, mention.end):
         if covered[token] != parent:
           other = parent if parent is not None else covered[token]
           example = (docid, document.phrase(mention.begin, mention.end), \
@@ -395,10 +395,10 @@ class Converter:
       if parent is not None:
         depth = 1 + depths[(parent.begin, parent.end)]
       depths[key] = depth
-      for i in xrange(mention.begin, mention.end):
+      for i in range(mention.begin, mention.end):
         covered[i] = mention
 
-    for _, depth in depths.iteritems():
+    for _, depth in depths.items():
       output.nesting.increment(depth)
 
 # Returns true if 'filename' appears in the list of ids in 'allowed_ids'.
@@ -437,7 +437,7 @@ if __name__ == "__main__":
   options = Options()
 
   # Also add a flag per conversion option.
-  for option, value in options.__dict__.iteritems():
+  for option, value in options.__dict__.items():
     if type(value) is bool:
       assert value == True, option
       flags.define('--' + option,
@@ -456,10 +456,10 @@ if __name__ == "__main__":
                    default=value,
                    type=type(value))
   flags.parse()
-  for option, value in flags.arg.__dict__.iteritems():
+  for option, value in flags.arg.__dict__.items():
     if option in options.__dict__:
       options.__dict__[option] = value
-      print "Setting option", option, "to", value
+      print("Setting option", option, "to", value)
 
   if options.doc_per_sentence:
     assert options.skip_coref, \
@@ -484,7 +484,7 @@ if __name__ == "__main__":
         if not line.endswith('.gold_conll'):
           line += '.gold_conll'
         allowed_ids.add(line)
-    print len(allowed_ids), "allowed filenames read"
+    print(len(allowed_ids), "allowed filenames read")
 
   # Convert each file in the specified folder.
   summary = Summary()
@@ -505,10 +505,10 @@ if __name__ == "__main__":
           docid = document.frame["/ontonotes/docid"]
           writer.write(docid, document.frame.data(binary=True))
         if summary.input.files.value % 200 == 0:
-          print "Processed", summary.input.files.value, "files"
+          print("Processed", summary.input.files.value, "files")
 
   writer.close()
-  print "Wrote", summary.output.docs.value, "docs to", flags.arg.output
+  print("Wrote", summary.output.docs.value, "docs to", flags.arg.output)
 
   # Write conversion summary.
   if flags.arg.summary != '':
@@ -516,5 +516,5 @@ if __name__ == "__main__":
       summary_str = str(summary)
       f.write("CONVERSION SUMMARY\n\n")
       f.write(summary_str)
-    print "Summary written to", flags.arg.summary
+    print("Summary written to", flags.arg.summary)
 

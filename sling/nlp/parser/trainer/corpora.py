@@ -16,16 +16,6 @@ import sling
 
 from transition_generator import TransitionGenerator
 
-# Mention comparator function.
-def mention_comparator(x, y):
-  b1 = x.begin
-  b2 = y.begin
-  if b1 < b2 or b1 == b2 and x.length > y.length:
-    return -1
-  if b1 > b2 or x.length < y.length:
-    return 1
-  return 0
-
 
 # Stores a document and its gold transitions.
 class AnnotatedDocument(sling.Document):
@@ -33,7 +23,7 @@ class AnnotatedDocument(sling.Document):
     self._store = sling.Store(commons)
     self.object = self._store.parse(encoded, binary=True)
     super(AnnotatedDocument, self).__init__(frame=self.object, schema=schema)
-    self.mentions.sort(cmp=mention_comparator)
+    self.mentions.sort(key=lambda mention: (mention.begin, -mention.length))
     self.gold = []  # sequence of gold transitions
 
 
@@ -94,14 +84,14 @@ class Corpora:
 
 
   # Returns the next document.
-  def next(self):
+  def __next__(self):
     if self.reader.done():
       if self.loop:
         self.reader.rewind()
       else:
         raise StopIteration
 
-    (_, value) = self.reader.next()
+    (_, value) = next(self.reader)
     document = AnnotatedDocument(self.commons, self.schema, value)
     if self.generator is not None:
       document.gold = self.generator.generate(document)

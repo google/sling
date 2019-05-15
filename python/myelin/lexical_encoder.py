@@ -15,7 +15,7 @@
 import os
 import tempfile
 
-import sling.myelin.flow as flow
+import sling.myelin.builder as builder
 import sling.myelin.nn as nn
 
 # Adds a lexical encoder to 'flow', as per 'spec' (which is a Spec object).
@@ -35,7 +35,7 @@ class LexicalEncoder:
     self.lexicon_blob = lexicon
 
     def read_file(filename):
-      fin = open(filename, "r")
+      fin = open(filename, "rb")
       data = fin.read()
       fin.close()
       return data

@@ -125,7 +125,7 @@ class SoftmaxDelegate(Delegate):
 
     """Save the action table for this delegate in the frame."""
     actions = frame.store().array(self.size())
-    for i in xrange(self.size()):
+    for i in range(self.size()):
       action = self.action(i, previous_action=None)
       actions[i] = action.as_frame(frame.store())
     frame["actions"] = actions
@@ -468,8 +468,8 @@ def print_cost_estimates(commons_path, corpora_path):
           delegate = 0
       costs[index] += cost
   for c, cost, cascade in zip(counts, costs, cascades):
-    print "\n", cascade.__class__.__name__, "cost =", cost, "\n", \
-      "Delegate invocations:", c, "\n", cascade
+    print("\n", cascade.__class__.__name__, "cost =", cost, "\n", \
+      "Delegate invocations:", c, "\n", cascade)
 
 if __name__ == '__main__':
   import sling.flags as flags

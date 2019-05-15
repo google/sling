@@ -67,17 +67,17 @@ OUT=local/data/corpora/caspar
 
 mkdir -p $OUT
 
-python $CONVERTER \
+python3 $CONVERTER \
   --input=$IN/train/data/english/annotations/ \
   --allowed_ids=$ONTONOTES/train.ids \
   --output=$OUT/train.rec
 
-python $CONVERTER \
+python3 $CONVERTER \
   --input=$IN/development/data/english/annotations/ \
   --allowed_ids=$ONTONOTES/dev.ids \
   --output=$OUT/dev.rec
 
-python $CONVERTER \
+python3 $CONVERTER \
   --input=$IN/test/data/english/annotations/ \
   --allowed_ids=$ONTONOTES/test.ids \
   --output=$OUT/test.rec

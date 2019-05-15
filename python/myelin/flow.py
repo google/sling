@@ -43,6 +43,8 @@ class FileWriter:
 
   def write(self, d):
     """Write data to flow file."""
+    if type(d) is str:
+      d = d.encode()
     self.f.write(d)
 
   def write_int(self, n):
@@ -58,6 +60,7 @@ class FileWriter:
     if s is None:
       self.write_int(0)
     else:
+      s = s.encode()
       self.write_int(len(s))
       self.f.write(s)
 
@@ -65,7 +68,11 @@ class FileWriter:
     """Write array to flow file."""
     if a is None:
       self.write_long(0)
+    elif isinstance(a, bytes):
+      self.write_long(len(a))
+      self.f.write(a)
     elif isinstance(a, str):
+      a = a.encode()
       self.write_long(len(a))
       self.f.write(a)
     elif isinstance(a, float):

@@ -160,10 +160,10 @@ class Spec:
     self.actions.decode(actions_frame)
 
     self.num_actions = self.actions.size()
-    print self.num_actions, "gold actions"
+    print(self.num_actions, "gold actions")
     allowed = self.num_actions - sum(self.actions.disallowed)
-    print "num allowed actions:", allowed
-    print len(self.actions.roles), "unique roles in action table"
+    print("num allowed actions:", allowed)
+    print(len(self.actions.roles), "unique roles in action table")
   
 
   # Writes parts of the spec to a flow blob.
@@ -178,7 +178,7 @@ class Spec:
     # Temporarily remove fields that can't or don't need to be pickled.
     fields_to_ignore = [ 'commons', 'actions', 'words', 'suffix', 'cascade']
     cache = {}
-    for k, v in self.__dict__.iteritems():
+    for k, v in self.__dict__.items():
       if k in fields_to_ignore:
         cache[k] = v
 
@@ -187,7 +187,7 @@ class Spec:
     blob.data = pickle.dumps(self.__dict__)
 
     # Resurrect deleted fields.
-    for k, v in cache.iteritems():
+    for k, v in cache.items():
       setattr(self, k, v)
 
 
@@ -218,13 +218,13 @@ class Spec:
     # on the class constructor. The classname is stored in the cascade frame.
     frame = self.commons["/cascade"]
     self.cascade = eval(frame["name"])(self.actions)
-    print self.cascade
+    print(self.cascade)
 
     # Read word lexicon.
     blob = fl.blob("lexicon")
     self.words = Lexicon(self.words_normalize_digits)
     self.words.read(blob.data.tobytes(), chr(int(blob.get_attr("delimiter"))))
-    print self.words.size(), "words read from flow's lexicon"
+    print(self.words.size(), "words read from flow's lexicon")
 
     # Read suffix table.
     self.suffix = Lexicon(self.words_normalize_digits, oov_item=None)
@@ -249,7 +249,7 @@ class Spec:
     assert max_length == self.suffixes_max_length
 
     num, data = read_int(data)                       # num affixes
-    for _ in xrange(num):
+    for _ in range(num):
       num_bytes, data = read_int(data)
       word = data[0:num_bytes].tobytes()
       self.suffix.add(word)
@@ -257,17 +257,16 @@ class Spec:
       num_chars, data = read_int(data)
       if num_chars > 0:
         shorter_index, data = read_int(data)
-    print self.suffix.size(), "suffixes read from flow's affix table"
+    print(self.suffix.size(), "suffixes read from flow's affix table")
 
 
   # Returns suffix(es) of 'word'.
-  def get_suffixes(self, word, unicode_chars=None):
-    if unicode_chars is None:
-      unicode_chars = list(word.decode("utf-8"))
+  def get_suffixes(self, word):
+    assert type(word) is str
     output = []
-    end = min(self.suffixes_max_length, len(unicode_chars))
-    for start in xrange(end, 0, -1):
-      output.append("".join(unicode_chars[-start:]).encode('utf-8'))
+    end = min(self.suffixes_max_length, len(word))
+    for start in range(end, 0, -1):
+      output.append(word[-start:])
     output.append("")  # empty suffix
 
     return output
@@ -292,21 +291,20 @@ class Spec:
     writeint(1, buf)  # 1 = AffixTable::SUFFIX
     writeint(self.suffixes_max_length, buf)
     writeint(self.suffix.size(), buf)
-    for i in xrange(self.suffix.size()):
+    for i in range(self.suffix.size()):
       v = self.suffix.value(i)
 
       assert type(v) is str, type(v)
-      v_unicode = v.decode('utf-8')
+      v_bytes = v.encode('utf-8')
 
-      writeint(len(v), buf)           # number of bytes
-      for x in v: buf.append(x)       # the bytes themselves
-      writeint(len(v_unicode), buf)   # number of code points
-      if len(v_unicode) > 0:
-        shorter = v_unicode[1:].encode('utf-8')
+      writeint(len(v_bytes), buf)      # number of bytes
+      for x in v_bytes: buf.append(x)  # the bytes themselves
+      writeint(len(v), buf)            # number of code points
+      if len(v) > 0:
+        shorter = v[1:]
         shorter_idx = self.suffix.index(shorter)
-        assert shorter_idx is not None, (shorter, v, v_unicode)
-        writeint(shorter_idx, buf)    # id of the shorter suffix
-
+        assert shorter_idx is not None, (shorter, v, v_bytes)
+        writeint(shorter_idx, buf)     # id of the shorter suffix
     return buf
 
 
@@ -352,7 +350,7 @@ class Spec:
       self.add_lstm_fixed("digit", self.fallback_dim, Spec.DIGIT_CARDINALITY)
 
     self.lstm_input_dim = sum([f.dim for f in self.lstm_features])
-    print "LSTM input dim", self.lstm_input_dim
+    print("LSTM input dim", self.lstm_input_dim)
     assert self.lstm_input_dim > 0
 
     # Feed forward features.
@@ -387,7 +385,7 @@ class Spec:
     self.ff_input_dim = sum([f.dim for f in self.ff_fixed_features])
     self.ff_input_dim += sum(
         [f.dim * f.num for f in self.ff_link_features])
-    print "FF_input_dim", self.ff_input_dim
+    print("FF_input_dim", self.ff_input_dim)
     assert self.ff_input_dim > 0
 
 
@@ -406,10 +404,9 @@ class Spec:
         word = token.word
         self.words.add(word)
         for s in self.get_suffixes(word):
-          assert type(s) is str
           self.suffix.add(s)
-    print "Words:", self.words.size(), "items in lexicon, including OOV"
-    print "Suffix:", self.suffix.size(), "items in lexicon"
+    print("Words:", self.words.size(), "items in lexicon, including OOV")
+    print("Suffix:", self.suffix.size(), "items in lexicon")
 
     # Load common store, but not freeze it yet. We will add the action table
     # and cascade specification to it.
@@ -420,7 +417,7 @@ class Spec:
     # Prepare action table and cascade.
     self._build_action_table(corpora)
     self.cascade = cascade.ShiftMarkCascade(self.actions)
-    print self.cascade
+    print(self.cascade)
 
     # Save cascade specification in commons.
     _ = self.cascade.as_frame(self.commons, delegate_cell_prefix="delegate")
@@ -448,7 +445,7 @@ class Spec:
     fmt = "f" * dim
     vector_size = 4 * dim  # 4 being sizeof(float)
     oov = self.words.oov_index
-    for _ in xrange(size):
+    for _ in range(size):
       word = ""
       while True:
         ch = f.read(1)
@@ -469,21 +466,18 @@ class Spec:
         [i for i, v in enumerate(word_embeddings) if v is not None]
     word_embeddings = [v for v in word_embeddings if v is not None]
 
-    print "Loaded", count, "pre-trained embeddings from file with", size, \
+    print("Loaded", count, "pre-trained embeddings from file with", size, \
         "vectors. Vectors for remaining", (self.words.size() - count), \
-        "words will be randomly initialized."
+        "words will be randomly initialized.")
     return word_embeddings, word_embedding_indices
 
 
   # Returns raw indices of LSTM features for all tokens in 'document'.
   def raw_lstm_features(self, document):
     output = []
-    chars = []
     categories = []
     for token in document.tokens:
-      decoding = list(token.word.decode("utf-8"))
-      chars.append(decoding)
-      categories.append([unicodedata.category(ch) for ch in decoding])
+      categories.append([unicodedata.category(ch) for ch in token.word])
 
     for f in self.lstm_features:
       features = Feature()
@@ -492,8 +486,8 @@ class Spec:
         for token in document.tokens:
           features.add(self.words.index(token.word))
       elif f.name == "suffix":
-        for index, token in enumerate(document.tokens):
-          suffixes = self.get_suffixes(token.word, chars[index])
+        for token in document.tokens:
+          suffixes = self.get_suffixes(token.word)
           ids = [self.suffix.index(s) for s in suffixes]
           ids = [i for i in ids if i is not None]  # ignore unknown suffixes
           features.add(ids)
@@ -517,7 +511,7 @@ class Spec:
             value = Spec.INITIAL
           features.add(value)
       elif f.name == "punctuation":
-        for index in xrange(len(document.tokens)):
+        for index in range(len(document.tokens)):
           all_punct = all(c[0] == 'P' for c in categories[index])
           some_punct = any(c[0] == 'P' for c in categories[index])
 
@@ -529,7 +523,7 @@ class Spec:
             features.add(Spec.NO_PUNCTUATION)
 
       elif f.name == "digit":
-        for index in xrange(len(document.tokens)):
+        for index in range(len(document.tokens)):
           all_digit = all(c == 'Nd' for c in categories[index])
           some_digit = any(c == 'Nd' for c in categories[index])
 
@@ -542,9 +536,9 @@ class Spec:
 
       elif f.name == "quote":
         in_quote = False
-        for index in xrange(len(document.tokens)):
+        for index, token in enumerate(document.tokens):
           value = Spec.NO_QUOTE
-          for cat, ch in zip(categories[index], chars[index]):
+          for cat, ch in zip(categories[index], token.word):
             if cat == 'Pi':
               value = Spec.OPEN_QUOTE
             elif cat == 'Pf':
@@ -613,7 +607,7 @@ class Spec:
 
     output = []
     if name == "history":
-      for i in xrange(num):
+      for i in range(num):
         output.append(None if i >= state.steps else state.steps - i - 1)
     elif name in ["lr", "rl"]:
       index = None
@@ -621,28 +615,28 @@ class Spec:
         index = state.current - state.begin
       output.append(index)
     elif name in ["frame-end-lr", "frame-end-rl"]:
-      for i in xrange(num):
+      for i in range(num):
         index = None
         end = state.frame_end_inclusive(i)
         if end != -1:
           index = end - state.begin
         output.append(index)
     elif name == "frame-creation-steps":
-      for i in xrange(num):
+      for i in range(num):
         step = state.creation_step(i)
         output.append(None if step == -1 else step)
     elif name == "frame-focus-steps":
-      for i in xrange(num):
+      for i in range(num):
         step = state.focus_step(i)
         output.append(None if step == -1 else step)
     elif name in ["mark-lr", "mark-rl"]:
-      for i in xrange(num):
+      for i in range(num):
         index = None
         if len(state.marks) > i:
           index = state.marks[-1 - i].token - state.begin
         output.append(index)
     elif name == "mark-step":
-      for i in xrange(num):
+      for i in range(num):
         index = None
         if len(state.marks) > i:
           index = state.marks[-1 - i].step
@@ -686,13 +680,13 @@ class Spec:
     assert len(document.gold) > 0, "No gold actions"
     state = ParserState(document, self)
     for gold in document.gold:
-      print "Taking gold action", gold
-      print "On state:", state
+      print("Taking gold action", gold)
+      print("On state:", state)
 
       gold_index = self.actions.indices.get(gold, None)
       assert gold_index is not None, "Unknown gold action: %r" % gold
       assert state.is_allowed(gold_index), "Disallowed gold action: %r" % gold
       state.advance(gold)
 
-    print "Final state after", len(document.gold), "actions:", state
+    print("Final state after", len(document.gold), "actions:", state)
 

@@ -24,7 +24,6 @@ import train_util as utils
 
 from corpora import Corpora
 from pytorch_modules import Losses
-from pytorch_modules import fstr
 from train_util import mem
 from train_util import now
 
@@ -34,7 +33,7 @@ Var = torch.autograd.Variable
 # Computes accuracy on the given dev set, using the given Caspar module.
 def dev_accuracy(dev_path, tmp_folder, caspar):
   dev = Corpora(dev_path, caspar.spec.commons)
-  print "Annotating dev documents", now(), mem()
+  print("Annotating dev documents", now(), mem())
   test_path = os.path.join(tmp_folder, "dev.annotated.rec")
   writer = sling.RecordWriter(test_path)
   count = 0
@@ -51,17 +50,17 @@ def dev_accuracy(dev_path, tmp_folder, caspar):
     writer.write(str(count), state.encoded())
     count += 1
     if count % 100 == 0:
-      print "  Annotated", count, "documents", now(), mem()
+      print("  Annotated", count, "documents", now(), mem())
     for i, c in enumerate(disallowed):
       dev_total[i] += total[i]
       dev_disallowed[i] += c
   writer.close()
   end_time = time.time()
-  print "Annotated", count, "documents in", "%.1f" % (end_time - start_time), \
-      "seconds", now(), mem()
-  print "Disallowed/Total leaf actions for", cascade.__class__.__name__
+  print("Annotated", count, "documents in", "%.1f" % (end_time - start_time), \
+      "seconds", now(), mem())
+  print("Disallowed/Total leaf actions for", cascade.__class__.__name__)
   for i, c in enumerate(dev_disallowed):
-    print "Delegate", i, "disallowed", c, "out of", dev_total[i]
+    print("Delegate", i, "disallowed", c, "out of", dev_total[i])
 
   return utils.frame_evaluation(gold_corpus_path=dev_path, \
                                 test_corpus_path=test_path, \
@@ -84,7 +83,7 @@ class Hyperparams:
     self.adam_eps = args.adam_eps
     self.moving_avg = args.use_moving_average
     self.moving_avg_coeff = args.moving_average_coeff
-    for k, v in self.__dict__.iteritems():
+    for k, v in self.__dict__.items():
       assert v is not None, "Hyperparameter %r not set" % k
 
 
@@ -125,9 +124,9 @@ class Trainer:
     num_params = 0
     for name, p in caspar.named_parameters():
       if p.requires_grad:
-        print name, ":", p.size()
+        print(name, ":", p.size())
         num_params += torch.numel(p)
-    print "Number of parameters:", num_params
+    print("Number of parameters:", num_params)
 
     self.count = 0
     self.last_eval_count = 0
@@ -161,7 +160,7 @@ class Trainer:
     loss_dict["num_examples_seen"] = self.count
     loss_dict["num_batches_seen"] = self.count / self.hparams.batch_size
     self.saved_losses.append(loss_dict)
-    
+
 
   # Processes a single given example.
   def process(self, example):
@@ -242,10 +241,10 @@ class Trainer:
             diff = (self.averages[name] - p.data) * (1 - decay)
             self.averages[name].sub_(diff)
 
-      print "BatchLoss after", "(%d" % num_batches, \
-          "batches =", self.count, "examples):", value, \
-          " incl. L2=", fstr(l2 / 3.0), \
-          "(%.1f" % (end - start), "secs)", now(), mem()
+      print(now(), "BatchLoss after", "(%d" % num_batches, \
+            "batches =", self.count, "examples): %.4f" % value.item(), \
+            "incl. L2=%.6f" % (l2 / 3.0).item(), \
+            "(%.1f" % (end - start), "secs)", mem())
 
 
   # Swaps model parameters with their moving average counterparts.
@@ -270,7 +269,7 @@ class Trainer:
         metrics["num_examples_seen"] = self.count
         self.checkpoint_metrics.append(metrics)
         eval_metric = metrics["eval_metric"]
-        print "Eval metric after", self.count, " examples:", eval_metric
+        print("Eval metric after", self.count, " examples:", eval_metric)
 
         if self.output_file_prefix is not None:
           # Record the evaluation metric to a separate file.
@@ -291,7 +290,7 @@ class Trainer:
             self.model.to_flow(fl)
             self.save_training_details(fl)
             fl.save(best_flow_file)
-            print "Updating best flow at", best_flow_file
+            print("Updating best flow at", best_flow_file)
 
         self.last_eval_count = self.count
 
