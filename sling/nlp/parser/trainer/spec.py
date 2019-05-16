@@ -164,7 +164,7 @@ class Spec:
     allowed = self.num_actions - sum(self.actions.disallowed)
     print("num allowed actions:", allowed)
     print(len(self.actions.roles), "unique roles in action table")
-  
+
 
   # Writes parts of the spec to a flow blob.
   def to_flow(self, fl):

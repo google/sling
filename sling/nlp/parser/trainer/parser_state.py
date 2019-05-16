@@ -25,7 +25,7 @@ class ParserState:
       self.end = start + length
       self.evoked = []   # frame(s) evoked by the span
 
-  
+
   # Represents the beginning token of a span.
   class Mark:
     def __init__(self, token, step):
@@ -69,6 +69,7 @@ class ParserState:
     self.marks = []                  # marked (i.e. open) spans
     self.embed = []                  # current embedded frames
     self.elaborate = []              # current elaborated frames
+    self.max_mark_nesting = 5        # max number of open marks
 
     # Token -> Spans over it.
     self.token_to_spans = [[] for _ in range(len(document.tokens))]
@@ -153,7 +154,8 @@ class ParserState:
     actions = self.spec.actions
     if action_index == actions.stop(): return self.current == self.end
     if action_index == actions.shift(): return self.current < self.end
-    if action_index == actions.mark(): return self.current < self.end
+    if action_index == actions.mark():
+      return self.current < self.end and len(self.marks) < self.max_mark_nesting
 
     action = actions.table[action_index]
     if action.type == Action.REFER:

@@ -153,7 +153,7 @@ class TransitionGenerator:
     return TransitionGenerator.SimpleAction(type)
 
 
-  # Stores mentions starting or ending or both at a given token. 
+  # Stores mentions starting or ending or both at a given token.
   class TokenToMentions:
     def __init__(self):
       self.starting = []

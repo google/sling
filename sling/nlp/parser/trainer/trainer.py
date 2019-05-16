@@ -44,9 +44,9 @@ def dev_accuracy(dev_path, tmp_folder, caspar):
   dev_disallowed = [0] * cascade.size()
   for document in dev:
     state, disallowed, total, trace = \
-      caspar.forward(document, train=False, debug=True)
+      caspar.forward(document, train=False, debug=False)
     state.write()
-    trace.write()
+    if trace: trace.write()
     writer.write(str(count), state.encoded())
     count += 1
     if count % 100 == 0:
