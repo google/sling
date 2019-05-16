@@ -698,14 +698,15 @@ The WikiConverter class can convert
 to SLING frame notation.
 ```
 import sling
+from urllib.request import urlopen
 
 store = sling.Store()
 wikiconv = sling.WikiConverter(store)
 
 qid = "Q1254"
 url = "https://www.wikidata.org/wiki/Special:EntityData/" + qid + ".json"
-json = urllib2.urlopen(url).read()[len(qid) + 16:-2]
+json = urlopen(url).read()[len(qid) + 16:-2]
 
 item = wikiconv.convert_wikidata(store, json)
-print(item.data(pretty=True))
+print(item.data(pretty=True, utf8=True))
 ```

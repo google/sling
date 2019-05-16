@@ -66,16 +66,17 @@ void PyWikiConverter::Dealloc() {
 PyObject *PyWikiConverter::ConvertWikidata(PyObject *args, PyObject *kw) {
   // Get store and Wikidata JSON string.
   PyStore *pystore = nullptr;
-  const char *json = nullptr;
-  if (!PyArg_ParseTuple(args, "Os", &pystore, &json)) return nullptr;
+  Py_buffer json;
+  if (!PyArg_ParseTuple(args, "Os*", &pystore, &json)) return nullptr;
   if (!PyStore::TypeCheck(pystore)) return nullptr;
 
   // Parse JSON.
-  ArrayInputStream stream(json, strlen(json));
+  ArrayInputStream stream(json.buf, json.len);
   Input input(&stream);
   Reader reader(pystore->store, &input);
   reader.set_json(true);
   Object obj = reader.Read();
+  PyBuffer_Release(&json);
   if (reader.error()) {
     PyErr_SetString(PyExc_ValueError, reader.error_message().c_str());
     return nullptr;

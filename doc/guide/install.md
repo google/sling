@@ -21,7 +21,7 @@ parser = sling.Parser("caspar.flow")
 
 text = input("text: ")
 doc = parser.parse(text)
-print doc.frame.data(pretty=True)
+print(doc.frame.data(pretty=True))
 for m in doc.mentions:
   print("mention", doc.phrase(m.begin, m.end))
 ```
@@ -88,3 +88,4 @@ sudo ln -s $(realpath python) /usr/lib/python3/dist-packages/sling
 * Similarly, we do not support Windows, but you can check out
   [issue #296](https://github.com/google/sling/issues/296) for help on
   building SLING on Windows Subsystem for Linux (WSL).
+
