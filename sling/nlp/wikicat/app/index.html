@@ -279,7 +279,14 @@
         <th class="mdl-data-table__cell--non-numeric">Category QID</th>
         <th class="mdl-data-table__cell--non-numeric">Category Name</th>
         <th>Score</th>
-        <th class="mdl-data-table__cell--non-numeric">Fact Match Counts</th>
+        <th class="mdl-data-table__cell--non-numeric">
+          Match counts for all selected spans
+        </th>
+        <th class="mdl-data-table__cell--non-numeric"
+          ng-show="query_results.num_selected_spans > 1"
+          ng-repeat="c in query_results.parses[0].selected_span_counts">
+          Match counts for {{c[0]}}
+        </th>
       </thead>
 
       <!-- One row per topk parse matching the signature and selected by the
@@ -303,11 +310,17 @@
         </td>
         <td>{{parse.score}}</td>
         <td><match-counts types='match_types' counts='parse.counts' /></td>
+        <td class="mdl-data-table__cell--non-numeric"
+          ng-show="query_results.num_selected_spans > 1"
+          ng-repeat="c in parse.selected_span_counts">
+          <match-counts types='match_types' counts='c[1]' />
+        </th>
+        </td>
       </tr>
 
       <!-- Summary of non-topk parses matching the signature and selected by
            the parse selection formula.-->
-      <tr>
+      <tr ng-show="query_results.parses_not_shown.num > 0">
         <td>&nbsp;</td>
         <td>-</td>
         <td class="mdl-data-table__cell--non-numeric">
@@ -317,6 +330,11 @@
         <td>
           <match-counts types='match_types'
             counts='query_results.parses_not_shown.counts' />
+        </td>
+        <td class="mdl-data-table__cell--non-numeric"
+          ng-show="query_results.num_selected_spans > 1"
+          ng-repeat="c in query_results.parses[0].selected_span_counts">
+          -
         </td>
       </tr>
 
@@ -332,6 +350,11 @@
         <td>
           <match-counts types='match_types'
             counts='query_results.parses_not_selected.counts' />
+        </td>
+        <td class="mdl-data-table__cell--non-numeric"
+          ng-show="query_results.num_selected_spans > 1"
+          ng-repeat="c in query_results.parses[0].selected_span_counts">
+          -
         </td>
       </tr>
     </table>

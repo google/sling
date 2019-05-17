@@ -103,6 +103,17 @@ class Parse:
         counts.merge(count)
     return counts
 
+
+  # Returns a list of (span signature, span match counts) for all selected spans
+  # as per 'span_subset'.
+  def selected_span_counts(self, span_subset=None):
+    output = []
+    for index, counts in enumerate(self.span_counts):
+      if span_subset is None or span_subset.is_allowed(index):
+        output.append((self.parse.spans[index].signature, counts.to_dict()))
+    return output
+
+
   # Computes a list of name-parts for 'parse'.
   def name_parts(self, span_subset=None, use_span_signature=False):
     def _word(text, token):
@@ -249,6 +260,11 @@ class SignatureResponse:
       data["error"] = self.error_message
       return json.dumps(data)
 
+    data["num_total_spans"] = len(self.counts_by_span)
+    data["num_selected_spans"] = sum([
+        self.request.span_subset.is_allowed(i) \
+            for i in range(len(self.counts_by_span))])
+
     data["per_span"] = [
       {
         "selected" : self.request.span_subset.is_allowed(index),
@@ -265,7 +281,8 @@ class SignatureResponse:
       "name": p.frame.name,
       "name_parts": p.name_parts(self.request.span_subset),
       "score": round(p.score, 2),
-      "counts": p.counts.to_dict()
+      "counts": p.counts.to_dict(),
+      "selected_span_counts": p.selected_span_counts(self.request.span_subset)
     } for p in self.top_parses]
 
     data["parses_not_shown"] = {
@@ -703,7 +720,7 @@ class BrowserService(BaseHTTPRequestHandler):
           response = self.default_weights()
         elif self.path.startswith("/wikicat/query?"):
           request = self.params_to_request(params)
-          if request.query == "top":
+          if request.query.lower() == "top":
             response = server_globals.handle_top(request)
           elif server_globals.is_category(request.query):
             response = server_globals.handle_category(request).to_json()
