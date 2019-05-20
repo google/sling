@@ -67,17 +67,17 @@ def setup_training_flags(flags):
                metavar='FILE')
   flags.define('--train_corpus', '--train',
                help='Path to the train corpus recordio',
-               default="local/data/corpora/sempar/train.rec",
+               default="local/data/corpora/caspar/train.rec",
                type=str,
                metavar='FILE')
   flags.define('--dev_corpus', '--dev',
                help='Path to the dev corpus recordio',
-               default="local/data/corpora/sempar/dev.rec",
+               default="local/data/corpora/caspar/dev.rec",
                type=str,
                metavar='FILE')
   flags.define('--word_embeddings',
                help='(Optional) Path to the word embeddings file',
-               default="local/data/corpora/sempar/word2vec-32-embeddings.bin",
+               default="local/data/corpora/caspar/word2vec-32-embeddings.bin",
                type=str,
                metavar='FILE')
 

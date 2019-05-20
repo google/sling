@@ -305,7 +305,7 @@ class Spec:
         shorter_idx = self.suffix.index(shorter)
         assert shorter_idx is not None, (shorter, v, v_bytes)
         writeint(shorter_idx, buf)     # id of the shorter suffix
-    return buf
+    return bytes(buf)
 
 
   # Adds LSTM feature to the specification.
@@ -446,16 +446,17 @@ class Spec:
     vector_size = 4 * dim  # 4 being sizeof(float)
     oov = self.words.oov_index
     for _ in range(size):
-      word = ""
+      word = bytearray()
       while True:
         ch = f.read(1)
-        if ch == " ": break
-        word += ch
+        if ch[0] == 32: break
+        word.append(ch[0])
 
       vector = list(struct.unpack(fmt, f.read(vector_size)))
       ch = f.read(1)
-      assert ch == "\n", "%r" % ch     # end of line expected
+      assert ch[0] == 10, "%r" % ch     # end of line expected
 
+      word = word.decode()
       index = self.words.index(word)
       if index != oov and word_embeddings[index] is None:
         word_embeddings[index] = vector

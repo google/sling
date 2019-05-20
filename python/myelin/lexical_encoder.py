@@ -53,7 +53,7 @@ class LexicalEncoder:
 
     suffix = flow.blob("suffixes")
     suffix.type = "affix"
-    suffix.data = str(spec.write_suffix_table())
+    suffix.data = spec.write_suffix_table()
     self.suffix_blob = suffix
 
     # Add feature extraction related ops.

@@ -71,6 +71,10 @@ class FileWriter:
     elif isinstance(a, bytes):
       self.write_long(len(a))
       self.f.write(a)
+    elif isinstance(a, bytearray):
+      b = bytes(a)
+      self.write_long(len(b))
+      self.f.write(b)
     elif isinstance(a, str):
       a = a.encode()
       self.write_long(len(a))
