@@ -17,7 +17,7 @@
 # The Python wheel produced by this script can be installed with the following
 # command:
 #
-#   sudo pip install /tmp/sling-2.0.0-cp35-none-linux_x86_64.whl
+#   sudo -H pip install /tmp/sling-2.0.0-py3-abi3-linux_x86_64.whl
 #
 # If you are developing the SLING system, it is convenient to just add a
 # link to the SLING repository directly from the Python package directory
@@ -47,13 +47,12 @@ def sha256_content_checksum(data):
   return base64.urlsafe_b64encode(sha256.digest()).rstrip(b'=')
 
 # Python version.
-pymajor = str(sys.version_info.major)
-pyminor = str(sys.version_info.minor)
-pyversion = pymajor + "." + pyminor
+pyversion = str(sys.version_info.major)
+abi = "none"
 
 # Wheel package information.
 platform = distutils.util.get_platform().replace("-", "_")
-tag = "cp" + pymajor + pyminor + "-none-" + platform
+tag = "py" + pyversion + "-" + abi + "-" + platform
 package = "sling"
 version = "2.0.0"
 dist_dir = package + "-" + version + ".dist-info"
@@ -120,13 +119,11 @@ License: Apache 2.0
 Download-URL: https://github.com/google/sling/releases
 Platform: UNKNOWN
 Classifier: Programming Language :: Python
-Classifier: Programming Language :: Python :: $PYMAJOR$
 Classifier: Programming Language :: Python :: $PYVERSION$
 
 Google SLING frame semantic parsing framework
 """
 package_metadata = package_metadata.replace("$VERSION$", version)
-package_metadata = package_metadata.replace("$PYMAJOR$", pymajor)
 package_metadata = package_metadata.replace("$PYVERSION$", pyversion)
 package_metadata = package_metadata.encode()
 

@@ -4,10 +4,10 @@
 
 If you just want to try out the parser on a pre-trained model, you can install
 the wheel with pip and download a pre-trained parser model. On a Linux machine
-with Python 3.5 you can install a pre-built wheel:
+with Python 3 you can install a pre-built wheel:
 
 ```
-sudo pip3 install http://www.jbox.dk/sling/sling-2.0.0-cp35-none-linux_x86_64.whl
+sudo -H pip3 install http://www.jbox.dk/sling/sling-2.0.0-py3-none-linux_x86_64.whl
 ```
 and download the pre-trained model:
 ```

@@ -3,7 +3,7 @@
 A number of components in SLING can be accessed through the Python SLING API.
 You can install the SLING Python wheel using pip:
 ```
-sudo pip3 install http://www.jbox.dk/sling/sling-2.0.0-cp35-none-linux_x86_64.whl
+sudo -H pip3 install http://www.jbox.dk/sling/sling-2.0.0-py3-none-linux_x86_64.whl
 ```
 or you can [clone the repo and build SLING from sources](install.md).
 
