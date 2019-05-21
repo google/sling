@@ -188,19 +188,35 @@ class StoreFactsBot:
         if prop in claims: return True
     return False
 
+  def ever_had(self, wd_item, prop, target):
+    # Up to 150 revisions covers the full history of 99% human items
+    revisions = wd_item.revisions(total=150, content=True)
+    for revision in revisions:
+      try:
+        revision_text = json.loads(revision.text)
+        claims = revision_text['claims']
+      except:
+        pass # unable to extract claims - move to next revision
+      else:
+        if prop in claims:
+          for claim in claims[prop]:
+            old_claim = pywikibot.Claim.fromJSON(self.repo, claim)
+            if old_claim.target_equals(target): return True
+    return False
+
   def log_status_skip(self, item, facts, error):
-    print("Skipping", str(item), " -- ", str(facts), error)
+    print("Skipping", str(item.id), " -- ", str(facts), error)
     status_record = self.rs.frame({
       self.n_item: item,
       self.n_facts: facts,
       self.n_status: self.rs.frame({self.n_skipped: error})
     })
-    self.status_file.write(str(item), status_record.data(binary=True))
+    self.status_file.write(str(item.id), status_record.data(binary=True))
 
   def log_status_stored(self, item, facts, rev_id):
-    print("Storing", str(item), " -- ", str(facts))
+    print("Storing", str(item.id), " -- ", str(facts))
     url = "https://www.wikidata.org/w/index.php?title="
-    url += str(item)
+    url += str(item.id)
     url += "&type=revision&diff="
     url += rev_id
     status_record = self.rs.frame({
@@ -211,7 +227,7 @@ class StoreFactsBot:
         self.n_url: url
       })
     })
-    self.status_file.write(str(item), status_record.data(binary=True))
+    self.status_file.write(str(item.id), status_record.data(binary=True))
 
   def get_wbtime(self, date):
     precision = precision_map[date.precision] # sling to wikidata
@@ -264,7 +280,7 @@ class StoreFactsBot:
         continue
       # Process facts / claims
       for prop, val in facts:
-        prop_str = str(prop)
+        prop_str = str(prop.id)
         fact = self.rs.frame({prop: val})
         claim = pywikibot.Claim(self.repo, prop_str)
         if prop in self.uniq_prop:
@@ -305,7 +321,7 @@ class StoreFactsBot:
             if prop_str in wd_claims:
               self.log_status_skip(item, fact, "already has property")
               continue
-            target = pywikibot.ItemPage(self.repo, val)
+            target = pywikibot.ItemPage(self.repo, val.id)
           else:
             # TODO add location and possibly other types
             print("Error: Unknown claim type", claim.type)
@@ -329,6 +345,9 @@ class StoreFactsBot:
                 self.log_status_skip(item, fact, "already has fact")
                 old_fact = True
             if old_fact: continue
+          if self.ever_had(wd_item, prop_str, target):
+            self.log_status_skip(item, fact, "already had fact")
+            continue
         if provenance[self.n_category]:
           s = str(provenance[self.n_category])
           sources = self.get_sources(item, s)
@@ -345,7 +364,7 @@ class StoreFactsBot:
           claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
-      print(item, recno)
+      print("Item:", item.id, "Record: ", recno)
     print("Last record:", recno, "Total:", updated, "records updated.")
 
 
