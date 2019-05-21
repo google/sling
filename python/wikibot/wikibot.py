@@ -196,16 +196,18 @@ class StoreFactsBot:
         revision_text = json.loads(revision.text)
         claims = revision_text['claims']
       except:
-        pass # unable to extract claims - move to next revision
-      else:
-        if prop in claims:
-          for claim in claims[prop]:
-            old_claim = pywikibot.Claim.fromJSON(self.repo, claim)
-            if old_claim.target_equals(target): return True
+        continue # unable to extract claims - move to next revision
+      if prop not in claims: continue
+      for claim in claims[prop]:
+        try:
+          old_claim = pywikibot.Claim.fromJSON(self.repo, claim)
+        except:
+          continue # unable to extract prop claim - move to next prop claim
+        if old_claim.target_equals(target): return True
     return False
 
   def log_status_skip(self, item, facts, error):
-    print("Skipping", str(item.id), " -- ", str(facts), error)
+    print("Skipping", item.id, " -- ", facts, error)
     status_record = self.rs.frame({
       self.n_item: item,
       self.n_facts: facts,
@@ -214,7 +216,7 @@ class StoreFactsBot:
     self.status_file.write(str(item.id), status_record.data(binary=True))
 
   def log_status_stored(self, item, facts, rev_id):
-    print("Storing", str(item.id), " -- ", str(facts))
+    print("Storing", item.id, " -- ", facts)
     url = "https://www.wikidata.org/w/index.php?title="
     url += str(item.id)
     url += "&type=revision&diff="
