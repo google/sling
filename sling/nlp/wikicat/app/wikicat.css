@@ -56,7 +56,8 @@
   text-align: left;
   padding: 2px 2px;
   z-index: 1;
-  border: 1px solid black;
+  box-shadow: rgba(0, 0, 0, 0.3) 0 2px 10px;
+  border-radius: 8px;
 }
 
 .fact_match_count:hover .fact_match_examples {
@@ -102,4 +103,28 @@ code {
 
 body.waiting * {
   cursor: wait;
+}
+
+.pagination {
+  display: inline-block;
+}
+
+.pagination a {
+  color: black;
+  float: left;
+  padding: 8px 16px;
+  text-decoration: none;
+}
+
+.pagination a.active {
+  background-color: rgb(63,81,181);
+  color: white;
+}
+
+.pagination a:hover:not(.active) {
+  background-color: #ddd;
+}
+
+md-checkbox {
+  margin-bottom: 3px;
 }

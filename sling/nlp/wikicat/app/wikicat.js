@@ -6,6 +6,7 @@ app.config(function ($locationProvider) {
 
 // Top-level controller.
 app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
+  $scope.self = $scope;
   $scope.match_types = [];       // mirrors FactMatchType names
   $scope.default_weights = {};   // default weights for match types
   $scope.user_weights = {};      // user-specified weights for match types
@@ -29,10 +30,15 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
       $scope.num_categories = response.data["num_categories"];
   });
 
-  $scope.query = "";                // main text box
-  $scope.query_results = null;      // results of the query
-  $scope.recordio_results = null;   // result of recordio generation
-  $scope.parse_selector = "";       // user-specified parse-selection formula
+  $scope.query = "";                   // main text box
+  $scope.query_results = null;         // results of the query
+  $scope.recordio_results = null;      // result of recordio generation
+  $scope.parse_selector = "";          // user-specified parse-selection formula
+  $scope.selected_parses = new Set();  // user-selected parses
+
+  // Current page and page size for displaying results.
+  $scope.current_page = 0;
+  $scope.page_size = 200;
 
   // Function that shows help-text for writing parse selection formulae.
   $scope.formulaHelp = function(ev) {
@@ -50,6 +56,17 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
     ev.stopPropagation();
     $mdDialog.show({
       contentElement: '#signatureScoreDialog',
+      parent: angular.element(document.body),
+      targetEvent: ev,
+      clickOutsideToClose: true
+    });
+  }
+
+  // Function that shows category constraints.
+  $scope.categoryConstraintsHelp = function(ev) {
+    ev.stopPropagation();
+    $mdDialog.show({
+      contentElement: '#categoryConstraintsDialog',
       parent: angular.element(document.body),
       targetEvent: ev,
       clickOutsideToClose: true
@@ -112,6 +129,18 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
     var selector = "True";
     if ($scope.parse_selector != "") selector = $scope.parse_selector;
 
+    var categories = $scope.selectedCategoriesList();
+    if (categories.length > 0) {
+      var aux = "$QID in [";
+      for (var i = 0; i < categories.length; ++i) {
+        if (i > 0) aux += ",";
+        aux += "\"" + categories[i] + "\"";
+      }
+      aux += "]";
+      selector = "(" + selector + ") and (" + aux + ")";
+      $scope.parse_selector = selector;
+    }
+
     var params = {
       "query": $scope.query,
       "spans": span_subset_str,
@@ -137,7 +166,9 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
     return $http.get('/wikicat/query?' + url_params)
       .then(function(results) {
         $scope.query_results = results.data;
+        $scope.selected_parses.clear();
         $scope.recordio_results = null;
+        $scope.current_page = 0;
         document.body.classList.remove('waiting');
       });
   }
@@ -160,6 +191,7 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
   $scope.browseSignature = function(sig) {
     $scope.query = sig;
     $scope.parse_selector = "True";
+    $scope.selected_parses.clear();
     $scope.search();
   }
 
@@ -167,7 +199,89 @@ app.controller('SearchCtrl', function($scope, $http,  $location, $mdDialog) {
   // by any currently-specified selection formula.
   $scope.browseCategory = function(name) {
     $scope.query = name;
+    $scope.selected_parses.clear();
     $scope.search();
+  }
+
+  // Returns whether a particular row index should be displayed or not.
+  $scope.showTableRow = function(row) {
+    var start = $scope.current_page * $scope.page_size;
+    return (start <= row) && (row < start + $scope.page_size);
+  }
+
+  // Returns a [start, end) range list with the given step size.
+  $scope.range = function(start, end, step) {
+    step = step || 1;
+    var output = [];
+    for (var i = start; i < end; i += step) {
+      output.push(i);
+    }
+    return output;
+  }
+
+  // Returns the list of page numbers for displaying 'num_rows' rows.
+  $scope.pageList = function(num_rows) {
+    var a = num_rows % $scope.page_size;
+    if (a == 0) return $scope.range(0, num_rows / $scope.page_size);
+    return $scope.range(0, 1 + Math.floor(num_rows / $scope.page_size));
+  }
+
+  // Sets the current page to 'p'.
+  $scope.setPage = function(p) {
+    $scope.current_page = p;
+  }
+
+  // Moves one page back in the results table, if possible.
+  $scope.prevPage = function() {
+    if ($scope.current_page > 0) $scope.setPage($scope.current_page - 1);
+  }
+
+  // Moves one page forward in the results table, if possible.
+  $scope.nextPage = function(numresults) {
+    var n = ($scope.current_page + 1) * $scope.page_size;
+    if (n < numresults) $scope.setPage($scope.current_page + 1);
+  }
+
+  // Toggles selection of a single category.
+  $scope.toggleCategory = function(qid) {
+    if ($scope.selected_parses.has(qid)) {
+      $scope.selected_parses.delete(qid);
+    } else {
+      $scope.selected_parses.add(qid);
+    }
+  }
+
+  // Returns whether all categories on the current page are selected.
+  $scope.allCategorySelected = function() {
+    var start = $scope.current_page * $scope.page_size;
+    var end = start + $scope.page_size;
+    end = Math.min(end, $scope.query_results.parses.length);
+    for (var i = start; i < end; ++i) {
+      var qid = $scope.query_results.parses[i].category_qid;
+      if (!$scope.selected_parses.has(qid)) return false;
+    }
+    return true;
+  }
+
+  // Selects or deselects all categories on the current page.
+  $scope.toggleAllCategories = function() {
+    var current = $scope.allCategorySelected();
+    var start = $scope.current_page * $scope.page_size;
+    var end = start + $scope.page_size;
+    end = Math.min(end, $scope.query_results.parses.length);
+    for (var i = start; i < end; ++i) {
+      var qid = $scope.query_results.parses[i].category_qid;
+      if (current) {
+        $scope.selected_parses.delete(qid);
+      } else {
+        $scope.selected_parses.add(qid);
+      }
+    }
+  }
+
+  // Returns the array of qids of all selected categories.
+  $scope.selectedCategoriesList = function() {
+    return Array.from($scope.selected_parses);
   }
 });
 
@@ -202,5 +316,30 @@ app.directive('matchCounts', function() {
               "  </td>" +
               "</tr>" +
               "</table>"
+  };
+});
+
+// Directive for displaying pagination information.
+app.directive('paginate', function() {
+  return {
+    scope: {
+      numresults: "=",
+      ctrl: "="
+    },
+    template: "<div class='pagination'>" +
+              "  <ul class='pagination'>" +
+              "   <li class='pagination'>" +
+              "    <a href ng-click='ctrl.prevPage()'>« Prev</a>" +
+              "   </li>" +
+              "   <li ng-repeat='n in ctrl.pageList(numresults)'" +
+              "    class='pagination'>" +
+              "    <a href ng-click='ctrl.setPage(n)' " +
+              "     ng-class='{active: n == ctrl.current_page}'>{{n}}</a>" +
+              "   </li>" +
+              "   <li class='pagination'>" +
+              "    <a href ng-click='ctrl.nextPage(numresults)'>Next »</a>" +
+              "   </li>" +
+              "  </ul>" +
+              "</div>"
   };
 });

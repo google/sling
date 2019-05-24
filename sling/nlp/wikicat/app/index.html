@@ -89,6 +89,8 @@
           <label>Parse selection formula</label>
           <input type='text' ng-model="parse_selector" placeholder="True">
           <span pointer ng-click='formulaHelp($event)'>(examples)</span>
+          &nbsp;
+          <span pointer ng-click='parse_selector = "True";'>(clear)</span>
         </md-input-container>
 
         <md-button class="md-raised md-primary" style='height:100%'
@@ -102,6 +104,16 @@
           Generate RecordIO
         </md-button>
         <span flex="20"></span>
+      </div>
+
+      <!-- Number of categories selected, if any -->
+      <div flex layout-padding layout='row'
+       ng-show='hasSignatureResults() && (selected_parses.size > 0)'>
+        Auxiliary constraint: parse should belong to&nbsp;
+        <span pointer ng-click='categoryConstraintsHelp($event)'
+         style='padding:unset'>
+        these {{selected_parses.size}} categories
+        </span>
       </div>
 
     <!-- End of settings -->
@@ -132,7 +144,13 @@
           <th>Rejected Parses</th>
           <th>Selected Match Counts</th>
         </thead>
-        <tr ng-repeat='result in query_results.stats track by $index'>
+        <tfoot>
+          <td style='text-align:left' colspan=7>
+            <paginate numresults='query_results.stats.length' ctrl='self'/>
+          </td>
+        </tfoot>
+        <tr ng-repeat='result in query_results.stats track by $index'
+          ng-show='showTableRow($index)'>
           <td>{{$index}}</td>
           <td>
             <span pointer ng-click='browseSignature(result.signature)'>
@@ -178,7 +196,8 @@
           <th>Score</th>
           <th>Fact Match Counts</th>
         </thead>
-        <tr ng-repeat='parse in query_results.parses track by $index'>
+        <tr ng-repeat='parse in query_results.parses track by $index'
+          ng-show='showTableRow($index)'>
           <td>{{$index}}</td>
           <td>
             <span pointer ng-click='browseSignature(parse.signature)'>
@@ -194,6 +213,11 @@
             <match-counts types='match_types' counts='parse.counts' />
           </td>
         </tr>
+        <tfoot>
+          <td style='text-align:left' colspan=4>
+            <paginate numresults='query_results.parses.length' ctrl='self'/>
+          </td>
+        </tfoot>
       </table>
     </div>
 
@@ -270,11 +294,16 @@
     <!-- Parses matching the signature.
          Only relevant if the results are for a signature. -->
     <table class='mdl-data-table mdl-shadow--2dp'
-     ng-show='hasSignatureResults()'>
+     ng-if='hasSignatureResults()'>
       <caption>
         Parses matching the signature and meeting the selection criteria
       </caption>
       <thead>
+        <th>
+          <md-checkbox ng-click='toggleAllCategories()'
+           ng-checked='allCategorySelected()'>
+          </md-checkbox>
+        </th>
         <th>Index</th>
         <th class="mdl-data-table__cell--non-numeric">Category QID</th>
         <th class="mdl-data-table__cell--non-numeric">Category Name</th>
@@ -291,7 +320,13 @@
 
       <!-- One row per topk parse matching the signature and selected by the
            parse selection formula. -->
-      <tr ng-repeat="parse in query_results.parses track by $index">
+      <tr ng-repeat="parse in query_results.parses track by $index"
+        ng-show="showTableRow($index)">
+        <td>
+          <md-checkbox ng-click='toggleCategory(parse.category_qid)'
+           ng-checked='selected_parses.has(parse.category_qid)'>
+          </md-checkbox>
+        </td>
         <td>{{$index}}</td>
         <td class="mdl-data-table__cell--non-numeric">
           <a ng-href='https://wikidata.org/wiki/{{parse.category_qid}}'
@@ -317,10 +352,16 @@
         </th>
         </td>
       </tr>
+      <tr>
+        <td style='text-align:left' colspan=20>
+          <paginate numresults='query_results.parses.length' ctrl='self'/>
+        </td>
+      </tr>
 
       <!-- Summary of non-topk parses matching the signature and selected by
            the parse selection formula.-->
       <tr ng-show="query_results.parses_not_shown.num > 0">
+        <td>&nbsp;</td>
         <td>&nbsp;</td>
         <td>-</td>
         <td class="mdl-data-table__cell--non-numeric">
@@ -341,6 +382,7 @@
       <!-- Summary of parses matching the signature, but rejected by the
            parse selection formula.-->
       <tr>
+        <td>&nbsp;</td>
         <td>&nbsp;</td>
         <td>-</td>
         <td class="mdl-data-table__cell--non-numeric">
@@ -440,5 +482,15 @@
     </div>
   </div>
 
+  <!-- Popover that shows category constraints -->
+  <div style="visibility: hidden" ng-if='selected_parses.size > 0'>
+    <div class="md-dialog-container" id="categoryConstraintsDialog">
+      <md-dialog layout-padding>
+        <h3>Category Constraints</h3>
+        Parses are constrained to belong to the following categories:
+        <span ng-repeat='qid in selectedCategoriesList()'>{{qid}}</span>.
+      </md-dialog>
+    </div>
+  </div>
 </body>
 </html>

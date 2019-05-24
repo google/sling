@@ -189,7 +189,7 @@ class ParseSelector:
 # a parse-selection formula captured by 'parse_selector'.
 class Request:
   def __init__(self, query, metric, span_subset=None, \
-               parse_selector=None, topk=50):
+               parse_selector=None, topk=500):
     self.query = query
     self.metric = Metric(metric)
     self.span_subset = SpanSubset(span_subset)
