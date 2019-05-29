@@ -47,9 +47,9 @@ echo "Download and unpack the CoNLL formated OntoNotes 5 data"
 wget https://github.com/ontonotes/conll-formatted-ontonotes-5.0/archive/v12.tar.gz
 tar -xf v12.tar.gz --strip-components=1
 
-wget -O train.ids http://ontonotes.cemantix.org/download/english-ontonotes-5.0-train-document-ids.txt
-wget -O dev.ids http://ontonotes.cemantix.org/download/english-ontonotes-5.0-development-document-ids.txt
-wget -O test.ids http://ontonotes.cemantix.org/download/english-ontonotes-5.0-test-document-ids.txt
+wget -O train.ids http://conll.cemantix.org/2012/download/ids/english/coref/train.id
+wget -O dev.ids http://conll.cemantix.org/2012/download/ids/english/coref/development.id
+wget -O test.ids http://conll.cemantix.org/2012/download/ids/english/coref/test.id
 
 wget http://ontonotes.cemantix.org/download/conll-formatted-ontonotes-5.0-scripts.tar.gz
 tar -xf conll-formatted-ontonotes-5.0-scripts.tar.gz

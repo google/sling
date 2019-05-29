@@ -55,6 +55,11 @@ def mem():
 
 # Sets up commonly used command-line training flags.
 def setup_training_flags(flags):
+  flags.define('--train_shuffle_seed',
+               help='Seed for shuffling the train corpus. Not shuffled if -1.',
+               default="314159",
+               type=int,
+               metavar='NUM')
   flags.define('--output_folder',
                help='Output directory where flow will be saved',
                default="",

@@ -97,7 +97,7 @@ class Corpora:
       document.gold = self.generator.generate(document)
     return document
 
-  
+
   # Rewinds to the beginning of the corpus.
   def rewind(self):
     self.reader.rewind()

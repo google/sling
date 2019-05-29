@@ -24,6 +24,7 @@ from functools import partial
 
 sys.path.insert(0, "sling/nlp/parser/trainer")
 import commons_from_corpora as commons_builder
+import random
 from corpora import Corpora
 from pytorch_modules import Caspar
 from spec import Spec
@@ -32,7 +33,24 @@ from train_util import *
 
 
 def train(args):
-  check_present(args, ["train_corpus", "output_folder", "dev_corpus"])
+  check_present(
+      args,
+      ["train_corpus", "output_folder", "dev_corpus", "train_shuffle_seed"])
+
+  train_corpus_path = args.train_corpus
+  if args.train_shuffle_seed > 0:
+    reader = sling.RecordReader(args.train_corpus)
+    items = [(key, value) for key, value in reader]
+    reader.close()
+    r = random.Random(args.train_shuffle_seed)
+    r.shuffle(items)
+    train_corpus_path = os.path.join(args.output_folder, "train_shuffled.rec")
+    writer = sling.RecordWriter(train_corpus_path)
+    for key, value in items:
+      writer.write(key, value)
+    writer.close()
+    print("Wrote shuffled train corpus to %s using seed %d" % \
+          (train_corpus_path, args.train_shuffle_seed))
 
   # Setting an explicit seed for the sake of determinism.
   torch.manual_seed(1)
@@ -46,13 +64,13 @@ def train(args):
     else:
       print("No commons found at", args.commons, ", creating it...")
     _, symbols = commons_builder.build(
-      [args.train_corpus, args.dev_corpus], args.commons)
+      [train_corpus_path, args.dev_corpus], args.commons)
     print("Commons created at", args.commons, "with", len(symbols), \
         "symbols besides the usual ones.")
 
   # Make the training spec.
   spec = Spec()
-  spec.build(args.commons, args.train_corpus)
+  spec.build(args.commons, train_corpus_path)
 
   # Initialize the model with the spec and any word embeddings.
   caspar = Caspar(spec)
@@ -71,7 +89,7 @@ def train(args):
   print("Using hyperparameters:", hyperparams)
 
   trainer = Trainer(caspar, hyperparams, evaluator, output_file_prefix)
-  train = Corpora(args.train_corpus, spec.commons, gold=True)
+  train = Corpora(train_corpus_path, spec.commons, gold=True)
   trainer.train(train)
 
 
