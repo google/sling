@@ -157,10 +157,10 @@ class EntityWorkflow:
                             dir=self.workdir(language),
                             format="records/document")
 
-  def label_documents(self, language=None):
+  def label_documents(self, indocs=None, outdocs=None, language=None):
+    if indocs == None: indocs = self.wiki.wikipedia_documents(language)
+    if outdocs == None: indocs = self.labeled_documents(language)
     if language == None: language = flags.arg.language
-    input_documents = self.wiki.wikipedia_documents(language)
-    output_documents = self.labeled_documents(language)
 
     with self.wf.namespace(language + "-ner"):
       mapper = self.wf.task("document-ner-labeler", "labeler")
@@ -169,7 +169,7 @@ class EntityWorkflow:
       mapper.attach_input("aliases", self.wiki.phrase_table(language))
       mapper.attach_input("dictionary", self.idftable(language))
 
-      self.wf.connect(self.wf.read(input_documents), mapper)
+      self.wf.connect(self.wf.read(indocs), mapper)
       output = self.wf.channel(mapper, format="message/document")
-      self.wf.write(output, output_documents)
+      return self.wf.write(output, outdocs)
 
