@@ -23,7 +23,7 @@ BAZELURL=${BAZELREPO}/releases/download/${BAZELVER}/${BAZELSH}
 if ! which bazel > /dev/null; then
   echo
   echo "=== Install Bazel build system"
-  wget -P ${BAZELURL}
+  wget -P /tmp ${BAZELURL}
   chmod +x /tmp/${BAZELSH}
   sudo /tmp/${BAZELSH}
   rm /tmp/${BAZELSH}
