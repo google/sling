@@ -136,7 +136,7 @@ class FileReader:
     """Reads a string."""
     size = self.read_int()
     if size > 0:
-      return self.read(size).tobytes()
+      return self.read(size).tobytes().decode()
     return ''
 
 
@@ -628,7 +628,7 @@ class Flow:
   def load(self, filename):
     f = FileReader(filename)
     magic = f.read(4)
-    assert magic == 'flow', magic
+    assert magic == memoryview(b'flow'), magic.tobytes()
 
     version = f.read_int()
     assert version == 4 or version == 5, version

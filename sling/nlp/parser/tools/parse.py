@@ -39,7 +39,7 @@ def run(args):
   assert os.path.exists(args.parser), args.parser
 
   # Read parser flow.
-  flow = Flow() 
+  flow = Flow()
   flow.load(args.parser)
 
   # Initialize the spec from the flow.
@@ -61,10 +61,10 @@ def run(args):
     writer.write(str(count), state.encoded())
     count += 1
     if count % 100 == 0:
-      print "Annotated", count, "documents", now(), mem()
+      print("Annotated", count, "documents", now(), mem())
   writer.close()
-  print "Annotated", count, "documents", now(), mem()
-  print "Wrote annotated documents to", args.output
+  print("Annotated", count, "documents", now(), mem())
+  print("Wrote annotated documents to", args.output)
 
   if args.evaluate:
     f = tempfile.NamedTemporaryFile(delete=False)

@@ -17,19 +17,19 @@
 
 Sample usage:
 ONTO=path/to/ontonotes/data/train/data/english/annotations/
-python path/to/this/script.py --output=/tmp/output.rec --input=$ONTO
+python3 path/to/this/script.py --output=/tmp/output.rec --input=$ONTO
 
 # Also import coref annotations (not enabled by default).
-python path/to/this/script.py --no_skip_coref --input=$ONTO
+python3 path/to/this/script.py --no_skip_coref --input=$ONTO
 
 # Only converted a handful of files.
-python path/to/this/script.py --max=100 --input=$ONTO
+python3 path/to/this/script.py --max=100 --input=$ONTO
 
 # Also output conversion summary.
-python path/to/this/script.py --summary=/tmp/summary.txt --input=$ONTO
+python3 path/to/this/script.py --summary=/tmp/summary.txt --input=$ONTO
 
 # Only process files whose names are whitelisted.
-python path/to/this/script.py --allowed_ids_file=/path/to/ids
+python3 path/to/this/script.py --allowed_ids_file=/path/to/ids
 
 By default, the script performs a series of span normalization steps.
 These can be disabled by passing:

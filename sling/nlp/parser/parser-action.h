@@ -141,6 +141,11 @@ struct ParserAction {
     return ParserAction(ParserAction::SHIFT);
   }
 
+  // Returns a STOP action.
+  static ParserAction Stop() {
+    return ParserAction(ParserAction::STOP);
+  }
+
   // Returns an EVOKE action.
   static ParserAction Evoke(uint8 length, Handle type) {
     ParserAction action(ParserAction::EVOKE, length);

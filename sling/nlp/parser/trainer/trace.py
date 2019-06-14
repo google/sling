@@ -70,7 +70,7 @@ class Trace:
     self.document = state.document
     self.begin = state.begin
     self.end = state.end
-  
+
     # List of steps.
     self.steps = []
 
@@ -174,7 +174,7 @@ if __name__ == "__main__":
           'token %d word' % i)
         self.check_eq(base_doc.tokens[i].brk, expt_doc.tokens[i].brk, \
           "token %d brk" % i)
-      
+
     # Throws an error with 'message', and writes the document pair to the
     # pre-specified file.
     def error(self, message):
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     commons.load(arg.commons)
     schema = sling.DocumentSchema(commons)
     commons.freeze()
-    
+
     store = sling.Store(commons)
     index = -1
     for (_, base_val), (_, expt_val) in zip(base_reader, expt_reader):
@@ -260,6 +260,9 @@ if __name__ == "__main__":
       for i in range(len(base_lstm)):
         checker.frame_eq(base_lstm[i], expt_lstm[i], \
           "LSTM features for token %d (%s)" % (i, base_doc.tokens[i].word))
+
+      if arg.skip_steps:
+        continue
 
       # Check steps.
       base_steps = base["/trace/steps"]
@@ -331,6 +334,10 @@ if __name__ == "__main__":
                default="/tmp/diff.txt",
                type=str,
                metavar='FILE')
+  flags.define('--skip_steps',
+               help='Whether to skip diffing steps (only comparing features)',
+               default=False,
+               action='store_true')
   flags.parse()
   assert os.path.exists(flags.arg.base)
   assert os.path.exists(flags.arg.expt)

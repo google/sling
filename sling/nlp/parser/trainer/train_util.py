@@ -174,4 +174,3 @@ def setup_runtime_flags(flags):
                help='Whether to write tracing information in documents',
                default=False,
                action='store_true')
- 

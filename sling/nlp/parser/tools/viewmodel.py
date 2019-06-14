@@ -29,13 +29,13 @@ import trainer as trainer
 
 # Prints evaluation metrics.
 def print_metrics(header, metrics):
-  print "\n", header, "metrics"
-  print "-" * (len(header) + len("metrics") + 1)
+  print("\n", header, "metrics")
+  print("-" * (len(header) + len("metrics") + 1))
   for metric in ['SPAN', 'FRAME', 'TYPE', 'ROLE', 'SLOT']:
     for name in ['Precision', 'Recall', 'F1']:
       key = metric + "_" + name
-      print "  %s: %f" % (key, metrics[key])
-    print
+      print("  %s: %f" % (key, metrics[key]))
+    print()
 
 
 if __name__ == '__main__':
@@ -60,21 +60,24 @@ if __name__ == '__main__':
                metavar='FILE')
   flags.parse()
   assert os.path.exists(flags.arg.flow), flags.arg.flow
- 
+
   f = flow.Flow()
   f.load(flags.arg.flow)
 
   if flags.arg.training_details:
     details = f.blobs.get('training_details', None)
     if not details:
-      print 'No training details in the flow file.'
+      print('No training details in the flow file.')
     else:
       dictionary = pickle.loads(details.data)
-      print 'Hyperparams:\n', dictionary['hyperparams'], '\n'
-      print 'Number of examples seen:', dictionary['num_examples_seen']
+      print('Hyperparams:\n', dictionary['hyperparams'], '\n')
+      print('Number of examples seen:', dictionary['num_examples_seen'])
 
-      (final_loss, final_count) = dictionary['losses'][-1]['total']
-      print 'Final loss', (final_loss / final_count)
+      if len(dictionary['losses']) > 0:
+        (final_loss, final_count) = dictionary['losses'][-1]['total']
+        print('Final loss', (final_loss / final_count))
+      else:
+        print('Final loss: <not available>')
 
       metrics = dictionary['checkpoint_metrics']
       slot_f1 = [metric["SLOT_F1"] for metric in metrics]
@@ -89,7 +92,7 @@ if __name__ == '__main__':
     data = f.blobs['commons'].data
     with open(flags.arg.output_commons, 'wb') as outfile:
       outfile.write(data)
-      print len(data), 'bytes written to', flags.arg.output_commons
+      print(len(data), 'bytes written to', flags.arg.output_commons)
 
   if flags.arg.strip:
     count = 0
@@ -99,5 +102,5 @@ if __name__ == '__main__':
         f.blobs.pop(name)
         count += 1
     f.save(flags.arg.strip)
-    print count, 'blobs removed, flow output to', flags.arg.strip
+    print(count, 'blobs removed, flow output to', flags.arg.strip)
 

@@ -76,7 +76,7 @@ void Trace::Write(Document *document) const {
     Builder step(store);
     int current = steps[i].current;
     step.Add("/trace/current", current);
-    step.Add("/trace/index", 0);
+    step.Add("/trace/index", i);
     string word = "<EOS>";
     if (current < document->num_tokens()) {
       word = document->token(current).word();

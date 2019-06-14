@@ -126,7 +126,7 @@ class Error:
 
     if indent > 0:
       prefix = ' ' * indent
-      for i in xrange(len(output)):
+      for i in range(len(output)):
         if i > 0: output[i] = prefix + output[i]
     return '\n'.join(output)
 
@@ -134,7 +134,7 @@ class Error:
 # Returns a string representation of the specified error code.
 def _codestr(code):
   assert type(code) is int, code
-  for c, value in Error.__dict__.iteritems():
+  for c, value in Error.__dict__.items():
     if type(value) is int and value == code and c[0].isupper():
       return c
   return "<UNKNOWN_ERROR:" + str(code) + ">"
@@ -168,7 +168,7 @@ class Results:
 
   # Aggregates the result set in 'other' to this result set.
   def add(self, other):
-    for code, count in other.error_counts.iteritems():
+    for code, count in other.error_counts.items():
       if code not in self.error_counts:
         self.error_counts[code] = 0
         self.error_examples[code] = []
@@ -188,16 +188,16 @@ class Results:
       return "No errors"
 
     total = 0
-    for code, count in self.error_counts.iteritems():
+    for code, count in self.error_counts.items():
       total += count
 
     output = []
     output.append("Total " + str(total) + " errors")
-    for code, count in self.error_counts.iteritems():
+    for code, count in self.error_counts.items():
       output.append("  " +  _codestr(code) + " : " + str(count))
 
     output.extend(["", "EXAMPLES", "-" * 70, ""])
-    for code, examples in self.error_examples.iteritems():
+    for code, examples in self.error_examples.items():
       output.append(_codestr(code) + ":")
       for index, example in enumerate(examples):
         indent = len(str(index) + ") ")
@@ -324,7 +324,7 @@ def validate(commons, recordio_filename, output_recordio='', options=Options()):
     results = _validate(count, document, options)
     aggregate.add(results)
     if not results.ok() and options.stop_on_first_bad_document:
-      print "Stopping after first bad document as requested"
+      print("Stopping after first bad document as requested")
       break
     count += 1
     if writer and results.ok():
@@ -365,7 +365,7 @@ if __name__ == "__main__":
   options.max_error_examples = flags.arg.max_examples
   results, total, written = validate(
       flags.arg.commons, flags.arg.input, flags.arg.output, options)
-  print "Went over", total, "documents"
+  print("Went over", total, "documents")
   if flags.arg.output:
-    print "Wrote", written, "valid documents to", flags.arg.output
-  print results
+    print("Wrote", written, "valid documents to", flags.arg.output)
+  print(results)

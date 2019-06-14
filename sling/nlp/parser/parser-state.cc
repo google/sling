@@ -117,7 +117,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
       return current_ == end_;
 
     case ParserAction::MARK:
-      return current_ < end_;
+      return current_ < end_ && marks_.size() < 5;
 
     case ParserAction::EVOKE: {
       int begin = current_;
