@@ -150,11 +150,17 @@ class PrelimCategoryParseRanker:
         label = span.qid
       elif self.h_name in label:
         label = label[self.h_name]
+
+      # Ensure 'label' is a string.
+      if isinstance(label, sling.Frame):
+        label = "UNKNOWN" if label.id is None else label.id
+      assert isinstance(label, str), label
+
       if coarse:
-        word = '$' + str(label)
+        word = '$' + label
       else:
         pids = '.'.join([pid.name for pid in span.pids])
-        word = '$' + pids + '=$' + str(label)
+        word = '$' + pids + '=$' + label
       word = word.replace(' ', '_')
       span_signature[span] = word
       tokens.append(word)
