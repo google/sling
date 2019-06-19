@@ -16,10 +16,11 @@
 
 #include <inttypes.h>
 #include <algorithm>
+#include <cmath>
 #include <queue>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <string>
 #include <vector>
 
 #include "sling/base/status.h"
@@ -55,28 +56,90 @@ std::unordered_map<string, Type> typemap = {
   {"resource", DT_RESOURCE},
 };
 
+static double f64_zero = 0.0;
+static float f32_zero = 0.0;
+static int64_t i64_zero = 0;
+static int32_t i32_zero = 0;
+static int16_t i16_zero = 0;
+static uint16_t u16_zero = 0;
+static int8_t i8_zero = 0;
+static uint8_t u8_zero = 0;
+static bool b_zero = false;
+
+static double f64_one = 1.0;
+static float f32_one = 1.0;
+static int64_t i64_one = 1;
+static int32_t i32_one = 1;
+static int16_t i16_one = 1;
+static uint16_t u16_one = 1;
+static int8_t i8_one = 1;
+static uint8_t u8_one = 1;
+static bool b_one = true;
+
 std::vector<TypeTraits> typetraits = {
-  {DT_INVALID, "void", 0, nullptr, nullptr, nullptr},
-  {DT_FLOAT, "float32", sizeof(float), "float", "f32", "f"},
-  {DT_DOUBLE, "float64", sizeof(double), "double", "f64", "d"},
-  {DT_INT32, "int32", sizeof(int32_t), "int32_t", "s32", "i"},
-  {DT_UINT8, "uint8", sizeof(uint8_t), "uint8_t", "u8", "B"},
-  {DT_INT16, "int16", sizeof(int16_t), "int16_t", "s16", "h"},
-  {DT_INT8, "int8", sizeof(int8_t), "int8_t", "s8", "b"},
-  {DT_STRING, "string", sizeof(char *), "char *", "b64", nullptr},
-  {DT_COMPLEX64, "complex64", 2 * sizeof(double), nullptr, nullptr, nullptr},
-  {DT_INT64, "int64", sizeof(int64_t), "int64_t", "s64", "q"},
-  {DT_BOOL, "bool", sizeof(bool), "bool", "b8", "?"},
-  {DT_QINT8, "qint8", sizeof(int8_t), nullptr, nullptr, nullptr},
-  {DT_QUINT8, "quint8", sizeof(uint8_t), nullptr, nullptr, nullptr},
-  {DT_QINT32, "qint32", sizeof(int32_t), nullptr, nullptr, nullptr},
-  {DT_BFLOAT16, "bfloat16", 2, nullptr, nullptr, nullptr},
-  {DT_QINT16, "qint16", sizeof(int16_t), nullptr, nullptr, nullptr},
-  {DT_UINT16, "uint16", sizeof(uint16_t), nullptr, nullptr, nullptr},
-  {DT_QUINT16, "quint16", sizeof(uint16_t), nullptr, nullptr, nullptr},
-  {DT_COMPLEX128, "complex128", 2 * sizeof(double), nullptr, nullptr, nullptr},
-  {DT_HALF, "float16", 2, nullptr, "f16", nullptr},
-  {DT_RESOURCE, "resource", 1, "char *", nullptr, nullptr},
+  {DT_INVALID, "void", 0,
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_FLOAT, "float32", sizeof(float),
+   "float", "f32", 0, "f",
+   &f32_zero, &f32_one},
+  {DT_DOUBLE, "float64", sizeof(double),
+   "double", "f64", 1, "d",
+   &f64_zero, &f64_one},
+  {DT_INT32, "int32", sizeof(int32_t),
+   "int32_t", "s32", 10, "i",
+   &i32_zero, &i32_one},
+  {DT_UINT8, "uint8", sizeof(uint8_t),
+   "uint8_t", "u8", 8, "B",
+   &u8_zero, &u8_one},
+  {DT_INT16, "int16", sizeof(int16_t),
+   "int16_t", "s16", -1, "h",
+   &i16_zero, &i16_one},
+  {DT_INT8, "int8", sizeof(int8_t),
+   "int8_t", "s8", 3, "b",
+   &i8_zero, &i8_one},
+  {DT_STRING, "string", sizeof(char *),
+   "char *", "b64", -1, nullptr,
+   nullptr, nullptr},
+  {DT_COMPLEX64, "complex64", 2 * sizeof(float),
+   nullptr, nullptr, 5, nullptr,
+   nullptr, nullptr},
+  {DT_INT64, "int64", sizeof(int64_t),
+   "int64_t", "s64", -1, "q",
+   &i64_zero, &i64_one},
+  {DT_BOOL, "bool", sizeof(bool),
+   "bool", "b8", -1, "?",
+   &b_zero, &b_one},
+  {DT_QINT8, "qint8", sizeof(int8_t),
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_QUINT8, "quint8", sizeof(uint8_t),
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_QINT32, "qint32", sizeof(int32_t),
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_BFLOAT16, "bfloat16", 2,
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_QINT16, "qint16", sizeof(int16_t),
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_UINT16, "uint16", sizeof(uint16_t),
+   nullptr, nullptr, -1, nullptr,
+   &u16_zero, &u16_one},
+  {DT_QUINT16, "quint16", sizeof(uint16_t),
+   nullptr, nullptr, -1, nullptr,
+   nullptr, nullptr},
+  {DT_COMPLEX128, "complex128", 2 * sizeof(double),
+   nullptr, nullptr, 5, nullptr,
+   nullptr, nullptr},
+  {DT_HALF, "float16", 2,
+   nullptr, "f16", 2, nullptr,
+   nullptr, nullptr},
+  {DT_RESOURCE, "resource", 1,
+   "char *", nullptr, -1, nullptr,
+   nullptr, nullptr},
 };
 
 bool Shape::IsSameSize(const Shape &other) const {
@@ -169,6 +232,41 @@ string TypeTraits::str(const void *data) const {
 
     default:
       return "???";
+  }
+}
+
+double TypeTraits::number(const void *data) const {
+  if (data == nullptr) return NAN;
+  switch (type_) {
+    case DT_INT8:
+      return *reinterpret_cast<const int8 *>(data);
+
+    case DT_INT16:
+      return *reinterpret_cast<const int16 *>(data);
+
+    case DT_INT32:
+      return *reinterpret_cast<const int32 *>(data);
+
+    case DT_INT64:
+      return *reinterpret_cast<const int64 *>(data);
+
+    case DT_UINT8:
+      return *reinterpret_cast<const uint8 *>(data);
+
+    case DT_UINT16:
+      return *reinterpret_cast<const uint16 *>(data);
+
+    case DT_FLOAT:
+      return *reinterpret_cast<const float *>(data);
+
+    case DT_DOUBLE:
+      return *reinterpret_cast<const double *>(data);
+
+    case DT_BOOL:
+      return *reinterpret_cast<const bool *>(data);
+
+    default:
+      return NAN;
   }
 }
 
@@ -283,6 +381,37 @@ float Attributes::GetAttr(const string &name, float defval) const {
   return defval;
 }
 
+bool Attributes::GetAttr(const string &name, Shape *shape) const {
+  string str = GetAttr(name);
+  const char *p = str.c_str();
+  if (*p == 0) return false;
+  shape->clear();
+  if (*p == '[') p++;
+  while (*p == ' ') p++;
+  while (*p != 0 && *p != ']') {
+    while (*p == ' ') p++;
+    if (shape->rank() > 0 && *p++ != ',') return false;
+    while (*p == ' ') p++;
+    if (*p >= '0' && *p <= '9') {
+      int n = 0;
+      while (*p >= '0' && *p <= '9') {
+        n = n * 10 + (*p++ - '0');
+      }
+      shape->add(n);
+    } else if (*p == ']') {
+      shape->add(-1);
+      break;
+    } else if (*p == ',') {
+      shape->add(-1);
+    } else {
+      return false;
+    }
+  }
+  if (*p == ']') p++;
+  if (*p != 0) return false;
+  return true;
+}
+
 bool Attributes::HasAttr(const string &name) const {
   for (auto &attr : *this) {
     if (attr.name == name) return true;
@@ -314,6 +443,17 @@ void Attributes::SetAttr(const string &name, bool value) {
 
 void Attributes::SetAttr(const string &name, float value) {
   SetAttr(name, std::to_string(value));
+}
+
+void Attributes::SetAttr(const string &name, const Shape &value) {
+  string str;
+  str.push_back('[');
+  for (int d = 0; d < value.rank(); ++d) {
+    if (d > 0) str.push_back(',');
+    if (value.dim(d) >= 0) str.append(std::to_string(value.dim(d)));
+  }
+  str.push_back(']');
+  SetAttr(name, str);
 }
 
 void Attributes::RemoveAttr(const string &name) {
@@ -558,6 +698,12 @@ void Flow::Operation::ReplaceOutput(Variable *var, Variable *replacement) {
       output = replacement;
     }
   }
+}
+
+void Flow::Operation::SwapInputs(int first, int second) {
+  DCHECK_LT(first, inputs.size());
+  DCHECK_LT(second, inputs.size());
+  std::swap(inputs[first], inputs[second]);
 }
 
 Flow::Variable *Flow::Operation::GetPrototype() const {
@@ -1268,7 +1414,7 @@ void Flow::Eliminate(Operation *op) {
   VLOG(10) << "Eliminate " << op->name;
 
   if (op->inputs.size() > 0) {
-    // Update all usages of output to use the input variable instead.
+    // Check that input and output are compatible.
     CHECK_EQ(op->inputs.size(), 1);
     CHECK_EQ(op->outputs.size(), 1);
     Variable *input = op->inputs[0];
@@ -1279,57 +1425,65 @@ void Flow::Eliminate(Operation *op) {
     if (input->shape.defined() && output->shape.defined()) {
       CHECK(input->shape == output->shape) << op->name;
     }
-    if (output->in()) input->set_in();
-    if (output->out()) input->set_out();
-    if (output->ref()) input->set_ref();
-    for (Operation *target : ops_) {
-      for (int i = 0; i < target->inputs.size(); ++i) {
-        if (target->inputs[i] == output) {
-          target->inputs[i] = input;
-        }
-      }
-    }
 
-    // Remove op as consumer of input variable.
-    auto f = std::find(input->consumers.begin(), input->consumers.end(), op);
-    CHECK(f != input->consumers.end()) << op->name;
-    input->consumers.erase(f);
+    // Detach op.
+    op->RemoveInput(input);
+    op->RemoveOutput(output);
 
-    // Move consumers of output variable to input variable.
-    for (Operation *consumer : output->consumers) {
-      input->consumers.push_back(consumer);
-    }
-
-    // Merge input and output variable names.
     if (output->out()) {
-      input->AddAlias(input->name);
-      input->name = output->name;
+      // Replace input with output.
+      output->flags |= input->flags;
+
+      // Update all usages of input to use the output variable instead.
+      while (input->usages() > 0) {
+        Operation *consumer = input->consumers[0];
+        consumer->ReplaceInput(input, output);
+      }
+
+      if (input->producer != nullptr) {
+        input->producer->ReplaceOutput(input, output);
+      }
+
+      // Merge variable names.
+      output->AddAlias(input->name);
+      for (const string &alias : input->aliases) output->AddAlias(alias);
+
+      // Update connectors replacing the input with the output.
+      for (Connector *cnx : cnxs_) {
+        cnx->ReplaceLink(input, output);
+      }
+
+      DeleteVariable(input);
+
+      // Check for unused variable. The local variable still needs to be
+      // generated even if there are no consumers.
+      if (output->local() && output->in() && output->detached()) {
+        op->func->unused.push_back(output);
+      }
+
     } else {
+      // Replace output with input.
+      input->flags |= output->flags;
+
+      // Update all usages of output to use the input variable instead.
+      while (output->usages() > 0) {
+        Operation *consumer = output->consumers[0];
+        consumer->ReplaceInput(output, input);
+      }
+
+      // Merge variable names.
       input->AddAlias(output->name);
-    }
-    for (const string &alias : output->aliases) {
-      input->AddAlias(alias);
-    }
+      for (const string &alias : output->aliases) input->AddAlias(alias);
 
-    // Update connectors replacing the output with the input.
-    for (Connector *cnx : cnxs_) {
-      cnx->ReplaceLink(output, input);
-    }
+      // Update connectors replacing the output with the input.
+      for (Connector *cnx : cnxs_) {
+        cnx->ReplaceLink(output, input);
+      }
 
-    // Delete output variable.
-    DeleteVariable(output);
-
-    // Check for unused input. The local input variable still needs to be
-    // generated even if there are no consumers.
-    if (input->local() && input->in() && input->detached()) {
-      op->func->unused.push_back(input);
+      DeleteVariable(output);
     }
-  } else {
-    // Clear producer for outputs.
-    for (Variable *var : op->outputs) var->producer = nullptr;
   }
 
-  // Delete operation.
   DeleteOperation(op);
 }
 
@@ -1977,6 +2131,22 @@ Flow::Blob *Flow::DataBlock(const string &name) {
     if (blob->name == name) return blob;
   }
   return nullptr;
+}
+
+string Flow::VarName(const string &prefix) {
+  for (int n = 0;; ++n) {
+    string name = prefix;
+    if (n > 0) name.append(std::to_string(n));
+    if (Var(name) == nullptr) return name;
+  }
+}
+
+string Flow::OpName(const string &prefix) {
+  for (int n = 0;; ++n) {
+    string name = prefix;
+    if (n > 0) name.append(std::to_string(n));
+    if (Op(name) == nullptr) return name;
+  }
 }
 
 string GradientVarName(const string &name) {

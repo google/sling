@@ -114,11 +114,11 @@ class Parser {
   myelin::Cell *GetCell(const string &name);
   myelin::Tensor *GetParam(const string &name, bool optional = false);
 
-  // Parser network.
-  myelin::Network network_;
-
   // JIT compiler.
   myelin::Compiler compiler_;
+
+  // Parser network.
+  myelin::Network network_;
 
   // Lexical encoder.
   LexicalEncoder encoder_;

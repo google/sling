@@ -24,7 +24,8 @@ using namespace jit;
 // Generate vector float expression using AVX and YMM registers.
 class VectorFltAVX512Generator : public ExpressionGenerator {
  public:
-  VectorFltAVX512Generator() {
+  VectorFltAVX512Generator(Type type) {
+    model_.name = "VFltAVX512";
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -39,14 +40,33 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
       model_.fm_reg_reg_reg = true;
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
+      model_.instruction_set({
+        Express::MULADD132, Express::MULADD213, Express::MULADD231,
+        Express::MULSUB132, Express::MULSUB213, Express::MULSUB231,
+      });
     }
     model_.cond_reg_reg_reg = true;
     model_.cond_reg_mem_reg = true;
     model_.predicate_regs = true;
     model_.logic_in_regs = true;
+    model_.instruction_set({
+      Express::MOV,
+      Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+      Express::RECIPROCAL, Express::SQRT, Express::RSQRT,
+      Express::MINIMUM, Express::MAXIMUM,
+      Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+      Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+      Express::COND, Express::SELECT, Express::QUADSIGN, Express::BITEQ,
+      Express::AND, Express::OR, Express::XOR, Express::ANDNOT, Express::NOT,
+      Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+      Express::FLOOR, Express::CEIL, Express::ROUND, Express::TRUNC,
+      Express::CVTFLTINT, Express::CVTINTFLT,
+      Express::CVTEXPINT, Express::CVTINTEXP,
+      Express::ADDINT, Express::SUBINT,
+      Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+      Express::ALL, Express::ANY,
+    });
   }
-
-  string Name() override { return "VFltAVX512"; }
 
   int VectorSize() override { return ZMMRegSize; }
 
@@ -58,13 +78,25 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
-    if (instructions_.Has(Express::MOV) ||
-        instructions_.Has(Express::SUM) ||
-        instructions_.Has(Express::PRODUCT) ||
-        instructions_.Has(Express::MIN) ||
-        instructions_.Has(Express::MAX)) {
+    int num_rr_aux = 0;
+    if (instructions_.Has({Express::SUM, Express::PRODUCT,
+                           Express::MIN, Express::MAX})) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
+    if (instructions_.Has({Express::ALL, Express::ANY})) {
+      num_rr_aux = std::max(num_rr_aux, 1);
+    }
+    if (instructions_.Has(Express::MOV)) {
+      bool pred_mov = false;
+      for (auto *op : instructions_.ops()) {
+        if (op->result->predicate || op->args[0]->predicate) {
+          pred_mov = true;
+          break;
+        }
+      }
+      if (pred_mov) num_mm_aux = std::max(num_mm_aux, 1);
+    }
+    index_->ReserveAuxRegisters(num_rr_aux);
     index_->ReserveAuxZMMRegisters(num_mm_aux);
   }
 
@@ -137,6 +169,20 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
             nullptr, nullptr,
             &Assembler::vsqrtps, &Assembler::vsqrtpd,
             &Assembler::vsqrtps, &Assembler::vsqrtpd,
+            masm);
+        break;
+      case Express::RSQRT:
+        GenerateZMMFltOp(instr,
+            &Assembler::vrsqrt14ps, &Assembler::vrsqrt14pd,
+            nullptr, nullptr,
+            &Assembler::vrsqrt14ps, &Assembler::vrsqrt14pd,
+            masm);
+        break;
+      case Express::RECIPROCAL:
+        GenerateZMMFltOp(instr,
+            &Assembler::vrcp14ps, &Assembler::vrcp14ps,
+            nullptr, nullptr,
+            &Assembler::vrcp14ps, &Assembler::vrcp14ps,
             masm);
         break;
       case Express::MULADD132:
@@ -226,11 +272,46 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
             &Assembler::vorps, &Assembler::vorpd,
             masm);
         break;
+      case Express::BITXOR:
+        GenerateZMMFltOp(instr,
+            &Assembler::vxorps, &Assembler::vxorpd,
+            nullptr, nullptr,
+            &Assembler::vxorps, &Assembler::vxorpd,
+            masm);
+        break;
+      case Express::BITANDNOT:
+        GenerateZMMFltOp(instr,
+            &Assembler::vandnps, &Assembler::vandnpd,
+            nullptr, nullptr,
+            &Assembler::vandnps, &Assembler::vandnpd,
+            masm);
+        break;
+      case Express::BITEQ:
+        GenerateBitEqual(instr, masm);
+        break;
       case Express::FLOOR:
         GenerateZMMFltOp(instr,
             &Assembler::vrndscaleps, &Assembler::vrndscalepd,
             &Assembler::vrndscaleps, &Assembler::vrndscalepd,
             round_down, masm);
+        break;
+      case Express::CEIL:
+        GenerateZMMFltOp(instr,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            round_up, masm);
+        break;
+      case Express::ROUND:
+        GenerateZMMFltOp(instr,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            round_nearest, masm);
+        break;
+      case Express::TRUNC:
+        GenerateZMMFltOp(instr,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            &Assembler::vrndscaleps, &Assembler::vrndscalepd,
+            round_to_zero, masm);
         break;
       case Express::CVTFLTINT:
         GenerateZMMFltOp(instr,
@@ -251,6 +332,16 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
         break;
       case Express::CVTINTEXP:
         GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::QUADSIGN:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 29 : 61);
+        break;
+      case Express::ADDINT:
+        GenerateZMMFltOp(instr,
+            &Assembler::vpaddd, &Assembler::vpaddq,
+            nullptr, nullptr,
+            &Assembler::vpaddd, &Assembler::vpaddq,
+            masm);
         break;
       case Express::SUBINT:
         GenerateZMMFltOp(instr,
@@ -287,8 +378,14 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
             &Assembler::vmaxps, &Assembler::vmaxpd,
             masm);
         break;
+      case Express::ALL:
+        __ kandw(kk(instr->acc), kk(instr->acc), kk(instr->src));
+        break;
+      case Express::ANY:
+        __ korw(kk(instr->acc), kk(instr->acc), kk(instr->src));
+        break;
       default:
-        UNSUPPORTED;
+        LOG(FATAL) << "Unsupported instruction: " << instr->AsInstruction();
     }
   }
 
@@ -298,16 +395,30 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
       if (instr->src != -1) {
         __ kmovw(kk(instr->dst), kk(instr->src));
       } else {
-        switch (type_) {
-          case DT_FLOAT:
-            __ vmovaps(zmmaux(0), addr(instr->args[0]));
-            __ vpmovd2m(kk(instr->dst), zmmaux(0));
-            break;
-          case DT_DOUBLE:
-            __ vmovapd(zmmaux(0), addr(instr->args[0]));
-            __ vpmovq2m(kk(instr->dst), zmmaux(0));
-            break;
-          default: UNSUPPORTED;
+        // Handle all zeroes or ones as special case.
+        auto *value = instr->args[0];
+        bool zeroes = false;
+        bool ones = false;
+        if (value->type == Express::NUMBER) {
+          if (value->id == Express::ZERO) zeroes = true;
+          if (value->id == Express::QNAN) ones = true;
+        }
+        if (zeroes) {
+          __ kxorw(kk(instr->dst), kk(instr->dst), kk(instr->dst));
+        } else if (ones) {
+          __ kxnorw(kk(instr->dst), kk(instr->dst), kk(instr->dst));
+        } else {
+          switch (type_) {
+            case DT_FLOAT:
+              __ vmovaps(zmmaux(0), addr(value));
+              __ vpmovd2m(kk(instr->dst), zmmaux(0));
+              break;
+            case DT_DOUBLE:
+              __ vmovapd(zmmaux(0), addr(value));
+              __ vpmovq2m(kk(instr->dst), zmmaux(0));
+              break;
+            default: UNSUPPORTED;
+          }
         }
       }
     } else if (instr->src != -1) {
@@ -426,6 +537,33 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
     }
   }
 
+  // Generate bitwise compare equal.
+  void GenerateBitEqual(Express::Op *instr, MacroAssembler *masm) {
+    if (instr->src != -1 && instr->src2 != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vpcmpeqd(kk(instr->dst), zmm(instr->src), zmm(instr->src2));
+          break;
+        case DT_DOUBLE:
+          __ vpcmpeqq(kk(instr->dst), zmm(instr->src), zmm(instr->src2));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->src != -1 && instr->src2 == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vpcmpeqd(kk(instr->dst), zmm(instr->src), addr(instr->args[1]));
+          break;
+        case DT_DOUBLE:
+          __ vpcmpeqq(kk(instr->dst), zmm(instr->src), addr(instr->args[1]));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      UNSUPPORTED;
+    }
+  }
+
   // Generate conditional.
   void GenerateConditional(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
@@ -487,34 +625,59 @@ class VectorFltAVX512Generator : public ExpressionGenerator {
 
   // Generate code for reduction operation.
   void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
-    auto acc = zmm(instr->acc);
-    auto aux = zmmaux(0);
-    __ Reduce(ReduceOp(instr), type_, acc, aux);
+    if (instr->preduction()) {
+      // Check if all mask bits are set.
+      CHECK(instr->dst == -1);
+      Label l1;
+      switch (type_) {
+        case DT_FLOAT:
+          __ xorq(aux(0), aux(0));
+          __ kortestw(kk(instr->acc), kk(instr->acc));
+          __ j(instr->type == Express::ALL ? not_carry : zero, &l1);
+          __ decq(aux(0));
+          __ bind(&l1);
+          __ movl(addr(instr->result), aux(0));
+          break;
+        case DT_DOUBLE:
+          __ xorq(aux(0), aux(0));
+          __ kortestb(kk(instr->acc), kk(instr->acc));
+          __ j(instr->type == Express::ALL ? not_carry : zero, &l1);
+          __ decq(aux(0));
+          __ bind(&l1);
+          __ movq(addr(instr->result), aux(0));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      auto acc = zmm(instr->acc);
+      auto aux = zmmaux(0);
+      __ Reduce(ReduceOp(instr), type_, acc, aux);
 
-    switch (type_) {
-      case DT_FLOAT:
-        if (instr->dst != -1) {
-          __ vmovss(zmm(instr->dst).x(), zmm(instr->dst).x(),
-                    zmm(instr->acc).x());
-        } else {
-          __ vmovss(addr(instr->result), zmm(instr->acc).x());
-        }
-        break;
-      case DT_DOUBLE:
-        if (instr->dst != -1) {
-          __ vmovsd(zmm(instr->dst).x(), zmm(instr->dst).x(),
-                    zmm(instr->acc).x());
-        } else {
-          __ vmovsd(addr(instr->result), zmm(instr->acc).x());
-        }
-        break;
-      default: UNSUPPORTED;
+      switch (type_) {
+        case DT_FLOAT:
+          if (instr->dst != -1) {
+            __ vmovss(zmm(instr->dst).x(), zmm(instr->dst).x(),
+                      zmm(instr->acc).x());
+          } else {
+            __ vmovss(addr(instr->result), zmm(instr->acc).x());
+          }
+          break;
+        case DT_DOUBLE:
+          if (instr->dst != -1) {
+            __ vmovsd(zmm(instr->dst).x(), zmm(instr->dst).x(),
+                      zmm(instr->acc).x());
+          } else {
+            __ vmovsd(addr(instr->result), zmm(instr->acc).x());
+          }
+          break;
+        default: UNSUPPORTED;
+      }
     }
   }
 };
 
-ExpressionGenerator *CreateVectorFltAVX512Generator() {
-  return new VectorFltAVX512Generator();
+ExpressionGenerator *CreateVectorFltAVX512Generator(Type type) {
+  return new VectorFltAVX512Generator(type);
 }
 
 }  // namespace myelin

@@ -139,6 +139,9 @@ class ConstantFolding : public Transformer {
         // Operation must have both inputs and outputs.
         if (op->inputs.empty() || op->outputs.empty()) continue;
 
+        // Do not fold ops with the keep flag set.
+        if (op->GetAttr("keep", false)) continue;
+
         // Identity op elimination is handled elsewhere.
         if (op->type == "Identity") continue;
 

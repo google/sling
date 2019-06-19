@@ -115,6 +115,7 @@ class FlowBuilder : public Scope {
   Variable *Const(float value) { return Const(&value, DT_FLOAT, {}); }
   Variable *Const(double value) { return Const(&value, DT_DOUBLE, {}); }
   Variable *Const(int value) { return Const(&value, DT_INT32, {}); }
+  Variable *Const(double value, Type type);
   Variable *Const(std::vector<float> &value) {
     int size = value.size();
     return Const(value.data(), DT_FLOAT, {size});
@@ -156,18 +157,49 @@ class FlowBuilder : public Scope {
   Variable *Neg(Variable *x) { return Op("Neg", {x}); }
   Variable *Square(Variable *x) { return Op("Square", {x}); }
   Variable *Sqrt(Variable *x) { return Op("Sqrt", {x}); }
+  Variable *Rsqrt(Variable *x) { return Op("Rsqrt", {x}); }
   Variable *Reciprocal(Variable *x) { return Op("Reciprocal", {x}); }
   Variable *Abs(Variable *x) { return Op("Abs", {x}); }
   Variable *Sign(Variable *x) { return Op("Sign", {x}); }
   Variable *Log(Variable *x) { return Op("Log", {x}); }
   Variable *Exp(Variable *x) { return Op("Exp", {x}); }
-  Variable *Tanh(Variable *x) { return Op("Tanh", {x}); }
+  Variable *Pow(Variable *x, Variable *y) { return Op("Pow", {x, y}); }
   Variable *Erf(Variable *x) { return Op("Erf", {x}); }
   Variable *Sigmoid(Variable *x) { return Op("Sigmoid", {x}); }
   Variable *Relu(Variable *x) { return Op("Relu", {x}); }
   Variable *Identity(Variable *x) { return Op("Identity", {x}); }
+
+  // Trigonometric functions.
   Variable *Cos(Variable *x) { return Op("Cos", {x}); }
   Variable *Sin(Variable *x) { return Op("Sin", {x}); }
+  Variable *Tan(Variable *x) { return Op("Tan", {x}); }
+  Variable *Cot(Variable *x) { return Op("Cot", {x}); }
+  Variable *Sec(Variable *x) { return Op("Sec", {x}); }
+  Variable *Csc(Variable *x) { return Op("Csc", {x}); }
+
+  // Inverse trigonometric functions.
+  Variable *Acos(Variable *x) { return Op("Acos", {x}); }
+  Variable *Asin(Variable *x) { return Op("ASin", {x}); }
+  Variable *Atan(Variable *x) { return Op("Atan", {x}); }
+  Variable *Acot(Variable *x) { return Op("Acot", {x}); }
+  Variable *Asec(Variable *x) { return Op("Asec", {x}); }
+  Variable *Acsc(Variable *x) { return Op("Acsc", {x}); }
+
+  // Hyperbolic functions.
+  Variable *Cosh(Variable *x) { return Op("Cosh", {x}); }
+  Variable *Sinh(Variable *x) { return Op("Sinh", {x}); }
+  Variable *Tanh(Variable *x) { return Op("Tanh", {x}); }
+  Variable *Coth(Variable *x) { return Op("Coth", {x}); }
+  Variable *Sech(Variable *x) { return Op("Sech", {x}); }
+  Variable *Csch(Variable *x) { return Op("Csch", {x}); }
+
+  // Inverse hyperbolic functions.
+  Variable *Acosh(Variable *x) { return Op("Acosh", {x}); }
+  Variable *Asinh(Variable *x) { return Op("ASinh", {x}); }
+  Variable *Atanh(Variable *x) { return Op("Atanh", {x}); }
+  Variable *Acoth(Variable *x) { return Op("Acoth", {x}); }
+  Variable *Asech(Variable *x) { return Op("Asech", {x}); }
+  Variable *Acsch(Variable *x) { return Op("Acsch", {x}); }
 
   // Comparison.
   Variable *Equal(Variable *x, Variable *y) {
@@ -229,14 +261,26 @@ class FlowBuilder : public Scope {
     return Op("Transpose", {x}, x->type, x->shape.transpose());
   }
 
+  // Tensor transpose.
+  Variable *Transpose(Variable *x, const Shape &perm) {
+    auto *t = Op("Transpose", {x}, x->type, x->shape.permute(perm));
+    t->producer->SetAttr("perm", perm);
+    return t;
+  }
+
   // Reductions.
   Variable *Sum(Variable *x) { return Op("Sum", {x}, x->type, {}); }
   Variable *Product(Variable *x) { return Op("Product", {x}, x->type, {}); }
   Variable *Max(Variable *x) { return Op("Max", {x}, x->type, {}); }
   Variable *Min(Variable *x) { return Op("Min", {x}, x->type, {}); }
+  Variable *All(Variable *x) { return Op("All", {x}, x->type, {}); }
+  Variable *Any(Variable *x) { return Op("Any", {x}, x->type, {}); }
   Variable *Mean(Variable *x) {
     float size = x->elements();
     return Div(Sum(x), Const(size));
+  }
+  Variable *Count(Variable *p, Type type = DT_FLOAT) {
+    return Op("Count", {p}, type, {});
   }
   Variable *ArgMin(Variable *x) { return Op("ArgMin", {x}, DT_INT32, {}); }
   Variable *ArgMax(Variable *x) { return Op("ArgMax", {x}, DT_INT32, {}); }

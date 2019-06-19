@@ -15,6 +15,7 @@
 
 """Myelin function builder and expression evaluator."""
 
+import array
 from .flow import set_builder_factory, Variable
 
 DT_FLOAT32 = "float32"
@@ -42,19 +43,91 @@ typemap = {
   "?": DT_BOOL,
 }
 
+typecodes = {
+  DT_FLOAT32: "f",
+  DT_FLOAT64: "d",
+  DT_INT8: "b",
+  DT_INT16: "h",
+  DT_INT32: "i",
+  DT_INT64: "q",
+  DT_BOOL: "?",
+}
+
+dtypes = {
+  int: DT_INT32,
+  float: DT_FLOAT32,
+}
+
+# Compute product of elements in list.
+def list_product(l):
+  n = 1
+  for e in l: n *= e
+  return n
+
+# Compute the shape of a nested list.
+def list_shape(l):
+  shape = None
+  for e in l:
+    if type(e) is list:
+      s = list_shape(e)
+      if shape is None:
+        shape = s
+      elif shape != s:
+        return None
+  if shape is None: return [len(l)]
+  return [len(l)] + shape
+
+# Flatten nested list.
+def flatten_list(flat, l):
+  for e in l:
+    if type(e) is list:
+      flatten_list(flat, e)
+    else:
+      flat.append(e)
+
+# Convert nested list to array.
+def list_to_array(l, typecode=None):
+  # Get list shape.
+  shape = list_shape(l)
+  if shape is None: raise TypeError("Unsupported list shape")
+
+  # Flatten list.
+  f = []
+  flatten_list(f, l)
+
+  # Determine list type.
+  if typecode is None:
+    for e in f:
+      et = type(e)
+      if et == float or typecode == 'f':
+        typecode = 'f'
+      elif et == int or typecode == 'i':
+        typecode = 'i'
+  if typecode is None: typecode = 'f'
+
+  # Convert list to array.
+  a = array.array(typecode, f)
+
+  # Return array, type, and shape.
+  return a, typecode, shape
+
 class Builder:
   def __init__(self, flow, func):
     self.flow = flow
     self.func = flow.func(func)
 
   def var(self, name, dtype=DT_FLOAT, shape=[]):
-    v = self.flow.var(self.func.name + "/" + name)
+    n = self.func.name + "/" + name
+    if n in self.flow.vars: raise IndexError("variable already defined: " + n);
+    v = self.flow.var(n)
     v.type = dtype
     v.shape = shape
     return v
 
   def rename(self, var, new_suffix):
-    var.name = self.func.name + "/" + new_suffix
+    n = self.func.name + "/" + new_suffix
+    if n in self.flow.vars: raise IndexError("variable already defined: " + n);
+    var.name = n
     return var
 
   def cnx(self, name, args):
@@ -67,7 +140,7 @@ class Builder:
     if name is None:
       name = self.opname(optype)
     else:
-      name = self.func.name + "/" + name
+      name = self.opname(name)
     op = self.flow.op(name)
     op.type = optype
     self.func.add(op)
@@ -85,20 +158,29 @@ class Builder:
     if name is None:
       name = self.opname(optype)
     else:
-      name = self.func.name + "/" + name
+      name = self.opname(name)
     op = self.flow.op(name)
     op.type = optype
     self.func.add(op)
     return op
 
   def const(self, value, dtype=None, shape=None):
-    # Convert scalars.
+    # Convert scalars and lists.
     if type(value) is float:
       if dtype is None: dtype = DT_FLOAT
       if shape is None: shape = []
     elif type(value) is int:
       if dtype is None: dtype = DT_INT
       if shape is None: shape = []
+    elif type(value) is list:
+      value, typecode, shape = list_to_array(value, typecodes.get(dtype))
+      dtype = typemap[typecode]
+
+    # Convert arrays.
+    if type(value) is array.array:
+      if dtype is None: dtype = typemap[value.typecode]
+      if shape is None: shape = [len(value)]
+      value = memoryview(value)
 
     # Get type and shape if missing.
     if dtype is None: dtype = str(value.dtype)
@@ -109,11 +191,15 @@ class Builder:
     return var
 
   def array(self, name, value):
+    # Convert lists to arrays that support the buffer protocol.
+    if type(value) is list:
+      value, _, _ = list_to_array(value)
+
     # Make constant from object with buffer support.
     view = memoryview(value)
     dtype = typemap[view.format]
     shape = list(view.shape)
-    var = self.flow.var(self.func.name + "/" + name, dtype, shape)
+    var = self.flow.var(self.varname(name), dtype, shape)
     var.data = value
     return var
 
@@ -162,6 +248,11 @@ class Builder:
       op.add_output(o)
       results.append(o)
     return tuple(results)
+
+  def reshape(self, x, shape, name=None):
+    result = self.op("Reshape", [x, self.const(shape)], name)
+    result.shape = shape
+    return result
 
   def add(self, x, y, name=None):
     return self.op("Add", [x, y], name)
@@ -225,20 +316,29 @@ class Builder:
 
   def matmul(self, x, y, name=None):
     result = self.op("MatMul", [x, y], name)
-    result.type = x.type
-    if len(x.shape) == 2 and len(y.shape) == 2:
-      result.shape = [x.shape[0], y.shape[1]]
-    else:
-      result.shape = [0]
+    result.shape = x.shape[:-2] + [x.shape[-2], y.shape[-1]]
     return result
 
-  def t(self, x, name=None):
+  def transpose(self, x, perm=None, name=None):
+    rank = len(x.shape)
     result = self.op("Transpose", [x], name)
-    if len(x.shape) == 2:
+    if perm is None and rank == 2:
+      # Matrix transpose.
       result.shape = [x.shape[1], x.shape[0]]
     else:
-      result.shape = [0]
+      # Tensor transpose.
+      if perm is None: perm = list(reversed(range(rank)))
+      if perm == list(range(rank)):
+        result.producer.type = "Identity"
+        result.shape = x.shape
+      else:
+        result.producer.add_attr("perm", perm)
+        result.shape = [0] * rank
+        for d in range(rank): result.shape[d] = x.shape[perm[d]]
     return result
+
+  def t(self, x, perm=None, name=None):
+    return self.transpose(x, perm, name)
 
   def log(self, x, name=None):
     return self.op("Log", [x], name)
@@ -246,8 +346,8 @@ class Builder:
   def exp(self, x, name=None):
     return self.op("Exp", [x], name)
 
-  def tanh(self, x, name=None):
-    return self.op("Tanh", [x], name)
+  def pow(self, x, y, name=None):
+    return self.op("Pow", [x, y], name)
 
   def erf(self, x, name=None):
     return self.op("Erf", [x], name)
@@ -264,11 +364,80 @@ class Builder:
   def cos(self, x, name=None):
     return self.op("Cos", [x], name)
 
+  def tan(self, x, name=None):
+    return self.op("Tan", [x], name)
+
+  def cot(self, x, name=None):
+    return self.op("Cot", [x], name)
+
+  def sec(self, x, name=None):
+    return self.op("Sec", [x], name)
+
+  def csc(self, x, name=None):
+    return self.op("Csc", [x], name)
+
+  def asin(self, x, name=None):
+    return self.op("Asin", [x], name)
+
+  def acos(self, x, name=None):
+    return self.op("Acos", [x], name)
+
+  def atan(self, x, name=None):
+    return self.op("Atan", [x], name)
+
+  def acot(self, x, name=None):
+    return self.op("Acot", [x], name)
+
+  def asec(self, x, name=None):
+    return self.op("Asec", [x], name)
+
+  def acsc(self, x, name=None):
+    return self.op("Acsc", [x], name)
+
+  def sinh(self, x, name=None):
+    return self.op("Sinh", [x], name)
+
+  def cosh(self, x, name=None):
+    return self.op("Cosh", [x], name)
+
+  def tanh(self, x, name=None):
+    return self.op("Tanh", [x], name)
+
+  def coth(self, x, name=None):
+    return self.op("Coth", [x], name)
+
+  def sech(self, x, name=None):
+    return self.op("Sech", [x], name)
+
+  def csch(self, x, name=None):
+    return self.op("Csch", [x], name)
+
+  def asinh(self, x, name=None):
+    return self.op("Asinh", [x], name)
+
+  def acosh(self, x, name=None):
+    return self.op("Acosh", [x], name)
+
+  def atanh(self, x, name=None):
+    return self.op("Atanh", [x], name)
+
+  def acoth(self, x, name=None):
+    return self.op("Acoth", [x], name)
+
+  def asech(self, x, name=None):
+    return self.op("Asech", [x], name)
+
+  def acsch(self, x, name=None):
+    return self.op("Acsch", [x], name)
+
   def square(self, x, name=None):
     return self.op("Square", [x], name)
 
   def sqrt(self, x, name=None):
     return self.op("Sqrt", [x], name)
+
+  def rsqrt(self, x, name=None):
+    return self.op("Rsqrt", [x], name)
 
   def neg(self, x, name=None):
     return self.op("Neg", [x], name)
@@ -281,6 +450,18 @@ class Builder:
 
   def rcp(self, x, name=None):
     return self.op("Reciprocal", [x], name)
+
+  def floor(self, x, name=None):
+    return self.op("Floor", [x], name)
+
+  def ceil(self, x, name=None):
+    return self.op("Ceil", [x], name)
+
+  def round(self, x, name=None):
+    return self.op("Round", [x], name)
+
+  def trunc(self, x, name=None):
+    return self.op("Trunc", [x], name)
 
   def equal(self, x, y, name=None):
     return self.op("Equal", [x, y], name)
@@ -321,22 +502,52 @@ class Builder:
   def identity(self, x, name=None):
     return self.op("Identity", [x], name)
 
-  def reduce(self, optype, x, name=None):
+  def reduce(self, optype, x, axis=None, keepdims=None, name=None):
     v = self.op(optype, [x], name)
-    v.shape = []
+    if axis is None:
+      v.shape = []
+    else:
+      if axis < 0: axis = len(x.shape) + axis
+      v.shape = x.shape.copy()
+      v.producer.add_attr("axis", axis)
+      if keepdims:
+        v.shape[axis] = 1
+        v.producer.add_attr("keepdims", True)
+      else:
+        del v.shape[axis]
     return v
 
-  def sum(self, x, name=None):
-    return self.reduce("Sum", x, name)
+  def sum(self, x, axis=None, keepdims=None, name=None):
+    return self.reduce("Sum", x, axis, keepdims, name)
 
-  def product(self, x, name=None):
-    return self.reduce("Product", x, name)
+  def product(self, x, axis=None, keepdims=None, name=None):
+    return self.reduce("Product", x, axis, keepdims, name)
 
-  def min(self, x, name=None):
-    return self.reduce("Min", x, name)
+  def min(self, x, axis=None, keepdims=None, name=None):
+    return self.reduce("Min", x, axis, keepdims, name)
 
-  def max(self, x, name=None):
-    return self.reduce("Max", x, name)
+  def max(self, x, axis=None, keepdims=None, name=None):
+    return self.reduce("Max", x, axis, keepdims, name)
+
+  def all(self, x, axis=None, keepdims=None, name=None):
+    return self.reduce("All", x, axis, keepdims, name)
+
+  def any(self, x, axis=None, keepdims=None, name=None):
+    return self.reduce("Any", x, axis, keepdims, name)
+
+  def count(self, p, axis=None, dtype=DT_FLOAT32, name=None):
+    r = self.reduce("Count", p, axis, name)
+    r.type = dtype
+    return r
+
+  def mean(self, x, axis=None, keepdims=None, name=None):
+    sum = self.sum(x, axis, keepdims)
+    if axis is None:
+      size = list_product(x.shape)
+    else:
+      if axis < 0: axis = len(x.shape) + axis
+      size = x.shape[axis]
+    return self.div(sum, self.const(size, x.type), name=name)
 
   def norm(self, x, name=None):
     return self.sqrt(self.sum(self.square(x)), name)
@@ -371,6 +582,7 @@ class Builder:
     result.shape = []
     result.type = DT_INT
     return result
+
 
 # Set builder factory for flows.
 def builder_factory(flow, name):

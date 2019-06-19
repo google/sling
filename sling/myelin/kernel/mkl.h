@@ -12,26 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SLING_MYELIN_KERNEL_ARITHMETIC_H_
-#define SLING_MYELIN_KERNEL_ARITHMETIC_H_
+#ifndef SLING_MYELIN_KERNEL_MKL_H_
+#define SLING_MYELIN_KERNEL_MKL_H_
 
 #include "sling/myelin/compute.h"
-#include "sling/myelin/express.h"
 
 namespace sling {
 namespace myelin {
 
-// Register arithmetic library.
-void RegisterArithmeticLibrary(Library *library);
-
-// Register arithmetic transforms.
-void RegisterArithmeticTransforms(Library *library);
-
-// Initialize expression for step.
-void InitExpression(const Step *step, Express *expr);
+// Register MKL library.
+void RegisterMKLLibrary(Library *library);
 
 }  // namespace myelin
 }  // namespace sling
 
-#endif  // SLING_MYELIN_KERNEL_ARITHMETIC_H_
+#endif  // SLING_MYELIN_KERNEL_MKL_H_
 

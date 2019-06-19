@@ -24,7 +24,8 @@ using namespace jit;
 // Generate vector float expression using SSE and XMM registers.
 class VectorFltSSEGenerator : public ExpressionGenerator {
  public:
-  VectorFltSSEGenerator() {
+  VectorFltSSEGenerator(Type type) {
+    model_.name = "VFltSSE";
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -39,9 +40,27 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
     model_.cond_reg_mem_reg = true;
     model_.cond_reg_reg_mem = true;
     model_.cond_reg_mem_mem = true;
+    model_.instruction_set({
+      Express::MOV,
+      Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+      Express::MINIMUM, Express::MAXIMUM, Express::SQRT,
+      Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+      Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+      Express::COND, Express::SELECT,
+      Express::AND, Express::OR, Express::XOR, Express::ANDNOT,
+      Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+      Express::BITEQ, Express::QUADSIGN,
+      Express::FLOOR, Express::CEIL, Express::ROUND, Express::TRUNC,
+      Express::CVTFLTINT, Express::CVTINTFLT,
+      Express::CVTEXPINT, Express::CVTINTEXP,
+      Express::ADDINT, Express::SUBINT,
+      Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+      Express::ALL, Express::ANY,
+    });
+    if (type == DT_FLOAT) {
+      model_.instruction_set({Express::RECIPROCAL, Express::RSQRT});
+    }
   }
-
-  string Name() override { return "VFltSSE"; }
 
   int VectorSize() override { return XMMRegSize; }
 
@@ -51,10 +70,9 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
-    if (instructions_.Has(Express::SUM) ||
-        instructions_.Has(Express::PRODUCT) ||
-        instructions_.Has(Express::MIN) ||
-        instructions_.Has(Express::MAX)) {
+    if (instructions_.Has({Express::SUM, Express::PRODUCT,
+                           Express::MIN, Express::MAX,
+                           Express::ALL, Express::ANY})) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
     if (instructions_.Has(Express::COND)) {
@@ -125,6 +143,18 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
             &Assembler::sqrtps, &Assembler::sqrtpd,
             masm, 0);
         break;
+      case Express::RSQRT:
+        GenerateXMMFltOp(instr,
+            &Assembler::rsqrtps, &Assembler::rsqrtps,
+            &Assembler::rsqrtps, &Assembler::rsqrtps,
+            masm, 0);
+        break;
+      case Express::RECIPROCAL:
+        GenerateXMMFltOp(instr,
+            &Assembler::rcpps, &Assembler::rcpps,
+            &Assembler::rcpps, &Assembler::rcpps,
+            masm, 0);
+        break;
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;
@@ -164,22 +194,40 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
             masm);
         break;
       case Express::XOR:
+      case Express::BITXOR:
         GenerateXMMFltOp(instr,
             &Assembler::xorps, &Assembler::xorpd,
             &Assembler::xorps, &Assembler::xorpd,
             masm);
         break;
       case Express::ANDNOT:
+      case Express::BITANDNOT:
         GenerateXMMFltOp(instr,
             &Assembler::andnps, &Assembler::andnpd,
             &Assembler::andnps, &Assembler::andnpd,
             masm);
         break;
-      case Express::NOT:
-        GenerateNot(instr, masm);
+      case Express::BITEQ:
+        if (CPU::Enabled(SSE4_1)) {
+          GenerateXMMFltOp(instr,
+              &Assembler::pcmpeqd, &Assembler::pcmpeqq,
+              &Assembler::pcmpeqd, &Assembler::pcmpeqq,
+              masm);
+        } else {
+          UNSUPPORTED;
+        }
         break;
       case Express::FLOOR:
-        GenerateFloor(instr, masm);
+        GenerateRound(instr, masm, round_down);
+        break;
+      case Express::CEIL:
+        GenerateRound(instr, masm, round_up);
+        break;
+      case Express::ROUND:
+        GenerateRound(instr, masm, round_nearest);
+        break;
+      case Express::TRUNC:
+        GenerateRound(instr, masm, round_to_zero);
         break;
       case Express::CVTFLTINT:
         GenerateFltToInt(instr, masm);
@@ -192,6 +240,15 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         break;
       case Express::CVTINTEXP:
         GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::QUADSIGN:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 29 : 61);
+        break;
+      case Express::ADDINT:
+        GenerateXMMFltOp(instr,
+            &Assembler::paddd, &Assembler::paddq,
+            &Assembler::paddd, &Assembler::paddq,
+            masm);
         break;
       case Express::SUBINT:
         GenerateXMMFltOp(instr,
@@ -223,9 +280,20 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
             &Assembler::maxps, &Assembler::maxpd,
             masm);
         break;
+      case Express::ALL:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::andps, &Assembler::andpd,
+            &Assembler::andps, &Assembler::andpd,
+            masm);
+        break;
+      case Express::ANY:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::orps, &Assembler::orpd,
+            &Assembler::orps, &Assembler::orpd,
+            masm);
+        break;
       default:
-        LOG(INFO) << "Unsupported: " << instr->AsInstruction();
-        UNSUPPORTED;
+        LOG(FATAL) << "Unsupported instruction: " << instr->AsInstruction();
     }
   }
 
@@ -276,13 +344,13 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
     }
   }
 
-  // Generate floor rounding.
-  void GenerateFloor(Express::Op *instr, MacroAssembler *masm) {
+  // Generate rounding.
+  void GenerateRound(Express::Op *instr, MacroAssembler *masm, int8 code) {
     if (CPU::Enabled(SSE4_1)) {
-      GenerateXMMFltOp(instr,
+      GenerateXMMUnaryFltOp(instr,
           &Assembler::roundps, &Assembler::roundpd,
           &Assembler::roundps, &Assembler::roundpd,
-          round_down, masm);
+          code, masm);
     } else {
       UNSUPPORTED;
     }
@@ -313,31 +381,22 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         __ cvtdq2ps(xmm(instr->dst), addr(instr->args[0]));
       }
     } else if (type_ == DT_DOUBLE && CPU::Enabled(SSE2)) {
-      // Make sure source is in a register.
-      int src = instr->src;
-      if (instr->src == -1) {
+      // Get argument.
+      if (instr->src != -1) {
+        __ movdqa(xmm(instr->dst), xmm(instr->src));
+      } else {
         __ movdqa(xmm(instr->dst), addr(instr->args[0]));
-        src = instr->dst;
       }
 
       // Convert two int64s to two int32s.
-      __ shufps(xmm(instr->src), xmm(instr->src), 0xD8);
+      __ shufps(xmm(instr->dst), xmm(instr->dst), 0xD8);
 
       // Convert two int32s to doubles.
-      __ cvtdq2pd(xmm(instr->dst), xmm(src));
+      __ cvtdq2pd(xmm(instr->dst), xmm(instr->dst));
+
     } else {
       UNSUPPORTED;
     }
-  }
-
-  // Generate logical not.
-  void GenerateNot(Express::Op *instr, MacroAssembler *masm) {
-    // Compute not(x) = xor(1,x).
-    __ pcmpeqd(xmm(instr->dst), xmm(instr->dst));
-    GenerateXMMFltOp(instr,
-        &Assembler::xorps, &Assembler::xorpd,
-        &Assembler::xorps, &Assembler::xorpd,
-        masm);
   }
 
   // Generate compare.
@@ -384,7 +443,7 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         }
         break;
       case DT_DOUBLE:
-        if (instr->src != -1) {
+        if (instr->src2 != -1) {
           __ andnpd(xmmaux(1), xmm(instr->src2));
         } else {
           __ andnpd(xmmaux(1), addr(instr->args[2]));
@@ -412,7 +471,9 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
     CHECK(instr->mask != -1);
     switch (type_) {
       case DT_FLOAT:
-        __ movaps(xmm(instr->dst), xmm(instr->mask));
+        if (instr->dst != instr->mask) {
+          __ movaps(xmm(instr->dst), xmm(instr->mask));
+        }
         if (instr->src != -1) {
           __ andps(xmm(instr->dst), xmm(instr->src));
         } else {
@@ -420,7 +481,9 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
         }
         break;
       case DT_DOUBLE:
-        __ movapd(xmm(instr->dst), xmm(instr->mask));
+        if (instr->dst != instr->mask) {
+          __ movapd(xmm(instr->dst), xmm(instr->mask));
+        }
         if (instr->src != -1) {
           __ andpd(xmm(instr->dst), xmm(instr->src));
         } else {
@@ -457,8 +520,8 @@ class VectorFltSSEGenerator : public ExpressionGenerator {
   }
 };
 
-ExpressionGenerator *CreateVectorFltSSEGenerator() {
-  return new VectorFltSSEGenerator();
+ExpressionGenerator *CreateVectorFltSSEGenerator(Type type) {
+  return new VectorFltSSEGenerator(type);
 }
 
 }  // namespace myelin

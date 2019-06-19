@@ -135,6 +135,36 @@ Flow::Variable *FlowBuilder::Const(const void *data, Type type,
   return var;
 }
 
+Flow::Variable *FlowBuilder::Const(double value, Type type) {
+  switch (type) {
+    case DT_FLOAT: {
+      float v = value;
+      return Const(v);
+    }
+    case DT_DOUBLE: {
+      double v = value;
+      return Const(v);
+    }
+    case DT_INT64: {
+      int64 v = value;
+      return Const(&v, DT_INT64, {});
+    }
+    case DT_INT32: {
+      int32 v = value;
+      return Const(&v, DT_INT32, {});
+    }
+    case DT_INT16: {
+      int16 v = value;
+      return Const(&v, DT_INT16, {});
+    }
+    case DT_INT8: {
+      int8 v = value;
+      return Const(&v, DT_INT16, {});
+    }
+    default: LOG(FATAL) << "Constant type not supported";
+  }
+}
+
 Flow::Variable *FlowBuilder::Zero(Type type) {
   switch (type) {
     case DT_FLOAT: return Const(0.0f);

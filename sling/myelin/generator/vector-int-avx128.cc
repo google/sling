@@ -24,7 +24,8 @@ using namespace jit;
 // Generate vector int expression using AVX and XMM registers.
 class VectorIntAVX128Generator : public ExpressionGenerator {
  public:
-  VectorIntAVX128Generator() {
+  VectorIntAVX128Generator(Type type) {
+    model_.name = "VIntAVX128";
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -35,9 +36,12 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
     model_.func_reg_reg = true;
     model_.func_reg_imm = true;
     model_.func_reg_mem = true;
+    model_.instruction_set({
+      Express::MOV,
+      Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+      Express::MINIMUM, Express::MAXIMUM,
+    });
   }
-
-  string Name() override { return "VIntAVX128"; }
 
   int VectorSize() override { return XMMRegSize; }
 
@@ -57,8 +61,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
         num_mm_aux = std::max(num_mm_aux, 1);
       }
     }
-    if (instructions_.Has(Express::MINIMUM) ||
-        instructions_.Has(Express::MAXIMUM)) {
+    if (instructions_.Has({Express::MINIMUM, Express::MAXIMUM})) {
       if (type_ == DT_INT64) {
         num_rr_aux = std::max(num_rr_aux, 2);
         num_mm_aux = std::max(num_mm_aux, 1);
@@ -73,7 +76,7 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
       case Express::MOV:
         if (IsLoadZero(instr) && masm->Enabled(ZEROIDIOM)) {
           // Use XOR to zero register instead of loading constant from memory.
-          __ vpxor(ymm(instr->dst), ymm(instr->dst), ymm(instr->dst));
+          __ vpxor(xmm(instr->dst), xmm(instr->dst), xmm(instr->dst));
         } else {
           GenerateXMMVectorIntMove(instr, masm);
         }
@@ -142,7 +145,8 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
               masm);
         }
         break;
-      default: UNSUPPORTED;
+      default:
+        LOG(FATAL) << "Unsupported instruction: " << instr->AsInstruction();
     }
   }
 
@@ -241,8 +245,8 @@ class VectorIntAVX128Generator : public ExpressionGenerator {
   }
 };
 
-ExpressionGenerator *CreateVectorIntAVX128Generator() {
-  return new VectorIntAVX128Generator();
+ExpressionGenerator *CreateVectorIntAVX128Generator(Type type) {
+  return new VectorIntAVX128Generator(type);
 }
 
 }  // namespace myelin

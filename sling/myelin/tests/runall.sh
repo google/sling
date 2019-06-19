@@ -16,7 +16,7 @@
 
 # Run all Myelin tests.
 
-TESTPGM="python sling/myelin/tests/myelin-vs-numpy.py"
+TESTPGM="python3 sling/myelin/tests/opcheck.py"
 EXTRA=$@
 
 # Determine CPU feature support.
@@ -25,8 +25,8 @@ FMA=$(grep fma /proc/cpuinfo)
 AVX2=$(grep avx2 /proc/cpuinfo)
 AVX=$(grep avx /proc/cpuinfo)
 
-# Run all tests for data type.
-testtype() {
+# Run all CPU tests for data type.
+testcpu() {
   DT=$1
   echo "Test data type $DT"
   $TESTPGM --dt $DT ${EXTRA}
@@ -53,18 +53,37 @@ testtype() {
   fi
 }
 
+# Run all GPU tests for data type.
+testgpu() {
+  DT=$1
+  echo "Test data type $DT on GPU"
+  $TESTPGM --gpu --dt $DT ${EXTRA}
+}
+
 # Stop on errors.
 set -e
 
-# Test float types.
-testtype float32
-testtype float64
+# Test float types on CPU.
+testcpu float32
+testcpu float64
 
-# Test integer types.
-testtype int8
-testtype int16
-testtype int32
-testtype int64
+# Test integer types on CPU.
+testcpu int8
+testcpu int16
+testcpu int32
+testcpu int64
+
+# Test on GPU if CUDA is installed.
+if [ -f /usr/lib/x86_64-linux-gnu/libcuda.so.1 ]; then
+  # Test float types on GPU.
+  testgpu float32
+  testgpu float64
+
+  # Test integer types on GPU.
+  testgpu int16
+  testgpu int32
+  testgpu int64
+fi
 
 echo "==== ALL TESTS PASSED ====="
 

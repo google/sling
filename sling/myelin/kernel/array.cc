@@ -1484,6 +1484,76 @@ class ScatterAdd : public Kernel {
   bool scale_;  // scale input
 };
 
+// Reduction over an axis.
+class Reduce : public Kernel {
+ public:
+  Reduce(const string &name, Reduction op) : name_(name), op_(op) {}
+
+  string Name() override { return name_; }
+  string Operation() override { return name_; }
+
+  bool Supports(Step *step) override {
+    // Check inputs and outputs.
+    if (step->indegree() != 1 || step->outdegree() != 1) return false;
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    if (x->type() != y->type()) return false;
+    if (!step->HasAttr("axis")) return false;
+
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    LOG(WARNING) << "Generating dummy reduce op for " << step->name();
+    step->set_variant("DUMMY");
+    __ nop();
+  }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+    //return step->input(0)->elements();
+  }
+
+ private:
+  string name_;
+  Reduction op_;
+};
+
+// Transpose tensor by permuting dimensions.
+class Transpose : public Kernel {
+ public:
+  string Name() override { return "Transpose"; }
+  string Operation() override { return "Transpose"; }
+
+  bool Supports(Step *step) override {
+    // Check inputs and outputs.
+    if (step->indegree() != 1 || step->outdegree() != 1) return false;
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    if (x->type() != y->type()) return false;
+    if (!step->HasAttr("perm")) return false;
+
+    return true;
+  }
+
+  void Adjust(Step *step) override {
+  }
+
+  void Generate(Step *step, MacroAssembler *masm) override {
+    LOG(WARNING) << "Generating dummy transpose op for " << step->name();
+    step->set_variant("DUMMY");
+    __ nop();
+  }
+
+  int64 Complexity(const Step *step) override {
+    return 0;
+    //return step->input(0)->elements();
+  }
+};
+
 // Fold multiplication into update ops.
 class UpdateTransformer : public Transformer {
  public:
@@ -1503,6 +1573,43 @@ class UpdateTransformer : public Transformer {
       if (matmul->outputs[0]->usages() != 1) continue;
 
       flow->Fuse(assign, flow->Fuse(add, matmul, ""), "AssignAddMatMul", true);
+      updates++;
+    }
+
+    // Transform double sparse update.
+    for (Flow::Operation *op : flow->Find("Scatter|1:Add|1:Add|1:Assign")) {
+      Flow::Operation *assign = op;
+      Flow::Operation *add1 = assign->inputs[1]->producer;
+      Flow::Operation *add2 = add1->inputs[1]->producer;
+      Flow::Operation *scatter1 = add2->inputs[1]->producer;
+      Flow::Operation *scatter2 = add2->inputs[0]->producer;
+
+      if (assign->inputs[0] != add1->inputs[0]) continue;
+      if (add1->outputs[0]->usages() != 1) continue;
+      if (add2->outputs[0]->usages() != 1) continue;
+      if (scatter2->type != "Scatter") continue;
+
+      Flow::Variable *target = assign->inputs[0];
+      if (target != add1->inputs[0]) continue;
+
+      Flow::Variable *s1 = scatter1->outputs[0];
+      Flow::Variable *s2 = scatter2->outputs[0];
+      Flow::Variable *a2 = add2->outputs[0];
+      if (s1->usages() != 1) continue;
+      if (s2->usages() != 1) continue;
+
+      // Decompose scatter updates.
+      add1->RemoveInput(a2);
+      add2->RemoveInput(s1);
+      add2->RemoveInput(s2);
+      add1->AddInput(s1);
+      add2->AddInput(target);
+      add2->AddInput(s2);
+      string name = flow->OpName(assign->name);
+      auto *a = flow->AddOperation(add2->func, name, "Assign");
+      a->AddInput(target);
+      a->AddInput(a2);
+
       updates++;
     }
 
@@ -1578,6 +1685,14 @@ void RegisterArrayKernels(Library *library) {
   library->Register(new PoolingGather(PoolingGather::MAX));
   library->Register(new ScatterAdd(false));
   library->Register(new ScatterAdd(true));
+
+  library->Register(new Reduce("Sum", REDUCE_ADD));
+  library->Register(new Reduce("Product", REDUCE_MUL));
+  library->Register(new Reduce("Max", REDUCE_MAX));
+  library->Register(new Reduce("Min", REDUCE_MIN));
+  library->Register(new Reduce("All", REDUCE_AND));
+  library->Register(new Reduce("Any", REDUCE_OR));
+  library->Register(new Transpose());
 
   library->RegisterTransformer(new UpdateTransformer());
   library->RegisterTransformer(new ReshapeRefTransformer());

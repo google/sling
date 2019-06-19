@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
   // Add channels.
   for (Flow::Connector *cnx : flow.cnxs()) {
     if (cnx->links.empty()) continue;
-    Tensor *format = net.GetParameter(cnx->links[0]);
+    Tensor *format = net.GetParameter(cnx->links[0]->name);
     linker.AddChannel(cnx->name, format);
   }
 

@@ -30,6 +30,7 @@
 #include "sling/myelin/cuda/cuda-runtime.h"
 #include "sling/myelin/kernel/cuda.h"
 #include "sling/myelin/kernel/dragnn.h"
+#include "sling/myelin/kernel/mkl.h"
 #include "sling/myelin/kernel/tensorflow.h"
 
 DEFINE_string(cpu, "", "Enable/disable CPU features");
@@ -48,17 +49,22 @@ DEFINE_bool(dump_cells, false, "Dump cells after compilation");
 DEFINE_bool(dump_code, false, "Dump generated assembly code");
 DEFINE_bool(check_flow_consistency, false, "Check that flow is consistent");
 DEFINE_bool(dynamic_instance_allocation, false, "Dynamic instance allocation");
+DEFINE_bool(mkl, false, "Use Intel Math Kernel Library");
 DEFINE_bool(dragnn, false, "Use DRAGNN kernels");
 DEFINE_bool(sync_steps, false, "Synchronize all compute steps");
+DEFINE_bool(fast_math, false, "Fast approximate math ops");
 DEFINE_bool(graph_all_vars, false, "Include all variables in DOT graph");
 DEFINE_string(graph_layout, "", "DOT graph layout");
 DEFINE_bool(jit_debug, false, "Debug break in jit code");
+DEFINE_int32(cuda_device, -1, "CUDA device number");
+DEFINE_int32(cuda_context_flags, 0, "CUDA context flags");
 
 namespace sling {
 namespace myelin {
 
 // CUDA runtime.
-static myelin::CUDARuntime cudart;
+static myelin::CUDARuntime *cudart = nullptr;
+static int cudart_refs = 0;
 
 Compiler::Compiler() {
   // Register standard kernels.
@@ -70,19 +76,29 @@ Compiler::Compiler() {
 
   // Initialize CUDA runtime and register CUDA kernels in GPU mode.
   if (FLAGS_gpu) {
+    if (cudart == nullptr) {
+      cudart = new myelin::CUDARuntime();
+      cudart->Connect(FLAGS_cuda_device, FLAGS_cuda_context_flags);
+    }
+    runtime_ = cudart;
+    cudart_refs++;
     RegisterCUDALibrary(library_);
-    cudart.Connect();
-    runtime_ = &cudart;
   }
 
   // Add extra kernels.
   if (FLAGS_dragnn) RegisterDragnnLibrary(library_);
+  if (FLAGS_mkl) RegisterMKLLibrary(library_);
 }
 
 Compiler::~Compiler() {
   // Kernel library cannot be deallocated when profiling is enabled since the
   // profiler needs to be able to access the registered kernels.
   if (!FLAGS_profile) delete library_;
+
+  if (--cudart_refs == 0) {
+    delete cudart;
+    cudart = nullptr;
+  }
 }
 
 void Compiler::Compile(Flow *flow, Network *net) {
@@ -144,8 +160,12 @@ void Compiler::Compile(Flow *flow, Network *net) {
   }
   if (FLAGS_sync_steps) net->options().sync_steps = true;
   if (FLAGS_jit_debug) net->options().debug = true;
+  if (FLAGS_fast_math) net->options().fast_math = true;
 
   CHECK(net->Compile(*flow, *library_));
+
+  // Bind flow artifacts to network tensors, cells, and steps.
+  net->Bind(flow);
 
   // Optionally dump cells to log.
   if (FLAGS_dump_cells) {
@@ -220,24 +240,23 @@ void Compiler::WriteGraph(const Flow &flow,
 
 void LogProfile(const Network &net) {
   if (net.options().global_profiler) {
-    string report;
-    for (const Cell *cell : net.cells()) {
-      Profile profile(cell->profile_summary());
-      report.append("\n");
-      report.append(profile.ASCIIReport());
-    }
-    LOG(INFO) << "Profiling report:\n" << report;
+    LOG(INFO) << "Profiling report:\n" << ProfileReport(net);
   }
 }
 
 string ProfileReport(const Network &net) {
   string report;
   if (net.options().global_profiler) {
+    ProfileOverview overview;
     for (const Cell *cell : net.cells()) {
       Profile profile(cell->profile_summary());
       report.append(profile.ASCIIReport());
       report.append("\n");
+      overview.Add(profile);
     }
+    report.append("Summary:\n");
+    report.append(overview.ASCIIReport());
+    report.append("\n");
   }
   return report;
 }

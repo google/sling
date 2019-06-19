@@ -190,6 +190,206 @@ void cos_grad(Flow::Operation *op, Gradients *g) {
   g->add(x, g->Neg(g->Mul(g->d(y), g->Sin(g->v(x)))));
 }
 
+// y = tan(x)
+// dx = (1 + tan(x)^2) * dy = (1 + y^2) * dy
+void tan_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Mul(g->d(y), g->Add(one, g->Square(g->v(y)))));
+}
+
+// y = cot(x)
+// dx = -dy * (1 + cot(x)^2) = -dy * (1 + y^2)
+void cot_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Mul(g->d(y), g->Neg(g->Add(one, g->Square(g->v(y))))));
+}
+
+// y = sec(x)
+// dx =  tan(x) * sec(x) * dy = tan(x) * y * dy
+void sec_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Mul(g->d(y), g->Mul(g->Tan(g->v(x)), g->v(y))));
+}
+
+// y = csc(x)
+// dx = -cot(x) * csc(x) * dy = -cot(x) * y * dy
+void csc_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Mul(g->d(y), g->Neg(g->Mul(g->Cot(g->v(x)), g->v(y)))));
+}
+
+// y = asin(x)
+// dx = dy / sqrt(1 - x^2) = dy * rsqrt(1 - x^2)
+void asin_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Mul(g->d(y), g->Rsqrt(g->Sub(one, g->Square(g->v(x))))));
+}
+
+// y = acos(x)
+// dx = -dy / sqrt(1 - x^2) = -dy * rsqrt(1 - x^2)
+void acos_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Neg(g->Mul(g->d(y), g->Rsqrt(g->Sub(one, g->Square(g->v(x)))))));
+}
+
+// y = atan(x)
+// dx = dy / (1 + x^2)
+void atan_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Div(g->d(y), g->Add(one, g->Square(g->v(x)))));
+}
+
+// y = acot(x)
+// dx = -dy / (1 + x^2)
+void acot_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Neg(g->Div(g->d(y), g->Add(one, g->Square(g->v(x))))));
+}
+
+// y = asec(x)
+// dx = dy / (sqrt(x^2 - 1) * |x|)
+void asec_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  auto *num = g->d(y);
+  auto *den = g->Mul(g->Sqrt(g->Sub(g->Square(g->v(x)), one)), g->Abs(g->v(x)));
+  g->add(x, g->Div(num, den));
+}
+
+// y = acsc(x)
+// dx = dy / (sqrt(x^2 - 1) * |x|)
+void acsc_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  auto *num = g->Neg(g->d(y));
+  auto *den = g->Mul(g->Sqrt(g->Sub(g->Square(g->v(x)), one)), g->Abs(g->v(x)));
+  g->add(x, g->Div(num, den));
+}
+
+// y = sinh(x)
+// dx = cosh(x) * dy
+void sinh_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Mul(g->d(y), g->Cosh(g->v(x))));
+}
+
+// y = cosh(x)
+// dx = sinh(x) * dy
+void cosh_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Mul(g->d(y), g->Sinh(g->v(x))));
+}
+
+// y = tanh(x)
+// dx = (1 - tanh(x)^2) * dy = (1 - y^2) * dy
+void tanh_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(y)->type);
+  g->add(x, g->Mul(g->d(y), g->Sub(one, g->Square(g->v(y)))));
+}
+
+// y = coth(x)
+// dx = dy * (1 - coth(x)^2) = (1 - y^2) * dy
+void coth_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(y)->type);
+  g->add(x, g->Mul(g->d(y), g->Sub(one, g->Square(g->v(y)))));
+}
+
+// y = sech(x)
+// dx =  -tanh(x) * sech(x) * dy = -tanh(x) * y * dy
+void sech_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Neg(g->Mul(g->d(y), g->Mul(g->Tanh(g->v(x)), g->v(y)))));
+}
+
+// y = csch(x)
+// dx =  -coth(x) * csch(x) * dy = -coth(x) * y * dy
+void csch_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Neg(g->Mul(g->d(y), g->Mul(g->Coth(g->v(x)), g->v(y)))));
+}
+
+// y = asinh(x)
+// dx = dy / sqrt(x^2 + 1) = dy * rsqrt(x^2 + 1)
+void asinh_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Mul(g->d(y), g->Rsqrt(g->Add(g->Square(g->v(x)), one))));
+}
+
+// y = acosh(x)
+// dx = dy / sqrt(x^2 - 1) = dy * rsqrt(x^2 - 1)
+void acosh_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Mul(g->d(y), g->Rsqrt(g->Sub(g->Square(g->v(x)), one))));
+}
+
+// y = atanh(x)
+// dx = dy / (1 - x^2)
+void atanh_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Div(g->d(y), g->Sub(one, g->Square(g->v(x)))));
+}
+
+// y = acoth(x)
+// dx = dy / (1 - x^2)
+void acoth_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  g->add(x, g->Div(g->d(y), g->Sub(one, g->Square(g->v(x)))));
+}
+
+// y = asech(x)
+// dx = -dy / (sqrt(1 - x^2) * x)
+void asech_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  auto *num = g->Neg(g->d(y));
+  auto *den = g->Mul(g->Sqrt(g->Sub(one, g->Square(g->v(x)))), g->v(x));
+  g->add(x, g->Div(num, den));
+}
+
+// y = acsch(x)
+// dx = -dy / (sqrt(1 + x^2) * |x|)
+void acsch_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  auto one = g->One(g->v(x)->type);
+  auto *num = g->Neg(g->d(y));
+  auto *den = g->Mul(g->Sqrt(g->Add(one, g->Square(g->v(x)))), g->Abs(g->v(x)));
+  g->add(x, g->Div(num, den));
+}
+
 // y = exp(x)
 // dx = exp(x) * dy = y * dy
 void exp_grad(Flow::Operation *op, Gradients *g) {
@@ -206,6 +406,22 @@ void log_grad(Flow::Operation *op, Gradients *g) {
   g->add(x, g->Div(g->d(y), g->v(x)));
 }
 
+// y = x^c
+// dx = c * pow(x, c - 1) * dy = c * y * dy / x
+void pow_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto c = op->inputs[1];
+  auto y = op->outputs[0];
+  CHECK(c->constant());
+  double cval = c->number();
+  if (trunc(cval) == cval) {
+    auto *minus_one = g->Const(cval - 1, c->type);
+    g->add(x, g->Mul(g->d(y), g->Mul(c, g->Pow(g->v(x), minus_one))));
+  } else {
+    g->add(x, g->Mul(g->d(y), g->Mul(c, g->Div(g->v(y), g->v(x)))));
+  }
+}
+
 // y = sigmoid(x)
 // dx = sigmoid(x) * (1 - sigmoid(x)) * dy = y * (1 - y) * dy
 void sigmoid_grad(Flow::Operation *op, Gradients *g) {
@@ -213,15 +429,6 @@ void sigmoid_grad(Flow::Operation *op, Gradients *g) {
   auto y = op->outputs[0];
   auto one = g->One(g->v(y)->type);
   g->add(x, g->Mul(g->d(y), g->Mul(g->v(y), g->Sub(one, g->v(y)))));
-}
-
-// y = tanh(x)
-// dx = (1 - tanh(x)^2) * dy = (1 - y^2) * dy
-void tanh_grad(Flow::Operation *op, Gradients *g) {
-  auto x = op->inputs[0];
-  auto y = op->outputs[0];
-  auto one = g->One(g->v(y)->type);
-  g->add(x, g->Mul(g->d(y), g->Sub(one, g->Square(g->v(y)))));
 }
 
 // y = erf(x)
@@ -370,10 +577,32 @@ void RegisterStandardGradients(Transformations *library) {
   library->RegisterGradient("Maximum", maximum_grad);
   library->RegisterGradient("Sin", sin_grad);
   library->RegisterGradient("Cos", cos_grad);
+  library->RegisterGradient("Tan", tan_grad);
+  library->RegisterGradient("Cot", cot_grad);
+  library->RegisterGradient("Sec", sec_grad);
+  library->RegisterGradient("Csc", csc_grad);
+  library->RegisterGradient("Asin", asin_grad);
+  library->RegisterGradient("Acos", acos_grad);
+  library->RegisterGradient("Atan", atan_grad);
+  library->RegisterGradient("Acot", acot_grad);
+  library->RegisterGradient("Asec", asec_grad);
+  library->RegisterGradient("Acsc", acsc_grad);
+  library->RegisterGradient("Sinh", sinh_grad);
+  library->RegisterGradient("Cosh", cosh_grad);
+  library->RegisterGradient("Tanh", tanh_grad);
+  library->RegisterGradient("Coth", coth_grad);
+  library->RegisterGradient("Sech", sech_grad);
+  library->RegisterGradient("Csch", csch_grad);
+  library->RegisterGradient("Asinh", asinh_grad);
+  library->RegisterGradient("Acosh", acosh_grad);
+  library->RegisterGradient("Atanh", atanh_grad);
+  library->RegisterGradient("Acoth", acoth_grad);
+  library->RegisterGradient("Asech", asech_grad);
+  library->RegisterGradient("Acsch", acsch_grad);
   library->RegisterGradient("Exp", exp_grad);
   library->RegisterGradient("Log", log_grad);
+  library->RegisterGradient("Pow", pow_grad);
   library->RegisterGradient("Sigmoid", sigmoid_grad);
-  library->RegisterGradient("Tanh", tanh_grad);
   library->RegisterGradient("Erf", erf_grad);
   library->RegisterGradient("Relu", relu_grad);
   library->RegisterGradient("Norm", norm_grad);

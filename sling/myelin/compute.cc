@@ -63,7 +63,7 @@ static Order CombinedOrder(Order a, Order b) {
     return ROW_MAJOR;
   }
   if (b == ROW_MAJOR) {
-    if (b == COLUMN_MAJOR) return CONFLICTING_ORDER;
+    if (a == COLUMN_MAJOR) return CONFLICTING_ORDER;
     return ROW_MAJOR;
   }
 
@@ -880,7 +880,7 @@ bool Step::NeedsSynchronization() {
   // Only steps running in the main task need synchronization.
   if (task_index_ != -1) return false;
 
-  // Check if any of the inputs has been produced on the device.
+  // Check if any of the inputs have been produced on the device.
   for (Tensor *input : inputs_) {
     Step *producer = input->producer();
     if (producer == nullptr) continue;
@@ -944,6 +944,7 @@ Network::Network() {
 }
 
 Network::~Network() {
+  for (auto *r : resources_) delete r;
   for (auto *m : memory_) MemFree(m);
   for (auto *t : parameters_) delete t;
   for (auto *t : globals_) {
@@ -984,7 +985,7 @@ void Network::InitLearnableWeights(int64 seed, float mean, float stddev) {
   }
 }
 
-void Network::SaveLearnedWeights(Flow *flow) {
+void Network::SaveLearnedWeights(Flow *flow) const {
   // Find all learnable variables in flow.
   for (Flow::Variable *var : flow->vars()) {
     if (!var->learnable()) continue;
@@ -1092,6 +1093,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       if (tensor->local_) {
         tensor->order_ = options_.parameter_element_order;
       }
+    }
+
+    // Set order constraint from flow.
+    if (var->is(Flow::Variable::ROW)) {
+      tensor->order_ = ROW_MAJOR;
+    } else if (var->is(Flow::Variable::COL)) {
+      tensor->order_ = COLUMN_MAJOR;
     }
 
     // Initialize constant tensors with data from the flow variable so they can
@@ -1270,13 +1278,13 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       // int64 vector with the following layout:
       //   struct TaskTiming {
       //     int64 start;
-      //     int 64 wait;
+      //     int64 wait;
       //   };
       //   struct CellTiming {
       //     int64 invocations;
       //     int64 overhead;
       //     int64 steptime[#steps];
-      //     taskprofiling tasktime[#tasks];
+      //     TaskTiming tasktime[#tasks];
       //   };
       size_t size = 2 + cell->steps_.size() + 2 * cell->tasks_.size();
       Tensor *profile = new Tensor();
@@ -1600,6 +1608,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // Copy input variables that do not have the placement required by the
     // consumers.
     bool sync = false;
+    bool main_pending = false;
     Transfers xfers;
     for (Tensor *tensor : parameters_) {
       if (tensor->cell_ != cell) continue;
@@ -1615,7 +1624,10 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         // Copy parameter tensor from device to host.
         xfers.add_device_to_host(tensor, task);
         tensor->AddNewPlace(HOST);
-        if (task == -1) sync = true;
+      }
+      if (task == -1) {
+        sync = true;
+        main_pending = true;
       }
     }
     runtime_->EmitTensorTransfers(xfers, cell, &masm);
@@ -1658,8 +1670,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         // Synchronize main task if needed before executing step.
         if (options_.sync_steps || (sync && step->NeedsSynchronization())) {
           VLOG(8) << "Sync main task";
-          masm.CallInstanceFunction(runtime_->SyncMainFunc(), "MyelinSyncMain");
+          masm.WaitForMainTask();
           sync = false;
+          main_pending = false;
         }
 
         // Generate code for step.
@@ -1672,6 +1685,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         step->kernel_->Generate(step, &masm);
         if (masm.pc_offset() == pc) step->noop_ = true;
         linker_->EndStep(step, pc);
+        if (step->placement() == DEVICE) main_pending = true;
 
         // No registers are preserved between steps, so reset register
         // allocation.
@@ -1711,9 +1725,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
         if (t.state == PENDING) {
           // Flush asynchronous operations.
           if (sync) {
-            masm.CallInstanceFunction(runtime_->SyncMainFunc(),
-                                      "MyelinSyncMain");
+            masm.WaitForMainTask();
             sync = false;
+            main_pending = false;
           }
 
           // Start parallel task.
@@ -1767,7 +1781,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     }
 
     // Synchronize main task.
-    masm.CallInstanceFunction(runtime_->SyncMainFunc(), "MyelinSyncMain");
+    if (main_pending) masm.WaitForMainTask();
 
     // Stop runtime profiler.
     if (options_.profiling) {
@@ -1873,6 +1887,23 @@ bool Network::Compile(const string &flowfile, const Library &library) {
 
   // Generate code for flow.
   return Compile(flow, library);
+}
+
+void Network::Bind(Flow *flow) {
+  // Bind functions to cells and operations to steps.
+  for (auto *func : flow->funcs()) {
+    func->cell = LookupCell(func->name);
+    if (func->cell != nullptr) {
+      for (auto *op : func->ops) {
+        op->step = func->cell->LookupStep(op->name);
+      }
+    }
+  }
+
+  // Bind variables to tensors.
+  for (auto *var : flow->vars()) {
+    var->tensor = LookupParameter(var->name);
+  }
 }
 
 void Network::ComputeLiveRanges() {
@@ -1986,6 +2017,13 @@ Tensor *Cell::GetParameter(const string &name) const {
   return network_->GetParameter(name);
 }
 
+Step *Cell::LookupStep(const string &name) const {
+  for (Step *step : steps_) {
+    if (step->name() == name) return step;
+  }
+  return nullptr;
+}
+
 Cell *Cell::Gradient() const {
   return network()->LookupCell(GradientFuncName(name_));
 }
@@ -2094,6 +2132,11 @@ string Cell::ToString() const {
         globals.push_back(input);
       }
     }
+    for (Tensor *output : step->outputs()) {
+      if (output->IsGlobal() && !Contains(globals, output)) {
+        globals.push_back(output);
+      }
+    }
   }
   if (!globals.empty()) {
     str.append("\n");
@@ -2148,6 +2191,12 @@ string Cell::ToString() const {
         first = false;
       }
       str.append(")");
+
+      string expr = step->GetAttr("expr");
+      if (!expr.empty()) {
+        str.append(" ");
+        str.append(expr);
+      }
 
       if (step->placement() & DEVICE) str.append(" on device");
 

@@ -31,8 +31,8 @@ flags.define("--repeat", default=1, type=int)
 flags.parse()
 dt = flags.arg.dt
 
-print "Myelin test suite for", dt, flags.arg.cpu
-print
+print("Myelin test suite for", dt, flags.arg.cpu)
+print()
 
 # Statistics for test runs.
 class Test:
@@ -98,18 +98,40 @@ def simulate(flow, f, data):
       v[o[0]] = sigmoid(v[i[0]])
     elif op.type == "Log":
       v[o[0]] = np.log(v[i[0]])
-    elif op.type == "Tanh":
-      v[o[0]] = np.tanh(v[i[0]])
+    elif op.type == "Pow":
+      v[o[0]] = np.power(v[i[0]], v[i[1]])
     elif op.type == "Erf":
       v[o[0]] = erf(v[i[0]])
     elif op.type == "Sin":
       v[o[0]] = np.sin(v[i[0]])
     elif op.type == "Cos":
       v[o[0]] = np.cos(v[i[0]])
+    elif op.type == "Tan":
+      v[o[0]] = np.tan(v[i[0]])
+    elif op.type == "Asin":
+      v[o[0]] = np.arcsin(v[i[0]])
+    elif op.type == "Acos":
+      v[o[0]] = np.arccos(v[i[0]])
+    elif op.type == "Atan":
+      v[o[0]] = np.arctan(v[i[0]])
+    elif op.type == "Sinh":
+      v[o[0]] = np.sinh(v[i[0]])
+    elif op.type == "Cosh":
+      v[o[0]] = np.cosh(v[i[0]])
+    elif op.type == "Tanh":
+      v[o[0]] = np.tanh(v[i[0]])
+    elif op.type == "Asinh":
+      v[o[0]] = np.arcsinh(v[i[0]])
+    elif op.type == "Acosh":
+      v[o[0]] = np.arccosh(v[i[0]])
+    elif op.type == "Atanh":
+      v[o[0]] = np.arctanh(v[i[0]])
     elif op.type == "Relu":
       v[o[0]] = relu(v[i[0]])
     elif op.type == "Sqrt":
       v[o[0]] = np.sqrt(v[i[0]])
+    elif op.type == "Rsqrt":
+      v[o[0]] = 1 / np.sqrt(v[i[0]])
     elif op.type == "Square":
       v[o[0]] = np.square(v[i[0]])
     elif op.type == "Neg":
@@ -125,13 +147,21 @@ def simulate(flow, f, data):
     elif op.type == "Mul":
       v[o[0]] = v[i[0]] * v[i[1]]
     elif op.type == "Div":
-      v[o[0]] = np.divide(v[i[0]], v[i[1]])
+      v[o[0]] = np.divide(v[i[0]], v[i[1]]).astype(nptypes[dt])
     elif op.type == "Minimum":
       v[o[0]] = np.minimum(v[i[0]], v[i[1]])
     elif op.type == "Maximum":
       v[o[0]] = np.maximum(v[i[0]], v[i[1]])
     elif op.type == "Reciprocal":
       v[o[0]] = np.divide(1, v[i[0]])
+    elif op.type == "Floor":
+      v[o[0]] = np.floor(v[i[0]])
+    elif op.type == "Ceil":
+      v[o[0]] = np.ceil(v[i[0]])
+    elif op.type == "Round":
+      v[o[0]] = np.round(v[i[0]])
+    elif op.type == "Trunc":
+      v[o[0]] = np.trunc(v[i[0]])
     elif op.type == "Sum":
       v[o[0]] = np.sum(v[i[0]])
     elif op.type == "Max":
@@ -140,6 +170,12 @@ def simulate(flow, f, data):
       v[o[0]] = np.min(v[i[0]])
     elif op.type == "Product":
       v[o[0]] = np.prod(v[i[0]])
+    elif op.type == "All":
+      v[o[0]] = np.all(v[i[0]])
+    elif op.type == "Any":
+      v[o[0]] = np.any(v[i[0]])
+    elif op.type == "Count":
+      v[o[0]] = np.array(np.count_nonzero(v[i[0]]), nptypes[dt])
     elif op.type == "ArgMin":
       v[o[0]] = np.argmin(v[i[0]])
     elif op.type == "ArgMax":
@@ -196,12 +232,18 @@ def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8):
   # Ensure that inputs are not overwritten.
   for i in flow.inputs(): i.output = True
 
+  if flags.arg.v >= 2:
+    for f in flow.funcs.values():
+      print("Compiling %s %s" % (f.name, str(variant)))
+
   # Compile flow.
   net = compiler.compile(flow)
-  for f in flow.funcs.itervalues():
+
+  # Run all functions and compare results.
+  for f in flow.funcs.values():
     # Output progress.
     if flags.arg.v >= 1:
-      print "Running %s %s" % (f.name, str(variant))
+      print("Running %s %s" % (f.name, str(variant)))
 
     # Create data instance for cell.
     cell = net.cell(f.name)
@@ -229,39 +271,42 @@ def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8):
     if test == None:
       test = Test(f)
       tests[f.name] = test
-    test.runs += 1
     for o in flow.outputs(f):
+      test.runs += 1
       t = data.tensor(o)
       b = baseline[o]
+
       if b.dtype == bool: t = np.array(t, dtype=bool)
       if not np.allclose(t, b, rtol=rtol, atol=atol):
         test.errors += 1
-        print
-        print "mismatch in", f.name, variant, "for", o.name
-        print "inputs:"
+        print()
+        print("mismatch in", f.name, variant, "for", o.name)
+        print("inputs:")
         for i in flow.inputs(f):
-          if i.data == None: print i.name, np.asarray(data.tensor(i))
-        print "myelin:"
-        print np.asarray(t)
-        print "numpy:"
-        print b
+          if i.data == None:
+            print(i.name)
+            print(np.asarray(data.tensor(i)))
+        print("myelin:")
+        print(np.asarray(t))
+        print("numpy:")
+        print(b)
         if b.dtype != bool:
-          print "abs error:"
-          print b - np.asarray(t)
-          print "rel error:"
-          print (b - np.asarray(t)) / np.asarray(t)
+          print("abs error:")
+          print(b - np.asarray(t))
+          print("rel error:")
+          print((b - np.asarray(t)) / np.asarray(t))
 
   if flags.arg.profile:
-    print net.profile()
+    print(net.profile())
 
 # Tests
 
 def matmul_test(m, k, n):
   flow = myelin.Flow()
   f = flow.define("matmul")
-  x = f.var("x", dt, [m, k])
-  W = f.var("W", dt, [k, n])
-  y = f.matmul(x, W)
+  A = f.var("A", dt, [m, k])
+  B = f.var("B", dt, [k, n])
+  C = f.matmul(A, B, name="C")
   check(flow, (m, k, n), -10, 10)
 
 def matmul_add_test(m, k, n):
@@ -282,14 +327,62 @@ def matmul_add_relu_test(m, k, n):
   y = f.relu(f.add(f.matmul(x, W), b))
   check(flow, (m, k, n), -10, 10)
 
-def matmul_transpose_test(m, n):
+def matmul_transpose_test(m, n, k=1):
   flow = myelin.Flow()
   f = flow.define("matmul_transpose")
-  x = f.var("x", dt, [1, m])
+  x = f.var("x", dt, [k, m])
+  y = f.var("y", dt, [n, k])
+  z = f.var("z", dt, [m, k])
   W = f.var("W", dt, [n, m])
   f.matmul(x, f.t(W))
   f.matmul(W, f.t(x))
-  check(flow, (m, n), -10, 10)
+  f.matmul(f.t(y), W)
+  f.matmul(f.t(z), f.t(W))
+  check(flow, (m, n, k), -10, 10)
+
+def matmul_order_test(m, k, n,
+                      ta=False, tb=False, tc=False,
+                      ra=None, rb=None, rc=None):
+  flow = myelin.Flow()
+  f = flow.define("matmul_order")
+
+  a = f.var("A", dt, [k, m] if ta else [m, k])
+  b = f.var("B", dt, [n, k] if tb else [k, n])
+
+  if ra is True: a.flags |= 128
+  if ra is False: a.flags |= 64
+
+  if rb is True: b.flags |= 128
+  if rb is False: b.flags |= 64
+
+  if ta: a = f.t(a)
+  if tb: b = f.t(b)
+
+  if tc:
+    c = f.t(f.matmul(a, b, name="C"))
+  else:
+    c = f.matmul(a, b, name="C")
+
+  if rc is True: c.flags |= 128
+  if rc is False: c.flags |= 64
+
+  check(flow, ([m, k, n], [ta, tb, tc], [ra, rb, rc]), -10, 10)
+
+def matmul_all_orders_test(m, k, n):
+  for ra in [False, True]:
+    for rb in [False, True]:
+      for ta in [False, True]:
+        for tb in [False, True]:
+          for tc in [False, True]:
+            matmul_order_test(m, k, n, ta, tb, tc, ra, rb)
+
+def matmul_batch_test(m, k, n, b=8):
+  flow = myelin.Flow()
+  f = flow.define("matmul_batch")
+  a = f.var("A", dt, [b, m, k])
+  b = f.var("B", dt, [b, k, n])
+  c = f.matmul(a, b, name="C")
+  check(flow, (m, k, n, b), -10, 10)
 
 def add_test(n):
   flow = myelin.Flow()
@@ -351,6 +444,34 @@ def sign_test(n):
   y = f.sign(x)
   check(flow, n, -10.0, 10.0)
 
+def floor_test(n):
+  flow = myelin.Flow()
+  f = flow.define("floor")
+  x = f.var("x", dt, [n])
+  y = f.floor(x)
+  check(flow, n)
+
+def ceil_test(n):
+  flow = myelin.Flow()
+  f = flow.define("ceil")
+  x = f.var("x", dt, [n])
+  y = f.ceil(x)
+  check(flow, n)
+
+def round_test(n):
+  flow = myelin.Flow()
+  f = flow.define("round")
+  x = f.var("x", dt, [n])
+  y = f.round(x)
+  check(flow, n)
+
+def trunc_test(n):
+  flow = myelin.Flow()
+  f = flow.define("trunc")
+  x = f.var("x", dt, [n])
+  y = f.trunc(x)
+  check(flow, n)
+
 def exp_test(n):
   flow = myelin.Flow()
   f = flow.define("exp")
@@ -363,14 +484,20 @@ def log_test(n):
   f = flow.define("log")
   x = f.var("x", dt, [n])
   y = f.log(x)
-  check(flow, n, 0.1, 10.0)
+  if flags.arg.gpu:
+    check(flow, n, 0.1, 10.0, atol=1e-6)
+  else:
+    check(flow, n, 0.1, 10.0)
 
 def tanh_test(n):
   flow = myelin.Flow()
   f = flow.define("tanh")
   x = f.var("x", dt, [n])
   y = f.tanh(x)
-  check(flow, n, -1.0, 1.0)
+  if flags.arg.gpu:
+    check(flow, n, -1.0, 1.0, atol=1e-7)
+  else:
+    check(flow, n, -1.0, 1.0)
 
 def erf_test(n):
   flow = myelin.Flow()
@@ -384,14 +511,106 @@ def sin_test(n):
   f = flow.define("sin")
   x = f.var("x", dt, [n])
   y = f.sin(x)
-  check(flow, n)
+  if flags.arg.gpu:
+    check(flow, n, atol=1e-6)
+  else:
+    check(flow, n)
 
 def cos_test(n):
   flow = myelin.Flow()
   f = flow.define("cos")
   x = f.var("x", dt, [n])
-  y = f.sin(x)
+  y = f.cos(x)
+  if flags.arg.gpu:
+    check(flow, n, atol=1e-6)
+  else:
+    check(flow, n)
+
+def tan_test(n):
+  flow = myelin.Flow()
+  f = flow.define("tan")
+  x = f.var("x", dt, [n])
+  y = f.tan(x)
+  if flags.arg.gpu:
+    check(flow, n, atol=1e-6, rtol=1e-4)
+  else:
+    check(flow, n)
+
+def trig_test(n):
+  flow = myelin.Flow()
+  f = flow.define("trig")
+  x = f.var("x", dt, [n])
+  ys = f.sin(x)
+  yc = f.cos(x)
+  yt = f.tan(x)
+  if flags.arg.gpu:
+    check(flow, n, atol=1e-6, rtol=1e-4)
+  else:
+    check(flow, n)
+
+def asin_test(n):
+  flow = myelin.Flow()
+  f = flow.define("asin")
+  x = f.var("x", dt, [n])
+  y = f.asin(x)
+  check(flow, n, -1.0, 1.0)
+
+def acos_test(n):
+  flow = myelin.Flow()
+  f = flow.define("acos")
+  x = f.var("x", dt, [n])
+  y = f.acos(x)
+  check(flow, n, -1.0, 1.0)
+
+def atan_test(n):
+  flow = myelin.Flow()
+  f = flow.define("atan")
+  x = f.var("x", dt, [n])
+  y = f.atan(x)
   check(flow, n)
+
+def sinh_test(n):
+  flow = myelin.Flow()
+  f = flow.define("sinh")
+  x = f.var("x", dt, [n])
+  y = f.sinh(x)
+  check(flow, n)
+
+def cosh_test(n):
+  flow = myelin.Flow()
+  f = flow.define("cosh")
+  x = f.var("x", dt, [n])
+  y = f.cosh(x)
+  check(flow, n)
+
+def tanh_test(n):
+  flow = myelin.Flow()
+  f = flow.define("tanh")
+  x = f.var("x", dt, [n])
+  y = f.tanh(x)
+  check(flow, n)
+
+def asinh_test(n):
+  flow = myelin.Flow()
+  f = flow.define("asinh")
+  x = f.var("x", dt, [n])
+  y = f.asinh(x)
+  check(flow, n, -1.0, 1.0, rtol=1e-3, atol=1e-6)
+
+def acosh_test(n):
+  flow = myelin.Flow()
+  f = flow.define("acosh")
+  x = f.var("x", dt, [n])
+  y = f.acosh(x)
+  check(flow, n, 1.0, 10.0, atol=1e-6)
+
+def atanh_test(n):
+  flow = myelin.Flow()
+  f = flow.define("atanh")
+  x = f.var("x", dt, [n])
+  y = f.atanh(x)
+  check(flow, n, -1.0, -0.1)
+  check(flow, n, 0.1, 1.0)
 
 def sqrt_test(n):
   flow = myelin.Flow()
@@ -399,6 +618,27 @@ def sqrt_test(n):
   x = f.var("x", dt, [n])
   y = f.sqrt(x)
   check(flow, n, 0.1, 10.0)
+
+def rsqrt_test(n):
+  flow = myelin.Flow()
+  f = flow.define("rsqrt")
+  x = f.var("x", dt, [n])
+  y = f.rsqrt(x)
+  check(flow, n, 1.0, 10.0, rtol=1e-3, atol=1e-4)
+
+def rcpsqrt_test(n):
+  flow = myelin.Flow()
+  f = flow.define("rcpsqrt")
+  x = f.var("x", dt, [n])
+  y = f.div(f.const(1.0, dtype=dt), f.sqrt(x))
+  check(flow, n, 1.0, 10.0, rtol=1e-3, atol=1e-4)
+
+def onediv_test(n):
+  flow = myelin.Flow()
+  f = flow.define("onediv")
+  x = f.var("x", dt, [n])
+  y = f.div(f.const(1.0, dtype=dt), x)
+  check(flow, n, 1.0, 10.0, rtol=1e-3, atol=1e-4)
 
 def square_test(n):
   flow = myelin.Flow()
@@ -456,6 +696,27 @@ def product_test(n):
   y = f.product(x)
   check(flow, n, 0.0, 1.0)
 
+def all_test(n):
+  flow = myelin.Flow()
+  f = flow.define("all")
+  x = f.var("x", dt, [n])
+  y = f.all(f.greater(x, f.const(0, dtype=dt)))
+  check(flow, -10.0, 1.0)
+
+def any_test(n):
+  flow = myelin.Flow()
+  f = flow.define("any")
+  x = f.var("x", dt, [n])
+  y = f.any(f.greater(x, f.const(0, dtype=dt)))
+  check(flow, n, -1.0, 10.0)
+
+def count_test(n):
+  flow = myelin.Flow()
+  f = flow.define("count")
+  x = f.var("x", dt, [n])
+  y = f.count(f.greater(x, f.const(0, dtype=dt)), dtype=dt)
+  check(flow, n)
+
 def norm_test(n):
   flow = myelin.Flow()
   f = flow.define("norm")
@@ -498,6 +759,14 @@ def bcast_test(n):
   f = flow.define("bcast")
   x = f.var("x", dt, [n])
   y = f.mul(x, f.const(7, dt))
+  check(flow, n)
+
+def bcast_repeat_test(n):
+  flow = myelin.Flow()
+  f = flow.define("bcast_repeat")
+  x = f.var("x", dt, [n, 256])
+  y = f.var("y", dt, [n, 1])
+  z = f.square(f.sub(x, y))
   check(flow, n)
 
 def shape_test(n):
@@ -627,23 +896,39 @@ def mul_const_test(n, c):
   x = f.mul(x, y)
   check(flow, (n, c))
 
+def pow_test(n, p):
+  flow = myelin.Flow()
+  f = flow.define("pow")
+  x = f.var("x", dt, [n])
+  y = f.const(p, dt)
+  x = f.pow(x, y)
+  check(flow, (n, p), 0.0, 10.0)
+
+def negfold_test(n):
+  flow = myelin.Flow()
+  f = flow.define("negfold")
+  x = f.var("x", dt, [n])
+  y = f.var("y", dt, [n])
+  z = f.sub(x, f.neg(y))
+  check(flow, n)
+
 # Check for specific test to run.
 if flags.arg.test:
-  print "Running test", flags.arg.test
+  print("Running test", flags.arg.test)
   exec(flags.arg.test)
-  print
+  print()
   quit()
 
 # Run tests for different size ranges.
 if flags.arg.thorough:
-  sizes = range(1, 48) + [64, 128, 256]
+  sizes = list(range(1, 48)) + [64, 128, 256]
 else:
-  sizes = range(1, 8) + [9, 14, 15, 16, 31, 32, 33, 64]
+  sizes = list(range(1, 8)) + [9, 14, 15, 16, 31, 32, 33, 64]
 
 for i in sizes:
   for j in sizes:
     concat_test(i, j)
-  for j in xrange(1, i + 1):
+  for j in range(1, i + 1):
     if i % j == 0:
       split_test(i, j)
 
@@ -659,6 +944,7 @@ for i in sizes:
   square_test(i)
   relu_test(i)
   bcast_test(i)
+  bcast_repeat_test(i)
   shape_test(i)
   size_test(i)
   if i < 32: rank_test(i)
@@ -671,9 +957,24 @@ for i in sizes:
   if dt == myelin.DT_FLOAT or dt == myelin.DT_DOUBLE:
     rcp_test(i)
     sqrt_test(i)
+    rsqrt_test(i)
     exp_test(i)
     log_test(i)
+    for p in [0.0, 1.0, 2.0, 2.5, 3.0, -1.0, -2.0, 0.5, -0.5]:
+      pow_test(i, p)
+    sin_test(i)
+    cos_test(i)
+    tan_test(i)
+    asin_test(i)
+    acos_test(i)
+    atan_test(i)
+    sinh_test(i)
+    cosh_test(i)
     tanh_test(i)
+    asinh_test(i)
+    acosh_test(i)
+    atanh_test(i)
+    trig_test(i)
     erf_test(i)
     sigmoid_test(i)
     softmax_test(i)
@@ -681,8 +982,15 @@ for i in sizes:
     product_test(i)
     min_test(i)
     max_test(i)
+    all_test(i)
+    any_test(i)
+    count_test(i)
     norm_test(i)
     sign_test(i)
+    floor_test(i)
+    ceil_test(i)
+    round_test(i)
+    trunc_test(i)
 
     equal_test(i)
     not_equal_test(i)
@@ -695,18 +1003,20 @@ for i in sizes:
     select_test(i)
 
     if dt != myelin.DT_DOUBLE:
-      # No support yet for argmax, argmin, sin, and cos for doubles.
-      sin_test(i)
-      cos_test(i)
+      # No support yet for argmax and argmin for doubles.
       argmax_test(i)
       argmin_test(i)
 
 for i in sizes:
   for j in sizes:
     matmul_transpose_test(i, j)
+    if not flags.arg.mkl: matmul_all_orders_test(i, j, 32)
     for k in sizes:
       matmul_test(i, j, k)
       matmul_add_test(i, j, k)
+      matmul_batch_test(i, j, k, 8)
+      if flags.arg.thorough and not flags.arg.mkl:
+        matmul_all_orders_test(i, j, k)
       if dt != myelin.DT_INT8:
         # Rounding with MatMulAddRelu not compatible with NymPy for INT8.
         matmul_add_relu_test(i, j, k)
@@ -714,21 +1024,21 @@ if flags.arg.thorough:
   matmul_test(1024, 1024, 1024)
 
 # Output test results.
-print "Test results"
-print "============"
-print
+print("Test results")
+print("============")
+print()
 
 errors = 0
 for name in sorted(tests):
   t = tests[name]
   errors += t.failed()
   if t.failed() == 0:
-    print "%-20s %7d passed" % (t.name, t.passed())
+    print("%-20s %7d passed" % (t.name, t.passed()))
   else:
-    print "%-20s %7d passed %7d failed" % (t.name, t.passed(), t.failed())
+    print("%-20s %7d passed %7d failed" % (t.name, t.passed(), t.failed()))
 print
 
 if errors > 0:
-  print "******", errors, "tests failed for ", " ".join(sys.argv[1:]), " ******"
+  print("*****", errors, "tests failed for ", " ".join(sys.argv[1:]), " *****")
   exit(1)
 

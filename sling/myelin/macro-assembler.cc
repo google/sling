@@ -200,6 +200,13 @@ void StaticData::Generate(MacroAssembler *masm) {
   // Bind label to the address of the generated data block.
   masm->bind(&location_);
 
+  // Add external symbol.
+  if (!symbol_.empty()) {
+    CHECK_EQ(data_.size(), sizeof(Address));
+    Address *addr = reinterpret_cast<Address *>(data_.data());
+    masm->AddExtern(symbol_, *addr);
+  }
+
   // Emit data block.
   for (uint8 byte : data_) masm->db(byte);
 }
@@ -376,6 +383,31 @@ void MacroAssembler::LoadTensorAddress(Register dst, Tensor *tensor,
       }
       rr_.release(iptr);
       rr_.release(acc);
+    }
+  }
+}
+
+void MacroAssembler::LoadTensorDeviceAddress(Register dst, Tensor *tensor) {
+  DCHECK(tensor->placement() & DEVICE);
+  if (tensor->IsGlobal()) {
+    if (tensor->ref()) {
+      DCHECK(tensor->ref_placement() & HOST) << tensor->name();
+      DCHECK(tensor->data() != nullptr);
+      movp(dst, tensor->data());
+      movq(dst, Operand(dst));
+    } else {
+      DCHECK(tensor->device_data() != DEVICE_NULL);
+      movq(dst, tensor->device_data());
+    }
+  } else {
+    if (tensor->ref()) {
+      DCHECK(tensor->ref_placement() & HOST) << tensor->name();
+      movq(dst, Operand(datareg, tensor->offset()));
+    } else {
+      movq(dst, Operand(datareg));
+      if (tensor->device_offset() != 0) {
+        addq(dst, Immediate(tensor->device_offset()));
+      }
     }
   }
 }
@@ -593,6 +625,20 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
             maxps(acc, r);
           }
           break;
+        case REDUCE_AND:
+          if (avx) {
+            vandps(acc, acc, r);
+          } else {
+            andps(acc, r);
+          }
+          break;
+        case REDUCE_OR:
+          if (avx) {
+            vorps(acc, acc, r);
+          } else {
+            orps(acc, r);
+          }
+          break;
       }
       break;
     case DT_DOUBLE:
@@ -625,6 +671,213 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
             maxpd(acc, r);
           }
           break;
+        case REDUCE_AND:
+          if (avx) {
+            vandpd(acc, acc, r);
+          } else {
+            andpd(acc, r);
+          }
+          break;
+        case REDUCE_OR:
+          if (avx) {
+            vorpd(acc, acc, r);
+          } else {
+            orpd(acc, r);
+          }
+          break;
+      }
+      break;
+    case DT_INT32:
+      switch (op) {
+        case REDUCE_ADD:
+          if (avx) {
+            vpaddd(acc, acc, r);
+          } else {
+            paddd(acc, r);
+          }
+          break;
+        case REDUCE_MUL:
+          if (avx) {
+            vpmulld(acc, acc, r);
+          } else {
+            pmulld(acc, r);
+          }
+          break;
+        case REDUCE_MIN:
+          if (avx) {
+            vpminsd(acc, acc, r);
+          } else {
+            pminsd(acc, r);
+          }
+          break;
+        case REDUCE_MAX:
+          if (avx) {
+            vpmaxsd(acc, acc, r);
+          } else {
+            pmaxsd(acc, r);
+          }
+          break;
+        case REDUCE_AND:
+          if (avx) {
+            vpand(acc, acc, r);
+          } else {
+            pand(acc, r);
+          }
+          break;
+        case REDUCE_OR:
+          if (avx) {
+            vpor(acc, acc, r);
+          } else {
+            por(acc, r);
+          }
+          break;
+      }
+      break;
+    default:
+      LOG(FATAL) << "Reduction for type not supported";
+  }
+}
+
+void MacroAssembler::Accumulate(Reduction op, Type type,
+                                XMMRegister acc, const Operand &src) {
+  bool avx = Enabled(AVX);
+  switch (type) {
+    case DT_FLOAT:
+      switch (op) {
+        case REDUCE_ADD:
+          if (avx) {
+            vaddps(acc, acc, src);
+          } else {
+            addps(acc, src);
+          }
+          break;
+        case REDUCE_MUL:
+          if (avx) {
+            vmulps(acc, acc, src);
+          } else {
+            mulps(acc, src);
+          }
+          break;
+        case REDUCE_MIN:
+          if (avx) {
+            vminps(acc, acc, src);
+          } else {
+            minps(acc, src);
+          }
+          break;
+        case REDUCE_MAX:
+          if (avx) {
+            vmaxps(acc, acc, src);
+          } else {
+            maxps(acc, src);
+          }
+          break;
+        case REDUCE_AND:
+          if (avx) {
+            vandps(acc, acc, src);
+          } else {
+            andps(acc, src);
+          }
+          break;
+        case REDUCE_OR:
+          if (avx) {
+            vorps(acc, acc, src);
+          } else {
+            orps(acc, src);
+          }
+          break;
+      }
+      break;
+    case DT_DOUBLE:
+      switch (op) {
+        case REDUCE_ADD:
+          if (avx) {
+            vaddpd(acc, acc, src);
+          } else {
+            addpd(acc, src);
+          }
+          break;
+        case REDUCE_MUL:
+          if (avx) {
+            vmulpd(acc, acc, src);
+          } else {
+            mulpd(acc, src);
+          }
+          break;
+        case REDUCE_MIN:
+          if (avx) {
+            vminpd(acc, acc, src);
+          } else {
+            minpd(acc, src);
+          }
+          break;
+        case REDUCE_MAX:
+          if (avx) {
+            vmaxpd(acc, acc, src);
+          } else {
+            maxpd(acc, src);
+          }
+          break;
+        case REDUCE_AND:
+          if (avx) {
+            vandpd(acc, acc, src);
+          } else {
+            andpd(acc, src);
+          }
+          break;
+        case REDUCE_OR:
+          if (avx) {
+            vorpd(acc, acc, src);
+          } else {
+            orpd(acc, src);
+          }
+          break;
+      }
+      break;
+    case DT_INT32:
+      switch (op) {
+        case REDUCE_ADD:
+          if (avx) {
+            vpaddd(acc, acc, src);
+          } else {
+            paddd(acc, src);
+          }
+          break;
+        case REDUCE_MUL:
+          if (avx) {
+            vpmulld(acc, acc, src);
+          } else {
+            pmulld(acc, src);
+          }
+          break;
+        case REDUCE_MIN:
+          if (avx) {
+            vpminsd(acc, acc, src);
+          } else {
+            pminsd(acc, src);
+          }
+          break;
+        case REDUCE_MAX:
+          if (avx) {
+            vpmaxsd(acc, acc, src);
+          } else {
+            pmaxsd(acc, src);
+          }
+          break;
+        case REDUCE_AND:
+          if (avx) {
+            vpand(acc, acc, src);
+          } else {
+            pand(acc, src);
+          }
+          break;
+        case REDUCE_OR:
+          if (avx) {
+            vpor(acc, acc, src);
+          } else {
+            por(acc, src);
+          }
+          break;
       }
       break;
     default:
@@ -634,6 +887,7 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
 
 void MacroAssembler::Accumulate(Reduction op, Type type,
                                 YMMRegister acc, YMMRegister r) {
+  CHECK(Enabled(AVX));
   switch (type) {
     case DT_FLOAT:
       switch (op) {
@@ -648,6 +902,12 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
           break;
         case REDUCE_MAX:
           vmaxps(acc, acc, r);
+          break;
+        case REDUCE_AND:
+          vandps(acc, acc, r);
+          break;
+        case REDUCE_OR:
+          vorps(acc, acc, r);
           break;
       }
       break;
@@ -664,6 +924,111 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
           break;
         case REDUCE_MAX:
           vmaxpd(acc, acc, r);
+          break;
+        case REDUCE_AND:
+          vandpd(acc, acc, r);
+          break;
+        case REDUCE_OR:
+          vorpd(acc, acc, r);
+          break;
+      }
+      break;
+    case DT_INT32:
+      CHECK(Enabled(AVX2));
+      switch (op) {
+        case REDUCE_ADD:
+          vpaddd(acc, acc, r);
+          break;
+        case REDUCE_MUL:
+          vpmulld(acc, acc, r);
+          break;
+        case REDUCE_MIN:
+          vpminsd(acc, acc, r);
+          break;
+        case REDUCE_MAX:
+          vpmaxsd(acc, acc, r);
+          break;
+        case REDUCE_AND:
+          vpand(acc, acc, r);
+          break;
+        case REDUCE_OR:
+          vpor(acc, acc, r);
+          break;
+      }
+      break;
+    default:
+      LOG(FATAL) << "Reduction for type not supported";
+  }
+}
+
+void MacroAssembler::Accumulate(Reduction op, Type type,
+                                YMMRegister acc, const Operand &src) {
+  CHECK(Enabled(AVX));
+  switch (type) {
+    case DT_FLOAT:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddps(acc, acc, src);
+          break;
+        case REDUCE_MUL:
+          vmulps(acc, acc, src);
+          break;
+        case REDUCE_MIN:
+          vminps(acc, acc, src);
+          break;
+        case REDUCE_MAX:
+          vmaxps(acc, acc, src);
+          break;
+        case REDUCE_AND:
+          vandps(acc, acc, src);
+          break;
+        case REDUCE_OR:
+          vorps(acc, acc, src);
+          break;
+      }
+      break;
+    case DT_DOUBLE:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddpd(acc, acc, src);
+          break;
+        case REDUCE_MUL:
+          vmulpd(acc, acc, src);
+          break;
+        case REDUCE_MIN:
+          vminpd(acc, acc, src);
+          break;
+        case REDUCE_MAX:
+          vmaxpd(acc, acc, src);
+          break;
+        case REDUCE_AND:
+          vandpd(acc, acc, src);
+          break;
+        case REDUCE_OR:
+          vorpd(acc, acc, src);
+          break;
+      }
+      break;
+    case DT_INT32:
+      CHECK(Enabled(AVX2));
+      switch (op) {
+        case REDUCE_ADD:
+          vpaddd(acc, acc, src);
+          break;
+        case REDUCE_MUL:
+          vpmulld(acc, acc, src);
+          break;
+        case REDUCE_MIN:
+          vpminsd(acc, acc, src);
+          break;
+        case REDUCE_MAX:
+          vpmaxsd(acc, acc, src);
+          break;
+        case REDUCE_AND:
+          vpand(acc, acc, src);
+          break;
+        case REDUCE_OR:
+          vpor(acc, acc, src);
           break;
       }
       break;
@@ -674,6 +1039,7 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
 
 void MacroAssembler::Accumulate(Reduction op, Type type,
                                 ZMMRegister acc, ZMMRegister r) {
+  CHECK(Enabled(AVX512F));
   switch (type) {
     case DT_FLOAT:
       switch (op) {
@@ -688,6 +1054,12 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
           break;
         case REDUCE_MAX:
           vmaxps(acc, acc, r);
+          break;
+        case REDUCE_AND:
+          vandps(acc, acc, r);
+          break;
+        case REDUCE_OR:
+          vorps(acc, acc, r);
           break;
       }
       break;
@@ -704,6 +1076,111 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
           break;
         case REDUCE_MAX:
           vmaxpd(acc, acc, r);
+          break;
+        case REDUCE_AND:
+          vandpd(acc, acc, r);
+          break;
+        case REDUCE_OR:
+          vorpd(acc, acc, r);
+          break;
+      }
+      break;
+    case DT_INT32:
+      switch (op) {
+        case REDUCE_ADD:
+          vpaddd(acc, acc, r);
+          break;
+        case REDUCE_MUL:
+          vpmulld(acc, acc, r);
+          break;
+        case REDUCE_MIN:
+          vpminsd(acc, acc, r);
+          break;
+        case REDUCE_MAX:
+          vpmaxsd(acc, acc, r);
+          break;
+        case REDUCE_AND:
+          vpandd(acc, acc, r);
+          break;
+        case REDUCE_OR:
+          vpord(acc, acc, r);
+          break;
+      }
+      break;
+    default:
+      LOG(FATAL) << "Reduction for type not supported";
+  }
+}
+
+void MacroAssembler::Accumulate(Reduction op, Type type,
+                                ZMMRegister acc, const Operand &src,
+                                OpmaskRegister k) {
+  CHECK(Enabled(AVX512F));
+  Mask mask = k.is_valid() ? Mask(k, merging) : nomask;
+  switch (type) {
+    case DT_FLOAT:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddps(acc, acc, src, mask);
+          break;
+        case REDUCE_MUL:
+          vmulps(acc, acc, src, mask);
+          break;
+        case REDUCE_MIN:
+          vminps(acc, acc, src, mask);
+          break;
+        case REDUCE_MAX:
+          vmaxps(acc, acc, src, mask);
+          break;
+        case REDUCE_AND:
+          vandps(acc, acc, src, mask);
+          break;
+        case REDUCE_OR:
+          vorps(acc, acc, src, mask);
+          break;
+      }
+      break;
+    case DT_DOUBLE:
+      switch (op) {
+        case REDUCE_ADD:
+          vaddpd(acc, acc, src, mask);
+          break;
+        case REDUCE_MUL:
+          vmulpd(acc, acc, src, mask);
+          break;
+        case REDUCE_MIN:
+          vminpd(acc, acc, src, mask);
+          break;
+        case REDUCE_MAX:
+          vmaxpd(acc, acc, src, mask);
+          break;
+        case REDUCE_AND:
+          vandpd(acc, acc, src, mask);
+          break;
+        case REDUCE_OR:
+          vorpd(acc, acc, src, mask);
+          break;
+      }
+      break;
+    case DT_INT32:
+      switch (op) {
+        case REDUCE_ADD:
+          vpaddd(acc, acc, src, mask);
+          break;
+        case REDUCE_MUL:
+          vpmulld(acc, acc, src, mask);
+          break;
+        case REDUCE_MIN:
+          vpminsd(acc, acc, src, mask);
+          break;
+        case REDUCE_MAX:
+          vpmaxsd(acc, acc, src, mask);
+          break;
+        case REDUCE_AND:
+          vpandd(acc, acc, src, mask);
+          break;
+        case REDUCE_OR:
+          vpord(acc, acc, src, mask);
           break;
       }
       break;
@@ -715,7 +1192,7 @@ void MacroAssembler::Accumulate(Reduction op, Type type,
 void MacroAssembler::Reduce(Reduction op, Type type,
                             XMMRegister acc, XMMRegister aux) {
   int n = (128 / 8) / TypeTraits::of(type).size();
-  if (CPU::Enabled(AVX)) {
+  if (Enabled(AVX)) {
     switch (n) {
       case 4:
         vpermil(type, aux, acc, 0x0E);
@@ -728,7 +1205,7 @@ void MacroAssembler::Reduce(Reduction op, Type type,
       default:
         LOG(FATAL) << "Reduction not supported";
     }
-  } else if (CPU::Enabled(SSE3) && n == 4) {
+  } else if (Enabled(SSE3) && n == 4) {
     movshdup(aux, acc);
     Accumulate(op, type, acc, aux);
     movhlps(aux, acc);
@@ -737,14 +1214,14 @@ void MacroAssembler::Reduce(Reduction op, Type type,
     movaps(aux, acc);
     shufps(aux, acc, 0xB1);
     Accumulate(op, type, acc, aux);
-    if (CPU::Enabled(SSE2)) {
+    if (Enabled(SSE2)) {
       movhlps(aux, acc);
     } else {
       movaps(aux, acc);
       shufps(aux, acc, 0x03);
     }
     Accumulate(op, type, acc, aux);
-  } else if (CPU::Enabled(SSE2) && n == 2) {
+  } else if (Enabled(SSE2) && n == 2) {
     movapd(aux, acc);
     shufpd(aux, acc, 1);
     Accumulate(op, type, acc, aux);
@@ -755,6 +1232,7 @@ void MacroAssembler::Reduce(Reduction op, Type type,
 
 void MacroAssembler::Reduce(Reduction op, Type type,
                             YMMRegister acc, YMMRegister aux) {
+  CHECK(Enabled(AVX));
   int n = (256 / 8) / TypeTraits::of(type).size();
   vperm2f128(aux, acc, acc, 1);
   Accumulate(op, type, acc, aux);
@@ -774,6 +1252,7 @@ void MacroAssembler::Reduce(Reduction op, Type type,
 
 void MacroAssembler::Reduce(Reduction op, Type type,
                             ZMMRegister acc, ZMMRegister aux) {
+  CHECK(Enabled(AVX512F));
   int n = (512 / 8) / TypeTraits::of(type).size();
   vshuff32x4(aux, acc, acc, 0x0E);
   Accumulate(op, type, acc, aux);
@@ -837,6 +1316,11 @@ void MacroAssembler::WaitForTask(int offset) {
               "MyelinWaitTask");
   call(acc);
   rr_.release(acc);
+}
+
+void MacroAssembler::WaitForMainTask() {
+  // Call runtime to wait for main task to complete.
+  CallInstanceFunction(runtime_->SyncMainFunc(), "MyelinSyncMain");
 }
 
 void MacroAssembler::CallInstanceFunction(void (*func)(void *),

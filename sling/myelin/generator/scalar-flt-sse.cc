@@ -24,7 +24,8 @@ using namespace jit;
 // Generate scalar float expression using SSE and XMM registers.
 class ScalarFltSSEGenerator : public ExpressionGenerator {
  public:
-  ScalarFltSSEGenerator() {
+  ScalarFltSSEGenerator(Type type) {
+    model_.name = "FltSSE";
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -39,9 +40,26 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
     model_.cond_reg_mem_reg = true;
     model_.cond_reg_reg_mem = true;
     model_.cond_reg_mem_mem = true;
+    model_.instruction_set({
+      Express::MOV, Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+      Express::MINIMUM, Express::MAXIMUM, Express::SQRT,
+      Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+      Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+      Express::COND, Express::SELECT,
+      Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+      Express::BITEQ, Express::QUADSIGN,
+      Express::AND, Express::OR, Express::XOR, Express::ANDNOT,
+      Express::FLOOR, Express::CEIL, Express::ROUND, Express::TRUNC,
+      Express::CVTFLTINT, Express::CVTINTFLT,
+      Express::CVTEXPINT, Express::CVTINTEXP,
+      Express::ADDINT, Express::SUBINT,
+      Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+      Express::ALL, Express::ANY,
+    });
+    if (type == DT_FLOAT) {
+      model_.instruction_set({Express::RECIPROCAL, Express::RSQRT});
+    }
   }
-
-  string Name() override { return "FltSSE"; }
 
   void Reserve() override {
     // Reserve XMM registers.
@@ -50,23 +68,14 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
     int num_rr_aux = 0;
-    if (instructions_.Has(Express::BITAND) ||
-        instructions_.Has(Express::BITOR) ||
-        instructions_.Has(Express::AND) ||
-        instructions_.Has(Express::OR) ||
-        instructions_.Has(Express::XOR) ||
-        instructions_.Has(Express::ANDNOT) ||
-        instructions_.Has(Express::CVTFLTINT) ||
-        instructions_.Has(Express::CVTINTFLT) ||
-        instructions_.Has(Express::SUBINT)) {
+    if (instructions_.Has({
+        Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+        Express::BITEQ, Express::AND, Express::OR, Express::XOR,
+        Express::ANDNOT, Express::CVTFLTINT, Express::CVTINTFLT,
+        Express::ADDINT, Express::SUBINT, Express::ALL, Express::ANY})) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
-    if (instructions_.Has(Express::NOT)) {
-      num_mm_aux = std::max(num_mm_aux, 2);
-      num_rr_aux = std::max(num_rr_aux, 1);
-    }
-    if (instructions_.Has(Express::SELECT) ||
-        instructions_.Has(Express::COND)) {
+    if (instructions_.Has({Express::SELECT, Express::COND})) {
       num_rr_aux = std::max(num_rr_aux, 1);
     }
 
@@ -136,6 +145,18 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
             &Assembler::sqrtss, &Assembler::sqrtsd,
             masm, 0);
         break;
+      case Express::RSQRT:
+        GenerateXMMFltOp(instr,
+            &Assembler::rsqrtss, &Assembler::rsqrtss,
+            &Assembler::rsqrtss, &Assembler::rsqrtss,
+            masm, 0);
+        break;
+      case Express::RECIPROCAL:
+        GenerateXMMFltOp(instr,
+            &Assembler::rcpss, &Assembler::rcpss,
+            &Assembler::rcpss, &Assembler::rcpss,
+            masm, 0);
+        break;
       case Express::CMPEQOQ:
         GenerateCompare(instr, masm, CMP_EQ_OQ);
         break;
@@ -162,22 +183,26 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
         break;
       case Express::BITAND:
       case Express::BITOR:
+      case Express::BITXOR:
+      case Express::BITANDNOT:
+      case Express::BITEQ:
       case Express::AND:
       case Express::OR:
       case Express::XOR:
       case Express::ANDNOT:
-      case Express::NOT:
         GenerateRegisterOp(instr, masm);
         break;
       case Express::FLOOR:
-        if (CPU::Enabled(SSE4_1)) {
-          GenerateXMMFltOp(instr,
-              &Assembler::roundss, &Assembler::roundsd,
-              &Assembler::roundss, &Assembler::roundsd,
-              round_down, masm);
-        } else {
-          UNSUPPORTED;
-        }
+        GenerateRound(instr, masm, round_down);
+        break;
+      case Express::CEIL:
+        GenerateRound(instr, masm, round_up);
+        break;
+      case Express::ROUND:
+        GenerateRound(instr, masm, round_nearest);
+        break;
+      case Express::TRUNC:
+        GenerateRound(instr, masm, round_to_zero);
         break;
       case Express::CVTFLTINT:
       case Express::CVTINTFLT:
@@ -193,6 +218,10 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
       case Express::CVTINTEXP:
         GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
         break;
+      case Express::QUADSIGN:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 29 : 61);
+        break;
+      case Express::ADDINT:
       case Express::SUBINT:
         GenerateRegisterOp(instr, masm);
         break;
@@ -220,7 +249,12 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
             &Assembler::maxss, &Assembler::maxsd,
             masm);
         break;
-      default: UNSUPPORTED;
+      case Express::ALL:
+      case Express::ANY:
+        GenerateLogicAccumulate(instr, masm);
+        break;
+      default:
+        LOG(FATAL) << "Unsupported instruction: " << instr->AsInstruction();
     }
   }
 
@@ -279,6 +313,18 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
         code, masm);
   }
 
+  // Generate rounding.
+  void GenerateRound(Express::Op *instr, MacroAssembler *masm, int8 code) {
+    if (CPU::Enabled(SSE4_1)) {
+      GenerateXMMUnaryFltOp(instr,
+          &Assembler::roundss, &Assembler::roundsd,
+          &Assembler::roundss, &Assembler::roundsd,
+          code, masm);
+    } else {
+      UNSUPPORTED;
+    }
+  }
+
   // Generate scalar op that loads memory operands into a register first.
   void GenerateRegisterOp(Express::Op *instr, MacroAssembler *masm) {
     CHECK(instr->dst != -1);
@@ -302,6 +348,9 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
           case Express::CVTINTFLT:
             __ cvtdq2ps(dst, src);
             break;
+          case Express::ADDINT:
+            __ paddd(dst, src);
+            break;
           case Express::SUBINT:
             __ psubd(dst, src);
             break;
@@ -314,19 +363,18 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
             __ orps(dst, src);
             break;
           case Express::XOR:
+          case Express::BITXOR:
             __ xorps(dst, src);
             break;
           case Express::ANDNOT:
+          case Express::BITANDNOT:
             __ andnps(dst, src);
             break;
-          case Express::NOT:
-            __ movl(aux(0), Immediate(-1));
-            if (dst.code() == src.code()) {
-              __ movd(xmmaux(1), aux(0));
-              __ xorps(dst, xmmaux(1));
+          case Express::BITEQ:
+            if (CPU::Enabled(SSE2)) {
+              __ pcmpeqd(dst, src);
             } else {
-              __ movd(dst, aux(0));
-              __ xorps(dst, src);
+              UNSUPPORTED;
             }
             break;
           default: UNSUPPORTED;
@@ -344,6 +392,9 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
           case Express::CVTINTFLT:
             __ cvtdq2pd(dst, src);
             break;
+          case Express::ADDINT:
+            __ paddq(dst, src);
+            break;
           case Express::SUBINT:
             __ psubq(dst, src);
             break;
@@ -356,19 +407,18 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
             __ orpd(dst, src);
             break;
           case Express::XOR:
+          case Express::BITXOR:
             __ xorpd(dst, src);
             break;
           case Express::ANDNOT:
+          case Express::BITANDNOT:
             __ andnpd(dst, src);
             break;
-          case Express::NOT:
-            __ movq(aux(0), Immediate(-1));
-            if (dst.code() == src.code()) {
-              __ movq(xmmaux(1), aux(0));
-              __ xorpd(dst, xmmaux(1));
+          case Express::BITEQ:
+            if (CPU::Enabled(SSE4_1)) {
+              __ pcmpeqq(dst, src);
             } else {
-              __ movq(dst, aux(0));
-              __ xorpd(dst, src);
+              UNSUPPORTED;
             }
             break;
           default: UNSUPPORTED;
@@ -474,6 +524,48 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
     }
   }
 
+  // Generate logic reduction accumulation.
+  void GenerateLogicAccumulate(Express::Op *instr, MacroAssembler *masm) {
+    XMMRegister acc = xmm(instr->acc);
+    XMMRegister src;
+    if (instr->src != -1) {
+      src = xmm(instr->src);
+    } else {
+      src = xmmaux(0);
+    }
+    switch (type_) {
+      case DT_FLOAT:
+        if (instr->src == -1) {
+          __ movss(src, addr(instr->args[0]));
+        }
+        switch (instr->type) {
+          case Express::ALL:
+            __ andps(acc, src);
+            break;
+          case Express::ANY:
+            __ orps(acc, src);
+            break;
+          default: UNSUPPORTED;
+        }
+        break;
+      case DT_DOUBLE:
+        if (instr->src == -1) {
+          __ movsd(src, addr(instr->args[0]));
+        }
+        switch (instr->type) {
+          case Express::ALL:
+            __ andpd(acc, src);
+            break;
+          case Express::ANY:
+            __ orpd(acc, src);
+            break;
+          default: UNSUPPORTED;
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+
   // Generate code for reduction operation.
   void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
     switch (type_) {
@@ -496,8 +588,8 @@ class ScalarFltSSEGenerator : public ExpressionGenerator {
   }
 };
 
-ExpressionGenerator *CreateScalarFltSSEGenerator() {
-  return new ScalarFltSSEGenerator();
+ExpressionGenerator *CreateScalarFltSSEGenerator(Type type) {
+  return new ScalarFltSSEGenerator(type);
 }
 
 }  // namespace myelin

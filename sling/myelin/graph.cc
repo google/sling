@@ -236,6 +236,8 @@ static void AppendVar(string *str,
 
   str->append(" tooltip=\"");
   if (var->constant()) str->append("const ");
+  if (var->is(Flow::Variable::ROW)) str->append("row ");
+  if (var->is(Flow::Variable::COL)) str->append("col ");
   if (var->learnable()) str->append("learnable ");
   if (var->in()) str->append("in ");
   if (var->out()) str->append("out ");

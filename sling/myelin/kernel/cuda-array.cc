@@ -24,6 +24,8 @@ namespace myelin {
 // Concatenation of input tensors along first dimension using CUDA.
 class CUDABasicConcat : public CUDAKernel {
  public:
+  static const int WORD_SIZE = 4;
+
   string Name() override { return "CUDABasicConcat"; }
   string Operation() override { return "ConcatV2"; }
 
@@ -45,12 +47,20 @@ class CUDABasicConcat : public CUDAKernel {
     return true;
   }
 
+  void Adjust(Step *step) override {
+    // Input and output tensors must be word aligned.
+    int n = step->GetAttr("N", step->indegree() - 1);
+    for (int i = 0; i < n; ++i) {
+      step->input(i)->SetMiniumAlignment(WORD_SIZE);
+    }
+    step->output(0)->SetMiniumAlignment(WORD_SIZE);
+  }
+
   void GeneratePTX(Step *step, PTXMacroAssembler *ptx) override {
     // Get the number of tensors to concatenate.
     int n = step->GetAttr("N", step->indegree() - 1);
 
     // Find maximum number of 32-bit words to copy.
-    static const int WORD_SIZE = 4;
     int max_words = 0;
     bool has_residuals = false;
     for (int i = 0; i < n; ++i) {
@@ -59,11 +69,11 @@ class CUDABasicConcat : public CUDAKernel {
       if (words > max_words) max_words = words;
       if (bytes != words * WORD_SIZE) has_residuals = true;
     }
-    ptx->set_grid_dims(max_words);
+    ptx->set_grid_dims(std::max(max_words, 1));
 
     // Get thread index.
     ptx_decl(b32, idx);
-    ptx->GetThreadIndex(idx, 0);
+    ptx->LoadThreadIndex(idx, 0);
 
     // Compute block offset.
     ptx_decl(b64, ofs);
@@ -100,8 +110,28 @@ class CUDABasicConcat : public CUDAKernel {
         ptx_if(copy);
         ptx_emit(add.u64, src, in, ofs);
         ptx_emit(add.u64, dst, out, ofs);
-        ptx_emit(ld.global.u32, data32, PTXAddr(src));
-        ptx_emit(st.global.u32, PTXAddr(dst, offset), data32);
+        int align = offset  % WORD_SIZE;
+        switch (align) {
+          case 0:
+            ptx_emit(ld.global.u32, data32, PTXAddr(src));
+            ptx_emit(st.global.u32, PTXAddr(dst, offset), data32);
+            break;
+          case 2:
+            ptx_emit(ld.global.u16, data16, PTXAddr(src));
+            ptx_emit(st.global.u16, PTXAddr(dst, offset), data16);
+            ptx_emit(ld.global.u16, data16, PTXAddr(src, 2));
+            ptx_emit(st.global.u16, PTXAddr(dst, offset + 2), data16);
+            break;
+          default:
+            ptx_emit(ld.global.u8, data8, PTXAddr(src));
+            ptx_emit(st.global.u8, PTXAddr(dst, offset), data8);
+            ptx_emit(ld.global.u8, data8, PTXAddr(src, 1));
+            ptx_emit(st.global.u8, PTXAddr(dst, offset + 1), data8);
+            ptx_emit(ld.global.u8, data8, PTXAddr(src, 2));
+            ptx_emit(st.global.u8, PTXAddr(dst, offset + 2), data8);
+            ptx_emit(ld.global.u8, data8, PTXAddr(src, 3));
+            ptx_emit(st.global.u8, PTXAddr(dst, offset + 3), data8);
+        }
         ptx_endif();
       }
 
@@ -111,23 +141,9 @@ class CUDABasicConcat : public CUDAKernel {
         int res_ofs_in = words * WORD_SIZE;
         int res_ofs_out = res_ofs_in + offset;
         ptx_if(first);
-        switch (residual) {
-          case 1:
-            ptx_emit(ld.global.u8, data8, PTXAddr(in, res_ofs_in));
-            ptx_emit(st.global.u8, PTXAddr(out, res_ofs_out), data8);
-            break;
-
-          case 2:
-            ptx_emit(ld.global.u16, data16, PTXAddr(in, res_ofs_in));
-            ptx_emit(st.global.u16, PTXAddr(out, res_ofs_out), data16);
-            break;
-
-          case 3:
-            ptx_emit(ld.global.u16, data16, PTXAddr(in, res_ofs_in));
-            ptx_emit(st.global.u16, PTXAddr(out, res_ofs_out), data16);
-            ptx_emit(ld.global.u8, data8, PTXAddr(in, res_ofs_in + 2));
-            ptx_emit(st.global.u8, PTXAddr(out, res_ofs_out + 2), data8);
-            break;
+        for (int r = 0; r < residual; ++r) {
+          ptx_emit(ld.global.u8, data8, PTXAddr(in, res_ofs_in + r));
+          ptx_emit(st.global.u8, PTXAddr(out, res_ofs_out + r), data8);
         }
         ptx_endif();
       }
@@ -300,7 +316,7 @@ class CUDAGatherMultiple : public CUDAKernel {
 
     // Get thread index.
     ptx_decl(b32, idx);
-    ptx->GetThreadIndex(idx, 0);
+    ptx->LoadThreadIndex(idx, 0);
 
     // Check bounds.
     ptx_decl(pred, outside);
@@ -439,7 +455,7 @@ class CUDAPoolingGather : public CUDAKernel {
 
     // Get thread index.
     ptx_decl(b32, idx);
-    ptx->GetThreadIndex(idx, 0);
+    ptx->LoadThreadIndex(idx, 0);
 
     // Check bounds.
     ptx_decl(pred, outside);

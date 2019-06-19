@@ -35,6 +35,9 @@ typedef uint64 DevicePtr;
 // Check that CUDA call is successful.
 #define CHECK_CUDA(op) CHECK_EQ((op), CUDA_SUCCESS)
 
+// Check that CUBLAS call is successful.
+#define CHECK_CUBLAS(op) CHECK_EQ((op), CUBLAS_STATUS_SUCCESS)
+
 // CUDA driver interface.
 class CUDA {
  public:
@@ -53,7 +56,7 @@ class CUDA {
 class CUDADevice {
  public:
   // Initialize CUDA device.
-  CUDADevice(int number);
+  CUDADevice(int number, int flags = 0);
   ~CUDADevice();
 
   // Return device number.
@@ -64,6 +67,9 @@ class CUDADevice {
 
   // Return context for device.
   CUcontext context() const { return context_; }
+
+  // Return handle for CUBLAS Lt.
+  cublasLtHandle_t lthandle() const { return lthandle_; }
 
   // Compile PTX code and return module. The module is owned by the device
   // object and is destroyed together with the device object.
@@ -152,6 +158,9 @@ class CUDADevice {
 
   // Context for device.
   CUcontext context_;
+
+  // CUBLAS Lt handle.
+  cublasLtHandle_t lthandle_;
 
   // Compute capabilities.
   int capability_;
@@ -299,7 +308,7 @@ class PTXImm : public PTXArg {
   int64 number_;
 };
 
-// PTX floating point number argument.
+// PTX 32-bit floating point number argument.
 class PTXFloat : public PTXArg {
  public:
   PTXFloat(float number) : number_(number) {}
@@ -308,6 +317,30 @@ class PTXFloat : public PTXArg {
 
  private:
   float number_;
+};
+
+// PTX 64-bit floating point number argument.
+class PTXDouble : public PTXArg {
+ public:
+  PTXDouble(double number) : number_(number) {}
+
+  void Generate(string *code) const override;
+
+ private:
+  double number_;
+};
+
+// PTX constant argument.
+class PTXConst : public PTXArg {
+ public:
+  enum Constant {ZERO, ONE, FALSE, TRUE};
+
+  PTXConst(Constant constant, const char *type);
+
+  void Generate(string *code) const override;
+
+ private:
+  const char *value_;
 };
 
 // PTX register argument.

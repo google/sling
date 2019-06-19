@@ -31,6 +31,9 @@ static std::once_flag cuda_initialized;
 // Number of CUDA-enabled devices.
 static int num_cuda_devices = 0;
 
+// Use default CUDA context.
+static const bool use_default_context = false;
+
 // Initialize CUDA support. This function should only be called once.
 void CUDA::Init() {
   // Load the CUDA driver API.
@@ -53,7 +56,7 @@ int CUDA::Devices() {
   return num_cuda_devices;
 }
 
-CUDADevice::CUDADevice(int number) : number_(number) {
+CUDADevice::CUDADevice(int number, int flags) : number_(number) {
   // Check that CUDA is supported.
   CHECK(CUDA::Supported());
 
@@ -63,8 +66,19 @@ CUDADevice::CUDADevice(int number) : number_(number) {
   // Get device handle.
   CHECK_CUDA(cuDeviceGet(&handle_, number));
 
-  // Create context for device.
-  CHECK_CUDA(cuCtxCreate(&context_, CU_CTX_SCHED_SPIN, handle_));
+  // Create/get context for device.
+  if (use_default_context) {
+    CHECK_CUDA(cuDevicePrimaryCtxRetain(&context_, handle_));
+  } else {
+    CHECK_CUDA(cuCtxCreate(&context_, flags, handle_));
+  }
+
+  // Get CUBLAS Lt handle.
+  if (HasCuBLASLt()) {
+    CHECK_CUBLAS(cublasLtCreate(&lthandle_));
+  } else {
+    lthandle_ = nullptr;
+  }
 
   // Get compute capabilities.
   int minor, major;
@@ -74,7 +88,12 @@ CUDADevice::CUDADevice(int number) : number_(number) {
 
 CUDADevice::~CUDADevice() {
   for (auto *m : modules_) delete m;
-  cuCtxDetach(context_);
+  if (lthandle_) cublasLtDestroy(lthandle_);
+  if (use_default_context) {
+    cuDevicePrimaryCtxRelease(handle_);
+  } else {
+    cuCtxDestroy(context_);
+  }
 }
 
 CUDAModule *CUDADevice::Compile(const char *ptx) {
@@ -97,6 +116,9 @@ int CUDADevice::CoresPerSM() const {
     case 60: return 64;   // Pascal Generation (SM 6.0) GP100 class
     case 61: return 128;  // Pascal Generation (SM 6.1) GP10x class
     case 62: return 128;  // Pascal Generation (SM 6.2) GP10x class
+    case 70: return 64;   // Volta Generation (SM 7.0) GV100 class
+    case 72: return 64;   // Volta Generation (SM 7.2) GV10B class
+    case 75: return 64;   // Turing Generation (SM 7.5) TU1xx class
     default: return 128;
   }
 }
@@ -220,6 +242,54 @@ void PTXFloat::Generate(string *code) const {
   char str[16];
   snprintf(str, sizeof(str), "0f%08x", bits);
   code->append(str);
+}
+
+void PTXDouble::Generate(string *code) const {
+  uint64 bits;
+  memcpy(&bits, &number_, sizeof(double));
+  char str[32];
+  snprintf(str, sizeof(str), "0d%016lx", bits);
+  code->append(str);
+}
+
+PTXConst::PTXConst(Constant constant, const char *type) {
+  char basetype = type[0];
+  int width = atoi(type + 1);
+  value_ = nullptr;
+  switch (constant) {
+    case ZERO:
+    case FALSE:
+      value_ = (basetype == 'f') ? "0.0" : "0";
+      break;
+    case ONE:
+      value_ = (basetype == 'f') ? "1.0" : "1";
+      break;
+    case TRUE:
+      switch (basetype) {
+        case 'f':
+          switch (width) {
+            case 16: value_ = "0fFFFF"; break;
+            case 32: value_ = "0fFFFFFFFF"; break;
+            case 64: value_ = "0dFFFFFFFFFFFFFFFF"; break;
+          }
+          break;
+        case 's':
+        case 'u':
+        case 'b':
+          switch (width) {
+            case 8: value_ = "0xFF"; break;
+            case 16: value_ = "0xFFFF"; break;
+            case 32: value_ = "0xFFFFFFFF"; break;
+            case 64: value_ = "0xFFFFFFFFFFFFFFFF"; break;
+          }
+      }
+      break;
+  }
+  CHECK(value_ != nullptr) << "Unknown CUDA type: " << type;
+}
+
+void PTXConst::Generate(string *code) const {
+  code->append(value_);
 }
 
 void PTXReg::Generate(string *code) const {

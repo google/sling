@@ -24,7 +24,8 @@ using namespace jit;
 // Generate scalar float expression using AXV and XMM registers.
 class ScalarFltAVXGenerator : public ExpressionGenerator {
  public:
-  ScalarFltAVXGenerator() {
+  ScalarFltAVXGenerator(Type type) {
+    model_.name = "FltAVX";
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -39,14 +40,36 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
       model_.fm_reg_reg_reg = true;
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
+      model_.instruction_set({
+        Express::MULADD132, Express::MULADD213, Express::MULADD231,
+        Express::MULSUB132, Express::MULSUB213, Express::MULSUB231,
+      });
     }
     model_.cond_reg_reg_reg = true;
     model_.cond_reg_mem_reg = true;
     model_.cond_reg_reg_mem = true;
     model_.cond_reg_mem_mem = true;
+    model_.instruction_set({
+      Express::MOV,
+      Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+      Express::MINIMUM, Express::MAXIMUM, Express::SQRT,
+      Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+      Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+      Express::COND, Express::SELECT,
+      Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+      Express::AND, Express::OR, Express::XOR, Express::ANDNOT,
+      Express::BITEQ, Express::QUADSIGN,
+      Express::CVTFLTINT, Express::CVTINTFLT,
+      Express::CVTEXPINT, Express::CVTINTEXP,
+      Express::FLOOR, Express::CEIL, Express::ROUND, Express::TRUNC,
+      Express::ADDINT, Express::SUBINT,
+      Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+      Express::ALL, Express::ANY,
+    });
+    if (type == DT_FLOAT || CPU::Enabled(AVX512F)) {
+      model_.instruction_set({Express::RECIPROCAL, Express::RSQRT});
+    }
   }
-
-  string Name() override { return "FltAVX"; }
 
   void Reserve() override {
     // Reserve XMM registers.
@@ -55,23 +78,14 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
     int num_rr_aux = 0;
-    if (instructions_.Has(Express::BITAND) ||
-        instructions_.Has(Express::BITOR) ||
-        instructions_.Has(Express::AND) ||
-        instructions_.Has(Express::OR) ||
-        instructions_.Has(Express::XOR) ||
-        instructions_.Has(Express::ANDNOT) ||
-        instructions_.Has(Express::CVTFLTINT) ||
-        instructions_.Has(Express::CVTINTFLT) ||
-        instructions_.Has(Express::SUBINT)) {
+    if (instructions_.Has({
+        Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+        Express::BITEQ, Express::AND, Express::OR, Express::XOR,
+        Express::ANDNOT, Express::CVTFLTINT, Express::CVTINTFLT,
+        Express::ADDINT, Express::SUBINT, Express::ALL, Express::ANY})) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
-    if (instructions_.Has(Express::NOT)) {
-      num_mm_aux = std::max(num_mm_aux, 2);
-      num_rr_aux = std::max(num_rr_aux, 1);
-    }
-    if (instructions_.Has(Express::SELECT) ||
-        instructions_.Has(Express::COND)) {
+    if (instructions_.Has({Express::SELECT, Express::COND})) {
       num_rr_aux = std::max(num_rr_aux, 1);
     }
 
@@ -138,6 +152,12 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
       case Express::SQRT:
         GenerateSqrt(instr, masm);
         break;
+      case Express::RSQRT:
+        GenerateRcpSqrt(instr, masm);
+        break;
+      case Express::RECIPROCAL:
+        GenerateRcp(instr, masm);
+        break;
       case Express::MULADD132:
         GenerateXMMFltOp(instr,
             &Assembler::vfmadd132ss, &Assembler::vfmadd132sd,
@@ -200,17 +220,26 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
         break;
       case Express::BITAND:
       case Express::BITOR:
+      case Express::BITXOR:
+      case Express::BITANDNOT:
       case Express::AND:
       case Express::OR:
       case Express::XOR:
       case Express::ANDNOT:
+      case Express::BITEQ:
         GenerateRegisterOp(instr, masm);
-        break;
-      case Express::NOT:
-        GenerateRegisterOp(instr, masm, true);
         break;
       case Express::FLOOR:
         GenerateRound(instr, masm, round_down);
+        break;
+      case Express::CEIL:
+        GenerateRound(instr, masm, round_up);
+        break;
+      case Express::ROUND:
+        GenerateRound(instr, masm, round_nearest);
+        break;
+      case Express::TRUNC:
+        GenerateRound(instr, masm, round_to_zero);
         break;
       case Express::CVTFLTINT:
       case Express::CVTINTFLT:
@@ -222,6 +251,10 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
       case Express::CVTINTEXP:
         GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
         break;
+      case Express::QUADSIGN:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 29 : 61);
+        break;
+      case Express::ADDINT:
       case Express::SUBINT:
         GenerateRegisterOp(instr, masm);
         break;
@@ -249,7 +282,12 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
             &Assembler::vmaxss, &Assembler::vmaxsd,
             masm);
         break;
-      default: UNSUPPORTED;
+      case Express::ALL:
+      case Express::ANY:
+        GenerateLogicAccumulate(instr, masm);
+        break;
+      default:
+        LOG(FATAL) << "Unsupported instruction: " << instr->AsInstruction();
     }
   }
 
@@ -350,6 +388,60 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
     }
   }
 
+  // Generate reciprocal square root.
+  void GenerateRcpSqrt(Express::Op *instr, MacroAssembler *masm) {
+    if (instr->dst != -1 && instr->src != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vrsqrtss(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
+          break;
+        case DT_DOUBLE:
+          __ vrsqrt14sd(zmm(instr->dst), zmm(instr->dst), zmm(instr->src));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->dst != -1 && instr->src == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vrsqrtss(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ vrsqrt14sd(zmm(instr->dst), zmm(instr->dst), addr(instr->args[0]));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      UNSUPPORTED;
+    }
+  }
+
+  // Generate reciprocal.
+  void GenerateRcp(Express::Op *instr, MacroAssembler *masm) {
+    if (instr->dst != -1 && instr->src != -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vrcpss(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
+          break;
+        case DT_DOUBLE:
+          __ vrcp14sd(zmm(instr->dst), zmm(instr->dst), zmm(instr->src));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else if (instr->dst != -1 && instr->src == -1) {
+      switch (type_) {
+        case DT_FLOAT:
+          __ vrcpss(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]));
+          break;
+        case DT_DOUBLE:
+          __ vrcp14sd(zmm(instr->dst), zmm(instr->dst), addr(instr->args[0]));
+          break;
+        default: UNSUPPORTED;
+      }
+    } else {
+      UNSUPPORTED;
+    }
+  }
+
   // Generate compare.
   void GenerateCompare(Express::Op *instr, MacroAssembler *masm, int8 code) {
     GenerateXMMFltOp(instr,
@@ -389,9 +481,18 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           __ vmovss(src2, addr(instr->args[1]));
         }
         switch (instr->type) {
-          case Express::CVTFLTINT: __ vcvttps2dq(dst, src); break;
-          case Express::CVTINTFLT: __ vcvtdq2ps(dst, src); break;
-          case Express::SUBINT: __ vpsubd(dst, src, src2); break;
+          case Express::CVTFLTINT:
+            __ vcvttps2dq(dst, src);
+            break;
+          case Express::CVTINTFLT:
+            __ vcvtdq2ps(dst, src);
+            break;
+          case Express::ADDINT:
+            __ vpaddd(dst, src, src2);
+            break;
+          case Express::SUBINT:
+            __ vpsubd(dst, src, src2);
+            break;
           case Express::BITAND:
           case Express::AND:
             __ vandps(dst, src, src2);
@@ -400,16 +501,16 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           case Express::OR:
             __ vorps(dst, src, src2);
             break;
+          case Express::BITXOR:
           case Express::XOR:
             __ vxorps(dst, src, src2);
             break;
+          case Express::BITANDNOT:
           case Express::ANDNOT:
             __ vandnps(dst, src, src2);
             break;
-          case Express::NOT:
-            __ movl(aux(0), Immediate(-1));
-            __ vmovd(xmmaux(1), aux(0));
-            __ vxorps(dst, src, xmmaux(1));
+          case Express::BITEQ:
+            __ vpcmpeqd(dst, src, src2);
             break;
           default: UNSUPPORTED;
         }
@@ -428,6 +529,9 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           case Express::CVTINTFLT:
             __ vcvtdq2pd(dst, src);
             break;
+          case Express::ADDINT:
+            __ vpaddq(dst, src, src2);
+            break;
           case Express::SUBINT:
             __ vpsubq(dst, src, src2);
             break;
@@ -439,16 +543,16 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
           case Express::OR:
             __ vorpd(dst, src, src2);
             break;
+          case Express::BITXOR:
           case Express::XOR:
             __ vxorpd(dst, src, src2);
             break;
+          case Express::BITANDNOT:
           case Express::ANDNOT:
             __ vandnpd(dst, src, src2);
             break;
-          case Express::NOT:
-            __ movq(aux(0), Immediate(-1));
-            __ vmovq(xmmaux(1), aux(0));
-            __ vxorpd(dst, src, xmmaux(1));
+          case Express::BITEQ:
+            __ vpcmpeqq(dst, src, src2);
             break;
           default: UNSUPPORTED;
         }
@@ -553,6 +657,48 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
     }
   }
 
+  // Generate logic reduction accumulation.
+  void GenerateLogicAccumulate(Express::Op *instr, MacroAssembler *masm) {
+    XMMRegister acc = xmm(instr->acc);
+    XMMRegister src;
+    if (instr->src != -1) {
+      src = xmm(instr->src);
+    } else {
+      src = xmmaux(0);
+    }
+    switch (type_) {
+      case DT_FLOAT:
+        if (instr->src == -1) {
+          __ vmovss(src, addr(instr->args[0]));
+        }
+        switch (instr->type) {
+          case Express::ALL:
+            __ vandps(acc, acc, src);
+            break;
+          case Express::ANY:
+            __ vorps(acc, acc, src);
+            break;
+          default: UNSUPPORTED;
+        }
+        break;
+      case DT_DOUBLE:
+        if (instr->src == -1) {
+          __ vmovsd(src, addr(instr->args[0]));
+        }
+        switch (instr->type) {
+          case Express::ALL:
+            __ vandpd(acc, acc, src);
+            break;
+          case Express::ANY:
+            __ vorpd(acc, acc, src);
+            break;
+          default: UNSUPPORTED;
+        }
+        break;
+      default: UNSUPPORTED;
+    }
+  }
+
   // Generate code for reduction operation.
   void GenerateReduce(Express::Op *instr, MacroAssembler *masm) override {
     switch (type_) {
@@ -575,8 +721,8 @@ class ScalarFltAVXGenerator : public ExpressionGenerator {
   }
 };
 
-ExpressionGenerator *CreateScalarFltAVXGenerator() {
-  return new ScalarFltAVXGenerator();
+ExpressionGenerator *CreateScalarFltAVXGenerator(Type type) {
+  return new ScalarFltAVXGenerator(type);
 }
 
 }  // namespace myelin

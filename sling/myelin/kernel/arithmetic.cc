@@ -30,12 +30,13 @@
 #include "sling/myelin/generator/elementwise.h"
 #include "sling/myelin/generator/expression.h"
 
-#define __ masm->
-
 namespace sling {
 namespace myelin {
 
 using namespace jit;
+
+// Generic instruction model for complexity calculation.
+static Express::Model generic_model;
 
 // Mapping from flow variables to expression variables.
 typedef std::map<Flow::Variable *, Express::Var *> VarMap;
@@ -54,9 +55,37 @@ static Express::OpType OpType(const string &op) {
 
     {"Log", Express::LOG},
     {"Exp", Express::EXP},
+    {"Pow", Express::POW},
     {"Sigmoid", Express::SIGMOID},
-    {"Tanh", Express::TANH},
     {"Erf", Express::ERF},
+
+    {"Sin", Express::SIN},
+    {"Cos", Express::COS},
+    {"Tan", Express::TAN},
+    {"Cot", Express::COT},
+    {"Sec", Express::SEC},
+    {"Csc", Express::CSC},
+
+    {"Asin", Express::ASIN},
+    {"Acos", Express::ACOS},
+    {"Atan", Express::ATAN},
+    {"Acot", Express::ACOT},
+    {"Asec", Express::ASEC},
+    {"Acsc", Express::ACSC},
+
+    {"Sinh", Express::SINH},
+    {"Cosh", Express::COSH},
+    {"Tanh", Express::TANH},
+    {"Coth", Express::COTH},
+    {"Sech", Express::SECH},
+    {"Csch", Express::CSCH},
+
+    {"Asinh", Express::ASINH},
+    {"Acosh", Express::ACOSH},
+    {"Atanh", Express::ATANH},
+    {"Acoth", Express::ACOTH},
+    {"Asech", Express::ASECH},
+    {"Acsch", Express::ACSCH},
 
     {"Neg", Express::NEG},
     {"Abs", Express::ABS},
@@ -68,6 +97,7 @@ static Express::OpType OpType(const string &op) {
     {"Reciprocal", Express::RECIPROCAL},
     {"Square", Express::SQUARE},
     {"Sqrt", Express::SQRT},
+    {"Rsqrt", Express::RSQRT},
 
     {"Equal", Express::CMPEQOQ},
     {"NotEqual", Express::CMPNEUQ},
@@ -79,6 +109,11 @@ static Express::OpType OpType(const string &op) {
     {"Cond", Express::COND},
     {"Select", Express::SELECT},
 
+    {"Floor", Express::FLOOR},
+    {"Ceil", Express::CEIL},
+    {"Round", Express::ROUND},
+    {"Trunc", Express::TRUNC},
+
     {"And", Express::AND},
     {"Or", Express::OR},
     {"Xor", Express::XOR},
@@ -89,6 +124,9 @@ static Express::OpType OpType(const string &op) {
     {"Product", Express::PRODUCT},
     {"Min", Express::MIN},
     {"Max", Express::MAX},
+    {"All", Express::ALL},
+    {"Any", Express::ANY},
+    {"Count", Express::COUNT},
 
     {"Identity", Express::MOV},
   };
@@ -108,14 +146,14 @@ static bool IsAssignmentOp(Flow::Operation *op) {
 }
 
 // Initialize expression for flow operation.
-static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
+static void InitExpression(Flow::Operation *op, Express *expr) {
   if (op->type == "Calculate") {
     // Build expression from expression recipe attribute on op.
     const string &recipe = op->GetAttr("expr");
-    if (!recipe.empty()) expr->Parse(recipe, expand);
+    if (!recipe.empty()) expr->Parse(recipe);
   } else if (op->type == "Assign") {
     const string &recipe = op->GetAttr("expr");
-    expr->Parse(recipe.empty() ? "@0=Id(%1)" : recipe, expand);
+    expr->Parse(recipe.empty() ? "@0=Id(%1)" : recipe);
   } else {
     // Add op with inputs and output.
     CHECK_EQ(op->outdegree(), 1);
@@ -123,7 +161,7 @@ static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
     for (int i = 0; i < op->indegree(); ++i) {
       args[i] = expr->Variable(Express::INPUT, i);
     }
-    Express::Op *func = expr->Function(OpType(op->type), args, expand);
+    Express::Op *func = expr->Function(OpType(op->type), args);
     func->Assign(expr->Variable(Express::OUTPUT, 0));
     expr->CompactTempVars();
   }
@@ -131,22 +169,20 @@ static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
   // Mark constant and scalar inputs.
   for (int i = 0; i < op->indegree(); ++i) {
     auto *input = op->inputs[i];
-    if (input->elements() == 1) {
+    if (input->scalar()) {
       int const_id = -1;
       if (input->constant()) {
-        if (input->type == DT_FLOAT) {
-          float value = *reinterpret_cast<const float *>(input->data);
-          if (value == 0.0) {
-            const_id = Express::ZERO;
-          } else if (value == 1.0) {
-            const_id = Express::ONE;
-          } else if (value == 0.5) {
-            const_id = Express::HALF;
-          } else if (value == 2.0) {
-            const_id = Express::TWO;
-          } else if (value == -1.0) {
-            const_id = Express::N1;
-          }
+        double value = input->number();
+        if (value == 0.0) {
+          const_id = Express::ZERO;
+        } else if (value == 1.0) {
+          const_id = Express::ONE;
+        } else if (value == 0.5) {
+          const_id = Express::HALF;
+        } else if (value == 2.0) {
+          const_id = Express::TWO;
+        } else if (value == -1.0) {
+          const_id = Express::N1;
         }
       }
       auto *var = expr->Variable(Express::INPUT, i);
@@ -163,14 +199,14 @@ static void InitExpression(Flow::Operation *op, Express *expr, bool expand) {
 }
 
 // Initialize expression for step.
-void InitExpression(const Step *step, Express *expr, bool expand) {
+void InitExpression(const Step *step, Express *expr) {
   if (step->type() == "Calculate") {
     // Build expression from expression recipe attribute on op.
     const string &recipe = step->GetAttr("expr");
-    if (!recipe.empty()) expr->Parse(recipe, expand);
+    if (!recipe.empty()) expr->Parse(recipe);
   } else if (step->type() == "Assign") {
     const string &recipe = step->GetAttr("expr");
-    expr->Parse(recipe.empty() ? "@0=Id(%1)" : recipe, expand);
+    expr->Parse(recipe.empty() ? "@0=Id(%1)" : recipe);
   } else {
     // Add op with inputs and output.
     CHECK_EQ(step->outdegree(), 1);
@@ -178,7 +214,7 @@ void InitExpression(const Step *step, Express *expr, bool expand) {
     for (int i = 0; i < step->indegree(); ++i) {
       args[i] = expr->Variable(Express::INPUT, i);
     }
-    Express::Op *func = expr->Function(OpType(step->type()), args, expand);
+    Express::Op *func = expr->Function(OpType(step->type()), args);
     func->Assign(expr->Variable(Express::OUTPUT, 0));
     expr->CompactTempVars();
   }
@@ -216,7 +252,7 @@ struct Expression {
     }
 
     // Compile expression to be computed.
-    InitExpression(step, &expr, true);
+    InitExpression(step, &expr);
 
     // Clear single flag for scalar ops since broadcasting and hoisting is not
     // needed in this case.
@@ -227,6 +263,7 @@ struct Expression {
     // Select expression generator.
     generator = ExpressionGenerator::Select(expr, type, elements);
     CHECK(generator != nullptr);
+    if (masm != nullptr) generator->set_approx(masm->options().fast_math);
 
     // Initialize expression and index generators.
     generator->Initialize(expr, type, spare_regs, &index);
@@ -251,7 +288,9 @@ struct Expression {
 
   // Compute complexity.
   int64 Complexity() {
-    return prototype->shape().elements() * expr.Complexity();
+    Express basic(&generic_model);
+    expr.Translate(&basic);
+    return prototype->shape().elements() * basic.Complexity();
   }
 
   // Compute how many spare register we have for hoisting constant out of the
@@ -287,49 +326,265 @@ struct Expression {
   ExpressionGenerator *generator;
 };
 
-// Convert division with constant c to multiplication with constant 1/c to
-// take advantage of mul being much faster than div.
-class DivToMulTransformer : public Transformer {
+// Apply transformations to logic operations.
+class LogicTransformer : public Transformer {
  public:
-  string Name() override { return "DivToMulTransformer"; }
+  string Name() override { return "LogicTransformer"; }
+
+  bool Transform(Flow *flow) override {
+    int num_updates = 0;
+
+    // Fold logical negations into comparison ops.
+    bool again = true;
+    while (again) {
+      again = false;
+      for (Flow::Operation *op : flow->ops()) {
+        if (op->type != "Not" || op->indegree() != 1) continue;
+        Flow::Operation *producer = op->inputs[0]->producer;
+        if (producer == nullptr) continue;
+
+        if (producer->type == "Not") {
+          // Transform Not(Not(x)) to x.
+          again = EliminateDoubleNegation(flow, producer, op);
+        } else if (producer->type == "Equal") {
+          // Transform Not(Equal(x,y)) to NotEqual(x,y).
+          again = FoldNotCompare(flow, producer, op, "NotEqual");
+        } else if (producer->type == "NotEqual") {
+          // Transform Not(NotEqual(x,y)) to Equal(x,y).
+          again = FoldNotCompare(flow, producer, op, "Equal");
+        } else if (producer->type == "Less") {
+          // Transform Not(Less(x,y)) to GreaterEqual(x,y).
+          again = FoldNotCompare(flow, producer, op, "GreaterEqual");
+        } else if (producer->type == "LessEqual") {
+          // Transform Not(LessEqual(x,y)) to Greater(x,y).
+          again = FoldNotCompare(flow, producer, op, "Greater");
+        } else if (producer->type == "Greater") {
+          // Transform Not(Greater(x,y)) to LessEqual(x,y).
+          again = FoldNotCompare(flow, producer, op, "LessEqual");
+        } else if (producer->type == "GreaterEqual") {
+          // Transform Not(GreaterEqual(x,y)) to Less(x,y).
+          again = FoldNotCompare(flow, producer, op, "Less");
+        }
+
+        if (again) {
+          num_updates++;
+          break;
+        }
+      }
+    }
+
+    // Merge negation into logical and.
+    for (Flow::Operation *op : flow->Find("Not|0:And")) {
+      Flow::Operation *logand = op;
+      Flow::Operation *logneg = logand->inputs[0]->producer;
+      if (logneg->outputs[0]->usages() == 1 && !logneg->outputs[0]->out()) {
+        flow->Eliminate(logneg);
+        logand->type = "AndNot";
+        num_updates++;
+      }
+    }
+    for (Flow::Operation *op : flow->Find("Not|1:And")) {
+      Flow::Operation *logand = op;
+      Flow::Operation *logneg = logand->inputs[1]->producer;
+      if (logneg->outputs[0]->usages() == 1 && !logneg->outputs[0]->out()) {
+        flow->Eliminate(logneg);
+        logand->type = "AndNot";
+        logand->SwapInputs();
+        num_updates++;
+      }
+    }
+
+    return num_updates > 0;
+  }
+
+  bool FoldNotCompare(Flow *flow, Flow::Operation *cmp, Flow::Operation *neg,
+                      const string &replacement) {
+    // Check that negation is the only consumer of the comparison.
+    if (cmp->outputs[0]->usages() != 1) return false;
+    if (cmp->outputs[0]->out()) return false;
+
+    // Remove negation and invert comparison condition.
+    flow->Eliminate(neg);
+    cmp->type = replacement;
+    return true;
+  }
+
+  bool EliminateDoubleNegation(Flow *flow, Flow::Operation *neg1,
+                               Flow::Operation *neg2) {
+    // Bypass double negation.
+    Flow::Variable *result = neg2->outputs[0];
+    for (Flow::Operation *op : result->consumers) {
+      op->ReplaceInput(result, neg1->inputs[0]);
+    }
+
+    // Remove unused negations.
+    if (neg2->outputs[0]->usages() == 0 && !neg2->outputs[0]->out()) {
+      flow->RemoveOperation(neg2);
+    }
+    if (neg1->outputs[0]->usages() == 0 && !neg1->outputs[0]->out()) {
+      flow->RemoveOperation(neg1);
+    }
+    return true;
+  }
+};
+
+// Convert division with constant c to multiplication with constant 1/c to
+// take advantage of mul being much faster than div. Also transforms div(1,x)
+// to rcp(x) and rcp(sqrt(x)) to rsqrt(x).
+class DivTransformer : public Transformer {
+ public:
+  string Name() override { return "DivTransformer"; }
 
   bool Transform(Flow *flow) override {
     int updates = 0;
     for (Flow::Operation *op : flow->ops()) {
-      // Look for Div(x, c) where c is a non-shared scalar float constant.
       if (op->type != "Div" && op->type != "RealDiv") continue;
       if (op->indegree() != 2) continue;
-      Flow::Variable *second = op->inputs[1];
-      if (second->type != DT_FLOAT || second->elements() != 1) continue;
-      if (!second->constant() || second->usages() != 1) continue;
 
-      // Change Div(x,c) to Mul(x,1/c).
-      CHECK_EQ(second->size, sizeof(float));
-      op->type = "Mul";
-      float multiplier = 1.0 / *reinterpret_cast<const float *>(second->data);
-      char *buffer = flow->AllocateMemory(sizeof(float));
-      *reinterpret_cast<float *>(buffer) = multiplier;
-      second->data = buffer;
+      Flow::Variable *first = op->inputs[0];
+      Flow::Variable *second = op->inputs[1];
+
+      if (second->type == DT_FLOAT && second->scalar() &&
+          second->constant() && second->usages() == 1) {
+        // Change Div(x,c) to Mul(x,1/c).
+        CHECK_EQ(second->size, sizeof(float));
+        op->type = "Mul";
+        float multiplier = 1.0 / *reinterpret_cast<const float *>(second->data);
+        char *buffer = flow->AllocateMemory(sizeof(float));
+        *reinterpret_cast<float *>(buffer) = multiplier;
+        second->data = buffer;
+        updates++;
+      } else if (first->type == DT_FLOAT && first->scalar() &&
+                 first->constant()) {
+        float value;
+        if (first->GetData<float>(&value) && value == 1.0) {
+          // Change Div(1,x) to Reciprocal(x).
+          op->type = "Reciprocal";
+          op->RemoveInput(first);
+          updates++;
+        }
+      }
+    }
+
+    for (Flow::Operation *op : flow->Find("Sqrt|Reciprocal")) {
+      Flow::Operation *rcp = op;
+      Flow::Operation *sqrt = rcp->inputs[0]->producer;
+      if (sqrt->outputs[0]->usages() > 1) continue;
+      if (sqrt->outputs[0]->out()) continue;
+
+      // Convert Reciprocal(Sqrt(x)) to Rsqrt(x).
+      flow->Eliminate(sqrt);
+      rcp->type = "Rsqrt";
       updates++;
     }
+
     return updates > 0;
   }
 };
 
-// Convert addition where last term is negated to subtraction.
-class AddNegToSubTransformer : public Transformer {
+// Convert pow(x, c)=x^c where c is a constant to corresponding optimized op.
+class PowerTransformer : public Transformer {
  public:
-  string Name() override { return "AddNegToSubTransformer"; }
+  string Name() override { return "PowerTransformer"; }
 
   bool Transform(Flow *flow) override {
     int updates = 0;
-    for (Flow::Operation *op : flow->Find("Neg|1:Add")) {
-      Flow::Operation *add = op;
-      Flow::Operation *neg = add->inputs[1]->producer;
-      if (neg->outputs[0]->usages() == 1 && !neg->outputs[0]->out()) {
-        flow->Eliminate(neg);
-        add->type = "Sub";
+    for (Flow::Operation *op : flow->Find("Pow")) {
+      if (op->indegree() != 2) continue;
+      Flow::Variable *x = op->inputs[0];
+      Flow::Variable *y = op->inputs[1];
+      Flow::Variable *result = op->outputs[0];
+      if (!y->constant() || y->elements() != 1) continue;
+      double exponent = y->number();
+      if (exponent == 0.0) {
+        // pow(x, 0) = identity(1).
+        auto &t = result->traits();
+        string name = flow->VarName("one");
+        Flow::Variable *one = flow->AddVariable(name, t.type(), {});
+        one->data = flow->AllocateMemory(t.one(), t.size());
+        one->size = t.size();
+        op->RemoveInput(y);
+        op->ReplaceInput(x, one);
+        op->type = "Identity";
         updates++;
+      } else {
+        string replacement;
+        if (exponent == 1.0) {
+          // pow(x, 1) = identity(x).
+          replacement = "Identity";
+        } else if (exponent == 2.0) {
+          // pow(x, 2) = square(x).
+          replacement = "Square";
+        } else if (exponent == 0.5) {
+          // pow(x, 0,5) = sqrt(x).
+          replacement = "Sqrt";
+        } else if (exponent == -0.5) {
+          // pow(x, -0.5) = rsqrt(x).
+          replacement = "Rsqrt";
+        } else if (exponent == -1.0) {
+          // pow(x, -1) = reciprocal(x).
+          replacement = "Reciprocal";
+        }
+
+        if (!replacement.empty()) {
+          op->RemoveInput(y);
+          op->type = replacement;
+          updates++;
+        }
+      }
+
+      if (x->in() && x->detached()) {
+        op->func->unused.push_back(x);
+      }
+      if (y->in() && y->detached()) {
+        op->func->unused.push_back(y);
+      }
+    }
+    return updates > 0;
+  }
+
+};
+
+// Fold negated arguments into addition and subtraction.
+class AddSubNegTransformer : public Transformer {
+ public:
+  string Name() override { return "AddSubNegTransformer"; }
+
+  bool Transform(Flow *flow) override {
+    int updates = 0;
+    bool again = true;
+    while (again) {
+      again = false;
+      for (Flow::Operation *op : flow->Find("Neg|1:Add")) {
+        Flow::Operation *add = op;
+        Flow::Operation *neg = add->inputs[1]->producer;
+        if (neg->outputs[0]->usages() == 1 && !neg->outputs[0]->out()) {
+          flow->Eliminate(neg);
+          add->type = "Sub";
+          updates++;
+          again = true;
+        }
+      }
+      for (Flow::Operation *op : flow->Find("Neg|Add")) {
+        Flow::Operation *add = op;
+        Flow::Operation *neg = add->inputs[0]->producer;
+        if (neg->outputs[0]->usages() == 1 && !neg->outputs[0]->out()) {
+          flow->Eliminate(neg);
+          add->type = "Sub";
+          add->SwapInputs();
+          updates++;
+          again = true;
+        }
+      }
+      for (Flow::Operation *op : flow->Find("Neg|1:Sub")) {
+        Flow::Operation *sub = op;
+        Flow::Operation *neg = sub->inputs[1]->producer;
+        if (neg->outputs[0]->usages() == 1 && !neg->outputs[0]->out()) {
+          flow->Eliminate(neg);
+          sub->type = "Add";
+          updates++;
+          again = true;
+        }
       }
     }
     return updates > 0;
@@ -348,7 +603,7 @@ class ExpressionTransformer : public Transformer {
     std::vector<Flow::Operation *> candidates;
     for (Flow::Operation *op : flow->ops()) {
       if (IsCalculateOp(op) || IsAssignmentOp(op)) {
-        if (!op->GetAttr("strict", false)) {
+        if (!op->GetAttr("strict", false) && !op->HasAttr("axis")) {
           candidates.push_back(op);
         }
       }
@@ -370,6 +625,7 @@ class ExpressionTransformer : public Transformer {
           if (producer == nullptr) continue;
           if (!IsCalculateOp(producer)) continue;
           if (producer->GetAttr("strict", false)) continue;
+          if (producer->HasAttr("axis")) continue;
 
           // Assignment must be the sole consumer of all the outputs from the
           // producer.
@@ -460,6 +716,10 @@ class ExpressionTransformer : public Transformer {
   }
 
   bool Combine(Flow *flow, Flow::Operation *first, Flow::Operation *second) {
+    // Check if merging has been disabled.
+    if (first->GetAttr("nomerge", false)) return false;
+    if (second->GetAttr("nomerge", false)) return false;
+
     // Check that ops have the same types and output shapes.
     bool assign = IsAssignmentOp(second);
     if (first->indegree() < 1) return false;
@@ -517,13 +777,13 @@ class ExpressionTransformer : public Transformer {
 
       // Swap target variable with first input.
       Express expr;
-      expr.Parse(fused_recipe, false);
+      expr.Parse(fused_recipe);
       auto *vt = expr.Variable(Express::INPUT, target_index);
       auto *v0 = expr.Variable(Express::INPUT, 0);
       vt->id = 0;
       v0->id = target_index;
       fused_recipe = expr.AsRecipe();
-      std::swap(fused->inputs[0], fused->inputs[target_index]);
+      fused->SwapInputs(0, target_index);
     }
 
     // Set fused expression for combined op.
@@ -535,14 +795,14 @@ class ExpressionTransformer : public Transformer {
   string FuseExpressions(Flow::Operation *first, Flow::Operation *second) {
     // Build first expression.
     Express expr1;
-    InitExpression(first, &expr1, false);
+    InitExpression(first, &expr1);
     VarMap vars1;
     MapVars(first, &expr1, &vars1);
 
     // Build second expression.
     bool assign = IsAssignmentOp(second);
     Express expr2;
-    InitExpression(second, &expr2, false);
+    InitExpression(second, &expr2);
     VarMap vars2;
     MapVars(second, &expr2, &vars2);
 
@@ -663,7 +923,7 @@ class RemoveUnusedInputs : public Transformer {
       bool assign = op->type == "Assign";
       if (calculate || assign) {
         Express expr;
-        InitExpression(op, &expr, false);
+        InitExpression(op, &expr);
         for (int i = 0; i < op->inputs.size(); ++i) {
           if (expr.Lookup(Express::INPUT, i) == nullptr &&
               expr.Lookup(Express::CONST, i) == nullptr) {
@@ -679,108 +939,6 @@ class RemoveUnusedInputs : public Transformer {
     }
 
     return num_eliminates > 0;
-  }
-};
-
-// Apply transformations to logic operations.
-class LogicTransformer : public Transformer {
- public:
-  string Name() override { return "LogicTransformer"; }
-
-  bool Transform(Flow *flow) override {
-    int num_updates = 0;
-
-    // Fold logical negations into comparison ops.
-    bool again = true;
-    while (again) {
-      again = false;
-      for (Flow::Operation *op : flow->ops()) {
-        if (op->type != "Not" || op->indegree() != 1) continue;
-        Flow::Operation *producer = op->inputs[0]->producer;
-        if (producer == nullptr) continue;
-
-        if (producer->type == "Not") {
-          // Transform Not(Not(x)) to x.
-          again = EliminateDoubleNegation(flow, producer, op);
-        } else if (producer->type == "Equal") {
-          // Transform Not(Equal(x,y)) to NotEqual(x,y).
-          again = FoldNotCompare(flow, producer, op, "NotEqual");
-        } else if (producer->type == "NotEqual") {
-          // Transform Not(NotEqual(x,y)) to Equal(x,y).
-          again = FoldNotCompare(flow, producer, op, "Equal");
-        } else if (producer->type == "Less") {
-          // Transform Not(Less(x,y)) to GreaterEqual(x,y).
-          again = FoldNotCompare(flow, producer, op, "GreaterEqual");
-        } else if (producer->type == "LessEqual") {
-          // Transform Not(LessEqual(x,y)) to Greater(x,y).
-          again = FoldNotCompare(flow, producer, op, "Greater");
-        } else if (producer->type == "Greater") {
-          // Transform Not(Greater(x,y)) to LessEqual(x,y).
-          again = FoldNotCompare(flow, producer, op, "LessEqual");
-        } else if (producer->type == "GreaterEqual") {
-          // Transform Not(GreaterEqual(x,y)) to Less(x,y).
-          again = FoldNotCompare(flow, producer, op, "Less");
-        }
-
-        if (again) {
-          num_updates++;
-          break;
-        }
-      }
-    }
-
-    // Merge negation into logical and.
-    for (Flow::Operation *op : flow->Find("Not|0:And")) {
-      Flow::Operation *logand = op;
-      Flow::Operation *logneg = logand->inputs[0]->producer;
-      if (logneg->outputs[0]->usages() == 1 && !logneg->outputs[0]->out()) {
-        flow->Eliminate(logneg);
-        logand->type = "AndNot";
-        num_updates++;
-      }
-    }
-    for (Flow::Operation *op : flow->Find("Not|1:And")) {
-      Flow::Operation *logand = op;
-      Flow::Operation *logneg = logand->inputs[1]->producer;
-      if (logneg->outputs[0]->usages() == 1 && !logneg->outputs[0]->out()) {
-        flow->Eliminate(logneg);
-        logand->type = "AndNot";
-        std::swap(logand->inputs[0], logand->inputs[1]);
-        num_updates++;
-      }
-    }
-
-    return num_updates > 0;
-  }
-
-  bool FoldNotCompare(Flow *flow, Flow::Operation *cmp, Flow::Operation *neg,
-                      const string &replacement) {
-    // Check that negation is the only consumer of the comparison.
-    if (cmp->outputs[0]->usages() != 1) return false;
-    if (cmp->outputs[0]->out()) return false;
-
-    // Remove negation and invert comparison condition.
-    flow->Eliminate(neg);
-    cmp->type = replacement;
-    return true;
-  }
-
-  bool EliminateDoubleNegation(Flow *flow, Flow::Operation *neg1,
-                               Flow::Operation *neg2) {
-    // Bypass double negation.
-    Flow::Variable *result = neg2->outputs[0];
-    for (Flow::Operation *op : result->consumers) {
-      op->ReplaceInput(result, neg1->inputs[0]);
-    }
-
-    // Remove unused negations.
-    if (neg2->outputs[0]->usages() == 0 && !neg2->outputs[0]->out()) {
-      flow->RemoveOperation(neg2);
-    }
-    if (neg1->outputs[0]->usages() == 0 && !neg1->outputs[0]->out()) {
-      flow->RemoveOperation(neg1);
-    }
-    return true;
   }
 };
 
@@ -814,12 +972,9 @@ class Calculate : public Kernel {
       if (output->shape() != shape && output->rank() != 0) return false;
     }
 
-    // Strict math not supported.
+    // Strict math and reduction over an axis is not supported.
     if (step->GetAttr("strict", false)) return false;
-
-    // Dense encoding required.
-    for (auto *input : step->inputs()) input->RequireDense();
-    for (auto *output : step->outputs()) output->RequireDense();
+    if (step->HasAttr("axis")) return false;
 
     return true;
   }
@@ -892,6 +1047,25 @@ class Calculate : public Kernel {
 
 // Register arithmetic library.
 void RegisterArithmeticLibrary(Library *library) {
+  generic_model.instruction_set({
+    Express::MOV, Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+    Express::MINIMUM, Express::MAXIMUM, Express::NEG, Express::ABS,
+    Express::SIGN, Express::SQUARE, Express::SQRT,
+    Express::MULADD132, Express::MULADD213, Express::MULADD231,
+    Express::MULSUB132, Express::MULSUB213, Express::MULSUB231,
+    Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+    Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+    Express::AND, Express::OR, Express::XOR, Express::ANDNOT, Express::NOT,
+    Express::COND, Express::SELECT,
+    Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+    Express::BITEQ, Express::FLOOR,
+    Express::CVTFLTINT, Express::CVTINTFLT,
+    Express::CVTEXPINT, Express::CVTINTEXP,
+    Express::QUADSIGN, Express::ADDINT, Express::SUBINT,
+    Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+    Express::ALL, Express::ANY,
+  });
+
   library->Register(new Calculate("AddExpr", "Add", 2));
   library->Register(new Calculate("SubExpr", "Sub", 2));
   library->Register(new Calculate("MulExpr", "Mul", 2));
@@ -901,11 +1075,39 @@ void RegisterArithmeticLibrary(Library *library) {
 
   library->Register(new Calculate("LogExpr", "Log", 1));
   library->Register(new Calculate("ExpExpr", "Exp", 1));
+  library->Register(new Calculate("PowExpr", "Pow", 2));
   library->Register(new Calculate("SigmoidExpr", "Sigmoid", 1));
-  library->Register(new Calculate("TanhExpr", "Tanh", 1));
   library->Register(new Calculate("ErfExpr", "Erf", 1));
   library->Register(new Calculate("Calculate", "Calculate"));
   library->Register(new Calculate("Assign", "Assign"));
+
+  library->Register(new Calculate("SinExpr", "Sin", 1));
+  library->Register(new Calculate("CosExpr", "Cos", 1));
+  library->Register(new Calculate("TanExpr", "Tan", 1));
+  library->Register(new Calculate("CotExpr", "Cot", 1));
+  library->Register(new Calculate("SecExpr", "Sec", 1));
+  library->Register(new Calculate("CscExpr", "Csc", 1));
+
+  library->Register(new Calculate("AsinExpr", "Asin", 1));
+  library->Register(new Calculate("AcosExpr", "Acos", 1));
+  library->Register(new Calculate("AtanExpr", "Atan", 1));
+  library->Register(new Calculate("AcotExpr", "Acot", 1));
+  library->Register(new Calculate("AsecExpr", "Asec", 1));
+  library->Register(new Calculate("AcscExpr", "Acsc", 1));
+
+  library->Register(new Calculate("SinhExpr", "Sinh", 1));
+  library->Register(new Calculate("CoshExpr", "Cosh", 1));
+  library->Register(new Calculate("TanhExpr", "Tanh", 1));
+  library->Register(new Calculate("CothExpr", "Coth", 1));
+  library->Register(new Calculate("SechExpr", "Sech", 1));
+  library->Register(new Calculate("CschExpr", "Csch", 1));
+
+  library->Register(new Calculate("AsinhExpr", "Asinh", 1));
+  library->Register(new Calculate("AcoshExpr", "Acosh", 1));
+  library->Register(new Calculate("AtanhExpr", "Atanh", 1));
+  library->Register(new Calculate("AcothExpr", "Acoth", 1));
+  library->Register(new Calculate("AsechExpr", "Asech", 1));
+  library->Register(new Calculate("AcschExpr", "Acsch", 1));
 
   library->Register(new Calculate("NegExpr", "Neg", 1));
   library->Register(new Calculate("AbsExpr", "Abs", 1));
@@ -917,6 +1119,7 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("ReciprocalExpr", "Reciprocal", 1));
   library->Register(new Calculate("SquareExpr", "Square", 1));
   library->Register(new Calculate("SqrtExpr", "Sqrt", 1));
+  library->Register(new Calculate("RsqrtExpr", "Rsqrt", 1));
 
   library->Register(new Calculate("EqualExpr", "Equal", 2));
   library->Register(new Calculate("NotEqualExpr", "NotEqual", 2));
@@ -928,6 +1131,11 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("CondExpr", "Cond", 3));
   library->Register(new Calculate("SelectExpr", "Select", 2));
 
+  library->Register(new Calculate("FloorExpr", "Floor", 1));
+  library->Register(new Calculate("CeilExpr", "Ceil", 1));
+  library->Register(new Calculate("RoundExpr", "Round", 1));
+  library->Register(new Calculate("TruncExpr", "Trunc", 1));
+
   library->Register(new Calculate("AndExpr", "And", 2));
   library->Register(new Calculate("OrExpr", "Or", 2));
   library->Register(new Calculate("XorExpr", "Xor", 2));
@@ -938,6 +1146,9 @@ void RegisterArithmeticLibrary(Library *library) {
   library->Register(new Calculate("ProductExpr", "Product", 1));
   library->Register(new Calculate("MaxExpr", "Max", 1));
   library->Register(new Calculate("MinExpr", "Min", 1));
+  library->Register(new Calculate("AllExpr", "All", 1));
+  library->Register(new Calculate("AnyExpr", "Any", 1));
+  library->Register(new Calculate("CountExpr", "Count", 1));
 
   library->Register(new Calculate("IdExpr", "Identity", 1));
 }
@@ -946,8 +1157,9 @@ void RegisterArithmeticLibrary(Library *library) {
 void RegisterArithmeticTransforms(Library *library) {
   library->RegisterTransformer(new ExpressionTransformer());
   library->RegisterTransformer(new RemoveUnusedInputs());
-  library->RegisterTransformer(new DivToMulTransformer());
-  library->RegisterTransformer(new AddNegToSubTransformer());
+  library->RegisterTransformer(new DivTransformer());
+  library->RegisterTransformer(new AddSubNegTransformer());
+  library->RegisterTransformer(new PowerTransformer());
   library->RegisterTransformer(new LogicTransformer());
 }
 

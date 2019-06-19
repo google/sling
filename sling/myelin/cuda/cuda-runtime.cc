@@ -33,7 +33,7 @@ CUDARuntime::~CUDARuntime() {
   Disconnect();
 }
 
-void CUDARuntime::Connect(int device_number) {
+void CUDARuntime::Connect(int device_number, int flags) {
   // Check if device is already connected to another device.
   if (device_ != nullptr) {
     if (device_number != -1 && device_->number() != device_number) {
@@ -41,9 +41,9 @@ void CUDARuntime::Connect(int device_number) {
     }
   } else if (device_number == -1) {
     // Select the CUDA device with the most cores.
-    device_ = new CUDADevice(0);
+    device_ = new CUDADevice(0, flags);
     for (int d = 1; d < CUDA::Devices(); ++d) {
-      CUDADevice *candidate = new CUDADevice(d);
+      CUDADevice *candidate = new CUDADevice(d, flags);
       if (candidate->cores() > device_->cores()) {
         delete device_;
         device_ = candidate;
@@ -53,7 +53,7 @@ void CUDARuntime::Connect(int device_number) {
     }
   } else {
     // Initialize CUDA device.
-    device_ = new CUDADevice(device_number);
+    device_ = new CUDADevice(device_number, flags);
   }
 }
 
@@ -225,7 +225,7 @@ DevicePtr CUDARuntime::CopyTensorToDevice(const Tensor *tensor) {
 }
 
 void CUDARuntime::RemoveTensorFromDevice(const Tensor *tensor) {
-  CHECK_CUDA(cuMemFree(tensor->device_data()));
+  CHECK_CUDA(cuMemFree(tensor->device_data())) << tensor->name();
 }
 
 char *CUDARuntime::FetchTensorFromDevice(const Instance *data,
@@ -403,6 +403,18 @@ void CUDARuntime::StartProfiler(void *data) {
 
 void CUDARuntime::StopProfiler(void *data) {
   cuProfilerStop();
+}
+
+// Get offset of stream in data instance block.
+int StreamOffset(Step *step) {
+  if (step->task_index() == -1) {
+    // Main task stream is stored in runtime block.
+    return offsetof(CUDAInstance, mainstream);
+  } else {
+    // Parallel task stream is stored in task block.
+    int task_offset = step->cell()->task_offset(step->task_index());
+    return task_offset + offsetof(Task, state);
+  }
 }
 
 }  // namespace myelin

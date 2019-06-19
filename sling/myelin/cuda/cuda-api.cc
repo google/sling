@@ -24,6 +24,9 @@ namespace myelin {
 // Handle to CUDA library.
 static void *cuda_lib = nullptr;
 
+// Handle to cuBLASLt library.
+static void *cublaslt_lib = nullptr;
+
 // CUDA driver API functions.
 CUresult (*cuDriverGetVersion)(int *version);
 CUresult (*cuInit)(unsigned int flags);
@@ -40,7 +43,10 @@ CUresult (*cuDeviceGetAttribute)(int *pi,
 CUresult (*cuCtxCreate)(CUcontext *pctx,
                         unsigned int flags,
                         CUdevice dev);
-CUresult (*cuCtxDetach)(CUcontext ctx);
+CUresult (*cuCtxDestroy)(CUcontext ctx);
+CUresult (*cuCtxGetCurrent)(CUcontext* pctx);
+CUresult (*cuDevicePrimaryCtxRetain)(CUcontext *pctx, CUdevice dev);
+CUresult (*cuDevicePrimaryCtxRelease)(CUdevice dev);
 CUresult (*cuModuleLoadDataEx)(CUmodule *module,
                                const void *image,
                                unsigned int num_options,
@@ -99,16 +105,99 @@ CUresult (*cuProfilerInitialize)(const char *config_file,
 CUresult (*cuProfilerStart)();
 CUresult (*cuProfilerStop)();
 
+// cuBLASLt API functions.
+cublasStatus_t (*cublasLtCreate)(cublasLtHandle_t *handle);
+cublasStatus_t (*cublasLtDestroy)(cublasLtHandle_t handle);
+
+cublasStatus_t (*cublasLtCtxInit)(void);
+cublasStatus_t (*cublasLtShutdownCtx)(void);
+
+cublasStatus_t (*cublasLtMatmulDescCreate)(
+    cublasLtMatmulDesc_t *desc,
+    cudaDataType type);
+
+cublasStatus_t (*cublasLtMatmulDescDestroy)(cublasLtMatmulDesc_t desc);
+
+cublasStatus_t (*cublasLtMatmulDescSetAttribute)(
+    cublasLtMatmulDesc_t desc,
+    cublasLtMatmulDescAttributes_t attr,
+    const void *buf,
+    size_t size);
+
+cublasStatus_t (*cublasLtMatrixLayoutCreate)(
+    cublasLtMatrixLayout_t *layout,
+    cudaDataType type,
+    uint64_t rows,
+    uint64_t cols,
+    int64_t ld);
+
+cublasStatus_t (*cublasLtMatrixLayoutDestroy)(
+    cublasLtMatrixLayout_t layout);
+
+cublasStatus_t (*cublasLtMatrixLayoutSetAttribute)(
+  cublasLtMatrixLayout_t layout,
+  cublasLtMatrixLayoutAttribute_t attr,
+  void *buf,
+  size_t size);
+
+cublasStatus_t (*cublasLtMatmulPreferenceCreate)(
+    cublasLtMatmulPreference_t *pref);
+
+cublasStatus_t (*cublasLtMatmulPreferenceDestroy)(
+    cublasLtMatmulPreference_t pref);
+
+cublasStatus_t (*cublasLtMatmulPreferenceSetAttribute)(
+    cublasLtMatmulPreference_t pref,
+    cublasLtMatmulPreferenceAttributes_t attr,
+    const void *buf,
+    size_t size);
+
+cublasStatus_t (*cublasLtMatmulAlgoGetHeuristic)(
+    cublasLtHandle_t handle,
+    cublasLtMatmulDesc_t opdesc,
+    cublasLtMatrixLayout_t adesc,
+    cublasLtMatrixLayout_t bdesc,
+    cublasLtMatrixLayout_t cdesc,
+    cublasLtMatrixLayout_t ddesc,
+    cublasLtMatmulPreference_t preference,
+    int requested_algo_count,
+    cublasLtMatmulHeuristicResult_t heuristic_results[],
+    int *algo_count);
+
+cublasStatus_t (*cublasLtMatmul)(
+    cublasLtHandle_t handle,
+    cublasLtMatmulDesc_t desc,
+    const void *alpha,
+    const void *A,
+    cublasLtMatrixLayout_t adesc,
+    const void *B,
+    cublasLtMatrixLayout_t bdesc,
+    const void *beta,
+    const void *C,
+    cublasLtMatrixLayout_t cdesc,
+    void *D,
+    cublasLtMatrixLayout_t ddesc,
+    const cublasLtMatmulAlgo_t *algo,
+    void *workspace,
+    size_t workspace_size,
+    cudaStream_t stream);
+
 #define LOAD_CUDA_FUNCTION(name, version) \
   name = reinterpret_cast<decltype(name)>(dlsym(cuda_lib , #name version)); \
   if (!name) LOG(WARNING) << #name version " not found in CUDA library"
 
+#define LOAD_CUBLASLT_FUNCTION(name) \
+  name = reinterpret_cast<decltype(name)>(dlsym(cublaslt_lib , #name)); \
+  if (!name) LOG(WARNING) << #name " not found in cuBLASLt library"
+
+#define LIBPATH "/usr/lib/x86_64-linux-gnu"
+
 bool LoadCUDALibrary() {
   // Try to load CUDA library.
   CHECK(cuda_lib == nullptr) << "CUDA library already loaded";
-  cuda_lib = dlopen("libcuda.so", RTLD_LAZY);
+  cuda_lib = dlopen("libcuda.so", RTLD_NOW);
   if (cuda_lib == nullptr) {
-    cuda_lib = dlopen("/usr/lib/x86_64-linux-gnu/libcuda.so.1", RTLD_LAZY);
+    cuda_lib = dlopen(LIBPATH "/libcuda.so.1", RTLD_NOW);
   }
   if (cuda_lib == nullptr) return false;
 
@@ -122,7 +211,10 @@ bool LoadCUDALibrary() {
   LOAD_CUDA_FUNCTION(cuDeviceTotalMem, "_v2");
   LOAD_CUDA_FUNCTION(cuDeviceGetAttribute, "");
   LOAD_CUDA_FUNCTION(cuCtxCreate, "_v2");
-  LOAD_CUDA_FUNCTION(cuCtxDetach, "");
+  LOAD_CUDA_FUNCTION(cuCtxDestroy, "");
+  LOAD_CUDA_FUNCTION(cuCtxGetCurrent, "");
+  LOAD_CUDA_FUNCTION(cuDevicePrimaryCtxRetain, "");
+  LOAD_CUDA_FUNCTION(cuDevicePrimaryCtxRelease, "");
   LOAD_CUDA_FUNCTION(cuModuleLoadDataEx, "");
   LOAD_CUDA_FUNCTION(cuModuleUnload, "");
   LOAD_CUDA_FUNCTION(cuModuleGetFunction, "");
@@ -146,7 +238,34 @@ bool LoadCUDALibrary() {
   LOAD_CUDA_FUNCTION(cuProfilerStart, "");
   LOAD_CUDA_FUNCTION(cuProfilerStop, "");
 
+  // Try to load cuBLASLt library.
+  cublaslt_lib = dlopen("libcublasLt.so", RTLD_NOW);
+  if (cublaslt_lib == nullptr) {
+    cublaslt_lib = dlopen(LIBPATH "/libcublasLt.so", RTLD_NOW);
+  }
+  if (cublaslt_lib != nullptr) {
+    LOAD_CUBLASLT_FUNCTION(cublasLtCreate);
+    LOAD_CUBLASLT_FUNCTION(cublasLtDestroy);
+    LOAD_CUBLASLT_FUNCTION(cublasLtCtxInit);
+    LOAD_CUBLASLT_FUNCTION(cublasLtShutdownCtx);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulDescCreate);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulDescDestroy);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulDescSetAttribute);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatrixLayoutCreate);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatrixLayoutDestroy);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatrixLayoutSetAttribute);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulPreferenceCreate);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulPreferenceDestroy);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulPreferenceSetAttribute);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmulAlgoGetHeuristic);
+    LOAD_CUBLASLT_FUNCTION(cublasLtMatmul);
+  }
+
   return true;
+}
+
+bool HasCuBLASLt() {
+  return cublaslt_lib != nullptr;
 }
 
 }  // namespace myelin

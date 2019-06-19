@@ -12,12 +12,73 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <limits>
+
 #include "sling/myelin/simd-assembler.h"
 
 namespace sling {
 namespace myelin {
 
 using namespace jit;
+
+template<typename T> StaticData *MinVal(MacroAssembler *masm, int repeat) {
+  return masm->GetConstant<T>(std::numeric_limits<T>::min(), repeat);
+}
+
+template<typename T> StaticData *MaxVal(MacroAssembler *masm, int repeat) {
+  return masm->GetConstant<T>(std::numeric_limits<T>::max(), repeat);
+}
+
+StaticData *SIMDGenerator::NeutralElement(Reduction op, Type type, int repeat) {
+  switch (op) {
+    case REDUCE_ADD:
+      return nullptr;
+    case REDUCE_MUL:
+      switch (type) {
+        case DT_FLOAT: return masm_->GetConstant<float>(1.0, repeat);
+        case DT_DOUBLE: return masm_->GetConstant<double>(1.0, repeat);
+        case DT_INT8: return masm_->GetConstant<int8>(1, repeat);
+        case DT_INT16: return masm_->GetConstant<int16>(1, repeat);
+        case DT_INT32: return masm_->GetConstant<int32>(1, repeat);
+        case DT_INT64: return masm_->GetConstant<int64>(1, repeat);
+        default: return nullptr;
+      }
+    case REDUCE_MIN:
+      switch (type) {
+        case DT_FLOAT: return MaxVal<float>(masm_, repeat);
+        case DT_DOUBLE: return MaxVal<double>(masm_, repeat);
+        case DT_INT8: return MaxVal<int8>(masm_, repeat);
+        case DT_INT16: return MaxVal<int16>(masm_, repeat);
+        case DT_INT32: return MaxVal<int32>(masm_, repeat);
+        case DT_INT64: return MaxVal<int64>(masm_, repeat);
+        default: return nullptr;
+      }
+    case REDUCE_MAX:
+      switch (type) {
+        case DT_FLOAT: return MinVal<float>(masm_, repeat);
+        case DT_DOUBLE: return MinVal<double>(masm_, repeat);
+        case DT_INT8: return MinVal<int8>(masm_, repeat);
+        case DT_INT16: return MinVal<int16>(masm_, repeat);
+        case DT_INT32: return MinVal<int32>(masm_, repeat);
+        case DT_INT64: return MinVal<int64>(masm_, repeat);
+        default: return nullptr;
+      }
+    case REDUCE_AND:
+      switch (type) {
+        case DT_FLOAT: return masm_->GetConstant<int32>(-1, repeat);
+        case DT_DOUBLE: return masm_->GetConstant<int64>(-1, repeat);
+        case DT_INT8: return masm_->GetConstant<int8>(-1, repeat);
+        case DT_INT16: return masm_->GetConstant<int16>(-1, repeat);
+        case DT_INT32: return masm_->GetConstant<int32>(-1, repeat);
+        case DT_INT64: return masm_->GetConstant<int64>(-1, repeat);
+        default: return nullptr;
+      }
+    case REDUCE_OR:
+      return nullptr;
+    default:
+      return nullptr;
+  }
+}
 
 bool SIMDGenerator::SupportsUnroll() {
   return true;
@@ -38,8 +99,20 @@ bool SIMDGenerator::SupportsMasking() {
   return false;
 }
 
+void SIMDGenerator::LoadNeutral(Reduction op, int r) {
+  LOG(FATAL) << "Reduction not supported";
+}
+
+void SIMDGenerator::Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  LOG(FATAL) << "Reduction not supported";
+}
+
+void SIMDGenerator::Reduce(Reduction op, int r) {
+  // Reduction is a no-op for scalars.
+  CHECK_EQ(VectorSize(), 1);
+}
+
 void SIMDGenerator::SetMask(int bits) {
-  LOG(FATAL) << "Masking not supported";
 }
 
 void SIMDGenerator::MaskedLoad(int dst, const Operand &src) {
@@ -59,6 +132,11 @@ void SIMDGenerator::MaskedMul(int dst, int src1, const jit::Operand &src2) {
 }
 
 void SIMDGenerator::MaskedMulAdd(int dst, int src1, const jit::Operand &src2) {
+  LOG(FATAL) << "Masking not supported";
+}
+
+void SIMDGenerator::MaskedAccumulate(Reduction op, int acc,
+                                     const jit::Operand &src) {
   LOG(FATAL) << "Masking not supported";
 }
 
@@ -125,6 +203,25 @@ class AVX512FloatGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      masm_->vbroadcastss(zmm(r), neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_FLOAT, zmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    ZMMRegister aux = masm_->mm().allocz();
+    masm_->Reduce(op, DT_FLOAT, zmm(r), aux);
+    masm_->mm().release(aux);
+  }
+
   bool SupportsMasking() override {
     return true;
   }
@@ -159,6 +256,10 @@ class AVX512FloatGenerator : public SIMDGenerator {
 
   void MaskedMulAdd(int dst, int src1, const jit::Operand &src2) override {
     masm_->vfmadd231ps(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
+  }
+
+  void MaskedAccumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_FLOAT, zmm(acc), src, mask_);
   }
 
  private:
@@ -232,6 +333,25 @@ class AVX256FloatGenerator : public SIMDGenerator {
     masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
     masm_->mm().release(acc);
   }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      masm_->vbroadcastss(ymm(r), neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_FLOAT, ymm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    YMMRegister aux = masm_->mm().allocy();
+    masm_->Reduce(op, DT_FLOAT, ymm(r), aux);
+    masm_->mm().release(aux);
+  }
 };
 
 // AVX128 float SIMD generator using 128-bit XMM registers.
@@ -300,6 +420,25 @@ class AVX128FloatGenerator : public SIMDGenerator {
     XMMRegister acc = masm_->mm().allocx();
     masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
     masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      masm_->vbroadcastss(xmm(r), neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_FLOAT, xmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->Reduce(op, DT_FLOAT, xmm(r), aux);
+    masm_->mm().release(aux);
   }
 };
 
@@ -406,13 +545,37 @@ class SSE128FloatGenerator : public SIMDGenerator {
     masm_->Reduce(REDUCE_ADD, DT_FLOAT, sum, acc);
     masm_->mm().release(acc);
   }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT, VectorSize());
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_FLOAT, xmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->Reduce(op, DT_FLOAT, xmm(r), aux);
+    masm_->mm().release(aux);
+  }
 };
 
 // AVX512 scalar float SIMD generator.
 class AVX512ScalarFloatGenerator : public SIMDGenerator {
  public:
   AVX512ScalarFloatGenerator(MacroAssembler *masm, bool aligned)
-      : SIMDGenerator(masm, aligned) {}
+      : SIMDGenerator(masm, aligned) {
+    mask_ = masm->kk().alloc();
+  }
+  ~AVX512ScalarFloatGenerator() override {
+    masm_->kk().release(mask_);
+  }
 
   // Only uses the lower 32-bit float of ZMM register.
   int VectorBytes() override { return sizeof(float); }
@@ -456,6 +619,26 @@ class AVX512ScalarFloatGenerator : public SIMDGenerator {
       masm_->vaddss(zmm(dst), zmm(dst), zmm(src1));
     }
   }
+
+  void SetMask(int bits) override {
+    masm_->LoadMask(bits, mask_);
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_FLOAT, zmm(acc), src, mask_);
+  }
+
+ private:
+  OpmaskRegister mask_;
 };
 
 // AVX scalar float SIMD generator.
@@ -504,6 +687,46 @@ class AVXScalarFloatGenerator : public SIMDGenerator {
     } else {
       masm_->vmulss(xmm(src1), xmm(src1), src2);
       masm_->vaddss(xmm(dst), xmm(dst), xmm(src1));
+    }
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    switch (op) {
+      case REDUCE_ADD:
+        masm_->vaddss(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_MUL:
+        masm_->vmulss(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_MIN:
+        masm_->vminss(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_MAX:
+        masm_->vmaxss(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_AND: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->vmovss(aux, src);
+        masm_->vandps(xmm(acc), xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
+      case REDUCE_OR: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->vmovss(aux, src);
+        masm_->vorps(xmm(acc), xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
     }
   }
 };
@@ -556,6 +779,46 @@ class SSEScalarFloatGenerator : public SIMDGenerator {
     } else {
       masm_->mulss(xmm(src1), src2);
       masm_->addss(xmm(dst), xmm(src1));
+    }
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_FLOAT);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    switch (op) {
+      case REDUCE_ADD:
+        masm_->addss(xmm(acc), src);
+        break;
+      case REDUCE_MUL:
+        masm_->mulss(xmm(acc), src);
+        break;
+      case REDUCE_MIN:
+        masm_->minss(xmm(acc), src);
+        break;
+      case REDUCE_MAX:
+        masm_->maxss(xmm(acc), src);
+        break;
+      case REDUCE_AND: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->movss(aux, src);
+        masm_->andps(xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
+      case REDUCE_OR: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->movss(aux, src);
+        masm_->orps(xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
     }
   }
 };
@@ -623,6 +886,25 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      masm_->vbroadcastsd(zmm(r), neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_DOUBLE, zmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    ZMMRegister aux = masm_->mm().allocz();
+    masm_->Reduce(op, DT_DOUBLE, zmm(r), aux);
+    masm_->mm().release(aux);
+  }
+
   bool SupportsMasking() override {
     return true;
   }
@@ -657,6 +939,10 @@ class AVX512DoubleGenerator : public SIMDGenerator {
 
   void MaskedMulAdd(int dst, int src1, const jit::Operand &src2) override {
     masm_->vfmadd231pd(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
+  }
+
+  void MaskedAccumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_DOUBLE, zmm(acc), src, mask_);
   }
 
  private:
@@ -730,6 +1016,25 @@ class AVX256DoubleGenerator : public SIMDGenerator {
     masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
     masm_->mm().release(acc);
   }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      masm_->vbroadcastsd(ymm(r), neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_DOUBLE, ymm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    YMMRegister aux = masm_->mm().allocy();
+    masm_->Reduce(op, DT_DOUBLE, ymm(r), aux);
+    masm_->mm().release(aux);
+  }
 };
 
 // AVX128 double SIMD generator using 128-bit XMM registers.
@@ -799,6 +1104,25 @@ class AVX128DoubleGenerator : public SIMDGenerator {
     XMMRegister acc = masm_->mm().allocx();
     masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
     masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE, VectorSize());
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_DOUBLE, xmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->Reduce(op, DT_DOUBLE, xmm(r), aux);
+    masm_->mm().release(aux);
   }
 };
 
@@ -905,13 +1229,37 @@ class SSE128DoubleGenerator : public SIMDGenerator {
     masm_->Reduce(REDUCE_ADD, DT_DOUBLE, sum, acc);
     masm_->mm().release(acc);
   }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE, VectorSize());
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_DOUBLE, xmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->Reduce(op, DT_DOUBLE, xmm(r), aux);
+    masm_->mm().release(aux);
+  }
 };
 
 // AVX512 scalar double SIMD generator.
 class AVX512ScalarDoubleGenerator : public SIMDGenerator {
  public:
   AVX512ScalarDoubleGenerator(MacroAssembler *masm, bool aligned)
-      : SIMDGenerator(masm, aligned) {}
+      : SIMDGenerator(masm, aligned) {
+    mask_ = masm->kk().alloc();
+  }
+  ~AVX512ScalarDoubleGenerator() override {
+    masm_->kk().release(mask_);
+  }
 
   // Only uses the lower 64-bit float of ZMM register.
   int VectorBytes() override { return sizeof(double); }
@@ -955,6 +1303,26 @@ class AVX512ScalarDoubleGenerator : public SIMDGenerator {
       masm_->vaddsd(zmm(dst), zmm(dst), zmm(src1));
     }
   }
+
+  void SetMask(int bits) override {
+    masm_->LoadMask(bits, mask_);
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    masm_->Accumulate(op, DT_DOUBLE, zmm(acc), src, mask_);
+  }
+
+ private:
+  OpmaskRegister mask_;
 };
 
 // AVX scalar double SIMD generator.
@@ -1003,6 +1371,46 @@ class AVXScalarDoubleGenerator : public SIMDGenerator {
     } else {
       masm_->vmulsd(xmm(src1), xmm(src1), src2);
       masm_->vaddsd(xmm(dst), xmm(dst), xmm(src1));
+    }
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    switch (op) {
+      case REDUCE_ADD:
+        masm_->vaddsd(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_MUL:
+        masm_->vmulsd(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_MIN:
+        masm_->vminsd(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_MAX:
+        masm_->vmaxsd(xmm(acc), xmm(acc), src);
+        break;
+      case REDUCE_AND: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->vmovsd(aux, src);
+        masm_->vandpd(xmm(acc), xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
+      case REDUCE_OR: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->vmovsd(aux, src);
+        masm_->vorpd(xmm(acc), xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
     }
   }
 };
@@ -1055,6 +1463,46 @@ class SSEScalarDoubleGenerator : public SIMDGenerator {
     } else {
       masm_->mulsd(xmm(src1), src2);
       masm_->addsd(xmm(dst), xmm(src1));
+    }
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    StaticData *neutral = NeutralElement(op, DT_DOUBLE);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    switch (op) {
+      case REDUCE_ADD:
+        masm_->addsd(xmm(acc), src);
+        break;
+      case REDUCE_MUL:
+        masm_->mulsd(xmm(acc), src);
+        break;
+      case REDUCE_MIN:
+        masm_->minsd(xmm(acc), src);
+        break;
+      case REDUCE_MAX:
+        masm_->maxsd(xmm(acc), src);
+        break;
+      case REDUCE_AND: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->movsd(aux, src);
+        masm_->andpd(xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
+      case REDUCE_OR: {
+        XMMRegister aux = masm_->mm().allocx();
+        masm_->movsd(aux, src);
+        masm_->orpd(xmm(acc), aux);
+        masm_->mm().release(aux);
+        break;
+      }
     }
   }
 };
@@ -1134,6 +1582,74 @@ class ScalarIntSIMDGenerator : public SIMDGenerator {
       masm_->imulq(acc, reg(src1));
       masm_->addq(reg(dst), acc);
       masm_->rr().release(acc);
+    }
+  }
+
+  void LoadNeutral(Reduction op, int r) {
+    switch (op) {
+      case REDUCE_ADD:
+        Zero(r);
+        break;
+      case REDUCE_MUL:
+        masm_->movq(reg(r), Immediate(1));
+        break;
+      case REDUCE_MIN:
+        masm_->movq(reg(r), std::numeric_limits<int64>::max());
+        break;
+      case REDUCE_MAX:
+        masm_->movq(reg(r), std::numeric_limits<int64>::min());
+        break;
+      case REDUCE_AND:
+        masm_->movq(reg(r), Immediate(-1));
+        break;
+      case REDUCE_OR:
+        Zero(r);
+        break;
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+    switch (op) {
+      case REDUCE_ADD:
+        masm_->addq(reg(acc), src);
+        break;
+      case REDUCE_MUL:
+        masm_->imulq(reg(acc), src);
+        break;
+      case REDUCE_MIN:
+      case REDUCE_MAX: {
+        Register aux = masm_->rr().try_alloc();
+        if (aux.is_valid()) {
+          Load(aux.code(), src);
+          masm_->cmpq(reg(acc), aux);
+          if (op == REDUCE_MIN) {
+            masm_->cmovq(greater, reg(acc), aux);
+          } else {
+            masm_->cmovq(less, reg(acc), aux);
+          }
+          masm_->rr().release(acc);
+        } else {
+          switch (type_) {
+            case DT_INT8:  masm_->cmpb(reg(acc), src); break;
+            case DT_INT16: masm_->cmpw(reg(acc), src); break;
+            case DT_INT32: masm_->cmpl(reg(acc), src); break;
+            case DT_INT64: masm_->cmpq(reg(acc), src); break;
+            default: LOG(FATAL) << "Unsupported integer type: " << type_;
+          }
+          if (op == REDUCE_MIN) {
+            masm_->cmovq(greater, reg(acc), src);
+          } else {
+            masm_->cmovq(less, reg(acc), src);
+          }
+        }
+        break;
+      }
+      case REDUCE_AND:
+        masm_->andq(reg(acc), src);
+        break;
+      case REDUCE_OR:
+        masm_->orq(reg(acc), src);
+        break;
     }
   }
 
@@ -1304,7 +1820,13 @@ int SIMDStrategy::MaxUnrolls() {
 
 void SIMDStrategy::PreloadMasks() {
   for (auto &p : phases_) {
-    if (p.masked) p.generator->SetMask(p.masked);
+    if (p.masked) {
+      // Set mask for masked phase.
+      p.generator->SetMask(p.masked);
+    } else if (p.generator->VectorSize() == 1) {
+      // Set singleton mask for scalar phase.
+      p.generator->SetMask(1);
+    }
   }
 }
 

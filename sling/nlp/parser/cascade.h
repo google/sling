@@ -125,7 +125,7 @@ class DelegateInstance {
   const Delegate *delegate_ = nullptr;
 
   // Underlying Myelin instance.
-  myelin::Instance instance_ = nullptr;
+  myelin::Instance instance_;
 };
 
 // Runs an instance of a cascade on a ParserState.

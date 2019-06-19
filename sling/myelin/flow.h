@@ -28,6 +28,10 @@ namespace myelin {
 class Gradients;
 class Transformations;
 
+class Cell;
+class Step;
+class Tensor;
+
 // Data types.
 enum Type {
   DT_INVALID        = 0,      // invalid data type
@@ -57,9 +61,11 @@ enum Type {
 class TypeTraits {
  public:
   TypeTraits(Type type, const char *name, int size,
-             const char *ctype, const char *ptx, const char *pytype)
+             const char *ctype, const char *ptx, int cuda, const char *pytype,
+             void *zero, void *one)
       : type_(type), name_(name), size_(size),
-        ctype_(ctype), ptx_(ptx), pytype_(pytype) {}
+        ctype_(ctype), ptx_(ptx), cuda_(cuda), pytype_(pytype),
+        zero_(zero), one_(one) {}
 
   Type type() const { return type_; }
   const string &name() const { return name_; }
@@ -67,10 +73,20 @@ class TypeTraits {
   bool valid() const { return type_ != DT_INVALID; }
   const char *ctype() const { return ctype_; }
   const char *ptx() const { return ptx_; }
+  int cuda() const { return cuda_; }
   const char *pytype() const { return pytype_; }
 
   // Return data formatted according to type.
   string str(const void *data) const;
+
+  // Return data as number.
+  double number(const void *data) const;
+
+  // Binary representation of zero.
+  const void *zero() const { return zero_; }
+
+  // Binary representation of one.
+  const void *one() const { return one_; }
 
   // Look up traits from type code.
   static const TypeTraits &of(Type type);
@@ -83,8 +99,12 @@ class TypeTraits {
   string name_;         // type name
   size_t size_;         // size in bytes
   const char *ctype_;   // C type
-  const char *ptx_;     // ptx type
+  const char *ptx_;     // CUDA PTX type
+  int cuda_;            // CUDA CUBLAS type
   const char *pytype_;  // Python type
+
+  const void *zero_;    // binary representation of zero for type
+  const void *one_;     // binary representation of one for type
 };
 
 // Look up traits from type.
@@ -141,12 +161,25 @@ class Shape {
   // Add dimension to shape.
   void add(int size) { dims_.push_back(size); }
 
+  // Set shape to [rank-1, ..., 0].
+  void reverse(int rank) {
+    dims_.resize(rank);
+    for (int d = 0; d < rank; ++d) dims_[d] = rank - d - 1;
+  }
+
   // Return transposed shape.
   Shape transpose() const {
-    if (rank() < 2) return *this;
-    Shape t = *this;
-    std::swap(t.dims_[0], t.dims_[1]);
+    Shape t;
+    for (int d = rank() - 1; d >= 0; --d) t.add(dim(d));
     return t;
+  }
+
+  // Return permuted shape.
+  Shape permute(const Shape &perm) const {
+    CHECK_EQ(rank(), perm.rank());
+    Shape p;
+    for (int d = 0; d < rank(); ++d) p.add(dim(perm.dim(d)));
+    return p;
   }
 
   // Return the rank of the shape, i.e. the number of dimensions.
@@ -240,6 +273,7 @@ class Attributes : public std::vector<Attribute> {
   int GetAttr(const string &name, int defval) const;
   bool GetAttr(const string &name, bool defval) const;
   float GetAttr(const string &name, float defval) const;
+  bool GetAttr(const string &name, Shape *shape) const;
 
   // Check if attribute exists.
   bool HasAttr(const string &name) const;
@@ -250,6 +284,7 @@ class Attributes : public std::vector<Attribute> {
   void SetAttr(const string &name, int value);
   void SetAttr(const string &name, bool value);
   void SetAttr(const string &name, float value);
+  void SetAttr(const string &name, const Shape &value);
 
   // Remove attribute.
   void RemoveAttr(const string &name);
@@ -304,6 +339,8 @@ class Flow {
       LEARNABLE = 8,  // learnable global variable
       UNIQUE = 16,    // input with single gradient
       RANDOM = 32,    // initialize with random values
+      ROW = 64,       // request row-major order
+      COL = 128,      // request column-major order
     };
 
     // Add alias for variable.
@@ -376,6 +413,9 @@ class Flow {
     // Check if variable is detached, i.e. no producer or consumers.
     bool detached() const { return producer == nullptr && usages() == 0; }
 
+    // Check if variable is a scalar.
+    bool scalar() const { return elements() == 1; }
+
     // Return type as string.
     string TypeString() const;
 
@@ -409,6 +449,16 @@ class Flow {
       return true;
     }
 
+    // Return scalar constant as number.
+    double number() const {
+      DCHECK(constant());
+      DCHECK_EQ(elements(), 1);
+      return traits().number(data);
+    }
+
+    // Return type traits for variable type.
+    const TypeTraits &traits() const { return TypeTraits::of(type); }
+
     // Check if variable has a dependency on some operation.
     bool DependsOn(const Operation *op) const;
 
@@ -420,6 +470,7 @@ class Flow {
 
     Operation *producer = nullptr;       // operation producing variable
     std::vector<Operation *> consumers;  // list of consumers of variable
+    Tensor *tensor = nullptr;            // tensor for variable
   };
 
   // Flow operation.
@@ -466,6 +517,9 @@ class Flow {
     // Replace output variable with another variable.
     void ReplaceOutput(Variable *var, Variable *replacement);
 
+    // Swap order of inputs.
+    void SwapInputs(int first = 0, int second = 1);
+
     // Get prototype variable for operation. This is the biggest output from the
     // operation, unless this is a scalar or the operation does not have any
     // outputs. In that case, the biggest input is returned.
@@ -484,6 +538,7 @@ class Flow {
     int priority = 3;                 // task priority for op compute ordering
     int order = -1;                   // placement in computation order
     int missing = 0;                  // number of inputs that are not yet ready
+    Step *step = nullptr;             // step for operation
   };
 
   // Flow function.
@@ -518,6 +573,7 @@ class Flow {
 
     std::vector<Operation *> ops;     // ops for function in compute order
     std::vector<Variable *> unused;   // unused input variables
+    Cell *cell = nullptr;             // cell for function
   };
 
   // Flow connector.
@@ -703,6 +759,12 @@ class Flow {
   void Order(Function *func,
              std::vector<Operation *> *ops,
              std::vector<Variable *> *vars) const;
+
+  // Return unique variable name with prefix.
+  string VarName(const string &prefix);
+
+  // Return unique operation name with prefix.
+  string OpName(const string &prefix);
 
  private:
   // Infer which variables are inputs and outputs to functions.

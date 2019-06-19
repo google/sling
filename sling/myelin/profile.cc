@@ -26,15 +26,15 @@
 namespace sling {
 namespace myelin {
 
-static const char *divider = "+---------+---------+--------------+---------"
+static const char *divider = "+---------+---------+--------------+----------"
                              "+-------------------------------"
                              "+---+------------------------\n";
 
-static const char *header = "| percent |  accum% |      time    |  gflops |"
+static const char *header = "| percent |  accum% |      time    |   gflops |"
                             " kernel"
                             "                        | t | step\n";
 
-static float max_giga_flops = 10000;
+static float max_giga_flops = 100000;
 
 static string TimeStr(float us) {
   if (us < 1000000) {
@@ -177,7 +177,7 @@ string Profile::ASCIIReport() const {
     if (gflops >= max_giga_flops) gflops = 0;
     accum += percent(i);
     StringAppendF(&report,
-                  "| %6.2f%% | %6.2f%% |%s |%8.3f | %-30s|%-2s | %s",
+                  "| %6.2f%% | %6.2f%% |%s |%9.3f | %-30s|%-2s | %s",
                   percent(i), accum, TimeStr(time(i)).c_str(), gflops,
                   name.c_str(),
                   tid.c_str(),
@@ -193,7 +193,7 @@ string Profile::ASCIIReport() const {
   // Output overhead.
   if (overhead_ > 0) {
     StringAppendF(&report,
-                  "| %6.2f%% | %6.2f%% |%s |%8.3f | %-30s|%-2s | %s\n",
+                  "| %6.2f%% | %6.2f%% |%s |%9.3f | %-30s|%-2s | %s\n",
                   overhead_percent(),
                   100.0,
                   TimeStr(overhead_time()).c_str(), 0.0, "", "",
@@ -206,7 +206,7 @@ string Profile::ASCIIReport() const {
 
   report.append(divider);
   StringAppendF(&report,
-                "| 100.00%% | 100.00%% |%s |%8.3f | %-30s|   |\n",
+                "| 100.00%% | 100.00%% |%s |%9.3f | %-30s|   |\n",
                 TimeStr(time()).c_str(), gflops, "TOTAL");
   report.append(divider);
 
@@ -276,6 +276,30 @@ int64 Profile::Complexity(const Step *step) {
   }
 
   return ops;
+}
+
+string ProfileOverview::ASCIIReport() const {
+  static const char *divider =
+      "+---------+--------------+-------------+--------------+"
+      "--------------------------------------------------\n";
+  static const char *header =
+      "| percent |    time/call | invocations |   total time | cell\n";
+  string report;
+  if (!cells_.empty()) {
+    report.append(divider);
+    report.append(header);
+    report.append(divider);
+    for (const CellInfo &ci : cells_) {
+      double time = ci.time * ci.invocations;
+      double percent = total_time_ > 0 ? time / total_time_ * 100.0 : 0.0;
+      StringAppendF(&report,
+                   "| %6.2f%% |%s | %11" PRId64 " |%s | %s\n",
+                   percent, TimeStr(ci.time).c_str(), ci.invocations,
+                   TimeStr(time).c_str(), ci.cell->name().c_str());
+    }
+    report.append(divider);
+  }
+  return report;
 }
 
 static bool CompareTensorOrder(Tensor *a, Tensor *b) {

@@ -51,6 +51,9 @@ class SIMDGenerator {
   // Clear register.
   virtual void Zero(int r) = 0;
 
+  // Load neutral value for op into register.
+  virtual void LoadNeutral(Reduction op, int r);
+
   // Add src1 and src2 and store it in dst.
   virtual void Add(int dst, int src1, int src2) = 0;
   virtual void Add(int dst, int src1, const jit::Operand &src2) = 0;
@@ -63,8 +66,14 @@ class SIMDGenerator {
   virtual void MulAdd(int dst, int src1, const jit::Operand &src2,
                       bool retain) = 0;
 
+  // Accumulate value in src into acc.
+  virtual void Accumulate(Reduction op, int acc, const jit::Operand &src);
+
   // Horizontal sum of all elements in register.
   virtual void Sum(int r);
+
+  // Horizontal reduction of all elements in register.
+  virtual void Reduce(Reduction op, int r);
 
   // Some vector instructions support masking (e.g. AVX512) that allow loading
   // and storing partial results.
@@ -75,8 +84,12 @@ class SIMDGenerator {
   virtual void MaskedAdd(int dst, int src1, const jit::Operand &src2);
   virtual void MaskedMul(int dst, int src1, const jit::Operand &src2);
   virtual void MaskedMulAdd(int dst, int src1, const jit::Operand &src2);
+  virtual void MaskedAccumulate(Reduction op, int acc, const jit::Operand &src);
 
  protected:
+  // Get neutral element for operation and type. Returns null for zero.
+  StaticData *NeutralElement(Reduction op, Type type, int repeat = 1);
+
   // Get register from register code.
   jit::Register reg(int r) { return jit::Register::from_code(r); }
   jit::XMMRegister xmm(int r) { return jit::XMMRegister::from_code(r); }

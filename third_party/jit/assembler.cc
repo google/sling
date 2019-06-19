@@ -2847,6 +2847,24 @@ void Assembler::sqrtss(XMMRegister dst, const Operand &src) {
   emit_sse_operand(dst, src);
 }
 
+void Assembler::rsqrtss(XMMRegister dst, XMMRegister src) {
+  EnsureSpace ensure_space(this);
+  emit(0xF3);
+  emit_optional_rex_32(dst, src);
+  emit(0x0F);
+  emit(0x52);
+  emit_sse_operand(dst, src);
+}
+
+void Assembler::rsqrtss(XMMRegister dst, const Operand &src) {
+  EnsureSpace ensure_space(this);
+  emit(0xF3);
+  emit_optional_rex_32(dst, src);
+  emit(0x0F);
+  emit(0x52);
+  emit_sse_operand(dst, src);
+}
+
 void Assembler::ucomiss(XMMRegister dst, XMMRegister src) {
   DCHECK(Enabled(MMX));
   EnsureSpace ensure_space(this);
@@ -4078,22 +4096,6 @@ void Assembler::rcpps(XMMRegister dst, const Operand &src) {
   emit_sse_operand(dst, src);
 }
 
-void Assembler::rsqrtps(XMMRegister dst, XMMRegister src) {
-  EnsureSpace ensure_space(this);
-  emit_optional_rex_32(dst, src);
-  emit(0x0F);
-  emit(0x52);
-  emit_sse_operand(dst, src);
-}
-
-void Assembler::rsqrtps(XMMRegister dst, const Operand &src) {
-  EnsureSpace ensure_space(this);
-  emit_optional_rex_32(dst, src);
-  emit(0x0F);
-  emit(0x52);
-  emit_sse_operand(dst, src);
-}
-
 void Assembler::sqrtps(XMMRegister dst, XMMRegister src) {
   EnsureSpace ensure_space(this);
   emit_optional_rex_32(dst, src);
@@ -4125,6 +4127,22 @@ void Assembler::sqrtpd(XMMRegister dst, const Operand &src) {
   emit_optional_rex_32(dst, src);
   emit(0x0F);
   emit(0x51);
+  emit_sse_operand(dst, src);
+}
+
+void Assembler::rsqrtps(XMMRegister dst, XMMRegister src) {
+  EnsureSpace ensure_space(this);
+  emit_optional_rex_32(dst, src);
+  emit(0x0F);
+  emit(0x52);
+  emit_sse_operand(dst, src);
+}
+
+void Assembler::rsqrtps(XMMRegister dst, const Operand &src) {
+  EnsureSpace ensure_space(this);
+  emit_optional_rex_32(dst, src);
+  emit(0x0F);
+  emit(0x52);
   emit_sse_operand(dst, src);
 }
 

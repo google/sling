@@ -45,9 +45,6 @@ class ExpressionGenerator {
 
   virtual ~ExpressionGenerator() = default;
 
-  // Return generator name.
-  virtual string Name() = 0;
-
   // Return vector size in bytes.
   virtual int VectorSize() { return TypeTraits::of(type_).size(); }
 
@@ -84,8 +81,15 @@ class ExpressionGenerator {
   // Return register number for variable.
   int RegisterNumber(Express::VarType type, int id) const;
 
+  // Return generator name.
+  string Name() { return model_.name; }
+
   // Select expression generator for expression that is supported by the CPU.
   static ExpressionGenerator *Select(const Express &expr, Type type, int size);
+
+  // Set approximate math flag.
+  bool approx() const { return approx_; }
+  void set_approx(bool approx) { approx_ = approx; }
 
  protected:
   // Comparison types. These are Intel comparison predicates used by CMPSS.
@@ -312,6 +316,13 @@ class ExpressionGenerator {
     OpXMMRegMem fltopmem, OpXMMRegMem dblopmem,
     MacroAssembler *masm);
 
+  // Generate unary XMM float op with immediate.
+  void GenerateXMMUnaryFltOp(
+      Express::Op *instr,
+      OpXMMRegRegImm fltopreg, OpXMMRegRegImm dblopreg,
+      OpXMMRegMemImm fltopmem, OpXMMRegMemImm dblopmem,
+      int8 imm, MacroAssembler *masm);
+
   // Generate three-operand XMM float op.
   void GenerateXMMFltOp(
       Express::Op *instr,
@@ -321,13 +332,6 @@ class ExpressionGenerator {
 
   // Generate three-operand XMM float accumulate op.
   void GenerateXMMFltAccOp(
-      Express::Op *instr,
-      OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
-      OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
-      MacroAssembler *masm);
-
-  // Generate unary XMM float op.
-  void GenerateXMMUnaryFltOp(
       Express::Op *instr,
       OpXMMRegRegReg fltopreg, OpXMMRegRegReg dblopreg,
       OpXMMRegRegMem fltopmem, OpXMMRegRegMem dblopmem,
@@ -488,10 +492,13 @@ class ExpressionGenerator {
   Express::Model model_;
 
   // Expression that should be generated.
-  Express expression_;
+  Express expression_{&model_};
 
   // Instructions for generating expression.
-  Express instructions_;
+  Express instructions_{&model_};
+
+  // Allow approximate math functions.
+  bool approx_ = false;
 };
 
 // Return reduction operator for reduction instruction.

@@ -134,12 +134,12 @@ class DualEncoderBatch {
 
   // Get feature array for left encoder.
   int *left_features(int index) {
-    return elements_[index].left.Get<int>(left_features_);
+    return elements_[index].left.Get<int>(flow_.left.features);
   }
 
   // Get feature array for right encoder.
   int *right_features(int index) {
-    return elements_[index].right.Get<int>(right_features_);
+    return elements_[index].right.Get<int>(flow_.right.features);
   }
 
   // Compute similarities between instances in batch and propagate loss back
@@ -151,18 +151,24 @@ class DualEncoderBatch {
   void Reset();
 
   // Get gradient instances.
-  const std::vector<myelin::Instance *> &gradients() const { return gradients_; }
+  const std::vector<myelin::Instance *> &gradients() const {
+    return gradients_;
+  }
 
  private:
   // Data instances for one batch element.
   struct Element {
-    Element(const myelin::Cell *l, const myelin::Cell *r) : left(l), right(r) {}
+    Element(const DualEncoderFlow &flow)
+      : left(flow.left.forward), right(flow.right.forward) {}
     myelin::Instance left;
     myelin::Instance right;
   };
 
-  // Batch elements.
-  std::vector<Element> elements_;
+  // Flow for model.
+  const DualEncoderFlow &flow_;
+
+  // Softmax cross-entropy loss computation.
+  const myelin::CrossEntropyLoss &loss_;
 
   // Similarity computation.
   myelin::Instance sim_;
@@ -173,24 +179,8 @@ class DualEncoderBatch {
   myelin::Instance gright_;
   std::vector<myelin::Instance *> gradients_{&gleft_, &gright_};
 
-  // Softmax cross-entropy loss computation.
-  const myelin::CrossEntropyLoss &loss_;
-
-  // Tensors for accessing instance data.
-  const myelin::Tensor *left_features_ = nullptr;
-  const myelin::Tensor *right_features_ = nullptr;
-
-  const myelin::Tensor *sim_cosine_ = nullptr;
-  const myelin::Tensor *gsim_d_cosine_ = nullptr;
-
-  const myelin::Tensor *gleft_primal_ = nullptr;
-  const myelin::Tensor *gleft_d_encoding_ = nullptr;
-
-  const myelin::Tensor *gright_primal_ = nullptr;
-  const myelin::Tensor *gright_d_encoding_ = nullptr;
-
-  const myelin::Tensor *gsim_d_left_ = nullptr;
-  const myelin::Tensor *gsim_d_right_ = nullptr;
+  // Batch elements.
+  std::vector<Element> elements_;
 };
 
 }  // namespace nlp

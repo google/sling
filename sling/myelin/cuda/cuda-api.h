@@ -270,7 +270,10 @@ extern CUresult (*cuDeviceGetAttribute)(int *pi,
 extern CUresult (*cuCtxCreate)(CUcontext *pctx,
                                unsigned int flags,
                                CUdevice dev);
-extern CUresult (*cuCtxDetach)(CUcontext ctx);
+extern CUresult (*cuCtxDestroy)(CUcontext ctx);
+extern CUresult (*cuCtxGetCurrent)(CUcontext *pctx);
+extern CUresult (*cuDevicePrimaryCtxRetain)(CUcontext *pctx, CUdevice dev);
+extern CUresult (*cuDevicePrimaryCtxRelease)(CUdevice dev);
 extern CUresult (*cuModuleLoadDataEx)(CUmodule *module,
                                       const void *image,
                                       unsigned int num_options,
@@ -329,8 +332,192 @@ extern CUresult (*cuProfilerInitialize)(const char *config_file,
 extern CUresult (*cuProfilerStart)();
 extern CUresult (*cuProfilerStop)();
 
+// CUDA data types.
+typedef enum cudaDataType_t {
+  CUDA_R_16F = 2,
+  CUDA_C_16F = 6,
+  CUDA_R_32F = 0,
+  CUDA_C_32F = 4,
+  CUDA_R_64F = 1,
+  CUDA_C_64F = 5,
+  CUDA_R_8I  = 3,
+  CUDA_C_8I  = 7,
+  CUDA_R_8U  = 8,
+  CUDA_C_8U  = 9,
+  CUDA_R_32I = 10,
+  CUDA_C_32I = 11,
+  CUDA_R_32U = 12,
+  CUDA_C_32U = 13
+} cudaDataType;
+
+// CUBLAS status type.
+typedef enum {
+  CUBLAS_STATUS_SUCCESS          = 0,
+  CUBLAS_STATUS_NOT_INITIALIZED  = 1,
+  CUBLAS_STATUS_ALLOC_FAILED     = 3,
+  CUBLAS_STATUS_INVALID_VALUE    = 7,
+  CUBLAS_STATUS_ARCH_MISMATCH    = 8,
+  CUBLAS_STATUS_MAPPING_ERROR    = 11,
+  CUBLAS_STATUS_EXECUTION_FAILED = 13,
+  CUBLAS_STATUS_INTERNAL_ERROR   = 14,
+  CUBLAS_STATUS_NOT_SUPPORTED    = 15,
+  CUBLAS_STATUS_LICENSE_ERROR    = 16
+} cublasStatus_t;
+
+// CUBLAS matmul descriptor attributes.
+typedef enum {
+  CUBLASLT_MATMUL_DESC_COMPUTE_TYPE,
+  CUBLASLT_MATMUL_DESC_SCALE_TYPE,
+  CUBLASLT_MATMUL_DESC_POINTER_MODE,
+  CUBLASLT_MATMUL_DESC_TRANSA,
+  CUBLASLT_MATMUL_DESC_TRANSB,
+  CUBLASLT_MATMUL_DESC_TRANSC,
+  CUBLASLT_MATMUL_DESC_FILL_MODE,
+} cublasLtMatmulDescAttributes_t;
+
+// CUBLAS operation.
+typedef enum {
+  CUBLAS_OP_N = 0,
+  CUBLAS_OP_T = 1,
+  CUBLAS_OP_C = 2,
+  CUBLAS_OP_HERMITAN = 2,
+  CUBLAS_OP_CONJG = 3,
+} cublasOperation_t;
+
+// Data ordering.
+typedef enum {
+    CUBLASLT_ORDER_COL = 0,
+    CUBLASLT_ORDER_ROW = 1,
+    CUBLASLT_ORDER_COL32 = 2,
+    CUBLASLT_ORDER_COL4_4R2_8C = 3,
+} cublasLtOrder_t;
+
+// CUBLAS matrix layout attributes.
+typedef enum {
+  CUBLASLT_MATRIX_LAYOUT_TYPE,
+  CUBLASLT_MATRIX_LAYOUT_ORDER,
+  CUBLASLT_MATRIX_LAYOUT_ROWS,
+  CUBLASLT_MATRIX_LAYOUT_COLS,
+  CUBLASLT_MATRIX_LAYOUT_LD,
+  CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
+  CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
+  CUBLASLT_MATRIX_LAYOUT_PLANE_OFFSET,
+} cublasLtMatrixLayoutAttribute_t;
+
+// CUBLAS algorithm search preference.
+typedef enum {
+  CUBLASLT_MATMUL_PREF_SEARCH_MODE,
+  CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+  CUBLASLT_MATMUL_PREF_MATH_MODE_MASK,
+  CUBLASLT_MATMUL_PREF_REDUCTION_SCHEME_MASK,
+  CUBLASLT_MATMUL_PREF_GAUSSIAN_MODE_MASK,
+  CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_A_BYTES,
+  CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_B_BYTES,
+  CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_C_BYTES,
+  CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_D_BYTES,
+  CUBLASLT_MATMUL_PREF_MAX_WAVES_COUNT,
+} cublasLtMatmulPreferenceAttributes_t;
+
+// Configured algo descriptor and its runtime properties.
+typedef struct {
+  uint64_t data[8];
+} cublasLtMatmulAlgo_t;
+
+typedef struct {
+  cublasLtMatmulAlgo_t algo;
+  size_t workspace_size;
+  cublasStatus_t state;
+  float waves_count;
+  int reserved[4];
+} cublasLtMatmulHeuristicResult_t;
+
+// CUBLAS handles.
+typedef struct cublasLtContext *cublasLtHandle_t;
+typedef struct cublasLtMatrixLayoutStruct *cublasLtMatrixLayout_t;
+typedef struct cublasLtMatmulDescStruct *cublasLtMatmulDesc_t;
+typedef struct cublasLtMatmulPreferenceStruct *cublasLtMatmulPreference_t;
+typedef struct CUstream_st *cudaStream_t;
+
+// cuBLASLt API functions.
+
+extern cublasStatus_t (*cublasLtCreate)(cublasLtHandle_t *handle);
+extern cublasStatus_t (*cublasLtDestroy)(cublasLtHandle_t handle);
+
+extern cublasStatus_t (*cublasLtMatmulDescCreate)(
+    cublasLtMatmulDesc_t *desc,
+    cudaDataType type);
+
+extern cublasStatus_t (*cublasLtMatmulDescDestroy)(cublasLtMatmulDesc_t desc);
+
+extern cublasStatus_t (*cublasLtMatmulDescSetAttribute)(
+    cublasLtMatmulDesc_t desc,
+    cublasLtMatmulDescAttributes_t attr,
+    const void *buf,
+    size_t size);
+
+extern cublasStatus_t (*cublasLtMatrixLayoutCreate)(
+    cublasLtMatrixLayout_t *layout,
+    cudaDataType type,
+    uint64_t rows,
+    uint64_t cols,
+    int64_t ld);
+
+extern cublasStatus_t (*cublasLtMatrixLayoutDestroy)(
+    cublasLtMatrixLayout_t layout);
+
+extern cublasStatus_t (*cublasLtMatrixLayoutSetAttribute)(
+  cublasLtMatrixLayout_t layout,
+  cublasLtMatrixLayoutAttribute_t attr,
+  void *buf,
+  size_t size);
+
+extern cublasStatus_t (*cublasLtMatmulPreferenceCreate)(
+    cublasLtMatmulPreference_t *pref);
+
+extern cublasStatus_t (*cublasLtMatmulPreferenceDestroy)(
+    cublasLtMatmulPreference_t pref);
+
+extern cublasStatus_t (*cublasLtMatmulPreferenceSetAttribute)(
+    cublasLtMatmulPreference_t pref,
+    cublasLtMatmulPreferenceAttributes_t attr,
+    const void *buf,
+    size_t size);
+
+extern cublasStatus_t (*cublasLtMatmulAlgoGetHeuristic)(
+    cublasLtHandle_t handle,
+    cublasLtMatmulDesc_t opdesc,
+    cublasLtMatrixLayout_t adesc,
+    cublasLtMatrixLayout_t bdesc,
+    cublasLtMatrixLayout_t cdesc,
+    cublasLtMatrixLayout_t ddesc,
+    cublasLtMatmulPreference_t preference,
+    int requested_algo_count,
+    cublasLtMatmulHeuristicResult_t heuristic_results[],
+    int *algo_count);
+
+extern cublasStatus_t (*cublasLtMatmul)(
+    cublasLtHandle_t handle,
+    cublasLtMatmulDesc_t desc,
+    const void *alpha,
+    const void *A,
+    cublasLtMatrixLayout_t adesc,
+    const void *B,
+    cublasLtMatrixLayout_t bdesc,
+    const void *beta,
+    const void *C,
+    cublasLtMatrixLayout_t cdesc,
+    void *D,
+    cublasLtMatrixLayout_t ddesc,
+    const cublasLtMatmulAlgo_t *algo,
+    void *workspace,
+    size_t workspace_size,
+    cudaStream_t stream);
+
 // Load CUDA library. Return false if CUDA library not found.
 bool LoadCUDALibrary();
+
+// Check if cuBLASLt is present.
+bool HasCuBLASLt();
 
 }  // namespace myelin
 }  // namespace sling

@@ -349,6 +349,11 @@ class GenericIntVecMatMulBase : public Kernel {
     if (x->dim(0) != 1 || x->dim(1) != W->dim(0)) return false;
     if (y->dim(0) != x->dim(0) || y->dim(1) != W->dim(1)) return false;
 
+    // Transpose not supported.
+    if (step->GetAttr("transpose_a", false)) return false;
+    if (step->GetAttr("transpose_b", false)) return false;
+    if (step->GetAttr("transpose_c", false)) return false;
+
     // The matrix must support column-major order.
     if (!W->SupportsOrder(COLUMN_MAJOR)) return false;
 
@@ -593,6 +598,8 @@ class TransposeTransformer : public Transformer {
       Flow::Operation *t2 = t1->inputs[0]->producer;
       if (t1->outputs[0]->out()) continue;
       if (t1->outputs[0]->usages() != 1) continue;
+      if (t1->HasAttr("perm")) continue;
+      if (t2->HasAttr("perm")) continue;
 
       t2->outputs[0]->shape = t2->inputs[0]->shape;
       t1->outputs[0]->shape = t1->inputs[0]->shape;
@@ -609,10 +616,12 @@ class TransposeTransformer : public Transformer {
       if (transpose->outputs[0]->out()) continue;
       if (reference->outputs[0]->usages() != 1) continue;
       if (reference->outputs[0]->out()) continue;
+      if (transpose->HasAttr("perm")) continue;
 
       Flow::Variable *var = flow->Var(reference->GetAttr("var"));
       if (var == nullptr || var->producer == nullptr) continue;
       if (var->producer->type != "Transpose") continue;
+      if (var->producer->HasAttr("perm")) continue;
 
       // Move reference to the input of the referenced transpose and eliminate
       // transpose.
@@ -636,12 +645,36 @@ class TransposeTransformer : public Transformer {
       updates++;
     }
 
+    // Merge double transpose.
+    for (Flow::Operation *op : flow->Find("Transpose|Transpose")) {
+      Flow::Operation *t1 = op;
+      Flow::Operation *t2 = t1->inputs[0]->producer;
+      if (t2->outputs[0]->out()) continue;
+      if (t2->outputs[0]->usages() != 1) continue;
+
+      int rank1 = t1->outputs[0]->rank();
+      int rank2 = t2->outputs[0]->rank();
+      if (rank1 != rank2) continue;
+
+      Shape perm1;
+      Shape perm2;
+      if (!t1->GetAttr("perm", &perm1)) perm1.reverse(rank1);
+      if (!t2->GetAttr("perm", &perm2)) perm2.reverse(rank2);
+      Shape perm = perm2.permute(perm1);
+      t1->SetAttr("perm", perm);
+
+      t2->outputs[0]->shape = t2->inputs[0]->shape;
+      flow->Eliminate(t2);
+      updates++;
+    }
+
     // Fold transpose of first argument into matmul.
     for (Flow::Operation *op : flow->Find("Transpose|MatMul")) {
       Flow::Operation *matmul = op;
       Flow::Operation *transpose = matmul->inputs[0]->producer;
       if (transpose->outputs[0]->usages() != 1) continue;
       if (transpose->outputs[0]->out()) continue;
+      if (transpose->HasAttr("perm")) continue;
 
       transpose->outputs[0]->shape = transpose->inputs[0]->shape;
       flow->Eliminate(transpose);
@@ -655,6 +688,7 @@ class TransposeTransformer : public Transformer {
       Flow::Operation *transpose = matmul->inputs[1]->producer;
       if (transpose->outputs[0]->usages() != 1) continue;
       if (transpose->outputs[0]->out()) continue;
+      if (transpose->HasAttr("perm")) continue;
 
       transpose->outputs[0]->shape = transpose->inputs[0]->shape;
       flow->Eliminate(transpose);
@@ -668,6 +702,7 @@ class TransposeTransformer : public Transformer {
       Flow::Operation *matmul = transpose->inputs[0]->producer;
       if (matmul->outputs[0]->usages() != 1) continue;
       if (matmul->outputs[0]->out()) continue;
+      if (transpose->HasAttr("perm")) continue;
 
       matmul->outputs[0]->shape = transpose->outputs[0]->shape;
       flow->Eliminate(transpose);
@@ -679,7 +714,7 @@ class TransposeTransformer : public Transformer {
     for (Flow::Operation *op : flow->Find("MatMul")) {
       if (!op->GetAttr("transpose_c", false)) continue;
       if (op->indegree() != 2 || op->outdegree() != 1) continue;
-      std::swap(op->inputs[0], op->inputs[1]);
+      op->SwapInputs();
       bool ta = op->GetAttr("transpose_a", false);
       bool tb = op->GetAttr("transpose_b", false);
       op->SetAttr("transpose_a", !tb);

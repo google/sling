@@ -87,14 +87,47 @@ class Express {
     RECIPROCAL,  // reciprocal value, r=1/x
     SQUARE,      // square, r=x*x
     SQRT,        // square root, r=x^(1/2)
+    RSQRT,       // reciprocal square root, r=1/sqrt(x)=x^(-1/2)
 
     LOG,         // natural logarithm, r=log(x)
     EXP,         // natural exponential function, r=exp(x)
     SIGMOID,     // sigmoid function, r=1/(1+exp(-x))
-    TANH,        // hyperbolic tangent, r=tanh(x)
     ERF,         // error function, r=erf(x)
     LOG2,        // base-2 logarithm, r=log2(x)
     EXP2,        // base-2 exponential function, r=2^x
+    POW,         // power function, r=x^y
+
+    // Trigonometric functions.
+    SIN,         // sine function, r=sin(x)
+    COS,         // cosine function, r=cos(x)
+    TAN,         // tangent function, r=tan(x)
+    COT,         // cotangent, r=cot(x)=1/tan(x)=cos(x)/sin(x)
+    SEC,         // secant, r=sec(x)=1/cos(x)
+    CSC,         // cosecant, r=csc(x)=1/sin(x)
+
+    // Inverse trigonometric functions.
+    ASIN,        // inverse sine function, r=asin(x)
+    ACOS,        // inverse cosine function, r=acos(x)
+    ATAN,        // inverse tangent function, r=atan(x)
+    ACOT,        // inverse cotangent, r=acot(x)
+    ASEC,        // inverse secant, r=asec(x)
+    ACSC,        // inverse cosecant, r=acsc(x)
+
+    // Hyperbolic functions.
+    SINH,        // hyperbolic sine function, r=sinh(x)
+    COSH,        // hyperbolic cosine function, r=cosh(x)
+    TANH,        // hyperbolic tangent, r=tanh(x)
+    COTH,        // hyperbolic cotangent, r=coth(x)
+    SECH,        // hyperbolic secant, r=sech(x)
+    CSCH,        // hyperbolic cosecant, r=csch(x)
+
+    // Inverse hyperbolic functions.
+    ASINH,       // inverse hyperbolic sine function, r=asinh(x)
+    ACOSH,       // inverse hyperbolic cosine function, r=acosh(x)
+    ATANH,       // inverse hyperbolic tangent, r=atanh(x)
+    ACOTH,       // inverse hyperbolic cotangent, r=acoth(x)
+    ASECH,       // inverse hyperbolic secant, r=asech(x)
+    ACSCH,       // inverse hyperbolic cosecant, r=acsch(x)
 
     // Fused multiply.
     MULADD132,   // fused multiply/add, r=a*c+b
@@ -113,24 +146,34 @@ class Express {
     CMPGEOQ,     // compare greater than or equal (ordered, non-signaling)
 
     // Logical operators.
-    AND,        // logical and, p=a&b
-    OR,         // logical or, p=a|b
-    XOR,        // logical exclusive or, p=a^b
-    ANDNOT,     // logical and not, p=a&!b
-    NOT,        // logical not, p=!a
+    AND,         // logical and, p=a&b
+    OR,          // logical or, p=a|b
+    XOR,         // logical exclusive or, p=a^b
+    ANDNOT,      // logical and not, p=a&!b
+    NOT,         // logical not, p=!a
 
     // Conditionals operators.
-    COND,       // conditional expression, r=p?a:b
-    SELECT,     // conditional selection, r=p?a:0
+    COND,        // conditional expression, r=p?a:b
+    SELECT,      // conditional selection, r=p?a:0
 
-    // Miscellaneous.
+    // Rounding operations.
+    FLOOR,       // floor function, round down towards -inf
+    CEIL,        // ceil function, round up towards +inf
+    ROUND,       // round to nearest
+    TRUNC,       // round towards zero
+
+    // Integer operations.
     BITAND,      // bitwise and
     BITOR,       // bitwise or
-    FLOOR,       // floor function
+    BITXOR,      // bitwise xor
+    BITANDNOT,   // bitwise and not
+    BITEQ,       // bitwise equality test
     CVTFLTINT,   // float to integer conversion
     CVTINTFLT,   // integer to float conversion
     CVTEXPINT,   // convert float exponent to integer
     CVTINTEXP,   // convert integer to float exponent
+    QUADSIGN,    // shift bit 2 to sign bit
+    ADDINT,      // integer addition
     SUBINT,      // integer subtraction
 
     // Reductions.
@@ -138,14 +181,20 @@ class Express {
     PRODUCT,     // product reduction
     MIN,         // min reduction
     MAX,         // max reduction
+    ALL,         // and reduction
+    ANY,         // or reduction
+    COUNT,       // predicate reduction
 
     INVALID,     // invalid operation
+    NUM_OPTYPES
   };
 
   // System-defined numeric constants.
   enum ConstantNumber {
     ZERO, ONE, TWO, HALF, N1, P9, N9, LN2, NLN2, LOG2E,
+    PI, PIO2, PIO4, FOPI, TANPIO8, TAN3PIO8,
     PINF, NINF, QNAN, MIN_NORM_POS, INV_MANT_MASK, MAX_MANT,
+    SIGN_MASK, INV_SIGN_MASK, I1, I2, I4, INV_I1,
     CEPHES_SQRTHF,
     CEPHES_LOG_P0, CEPHES_LOG_P1, CEPHES_LOG_P2, CEPHES_LOG_P3, CEPHES_LOG_P4,
     CEPHES_LOG_P5, CEPHES_LOG_P6, CEPHES_LOG_P7, CEPHES_LOG_P8,
@@ -156,6 +205,10 @@ class Express {
     ALPHA_1, ALPHA_3, ALPHA_5, ALPHA_7, ALPHA_9, ALPHA_11, ALPHA_13,
     BETA_0, BETA_2, BETA_4, BETA_6,
     ERF_A1, ERF_A2, ERF_A3, ERF_A4, ERF_A5, ERF_P,
+    CEPHES_MINUS_DP1, CEPHES_MINUS_DP2, CEPHES_MINUS_DP3,
+    SINCOF_P0, SINCOF_P1, SINCOF_P2,
+    COSCOF_P0, COSCOF_P1, COSCOF_P2,
+    ATAN_P0, ATAN_P1, ATAN_P2, ATAN_P3,
     NUM_CONSTANTS,
   };
 
@@ -227,8 +280,8 @@ class Express {
     bool commutative() const {
       return type == ADD || type == MUL ||
              type == MINIMUM || type == MAXIMUM ||
-             type == BITAND || type == BITOR ||
-             type == CMPEQOQ || type == CMPNEUQ ||
+             type == BITAND || type == BITOR || type == BITXOR ||
+             type == CMPEQOQ || type == CMPNEUQ || type == BITEQ ||
              type == AND || type == OR || type == XOR;
     }
 
@@ -239,7 +292,7 @@ class Express {
 
     // Check if operation is a comparison.
     bool compare() const {
-      return type >= CMPEQOQ && type <= CMPGEOQ;
+      return (type >= CMPEQOQ && type <= CMPGEOQ) || type == BITEQ;
     }
 
     // Check if operation is a logic operation.
@@ -254,7 +307,12 @@ class Express {
 
     // Check if operation is a reduction.
     bool reduction() const {
-      return type >= SUM && type <= MAX;
+      return type >= SUM && type <= COUNT;
+    }
+
+    // Check if operation is a predicate reduction.
+    bool preduction() const {
+      return type == ALL || type == ANY;
     }
 
     // Check if operation is a no-op.
@@ -275,12 +333,12 @@ class Express {
     int index = -1;               // operation index
   };
 
-  // Target platform.
-  enum Target {INTEL, NVIDIA};
-
   // Instruction model with instruction forms supported by target architecture
-  // for rewriting expression operations.
+  // for translating and rewriting expressions.
   struct Model {
+    // Instruction model name.
+    const char *name = "Generic";
+
     // Move instruction formats.
     bool mov_reg_reg = false;       // dst = src
     bool mov_reg_imm = false;       // dst = imm
@@ -324,14 +382,23 @@ class Express {
 
     // Only use register operands for logic ops.
     bool logic_in_regs = false;
+
+    // Supported instructions.
+    bool instr[NUM_OPTYPES] = {false};
+
+    // Set supported instructions.
+    void instruction_set(std::initializer_list<OpType> ops) {
+      for (OpType op : ops) instr[op] = true;
+    }
   };
 
-  Express(Target target = INTEL) : target_(target) {}
+  Express() : model_(nullptr) {}
+  Express(const Model *model) : model_(model) {}
   ~Express();
 
   // Parse an expression recipe and add it to the expression. Intrinsic
   // functions can be expanded into basic operations.
-  void Parse(const string &recipe, bool expand = false);
+  void Parse(const string &recipe);
 
   // Return recipe for expression.
   void GetRecipe(string *recipe) const;
@@ -348,7 +415,10 @@ class Express {
 
   // Add function with optional intrinsics expansion. The result variable is not
   // set for the returned op.
-  Op *Function(OpType type, std::vector<Var *> &args, bool expand = false);
+  Op *Function(OpType type, std::vector<Var *> &args);
+
+  // Expand intrinsic operation or return null if no expansion is available.
+  Var *Expand(OpType type, std::vector<Var *> &args);
 
   // Find variable in expression or add a new variable if it does not exist.
   Var *Variable(VarType type, int id);
@@ -370,6 +440,9 @@ class Express {
 
   // Check if expression has node of a certain type.
   bool Has(OpType type) const { return NumOps(type) > 0; }
+
+  // Check if expression has any nodes of a set of type.
+  bool Has(std::initializer_list<OpType> ops) const;
 
   // Compact temporary variable ids and return the number of temporary variable.
   int CompactTempVars();
@@ -403,6 +476,10 @@ class Express {
   // expression. The variables are mapped through the mapping which maps
   // variables in the other expression to variables in this expression.
   void Merge(Express *other, const Map &varmap);
+
+  // Translate expression replacing instructions that are not supported by
+  // instruction model with more basic instructions.
+  void Translate(Express *translated) const;
 
   // Fuse operations. All occurrences of outer(inner(a,b),c) are changed to
   // left(a,b,c) and all occurrences of outer(a,inner(b,c)) to right(a,b,c).
@@ -490,6 +567,7 @@ class Express {
   Var *Zero() { return Number(ZERO); }
   Var *One() { return Number(ONE); }
   Var *Two() { return Number(TWO); }
+  Var *Ones() { return Number(QNAN); }
 
   Var *CmpEq(Var *x, Var *y) { return Do(CMPEQOQ, x, y); }
   Var *CmpNe(Var *x, Var *y) { return Do(CMPNEUQ, x, y); }
@@ -500,37 +578,110 @@ class Express {
 
   Var *And(Var *x, Var *y) { return Do(AND, x, y); }
   Var *Or(Var *x, Var *y) { return Do(OR, x, y); }
-  Var *Not(Var *x) { return Do(NOT, x); }
+  Var *Xor(Var *x, Var *y) { return Do(XOR, x, y); }
+  Var *Not(Var *x) {
+    return Supports(NOT) ? Do(NOT, x) : Xor(Ones(), x);
+  }
+  Var *AndNot(Var *x, Var *y) {
+    return Supports(ANDNOT) ? Do(ANDNOT, x) : And(Not(x), y);
+  }
 
   Var *Cond(Var *p, Var *x, Var *y) { return Do(COND, p, x, y); }
-  Var *Select(Var *p, Var *x) { return Do(SELECT, p, x); }
+  Var *Select(Var *p, Var *x) {
+    return Supports(SELECT) ? Do(SELECT, p, x) : Cond(p, x, Zero());
+  }
 
   // Build expressions for intrinsic functions.
   Var *Log(Var *x);
   Var *Exp(Var *x);
-  Var *Tanh(Var *x);
   Var *Erf(Var *x);
+
+  // Build expressions for trigonometric functions.
+  Var *Trig(OpType type, Var *x);
+  Var *Sin(Var *x) { return Trig(SIN, x); }
+  Var *Cos(Var *x) { return Trig(COS, x); }
+  Var *Tan(Var *x) { return Trig(TAN, x); }
+  Var *Cot(Var *x) { return Trig(COT, x); }
+  Var *Sec(Var *x) { return Trig(SEC, x); }
+  Var *Csc(Var *x) { return Trig(CSC, x); }
+
+  // Build expressions for inverse trigonometric functions.
+  Var *Asin(Var *x);
+  Var *Acos(Var *x);
+  Var *Atan(Var *x);
+  Var *Acot(Var *x) { return Sub(Number(PIO2), Atan(x)); }
+  Var *Asec(Var *x) { return Acos(Reciprocal(x)); }
+  Var *Acsc(Var *x) { return Asin(Reciprocal(x)); }
+
+  // Build expressions for hyperbolic functions.
+  Var *HyperTrig(OpType type, Var *x);
+  Var *Sinh(Var *x) { return HyperTrig(SINH, x); }
+  Var *Cosh(Var *x) { return HyperTrig(COSH, x); }
+  Var *Tanh(Var *x);
+  Var *Coth(Var *x) { return HyperTrig(COTH, x); }
+  Var *Sech(Var *x) { return HyperTrig(SECH, x); }
+  Var *Csch(Var *x) { return HyperTrig(CSCH, x); }
+
+  // Build expressions for inverse hyperbolic functions.
+  Var *Asinh(Var *x) {
+    return Log(Add(x, Sqrt(Add(Square(x), One()))));
+  }
+  Var *Acosh(Var *x) {
+    return Log(Add(x, Sqrt(Sub(Square(x), One()))));
+  }
+  Var *Atanh(Var *x) {
+    return Mul(Log(Div(Add(One(), x), Sub(One(), x))), Number(HALF));
+  }
+  Var *Acoth(Var *x) {
+    return Mul(Log(Div(Add(x, One()), Sub(x, One()))), Number(HALF));
+  }
+  Var *Asech(Var *x) {
+    return Log(Add(Reciprocal(x), Sqrt(Sub(Square(Reciprocal(x)), One()))));
+  }
+  Var *Acsch(Var *x) {
+    return Log(Add(Reciprocal(x), Sqrt(Add(Square(Reciprocal(x)), One()))));
+  }
 
   // Build expressions for composite functions.
   Var *MulAdd(Var *x, Var *y, Var *z) { return Add(Mul(x, y), z); }
-  Var *Neg(Var *x) { return target_ == NVIDIA ? Do(NEG, x) : Sub(Zero(), x); }
+  Var *Neg(Var *x) {
+    return Supports(NEG) ? Do(NEG, x) : Sub(Zero(), x);
+  }
   Var *Abs(Var *x) {
-    return target_ == NVIDIA ? Do(ABS, x) : Maximum(x, Neg(x));
+    return Supports(ABS) ? Do(ABS, x) : Maximum(x, Neg(x));
   }
   Var *Sign(Var *x) {
+    if (Supports(SIGN)) return Do(SIGN, x);
     return Cond(CmpLt(x, Zero()), Number(N1),
-                                  Cond(CmpGt(x, Zero()), One(), Zero()));
+                                  Select(CmpGt(x, Zero()), One()));
   }
-  Var *Relu(Var *x) { return Maximum(x, Zero()); }
+  Var *Relu(Var *x) {
+    return Supports(RELU) ? Do(RELU, x) : Maximum(x, Zero());
+  }
   Var *Softsign(Var *x) { return Div(x, Add(Abs(x), One())); }
   Var *Softplus(Var *x) { return Log(Add(Exp(x), One())); }
   Var *LogSigmoid(Var *x) { return Neg(Softplus(Neg(x))); }
   Var *Reciprocal(Var *x) {
-    return target_ == NVIDIA ? Do(RECIPROCAL, x) : Div(One(), x);
+    return Supports(RECIPROCAL) ? Do(RECIPROCAL, x) : Div(One(), x);
   }
-  Var *Square(Var *x) { return Mul(x, x); }
+  Var *Square(Var *x) {
+    return Supports(SQUARE) ? Do(SQUARE, x) : Mul(x, x);
+  }
   Var *Sqrt(Var *x) { return Do(SQRT, x); }
+  Var *Rsqrt(Var *x) {
+    return Supports(RSQRT) ? Do(RSQRT, x) : Reciprocal(Sqrt(x));
+  }
+  Var *Pow(Var *x, Var *y) {
+    if (Supports(POW)) return Do(POW, x, y);
+    if (Supports(EXP2) && Supports(LOG2)) return Do(EXP2, Mul(y, Do(LOG2, x)));
+    return Exp(Mul(y, Log(x)));
+  }
   Var *Sigmoid(Var *x) { return Reciprocal(Add(One(), Exp(Neg(x)))); }
+
+  Var *Sum(Var *x) { return Do(SUM, x); }
+  Var *Count(Var *p) {
+    return Supports(COUNT) ? Do(COUNT, p) : Sum(Select(p, One()));
+  }
 
   // Commute operation so op(a,b) = commute(op)(b,a).
   static OpType Commute(OpType type);
@@ -545,8 +696,12 @@ class Express {
   static float NumericFlt32(int number) { return constants[number].flt; }
   static double NumericFlt64(int number) { return constants[number].dbl; }
 
-  // Return system constant number for identity value for op.
-  static int IdentityValue(OpType type);
+  // Return system constant number for neutral element for op.
+  static int NeutralValue(OpType type);
+
+  // Set approximate math flag.
+  bool approx() const { return approx_; }
+  void set_approx(bool approx) { approx_ = approx; }
 
  private:
   // Try to eliminate identical operations from expression. Return true if any
@@ -565,6 +720,12 @@ class Express {
   // Remove operation.
   void RemoveOp(Op *op);
 
+  // Check if operation is supported by instruction model.
+  bool Supports(OpType type) const {
+    if (!approx_ && (type == RECIPROCAL || type == RSQRT)) return false;
+    return model_ == nullptr || model_->instr[type];
+  }
+
   // Variables in expression.
   std::vector<Var *> vars_;
 
@@ -575,8 +736,11 @@ class Express {
   // body is 0 (the default), there are no loop invariant instructions.
   int body_ = 0;
 
-  // Target platform.
-  Target target_;
+  // Target instruction model.
+  const Model *model_ = nullptr;
+
+  // Allow approximate math functions.
+  bool approx_ = false;
 
   // System-defined numeric constants.
   struct Constant { float flt; double dbl; };

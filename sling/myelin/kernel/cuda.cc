@@ -20,6 +20,9 @@ namespace myelin {
 // cuda-matmul.cc
 void RegisterCUDAMatMulLibrary(Library *library);
 
+// cublas-matmul.cc
+void RegisterCUBLASMatMulLibrary(Library *library);
+
 // cuda-arithmetic.cc
 void RegisterCUDAArithmeticLibrary(Library *library);
 
@@ -29,6 +32,7 @@ void RegisterCUDAArrayLibrary(Library *library);
 // Register CUDA kernels.
 void RegisterCUDALibrary(Library *library) {
   RegisterCUDAMatMulLibrary(library);
+  RegisterCUBLASMatMulLibrary(library);
   RegisterCUDAArithmeticLibrary(library);
   RegisterCUDAArrayLibrary(library);
 }

@@ -57,6 +57,9 @@ class Gradients : public FlowBuilder {
   void MarkReferences();
 
  private:
+  // Reference to primal function.
+  Flow::Function *primal_ = nullptr;
+
   // Get reference to primal variable.
   Flow::Variable *GetReference(Flow::Variable *x);
 
@@ -67,7 +70,7 @@ class Gradients : public FlowBuilder {
   std::unordered_map<Flow::Variable *, Flow::Variable *> terms_;
 
   // Instance variable pointing to primal variables.
-  Flow::Variable *instance_;
+  Flow::Variable *instance_ = nullptr;
 
   // References to primal variables (lazily initialized).
   std::unordered_map<Flow::Variable *, Flow::Variable *> refs_;

@@ -38,10 +38,9 @@ PTXMacroAssembler::PTXMacroAssembler(const string &name): PTXAssembler(name) {
   data_ = reg("b64", "data");
   emit("ld_param_b64", data_, PTXAddr(instance));
 
-  // Grid size for kernel.
-  grid_dim_[0] = 1;
-  grid_dim_[1] = 1;
-  grid_dim_[2] = 1;
+  // Grid and block size for kernel.
+  grid_dim_[0] = grid_dim_[1] = grid_dim_[2] = 1;
+  block_dim_[0] = block_dim_[1] = block_dim_[2] = 0;
 }
 
 void PTXMacroAssembler::LoadTensorAddress(const PTXReg &reg, Tensor *tensor) {
@@ -60,23 +59,33 @@ void PTXMacroAssembler::LoadTensorAddress(const PTXReg &reg, Tensor *tensor) {
   }
 }
 
-void PTXMacroAssembler::GetThreadIndex(const PTXReg &idx, int d) {
+void PTXMacroAssembler::LoadThreadIndex(const PTXReg &idx, int d) {
   static const char *thridx[] = {"thridxx", "thridxy", "thridxz"};
-  static const char *tid[] = {"%tid.x", "%tid.y", "%tid.z"};
-
   static const char *blkidx[] = {"blkidxx", "blkidxy", "blkidxz"};
-  static const char *ctaid[] = {"%ctaid.x", "%ctaid.y", "%ctaid.z"};
-
   static const char *blkdim[] = {"blkdimx", "blkdimy", "blkdimz"};
-  static const char *ntid[] = {"%ntid.x", "%ntid.y", "%ntid.z"};
 
   PTXReg tidx = reg("b32", thridx[d]);
   PTXReg bidx = reg("b32", blkidx[d]);
   PTXReg bdim = reg("b32", blkdim[d]);
-  emit("mov.u32", tidx, PTXLiteral(tid[d]));
-  emit("mov.u32", bidx, PTXLiteral(ctaid[d]));
-  emit("mov.u32", bdim, PTXLiteral(ntid[d]));
+  LoadBlockThreadIndex(tidx, d);
+  LoadBlockIndex(bidx, d);
+  LoadBlockDim(bdim, d);
   emit("mad.lo.u32", idx, bidx, bdim, tidx);
+}
+
+void PTXMacroAssembler::LoadBlockThreadIndex(const PTXReg &idx, int d) {
+  static const char *tid[] = {"%tid.x", "%tid.y", "%tid.z"};
+  emit("mov.u32", idx, PTXLiteral(tid[d]));
+}
+
+void PTXMacroAssembler::LoadBlockIndex(const PTXReg &idx, int d) {
+  static const char *ctaid[] = {"%ctaid.x", "%ctaid.y", "%ctaid.z"};
+  emit("mov.u32", idx, PTXLiteral(ctaid[d]));
+}
+
+void PTXMacroAssembler::LoadBlockDim(const PTXReg &idx, int d) {
+  static const char *ntid[] = {"%ntid.x", "%ntid.y", "%ntid.z"};
+  emit("mov.u32", idx, PTXLiteral(ntid[d]));
 }
 
 bool CUDAKernel::Supports(Step *step) {
@@ -124,21 +133,24 @@ void CUDAKernel::Generate(Step *step, MacroAssembler *masm) {
   int x = ptx.grid_dim(0);
   int y = ptx.grid_dim(1);
   int z = ptx.grid_dim(2);
-  int block_dim_x = 1;
-  int block_dim_y = 1;
-  int block_dim_z = 1;
-  if (x >= block_size) {
-    // The x dimension takes up the whole block.
-    block_dim_x = block_size;
-  } else {
-    // Distribute block to y dimension.
-    block_dim_x = x;
-    block_dim_y = block_size / block_dim_x;
-    if (y < block_dim_y) {
-      // Distribute block to z dimension.
-      block_dim_y = y;
-      block_dim_z = block_size / (block_dim_x * block_dim_y);
-      if (z < block_dim_z) block_dim_z = z;
+  int block_dim_x = ptx.block_dim(0);
+  int block_dim_y = ptx.block_dim(1);
+  int block_dim_z = ptx.block_dim(2);
+  if (ptx.block_size() == 0) {
+    block_dim_x = block_dim_y = block_dim_z = 1;
+    if (x >= block_size) {
+      // The x dimension takes up the whole block.
+      block_dim_x = block_size;
+    } else {
+      // Distribute block to y dimension.
+      block_dim_x = x;
+      block_dim_y = block_size / block_dim_x;
+      if (y < block_dim_y) {
+        // Distribute block to z dimension.
+        block_dim_y = y;
+        block_dim_z = block_size / (block_dim_x * block_dim_y);
+        if (z < block_dim_z) block_dim_z = z;
+      }
     }
   }
 
@@ -154,17 +166,6 @@ void CUDAKernel::Generate(Step *step, MacroAssembler *masm) {
           << grid_dim_x << "," << grid_dim_y << "," << grid_dim_z
           << "), block ("
           << block_dim_x << "," << block_dim_y << "," << block_dim_z << ")";
-
-  // Get offset of stream in data instance block.
-  int streamofs;
-  if (step->task_index() == -1) {
-    // Main task stream is stored in runtime block.
-    streamofs = offsetof(CUDAInstance, mainstream);
-  } else {
-    // Parallel task stream is stored in task block.
-    streamofs = step->cell()->task_offset(step->task_index()) +
-                 offsetof(Task, state);
-  }
 
   // Build parameter array with device instance address as the only parameter.
   Register params = tmpreg;
@@ -183,7 +184,7 @@ void CUDAKernel::Generate(Step *step, MacroAssembler *masm) {
   // Set up stack-based parameters for launching kernel.
   __ pushq(Immediate(0));  // extra options
   __ pushq(params);
-  __ pushq(Operand(masm->instance(), streamofs));
+  __ pushq(Operand(masm->instance(), StreamOffset(step)));
   __ pushq(Immediate(0));  // shared memory
   __ pushq(Immediate(block_dim_z));
 

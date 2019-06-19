@@ -38,7 +38,7 @@ class CUDARuntime : public Runtime {
 
   // Connect runtime to CUDA devices. If the device number is -1 the runtime
   // tries to selected the best GPU device for computations.
-  void Connect(int device_number = -1);
+  void Connect(int device_number = -1, int flags = 0);
 
   // Disconnect runtime from device.
   void Disconnect();
@@ -121,6 +121,9 @@ class CUDARuntime : public Runtime {
   // CUDA device for computations.
   CUDADevice *device_ = nullptr;
 };
+
+// Get offset of stream in data instance block.
+int StreamOffset(Step *step);
 
 }  // namespace myelin
 }  // namespace sling

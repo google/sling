@@ -192,6 +192,34 @@ class Profile {
   std::vector<StepInfo> steps_;
 };
 
+class ProfileOverview {
+ public:
+  // Add profile informaiton for cell.
+  void Add(const Profile &profile) {
+    cells_.emplace_back(profile);
+    total_time_ += profile.time() * profile.invocations();
+  }
+
+  // Profile summary report in ASCII format.
+  string ASCIIReport() const;
+
+ private:
+  // Accumulated profile information for cell.
+  struct CellInfo {
+    CellInfo(const Profile &profile)
+      : cell(profile.cell()),
+        invocations(profile.invocations()),
+        time(profile.time()) {}
+
+    const Cell *cell;   // network cell
+    int64 invocations;  // number of invocation of cell computation
+    double time;        // execution time per invocation in microseconds
+  };
+
+  std::vector<CellInfo> cells_;  // profile information for each cell
+  double total_time_ = 0.0;      // total execution time in microseconds
+};
+
 // Data profile for cell instance tensor allocation.
 class DataProfile {
  public:

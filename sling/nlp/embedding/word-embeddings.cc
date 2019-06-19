@@ -374,21 +374,20 @@ class WordEmbeddingsTrainer : public Process {
     std::vector<int> words;
 
     // Set up model compute instances.
-    myelin::Instance l0(model->GetCell(flow_.layer0));
-    myelin::Instance l1(model->GetCell(flow_.layer1));
-    myelin::Instance l0b(model->GetCell(flow_.layer0b));
+    myelin::Instance l0(flow_.layer0);
+    myelin::Instance l1(flow_.layer1);
+    myelin::Instance l0b(flow_.layer0b);
 
-    int *features = l0.Get<int>(model->GetParameter(flow_.fv));
+    int *features = l0.Get<int>(flow_.fv);
     int *fend = features + flow_.in_features;
-    int *target = l1.Get<int>(model->GetParameter(flow_.target));
-    float *label = l1.Get<float>(model->GetParameter(flow_.label));
-    float *alpha = l1.Get<float>(model->GetParameter(flow_.alpha));
+    int *target = l1.Get<int>(flow_.target);
+    float *label = l1.Get<float>(flow_.label);
+    float *alpha = l1.Get<float>(flow_.alpha);
     *alpha = learning_rate_;
-    myelin::Tensor *error = model->GetParameter(flow_.error);
 
-    l1.Set(model->GetParameter(flow_.l1_l0), &l0);
-    l0b.Set(model->GetParameter(flow_.l0b_l0), &l0);
-    l0b.Set(model->GetParameter(flow_.l0b_l1), &l1);
+    l1.Set(flow_.l1_l0, &l0);
+    l0b.Set(flow_.l0b_l0, &l0);
+    l0b.Set(flow_.l0b_l1, &l1);
 
     RecordFileOptions options;
     RecordReader input(filename, options);
@@ -454,7 +453,7 @@ class WordEmbeddingsTrainer : public Process {
 
           // Propagate hidden to output and back. This also accumulates the
           // errors that should be propagated back to the input layer.
-          l1.Clear(error);
+          l1.Clear(flow_.error);
           *label = 1.0;
           *target = words[pos];
           l1.Compute();

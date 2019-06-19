@@ -40,6 +40,8 @@ class CUDACalculate : public CUDAKernel {
     std::vector<bool> pred;   // predicate flags for temporary registers
     PTXReg offset;            // element offset register
     PTXReg addr;              // address register
+    PTXReg predval;           // temporary register for predicate conversion
+    PTXReg castval;           // temporary register for downcast
   };
 
   CUDACalculate(const string &name, const string &operation, int arity = -1)
@@ -56,13 +58,16 @@ class CUDACalculate : public CUDAKernel {
     if (step->type() != operation_) return false;
     if (arity_ != -1 && step->indegree() != arity_) return false;
 
-    // Check that inputs and outputs have the compatible types and shapes.
-    if (step->indegree() < 1 || step->outdegree() < 1) return false;
-    Type type = step->output(0)->type();
-    const Shape &shape = step->output(0)->shape();
+    // Check that inputs and outputs have compatible types and shapes.
+    bool assign = step->type() == "Assign";
+    if (step->indegree() < 1) return false;
+    if (!assign && step->outdegree() < 1) return false;
+    Tensor *prototype = step->GetPrototype();
+    Type type = prototype->type();
+    const Shape &shape = prototype->shape();
     for (auto *input : step->inputs()) {
       if (input->type() != type) return false;
-      if (!input->Compatible(step->output(0))) return false;
+      if (!input->Compatible(prototype)) return false;
 
       // NB: general broadcasting not yet supported.
       if (input->elements() != shape.elements() && input->elements() != 1) {
@@ -72,29 +77,18 @@ class CUDACalculate : public CUDAKernel {
     for (auto *output : step->outputs()) {
       if (output->type() != type) return false;
       if (output->shape() != shape) return false;
-      if (output->elements() != shape.elements()) return false;
     }
 
     // Check that element type is supported by CUDA.
     if (TypeTraits::of(type).ptx() == nullptr) return false;
 
-    // Dense encoding required.
-    for (auto *input : step->inputs()) input->RequireDense();
-    for (auto *output : step->outputs()) output->RequireDense();
-
     return true;
   }
 
   void Adjust(Step *step) override {
-    // Inputs and ouputs must be in standard format.
-   for (auto *input : step->inputs()) {
-      input->RequireDense();
-      input->RequireStandardOrder();
-    }
-    for (auto *output : step->outputs()) {
-      output->RequireDense();
-      output->RequireStandardOrder();
-    }
+    // Inputs and ouputs must be dense.
+    for (auto *input : step->inputs()) input->RequireDense();
+    for (auto *output : step->outputs()) output->RequireDense();
 
     // Enable sharing of inputs and outputs.
     for (int i = 0; i < step->indegree(); ++i) {
@@ -104,12 +98,45 @@ class CUDACalculate : public CUDAKernel {
         }
       }
     }
+
+    if (step->type() == "Assign") {
+      // Link output reference to assignment target.
+      if (step->outdegree() == 1) {
+        step->input(0)->Link(step->output(0));
+      }
+    } else {
+      // Enable sharing of inputs and outputs.
+      Express expr(&ptx_model);
+      InitExpression(step, &expr);
+      expr.ComputeLiveRanges();
+      for (int i = 0; i < step->indegree(); ++i) {
+        Tensor *input = step->input(i);
+        Express::Var *ivar = expr.Lookup(Express::INPUT, i);
+        if (ivar == nullptr) continue;
+
+        for (int j = 0; j < step->outdegree(); ++j) {
+          Tensor *output = step->output(j);
+          Express::Var *ovar = expr.Lookup(Express::OUTPUT, j);
+          if (ovar == nullptr) continue;
+
+          // The input and output can be shared if they have the same format and
+          // their live ranges do not overlap.
+          if (input->shape() == output->shape() && !ivar->overlaps(ovar)) {
+            if (step->AllowInPlace(i, j)) {
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   void GeneratePTX(Step *step, PTXMacroAssembler *ptx)  override {
     // Parse expression for evaluation.
-    Express expr(Express::NVIDIA);
-    InitExpression(step, &expr, true);
+    Express expr(&ptx_model);
+    InitExpression(step, &expr);
+    Express translated(&ptx_model);
+    expr.Translate(&translated);
 
     // Set grid size. Use one thread for each element.
     Tensor *output = step->output(0);
@@ -128,16 +155,16 @@ class CUDACalculate : public CUDAKernel {
     comp.size = traits.size();
 
     // Optimize expression.
-    expr.EliminateCommonSubexpressions();
-    expr.CacheResults();
+    translated.EliminateCommonSubexpressions();
+    translated.CacheResults();
 
     // Rewrite expression.
     Express instrs;
-    CHECK(expr.Generate(ptx_model, &instrs));
+    CHECK(translated.Generate(ptx_model, &instrs));
 
     // Get grid location.
     ptx_decl(b32, idx);
-    ptx->GetThreadIndex(idx, 0);
+    ptx->LoadThreadIndex(idx, 0);
 
     // Check bounds.
     ptx_decl(pred, outside);
@@ -193,10 +220,10 @@ class CUDACalculate : public CUDAKernel {
           }
           break;
         case Express::DIV:
-          if (IsFloat(comp.dtype)) {
+          if (comp.dtype == DT_FLOAT) {
             GenerateBinaryOp("div.approx", instr, &comp);
           } else {
-            GenerateBinaryOp("div", instr, &comp);
+            GenerateBinaryOp("div.rn", instr, &comp);
           }
           break;
         case Express::MINIMUM:
@@ -212,16 +239,37 @@ class CUDACalculate : public CUDAKernel {
           GenerateUnaryOp("abs", instr, &comp);
           break;
         case Express::SQRT:
-          GenerateUnaryOp("sqrt.approx", instr, &comp);
+          if (comp.dtype == DT_FLOAT) {
+            GenerateUnaryOp("sqrt.approx", instr, &comp);
+          } else {
+            GenerateUnaryOp("sqrt.rn", instr, &comp);
+          }
+          break;
+        case Express::RSQRT:
+          if (comp.dtype == DT_FLOAT) {
+            GenerateUnaryOp("rsqrt.approx", instr, &comp);
+          } else {
+            GenerateUnaryOp("rsqrt.rn", instr, &comp);
+          }
           break;
         case Express::RECIPROCAL:
-          GenerateUnaryOp("rcp.approx", instr, &comp);
+          if (comp.dtype == DT_FLOAT) {
+            GenerateUnaryOp("rcp.approx", instr, &comp);
+          } else {
+            GenerateUnaryOp("rcp.rn", instr, &comp);
+          }
           break;
         case Express::LOG2:
-          GenerateUnaryOp("lg2.approx", instr, &comp);
+          GenerateUnaryOp("lg2.approx", instr, &comp, comp.dtype == DT_DOUBLE);
           break;
         case Express::EXP2:
-          GenerateUnaryOp("ex2.approx", instr, &comp);
+          GenerateUnaryOp("ex2.approx", instr, &comp, comp.dtype == DT_DOUBLE);
+          break;
+        case Express::SIN:
+          GenerateUnaryOp("sin.approx", instr, &comp, comp.dtype == DT_DOUBLE);
+          break;
+        case Express::COS:
+          GenerateUnaryOp("cos.approx", instr, &comp, comp.dtype == DT_DOUBLE);
           break;
         case Express::CMPEQOQ:
           GenerateBinaryOp("setp.eq", instr, &comp);
@@ -261,6 +309,13 @@ class CUDACalculate : public CUDAKernel {
         case Express::SELECT:
           GenerateSelect(instr, &comp);
           break;
+        case Express::SUM:
+        case Express::PRODUCT:
+        case Express::MIN:
+        case Express::MAX:
+          // Only trivial reductions supported.
+          GenerateStore(instr, &comp);
+          break;
         default:
           LOG(FATAL) << "Instruction not supported in CUDA: "
                      <<  instr->AsInstruction();
@@ -273,10 +328,12 @@ class CUDACalculate : public CUDAKernel {
   }
 
   int64 Complexity(const Step *step) override {
-    Express expr(Express::NVIDIA);
-    InitExpression(step, &expr, true);
+    Express expr(&ptx_model);
+    InitExpression(step, &expr);
+    Express translated(&ptx_model);
+    expr.Translate(&translated);
     Tensor *output = step->output(0);
-    return output->shape().elements() * expr.Complexity();
+    return output->shape().elements() * translated.Complexity();
   }
 
   void GenerateLoad(Express::Op *instr, Compilation *comp) {
@@ -285,39 +342,15 @@ class CUDACalculate : public CUDAKernel {
     CHECK_EQ(instr->result->type, Express::TEMP);
     PTXReg &dst = comp->reg[instr->dst];
     switch (instr->args[0]->type) {
-      case Express::INPUT: {
+      case Express::INPUT:
+      case Express::CONST: {
         // mov reg, [ptr].
         Tensor *input = comp->step->input(instr->args[0]->id);
         if (input->constant() && input->elements() == 1) {
           // Load scalar constant.
-          switch (comp->dtype) {
-            case DT_FLOAT:
-              ptx->emit(PTXInstr("mov", comp->type), dst,
-                        PTXFloat(input->value<float>()));
-              break;
-            case DT_DOUBLE:
-              ptx->emit(PTXInstr("mov", comp->type), dst,
-                        PTXFloat(input->value<double>()));
-              break;
-            case DT_INT8:
-              ptx->emit(PTXInstr("mov", comp->type), dst,
-                        PTXImm(input->value<int8>()));
-              break;
-            case DT_INT16:
-              ptx->emit(PTXInstr("mov", comp->type), dst,
-                        PTXImm(input->value<int16>()));
-              break;
-            case DT_INT32:
-              ptx->emit(PTXInstr("mov", comp->type), dst,
-                        PTXImm(input->value<int32>()));
-              break;
-            case DT_INT64:
-              ptx->emit(PTXInstr("mov", comp->type), dst,
-                        PTXImm(input->value<int64>()));
-              break;
-            default:
-              LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
-          }
+          PTXArg *constant = GetConstantArg(input);
+          ptx->emit(PTXInstr("mov", comp->type), dst, *constant);
+          delete constant;
         } else {
           // Load from tensor.
           ptx->LoadTensorAddress(comp->addr, input);
@@ -330,16 +363,12 @@ class CUDACalculate : public CUDAKernel {
         break;
       }
 
-      case Express::NUMBER:
-        // mov reg, imm.
-        if (IsFloat(comp->dtype)) {
-          ptx->emit(PTXInstr("mov", comp->type), dst,
-                    PTXFloat(Express::NumericFlt32(instr->args[0]->id)));
-        } else {
-          ptx->emit(PTXInstr("mov", comp->type), dst,
-                    PTXImm(Express::NumericFlt32(instr->args[0]->id)));
-        }
+      case Express::NUMBER: {
+        PTXArg *constant = GetNumberArg(instr->args[0], comp->dtype);
+        ptx->emit(PTXInstr("mov", comp->type), dst, *constant);
+        delete constant;
         break;
+      }
 
       default:
         LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
@@ -358,14 +387,25 @@ class CUDACalculate : public CUDAKernel {
     if (output->elements() != 1) {
       ptx->emit("add.u64", comp->addr, comp->addr, comp->offset);
     }
-    ptx->emit(PTXInstr("st.global", comp->type), PTXAddr(comp->addr), src);
+    if (comp->pred[instr->src]) {
+      // Convert predicate to output type.
+      PTXReg &tmp = comp->predval;
+      if (tmp.none()) tmp = ptx->reg(comp->type, "pconv");
+      ptx->emit(PTXInstr("selp", comp->type), tmp,
+                         PTXConst(PTXConst::TRUE, comp->type),
+                         PTXConst(PTXConst::FALSE, comp->type),
+                         src);
+      ptx->emit(PTXInstr("st.global", comp->type), PTXAddr(comp->addr), tmp);
+    } else {
+      ptx->emit(PTXInstr("st.global", comp->type), PTXAddr(comp->addr), src);
+    }
   }
 
   void GenerateBinaryOp(const char *op, Express::Op *instr, Compilation *comp) {
     CHECK_EQ(instr->arity(), 2);
     CHECK_EQ(instr->result->type, Express::TEMP);
     CHECK_EQ(instr->args[0]->type, Express::TEMP);
-    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
+    const char *type = comp->pred[instr->src] ? "pred" : comp->type;
     switch (instr->args[1]->type) {
       case Express::TEMP:
         // op reg,reg,reg.
@@ -375,51 +415,73 @@ class CUDACalculate : public CUDAKernel {
                         comp->reg[instr->src2]);
         break;
 
-      case Express::NUMBER:
-        // op reg,reg,imm.
-        if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr(op, type),
-                          comp->reg[instr->dst],
-                          comp->reg[instr->src],
-                          PTXFloat(Express::NumericFlt32(instr->args[1]->id)));
-        } else {
-          comp->ptx->emit(PTXInstr(op, type),
-                          comp->reg[instr->dst],
-                          comp->reg[instr->src],
-                          PTXImm(Express::NumericFlt32(instr->args[1]->id)));
-        }
+      case Express::NUMBER: {
+        PTXArg *constant = GetNumberArg(instr->args[1], comp->dtype);
+        comp->ptx->emit(PTXInstr(op, type),
+                        comp->reg[instr->dst],
+                        comp->reg[instr->src],
+                        *constant);
+        delete constant;
         break;
+      }
+
+      case Express::CONST: {
+        Tensor *input = comp->step->input(instr->args[1]->id);
+        PTXArg *constant = GetConstantArg(input);
+        comp->ptx->emit(PTXInstr(op, type),
+                        comp->reg[instr->dst],
+                        comp->reg[instr->src],
+                        *constant);
+        delete constant;
+        break;
+      }
 
       default:
         LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
     }
   }
 
-  void GenerateUnaryOp(const char *op, Express::Op *instr, Compilation *comp) {
+  void GenerateUnaryOp(const char *op, Express::Op *instr, Compilation *comp,
+                       bool downcast = false) {
     CHECK_EQ(instr->arity(), 1);
     CHECK_EQ(instr->result->type, Express::TEMP);
     CHECK_NE(instr->dst, -1);
-    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
+    PTXMacroAssembler *ptx = comp->ptx;
+    const char *type = comp->pred[instr->src] ? "pred" : comp->type;
     switch (instr->args[0]->type) {
       case Express::TEMP:
         // op reg, reg.
-        comp->ptx->emit(PTXInstr(op, type),
-                        comp->reg[instr->dst],
-                        comp->reg[instr->src]);
-        break;
-
-      case Express::NUMBER:
-        // op reg, imm.
-        if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr(op, type),
-                          comp->reg[instr->dst],
-                          PTXFloat(Express::NumericFlt32(instr->args[0]->id)));
+        if (downcast) {
+          PTXReg &tmp = comp->castval;
+          if (tmp.none()) tmp = ptx->reg("f32", "dcast");
+          ptx->emit(PTXInstr("cvt.rn.f32.f64"), tmp, comp->reg[instr->src]);
+          ptx->emit(PTXInstr(op, "f32"), tmp, tmp);
+          ptx->emit(PTXInstr("cvt.f64.f32"), comp->reg[instr->dst], tmp);
         } else {
-          comp->ptx->emit(PTXInstr(op, type),
-                          comp->reg[instr->dst],
-                          PTXImm(Express::NumericFlt32(instr->args[0]->id)));
+          ptx->emit(PTXInstr(op, type),
+                    comp->reg[instr->dst],
+                    comp->reg[instr->src]);
         }
         break;
+
+      case Express::NUMBER: {
+        PTXArg *constant = GetNumberArg(instr->args[1], comp->dtype);
+        comp->ptx->emit(PTXInstr(op, type),
+                        comp->reg[instr->dst],
+                        *constant);
+        delete constant;
+        break;
+      }
+
+      case Express::CONST: {
+        Tensor *input = comp->step->input(instr->args[1]->id);
+        PTXArg *constant = GetConstantArg(input);
+        comp->ptx->emit(PTXInstr(op, type),
+                        comp->reg[instr->dst],
+                        *constant);
+        delete constant;
+        break;
+      }
 
       default:
         LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
@@ -430,31 +492,37 @@ class CUDACalculate : public CUDAKernel {
     CHECK_EQ(instr->arity(), 3);
     CHECK_EQ(instr->result->type, Express::TEMP);
     CHECK_EQ(instr->args[1]->type, Express::TEMP);
-    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
     switch (instr->args[2]->type) {
       case Express::TEMP:
-        comp->ptx->emit(PTXInstr("selp", type),
+        comp->ptx->emit(PTXInstr("selp", comp->type),
                         comp->reg[instr->dst],
                         comp->reg[instr->src],
                         comp->reg[instr->src2],
                         comp->reg[instr->mask]);
         break;
 
-      case Express::NUMBER:
-        if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr("selp", type),
-                          comp->reg[instr->dst],
-                          comp->reg[instr->src],
-                          PTXFloat(Express::NumericFlt32(instr->args[2]->id)),
-                          comp->reg[instr->mask]);
-        } else {
-          comp->ptx->emit(PTXInstr("selp", type),
-                          comp->reg[instr->dst],
-                          comp->reg[instr->src],
-                          PTXImm(Express::NumericFlt32(instr->args[2]->id)),
-                          comp->reg[instr->mask]);
-        }
+      case Express::NUMBER: {
+        PTXArg *constant = GetNumberArg(instr->args[2], comp->dtype);
+        comp->ptx->emit(PTXInstr("selp", comp->type),
+                        comp->reg[instr->dst],
+                        comp->reg[instr->src],
+                        *constant,
+                        comp->reg[instr->mask]);
+        delete constant;
         break;
+      }
+
+      case Express::CONST: {
+        Tensor *input = comp->step->input(instr->args[2]->id);
+        PTXArg *constant = GetConstantArg(input);
+        comp->ptx->emit(PTXInstr("selp", comp->type),
+                        comp->reg[instr->dst],
+                        comp->reg[instr->src],
+                        *constant,
+                        comp->reg[instr->mask]);
+        delete constant;
+        break;
+      }
 
       default:
         LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
@@ -464,42 +532,72 @@ class CUDACalculate : public CUDAKernel {
   void GenerateSelect(Express::Op *instr, Compilation *comp) {
     CHECK_EQ(instr->arity(), 2);
     CHECK_EQ(instr->result->type, Express::TEMP);
-    const char *type = comp->pred[instr->dst] ? "pred" : comp->type;
     switch (instr->args[1]->type) {
       case Express::TEMP:
-        if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr("selp", type),
-                          comp->reg[instr->dst],
-                          comp->reg[instr->src],
-                          PTXFloat(0),
-                          comp->reg[instr->mask]);
-        } else {
-          comp->ptx->emit(PTXInstr("selp", type),
-                          comp->reg[instr->dst],
-                          comp->reg[instr->src],
-                          PTXImm(0),
-                          comp->reg[instr->mask]);
-        }
+        comp->ptx->emit(PTXInstr("selp", comp->type),
+                        comp->reg[instr->dst],
+                        comp->reg[instr->src],
+                        PTXConst(PTXConst::ZERO, comp->type),
+                        comp->reg[instr->mask]);
         break;
 
-      case Express::NUMBER:
-        if (IsFloat(comp->dtype)) {
-          comp->ptx->emit(PTXInstr("selp", type),
-                          comp->reg[instr->dst],
-                          PTXFloat(Express::NumericFlt32(instr->args[1]->id)),
-                          PTXFloat(0),
-                          comp->reg[instr->mask]);
-        } else {
-          comp->ptx->emit(PTXInstr("selp", type),
-                          comp->reg[instr->dst],
-                          PTXImm(Express::NumericFlt32(instr->args[1]->id)),
-                          PTXImm(0),
-                          comp->reg[instr->mask]);
-        }
+      case Express::NUMBER: {
+        PTXArg *constant = GetNumberArg(instr->args[1], comp->dtype);
+        comp->ptx->emit(PTXInstr("selp", comp->type),
+                        comp->reg[instr->dst],
+                        *constant,
+                        PTXConst(PTXConst::ZERO, comp->type),
+                        comp->reg[instr->mask]);
+        delete constant;
         break;
+      }
+
+      case Express::CONST: {
+        Tensor *input = comp->step->input(instr->args[1]->id);
+        PTXArg *constant = GetConstantArg(input);
+        comp->ptx->emit(PTXInstr("selp", comp->type),
+                        comp->reg[instr->dst],
+                        *constant,
+                        PTXConst(PTXConst::ZERO, comp->type),
+                        comp->reg[instr->mask]);
+        delete constant;
+        break;
+      }
 
       default:
         LOG(FATAL) << "Unsupported: " << instr->AsInstruction();
+    }
+  }
+
+  PTXArg *GetNumberArg(Express::Var *var, Type dtype) {
+    switch (dtype) {
+      case DT_FLOAT:
+        return new PTXFloat(Express::NumericFlt32(var->id));
+
+      case DT_DOUBLE:
+        return new PTXDouble(Express::NumericFlt64(var->id));
+
+      default:
+        return new PTXImm(Express::NumericFlt32(var->id));
+    }
+  }
+
+  PTXArg *GetConstantArg(Tensor *tensor) {
+    switch (tensor->type()) {
+      case DT_FLOAT:
+        return new PTXFloat(tensor->value<float>());
+      case DT_DOUBLE:
+        return new PTXDouble(tensor->value<double>());
+      case DT_INT8:
+        return new PTXImm(tensor->value<int8>());
+      case DT_INT16:
+        return new PTXImm(tensor->value<int16>());
+      case DT_INT32:
+        return new PTXImm(tensor->value<int32>());
+      case DT_INT64:
+        return new PTXImm(tensor->value<int64>());
+      default:
+        LOG(FATAL) << "Unsupported constant type: " << tensor->type();
     }
   }
 
@@ -511,6 +609,208 @@ class CUDACalculate : public CUDAKernel {
   const string name_;       // kernel name
   const string operation_;  // kernel operation
   int arity_;               // number of inputs
+};
+
+// CUDA-based reduction.
+class CUDAReduce : public CUDAKernel {
+ public:
+  CUDAReduce(Reduction op) : op_(op) {}
+
+  string Name() override { return "CUDA" + Operation(); }
+
+  string Operation() override {
+    switch (op_) {
+      case REDUCE_ADD: return "Sum";
+      case REDUCE_MUL: return "Product";
+      case REDUCE_MIN: return "Min";
+      case REDUCE_MAX: return "Max";
+      case REDUCE_AND: return "All";
+      case REDUCE_OR: return "Any";
+    }
+    return "???";
+  }
+
+  bool Supports(Step *step) override {
+    // Requires CUDA support.
+    if (!CUDAKernel::Supports(step)) return false;
+
+    // Check inputs and outputs.
+    if (step->indegree() != 1) return false;
+    if (step->outdegree() != 1) return false;
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+
+    // Check that element type is supported by CUDA.
+    if (TypeTraits::of(x->type()).ptx() == nullptr) return false;
+    if (y->type() != x->type()) return false;
+    if (y->elements() != 1) return false;
+
+    return true;
+  }
+
+  void GeneratePTX(Step *step, PTXMacroAssembler *ptx) override {
+    // Get input and output tensors.
+    Tensor *x = step->input(0);
+    Tensor *y = step->output(0);
+    int size = x->elements();
+    int dsize = x->element_size();
+    const char *type = TypeTraits::of(x->type()).ptx();
+
+    // Get device capabilities.
+    CUDADevice *device = step->cell()->runtime()->Device();
+    int max_block_size = device->max_threads_per_block();
+    int warp_size = device->warp_size();
+
+    // Compute the block size.
+    int block_size = 1;
+    while (block_size * 2 <= size && block_size < max_block_size) {
+      block_size *= 2;
+    }
+    ptx->set_grid_dims(block_size);
+    if (step->variant().empty()) {
+      string variant = "B" + std::to_string(block_size);
+      step->set_variant(variant);
+    }
+
+    // Declare shared memory for reduction.
+    char str[128];
+    sprintf(str, ".shared .%s reduction_array[%d];\n", type, block_size);
+    ptx->emit(str);
+    ptx_decl(b64, reduction);
+    ptx_emit(mov.u64, reduction, PTXLiteral("reduction_array"));
+
+    // Get thread index.
+    ptx_decl(b32, idx);
+    ptx->LoadThreadIndex(idx, 0);
+
+    // Check bounds.
+    ptx_decl(pred, outside);
+    ptx_emit(setp.ge.u32, outside, idx, PTXImm(block_size));
+    ptx_if(outside);
+    ptx_jump(done);
+    ptx_endif();
+
+    // Reduce input array down to block size:
+    //  r = x[idx];
+    //  s = idx;
+    //  while (s < size) {
+    //    s += block_size;
+    //    r = op(r, x[s])
+    //  }
+    //  reduction[idx] = r;
+    ptx_decl(b64, xptr);
+    ptx->LoadTensorAddress(xptr, x);
+
+    // Initially set r = x[idx].
+    ptx_decl(b64, xiptr);
+    ptx_emit(mad.wide.u32, xiptr, idx, PTXImm(dsize), xptr);
+    PTXReg r = ptx->reg(type, "r");
+    ptx->emit(PTXInstr("ld.global", type), r, PTXAddr(xiptr));
+
+    if (block_size < size) {
+      // Strided loop over inputs.
+      ptx_decl(u32, s);
+      ptx_emit(mov.u32, s, idx);
+      ptx_label(loop1);
+
+      // Next element in stride. Stop when reaching end of input.
+      ptx_emit(add.u32, s, s, PTXImm(block_size));
+      ptx_emit(setp.ge.u32, outside, s, PTXImm(size));
+      ptx_if(outside);
+      ptx_jump(done1);
+      ptx_endif();
+
+      // Get x[s].
+      ptx_decl(b64, sptr);
+      ptx_emit(mad.wide.u32, sptr, s, PTXImm(dsize), xptr);
+      PTXReg value = ptx->reg(type, "value");
+      ptx->emit(PTXInstr("ld.global", type), value, PTXAddr(sptr));
+
+      // Reduce r and x[s].
+      Reduce(ptx, r, value, type);
+
+      ptx_jump(loop1);
+      ptx_label(done1);
+    }
+
+    // Store reduced element into shared memory.
+    ptx_decl(b64, rptr);
+    ptx_emit(mad.wide.u32, rptr, idx, PTXImm(dsize), reduction);
+    ptx->emit(PTXInstr("st.shared", type), PTXAddr(rptr), r);
+
+    // The input has now been reduced down to the block size and the reduced
+    // element in each block is now stored in shared memory. The block is
+    // reduced in a number of steps that reduce the problem in half. This is
+    // done until there is only one element left.
+    ptx_decl(pred, completed);
+    PTXReg rs = ptx->reg(type, "rs");
+    while (block_size > 1) {
+      // Terminate threads that are no longer active in the reduction.
+      ptx_emit(setp.ge.u32, completed, idx, PTXImm(block_size / 2));
+      ptx_if(completed);
+      ptx_jump(done);
+      ptx_endif();
+
+      // Synchronize threads. No synchronization is needed when all remaining
+      // active threads are running in the same warp because instructions are
+      // SIMD synchronous within a warp.
+      if (block_size > warp_size) {
+        ptx_emit(bar.sync, PTXImm(0));
+      }
+      block_size >>= 1;
+
+      // Reduce block by reducing strided elements.
+      //  reduction[idx] = op(reduction[idx], reduction[idx + block_size])
+      int disp = block_size * dsize;
+      ptx->emit(PTXInstr("ld.shared", type), r, PTXAddr(rptr));
+      ptx->emit(PTXInstr("ld.shared", type), rs, PTXAddr(rptr, disp));
+      Reduce(ptx, r, rs, type);
+      ptx->emit(PTXInstr("st.shared", type), PTXAddr(rptr), r);
+    }
+
+    // Reduction is now in the first element.
+    ptx->emit(PTXInstr("ld.shared", type), r, PTXAddr(rptr));
+    ptx_decl(b64, yptr);
+    ptx->LoadTensorAddress(yptr, y);
+    ptx->emit(PTXInstr("st.global", type), PTXAddr(yptr), r);
+
+    // Done.
+    ptx_label(done);
+    ptx_ret();
+  }
+
+  int64 Complexity(const Step *step) override {
+    return step->input(0)->elements();
+  }
+
+  // Emit reduction operation.
+  void Reduce(PTXMacroAssembler *ptx, const PTXReg &acc, const PTXReg &value,
+              const char *type) {
+    switch (op_) {
+      case REDUCE_ADD:
+        ptx->emit(PTXInstr("add", type), acc, acc, value);
+        break;
+      case REDUCE_MUL:
+        if (type[0] == 'f') {
+          ptx->emit(PTXInstr("mul", type), acc, acc, value);
+        } else {
+          ptx->emit(PTXInstr("mul.lo", type), acc, acc, value);
+        }
+        break;
+      case REDUCE_MIN:
+        ptx->emit(PTXInstr("min", type), acc, acc, value);
+        break;
+      case REDUCE_MAX:
+        ptx->emit(PTXInstr("max", type), acc, acc, value);
+        break;
+      case REDUCE_AND:
+      case REDUCE_OR:
+        LOG(FATAL) << "Unsupported reduction";
+    }
+  }
+
+ private:
+  Reduction op_;  // reduction operation
 };
 
 // CUDA-based argmax/argmin using reduction.
@@ -574,7 +874,7 @@ class CUDAArgMax : public CUDAKernel {
 
     // Get thread index.
     ptx_decl(b32, idx);
-    ptx->GetThreadIndex(idx, 0);
+    ptx->LoadThreadIndex(idx, 0);
 
     // Check bounds.
     ptx_decl(pred, outside);
@@ -717,6 +1017,30 @@ class CUDAArgMax : public CUDAKernel {
   bool minimum_;  // compute argmin instead of argmax
 };
 
+// Transformer that prevents reductions from being merged with other
+// expression kernels.
+class CUDAReductionTransformer : public Transformer {
+ public:
+  string Name() override { return "CUDAReduction"; }
+
+  bool Transform(Flow *flow) override {
+    int updates = 0;
+    for (Flow::Operation *op : flow->ops()) {
+      if (op->type == "Sum" ||
+          op->type == "Product" ||
+          op->type == "Min" ||
+          op->type == "Max") {
+        if (!op->GetAttr("nomerge", false)) {
+          op->SetAttr("nomerge", true);
+          updates++;
+        }
+      }
+    }
+
+    return updates > 0;
+  }
+};
+
 // Register CUDA arithmetic library.
 void RegisterCUDAArithmeticLibrary(Library *library) {
   ptx_model.mov_reg_reg = true;
@@ -731,7 +1055,22 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
   ptx_model.func_reg_imm = true;
   ptx_model.fm_reg_reg_reg = true;
   ptx_model.fm_reg_reg_imm = true;
+  ptx_model.cond_reg_reg_reg = true;
   ptx_model.predicate_regs = true;
+  ptx_model.instruction_set({
+    Express::MOV,
+    Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+    Express::MINIMUM, Express::MAXIMUM,
+    Express::NEG, Express::ABS, Express::RECIPROCAL,
+    Express::SQRT, Express::RSQRT,
+    Express::LOG2, Express::EXP2, Express::SIN, Express::COS,
+    Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+    Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+    Express::BITAND, Express::BITOR,
+    Express::AND, Express::OR, Express::XOR, Express::NOT,
+    Express::COND, Express::SELECT,
+    Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+  });
 
   library->Register(new CUDACalculate("CUDAAdd", "Add", 2));
   library->Register(new CUDACalculate("CUDASub", "Sub", 2));
@@ -742,12 +1081,43 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
 
   library->Register(new CUDACalculate("CUDALog", "Log", 1));
   library->Register(new CUDACalculate("CUDAExp", "Exp", 1));
+  library->Register(new CUDACalculate("CUDAPow", "Pow", 2));
   library->Register(new CUDACalculate("CUDASigmoid", "Sigmoid", 1));
-  library->Register(new CUDACalculate("CUDATanh", "Tanh", 1));
+  library->Register(new CUDACalculate("CUDAErf", "Erf", 1));
   library->Register(new CUDACalculate("CUDACalculate", "Calculate"));
+  library->Register(new CUDACalculate("CUDAAssign", "Assign"));
+
+  library->Register(new CUDACalculate("CUDASin", "Sin", 1));
+  library->Register(new CUDACalculate("CUDACos", "Cos", 1));
+  library->Register(new CUDACalculate("CUDATan", "Tan", 1));
+  library->Register(new CUDACalculate("CUDACot", "Cot", 1));
+  library->Register(new CUDACalculate("CUDASec", "Sec", 1));
+  library->Register(new CUDACalculate("CUDACsc", "Csc", 1));
+
+  library->Register(new CUDACalculate("CUDAAsin", "Asin", 1));
+  library->Register(new CUDACalculate("CUDAAcos", "Acos", 1));
+  library->Register(new CUDACalculate("CUDAAtan", "Atan", 1));
+  library->Register(new CUDACalculate("CUDAAcot", "Acot", 1));
+  library->Register(new CUDACalculate("CUDAAsec", "Asec", 1));
+  library->Register(new CUDACalculate("CUDAAcsc", "Acsc", 1));
+
+  library->Register(new CUDACalculate("CUDASinh", "Sinh", 1));
+  library->Register(new CUDACalculate("CUDACosh", "Cosh", 1));
+  library->Register(new CUDACalculate("CUDATanh", "Tanh", 1));
+  library->Register(new CUDACalculate("CUDACoth", "Coth", 1));
+  library->Register(new CUDACalculate("CUDASech", "Sech", 1));
+  library->Register(new CUDACalculate("CUDACsch", "Csch", 1));
+
+  library->Register(new CUDACalculate("CUDAAsin", "Asinh", 1));
+  library->Register(new CUDACalculate("CUDAAcos", "Acosh", 1));
+  library->Register(new CUDACalculate("CUDAAtan", "Atanh", 1));
+  library->Register(new CUDACalculate("CUDAAcot", "Acoth", 1));
+  library->Register(new CUDACalculate("CUDAAsec", "Asech", 1));
+  library->Register(new CUDACalculate("CUDAAcsc", "Acsch", 1));
 
   library->Register(new CUDACalculate("CUDANeg", "Neg", 1));
   library->Register(new CUDACalculate("CUDAAbs", "Abs", 1));
+  library->Register(new CUDACalculate("CUDASign", "Sign", 1));
   library->Register(new CUDACalculate("CUDARelu", "Relu", 1));
   library->Register(new CUDACalculate("CUDASoftsign", "Softsign", 1));
   library->Register(new CUDACalculate("CUDASoftplus", "Softplus", 1));
@@ -755,11 +1125,29 @@ void RegisterCUDAArithmeticLibrary(Library *library) {
   library->Register(new CUDACalculate("CUDAReciprocal", "Reciprocal", 1));
   library->Register(new CUDACalculate("CUDASquare", "Square", 1));
   library->Register(new CUDACalculate("CUDASqrt", "Sqrt", 1));
+  library->Register(new CUDACalculate("CUDARsqrt", "Rsqrt", 1));
+
   library->Register(new CUDACalculate("CUDACond", "Cond", 3));
   library->Register(new CUDACalculate("CUDASelect", "Select", 2));
 
+  library->Register(new CUDACalculate("CUDAAnd", "And", 2));
+  library->Register(new CUDACalculate("CUDAOr", "Or", 2));
+  library->Register(new CUDACalculate("CUDAXor", "Xor", 2));
+  library->Register(new CUDACalculate("CUDAAndNot", "AndNot", 2));
+  library->Register(new CUDACalculate("CUDANot", "Not", 1));
+
+  library->Register(new CUDACalculate("CUDAId", "Identity", 1));
+
+  library->Register(new CUDAReduce(REDUCE_ADD));
+  library->Register(new CUDAReduce(REDUCE_MUL));
+  library->Register(new CUDAReduce(REDUCE_MIN));
+  library->Register(new CUDAReduce(REDUCE_MAX));
+  library->Register(new CUDAReduce(REDUCE_AND));
+  library->Register(new CUDAReduce(REDUCE_OR));
   library->Register(new CUDAArgMax(false));
   library->Register(new CUDAArgMax(true));
+
+  library->RegisterTransformer(new CUDAReductionTransformer());
 }
 
 }  // namespace myelin

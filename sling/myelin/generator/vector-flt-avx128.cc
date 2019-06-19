@@ -24,7 +24,8 @@ using namespace jit;
 // Generate vector float expression using AVX and XMM registers.
 class VectorFltAVX128Generator : public ExpressionGenerator {
  public:
-  VectorFltAVX128Generator() {
+  VectorFltAVX128Generator(Type type) {
+    model_.name = "VFltAVX128";
     model_.mov_reg_reg = true;
     model_.mov_reg_imm = true;
     model_.mov_reg_mem = true;
@@ -39,12 +40,34 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
       model_.fm_reg_reg_reg = true;
       model_.fm_reg_reg_imm = true;
       model_.fm_reg_reg_mem = true;
+      model_.instruction_set({
+        Express::MULADD132, Express::MULADD213, Express::MULADD231,
+        Express::MULSUB132, Express::MULSUB213, Express::MULSUB231,
+      });
     }
     model_.cond_reg_reg_reg = true;
     model_.cond_reg_mem_reg = true;
+    model_.instruction_set({
+      Express::MOV,
+      Express::ADD, Express::SUB, Express::MUL, Express::DIV,
+      Express::MINIMUM, Express::MAXIMUM,
+      Express::CMPEQOQ, Express::CMPNEUQ, Express::CMPLTOQ,
+      Express::CMPLEOQ, Express::CMPGTOQ, Express::CMPGEOQ,
+      Express::COND, Express::SELECT,
+      Express::BITAND, Express::BITOR, Express::BITXOR, Express::BITANDNOT,
+      Express::AND, Express::OR, Express::XOR, Express::ANDNOT,
+      Express::BITEQ, Express::QUADSIGN, Express::SQRT,
+      Express::CVTFLTINT, Express::CVTINTFLT,
+      Express::CVTEXPINT, Express::CVTINTEXP,
+      Express::FLOOR, Express::CEIL, Express::ROUND, Express::TRUNC,
+      Express::ADDINT, Express::SUBINT,
+      Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+      Express::ALL, Express::ANY,
+    });
+    if (type == DT_FLOAT) {
+      model_.instruction_set({Express::RECIPROCAL, Express::RSQRT});
+    }
   }
-
-  string Name() override { return "VFltAVX128"; }
 
   int VectorSize() override { return XMMRegSize; }
 
@@ -54,10 +77,9 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
 
     // Allocate auxiliary registers.
     int num_mm_aux = 0;
-    if (instructions_.Has(Express::SUM) ||
-        instructions_.Has(Express::PRODUCT) ||
-        instructions_.Has(Express::MIN) ||
-        instructions_.Has(Express::MAX)) {
+    if (instructions_.Has({
+        Express::SUM, Express::PRODUCT, Express::MIN, Express::MAX,
+        Express::ALL, Express::ANY})) {
       num_mm_aux = std::max(num_mm_aux, 1);
     }
     index_->ReserveAuxXMMRegisters(num_mm_aux);
@@ -123,6 +145,18 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
         GenerateXMMFltOp(instr,
             &Assembler::vsqrtps, &Assembler::vsqrtpd,
             &Assembler::vsqrtps, &Assembler::vsqrtpd,
+            masm, 0);
+        break;
+      case Express::RSQRT:
+        GenerateXMMFltOp(instr,
+            &Assembler::vrsqrtps, &Assembler::vrsqrtps,
+            &Assembler::vrsqrtps, &Assembler::vrsqrtps,
+            masm, 0);
+        break;
+      case Express::RECIPROCAL:
+        GenerateXMMFltOp(instr,
+            &Assembler::vrcpps, &Assembler::vrcpps,
+            &Assembler::vrcpps, &Assembler::vrcpps,
             masm, 0);
         break;
       case Express::MULADD132:
@@ -200,25 +234,48 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             masm);
         break;
       case Express::XOR:
+      case Express::BITXOR:
         GenerateXMMFltOp(instr,
             &Assembler::vxorps, &Assembler::vxorpd,
             &Assembler::vxorps, &Assembler::vxorpd,
             masm);
         break;
       case Express::ANDNOT:
+      case Express::BITANDNOT:
         GenerateXMMFltOp(instr,
             &Assembler::vandnps, &Assembler::vandnpd,
             &Assembler::vandnps, &Assembler::vandnpd,
             masm);
         break;
-      case Express::NOT:
-        GenerateNot(instr, masm);
+      case Express::BITEQ:
+        GenerateXMMFltOp(instr,
+            &Assembler::vpcmpeqd, &Assembler::vpcmpeqq,
+            &Assembler::vpcmpeqd, &Assembler::vpcmpeqq,
+            masm);
         break;
       case Express::FLOOR:
-        GenerateXMMFltOp(instr,
+        GenerateXMMUnaryFltOp(instr,
             &Assembler::vroundps, &Assembler::vroundpd,
             &Assembler::vroundps, &Assembler::vroundpd,
             round_down, masm);
+        break;
+      case Express::CEIL:
+        GenerateXMMUnaryFltOp(instr,
+            &Assembler::vroundps, &Assembler::vroundpd,
+            &Assembler::vroundps, &Assembler::vroundpd,
+            round_up, masm);
+        break;
+      case Express::ROUND:
+        GenerateXMMUnaryFltOp(instr,
+            &Assembler::vroundps, &Assembler::vroundpd,
+            &Assembler::vroundps, &Assembler::vroundpd,
+            round_nearest, masm);
+        break;
+      case Express::TRUNC:
+        GenerateXMMUnaryFltOp(instr,
+            &Assembler::vroundps, &Assembler::vroundpd,
+            &Assembler::vroundps, &Assembler::vroundpd,
+            round_to_zero, masm);
         break;
       case Express::CVTFLTINT:
         GenerateFltToInt(instr, masm);
@@ -231,6 +288,15 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
         break;
       case Express::CVTINTEXP:
         GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 23 : 52);
+        break;
+      case Express::QUADSIGN:
+        GenerateShift(instr, masm, true, type_ == DT_FLOAT ? 29 : 61);
+        break;
+      case Express::ADDINT:
+        GenerateXMMFltOp(instr,
+            &Assembler::vpaddd, &Assembler::vpaddq,
+            &Assembler::vpaddd, &Assembler::vpaddq,
+            masm);
         break;
       case Express::SUBINT:
         GenerateXMMFltOp(instr,
@@ -262,7 +328,20 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
             &Assembler::vmaxps, &Assembler::vmaxpd,
             masm);
         break;
-      default: UNSUPPORTED;
+      case Express::ALL:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vandps, &Assembler::vandpd,
+            &Assembler::vandps, &Assembler::vandpd,
+            masm);
+        break;
+      case Express::ANY:
+        GenerateXMMFltAccOp(instr,
+            &Assembler::vorps, &Assembler::vorpd,
+            &Assembler::vorps, &Assembler::vorpd,
+            masm);
+        break;
+      default:
+        LOG(FATAL) << "Unsupported instruction: " << instr->AsInstruction();
     }
   }
 
@@ -298,10 +377,10 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
       }
 
       // Convert two int64s to two int32s.
-      __ vshufps(xmm(src), xmm(src), xmm(src), 0xD8);
+      __ vshufps(xmm(instr->dst), xmm(src), xmm(src), 0xD8);
 
       // Convert two int32s to doubles.
-      __ vcvtdq2pd(xmm(instr->dst), xmm(src));
+      __ vcvtdq2pd(xmm(instr->dst), xmm(instr->dst));
     } else {
       UNSUPPORTED;
     }
@@ -343,35 +422,6 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
         }
         break;
       default: UNSUPPORTED;
-    }
-  }
-
-  // Generate logical not.
-  void GenerateNot(Express::Op *instr, MacroAssembler *masm) {
-    // Compute not(x) = xor(1,x).
-    __ vpcmpeqd(xmm(instr->dst), xmm(instr->dst), xmm(instr->dst));
-    if (instr->src != -1) {
-      // NOT dst,reg
-      switch (type_) {
-        case DT_FLOAT:
-          __ vxorps(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
-          break;
-        case DT_DOUBLE:
-          __ vxorpd(xmm(instr->dst), xmm(instr->dst), xmm(instr->src));
-          break;
-        default: UNSUPPORTED;
-      }
-    } else {
-      // NOT dst,[mem]
-      switch (type_) {
-        case DT_FLOAT:
-          __ vxorps(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]));
-          break;
-        case DT_DOUBLE:
-          __ vxorpd(xmm(instr->dst), xmm(instr->dst), addr(instr->args[0]));
-          break;
-        default: UNSUPPORTED;
-      }
     }
   }
 
@@ -472,8 +522,8 @@ class VectorFltAVX128Generator : public ExpressionGenerator {
   }
 };
 
-ExpressionGenerator *CreateVectorFltAVX128Generator() {
-  return new VectorFltAVX128Generator();
+ExpressionGenerator *CreateVectorFltAVX128Generator(Type type) {
+  return new VectorFltAVX128Generator(type);
 }
 
 }  // namespace myelin

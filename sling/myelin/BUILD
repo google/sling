@@ -167,6 +167,7 @@ cc_library(
     "//sling/myelin/cuda:cuda-runtime",
     "//sling/myelin/kernel:cuda",
     "//sling/myelin/kernel:dragnn",
+    "//sling/myelin/kernel:mkl",
     "//sling/myelin/kernel:tensorflow",
   ],
 )
@@ -199,5 +200,4 @@ cc_binary(
     "//sling/file:posix",
   ],
 )
-
 

@@ -45,13 +45,42 @@ static std::map<string, Express::OpType> optypes = {
   {"Reciprocal", Express::RECIPROCAL},
   {"Square", Express::SQUARE},
   {"Sqrt", Express::SQRT},
+  {"Rsqrt", Express::RSQRT},
   {"Log", Express::LOG},
   {"Exp", Express::EXP},
   {"Sigmoid", Express::SIGMOID},
-  {"Tanh", Express::TANH},
   {"Erf", Express::ERF},
   {"Log2", Express::LOG2},
   {"Exp2", Express::EXP2},
+  {"Pow", Express::POW},
+
+  {"Sin", Express::SIN},
+  {"Cos", Express::COS},
+  {"Tan", Express::TAN},
+  {"Cot", Express::COT},
+  {"Sec", Express::SEC},
+  {"Csc", Express::CSC},
+
+  {"Asin", Express::ASIN},
+  {"Acos", Express::ACOS},
+  {"Atan", Express::ATAN},
+  {"Acot", Express::ACOT},
+  {"Asec", Express::ASEC},
+  {"Acsc", Express::ACSC},
+
+  {"Sinh", Express::SINH},
+  {"Cosh", Express::COSH},
+  {"Tanh", Express::TANH},
+  {"Coth", Express::COTH},
+  {"Sech", Express::SECH},
+  {"Csch", Express::CSCH},
+
+  {"Asinh", Express::ASINH},
+  {"Acosh", Express::ACOSH},
+  {"Atanh", Express::ATANH},
+  {"Acoth", Express::ACOTH},
+  {"Asech", Express::ASECH},
+  {"Acsch", Express::ACSCH},
 
   {"MulAdd132", Express::MULADD132},
   {"MulAdd213", Express::MULADD213},
@@ -76,19 +105,31 @@ static std::map<string, Express::OpType> optypes = {
   {"Cond", Express::COND},
   {"Select", Express::SELECT},
 
+  {"Floor", Express::FLOOR},
+  {"Ceil", Express::CEIL},
+  {"Round", Express::ROUND},
+  {"Trunc", Express::TRUNC},
+
   {"BitAnd", Express::BITAND},
   {"BitOr", Express::BITOR},
-  {"Floor", Express::FLOOR},
+  {"BitXor", Express::BITXOR},
+  {"BitAndNot", Express::BITANDNOT},
+  {"BitEq", Express::BITEQ},
   {"CvtFltInt", Express::CVTFLTINT},
   {"CvtIntFlt", Express::CVTINTFLT},
   {"CvtExpInt", Express::CVTEXPINT},
   {"CvtIntExp", Express::CVTINTEXP},
+  {"QuadSign", Express::QUADSIGN},
+  {"AddInt", Express::ADDINT},
   {"SubInt", Express::SUBINT},
 
   {"Sum", Express::SUM},
   {"Product", Express::PRODUCT},
   {"Min", Express::MIN},
   {"Max", Express::MAX},
+  {"All", Express::ALL},
+  {"Any", Express::ANY},
+  {"Count", Express::COUNT},
 };
 
 static const string opname[] = {
@@ -96,15 +137,21 @@ static const string opname[] = {
   "Add", "Sub", "Mul", "Div",
   "Minimum", "Maximum",
   "Neg", "Abs", "Sign", "Relu", "Softsign", "Softplus", "LogSigmoid",
-  "Reciprocal", "Square", "Sqrt",
-  "Log", "Exp", "Sigmoid", "Tanh", "Erf", "Log2", "Exp2",
+  "Reciprocal", "Square", "Sqrt", "Rsqrt",
+  "Log", "Exp", "Sigmoid", "Erf", "Log2", "Exp2", "Pow",
+  "Sin", "Cos", "Tan", "Cot", "Sec", "Csc",
+  "Asin", "Acos", "Atan", "Acot", "Asec", "Acsc",
+  "Sinh", "Cosh", "Tanh", "Coth", "Sech", "Csch",
+  "Asinh", "Acosh", "Atanh", "Acoth", "Asech", "Acsch",
   "MulAdd132", "MulAdd213", "MulAdd231",
   "MulSub132", "MulSub213", "MulSub231",
   "CmpEq", "CmpNe", "CmpLt", "CmpLe", "CmpGt", "CmpGe",
   "And", "Or", "Xor", "AndNot", "Not", "Cond", "Select",
-  "BitAnd", "BitOr",
-  "Floor", "CvtFltInt", "CvtIntFlt", "CvtExpInt", "CvtIntExp", "SubInt",
-  "Sum", "Product", "Min", "Max",
+  "Floor", "Ceil", "Round", "Trunc",
+  "BitAnd", "BitOr", "BitXor", "BitAndNot", "BitEq",
+  "CvtFltInt", "CvtIntFlt", "CvtExpInt", "CvtIntExp", "QuadSign",
+  "AddInt", "SubInt",
+  "Sum", "Product", "Min", "Max", "All", "Any", "Count",
   "???",
 };
 
@@ -125,8 +172,17 @@ class VariableMap {
       // Copy variable and update mapping.
       m = expr_->Variable(var->type, var->id);
       m->predicate = var->predicate;
+      m->single = var->single;
     }
     return m;
+  }
+
+  void rename(Express::Var *from, Express::Var *to) {
+    mapping_[from] = to;
+    to->type = from->type;
+    to->id = from->id;
+    to->predicate = from->predicate;
+    to->single = from->single;
   }
 
  private:
@@ -181,11 +237,11 @@ class RegisterAllocator {
   }
 
   // Allocate spare register not assigned to variable.
-  int AllocateExtra() {
+  int AllocateExtra(bool predicate) {
     static Express::Var extra(Express::REGISTER, -1);
     int regno = reg_.size();
     reg_.push_back(&extra);
-    predicate_.push_back(false);
+    predicate_.push_back(predicate);
     return regno;
   }
 
@@ -233,11 +289,10 @@ inline Dest bit_cast(const Source &source) {
 class RecipeParser {
  public:
   // Initialize parser.
-  RecipeParser(const string &recipe, Express *expr, bool expand) {
+  RecipeParser(const string &recipe, Express *expr) {
     recipe_ = ptr_ = recipe.data();
     end_ = ptr_ + recipe.size();
     expr_ = expr;
-    expand_ = expand;
   }
 
   // Parse recipe.
@@ -298,7 +353,7 @@ class RecipeParser {
     // Create operation.
     Express::OpType optype = Express::Lookup(opname);
     CHECK(optype != Express::INVALID) << opname;
-    return expr_->Function(optype, args, expand_);
+    return expr_->Function(optype, args);
   }
 
   // Parse argument.
@@ -392,7 +447,6 @@ class RecipeParser {
   const char *ptr_;            // current position for parser
   const char *end_;            // end of parsed recipe
   Express *expr_;              // target expression
-  bool expand_;                // expand intrinsic function into basic ops
 };
 
 }  // namespace
@@ -413,9 +467,15 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(9.0),    // P9
   FLTCONST(-9.0),   // N9
 
-  FLTCONST(0.6931471805599453),    // LN2
-  FLTCONST(-0.6931471805599453),   // NLN2
-  FLTCONST(1.442695021629333),     // LOG2E
+  FLTCONST(0.6931471805599453),      // LN2
+  FLTCONST(-0.6931471805599453),     // NLN2
+  FLTCONST(1.442695021629333),       // LOG2E
+  FLTCONST(3.14159265358979323846),  // PI
+  FLTCONST(1.5707963267948966192),   // PIO2 (pi/2)
+  FLTCONST(0.7853981633974483096),   // PIO4 (pi/4)
+  FLTCONST(1.27323954473516),        // FOPI (4/pi)
+  FLTCONST(0.4142135623730950),      // TANPIO8 (tan pi/8)
+  FLTCONST(2.414213562373095),       // TAN3PIO8 (tan 3pi/8)
 
   INTCONST(0x7F800000, 0x7FF0000000000000LL),      // PINF
   INTCONST(0xFF800000, 0xFFF0000000000000LL),      // NINF
@@ -424,6 +484,13 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   INTCONST(0x00800000, 0x0020000000000000LL),      // MIN_NORM_POS
   INTCONST(~0x7F800000, ~0x7FF0000000000000LL),    // INV_MANT_MASK
   INTCONST(0x7F, 0x3FFLL),                         // MAX_MANT
+
+  INTCONST(0x80000000, 0x8000000000000000LL),      // SIGN_MASK
+  INTCONST(~0x80000000, ~0x8000000000000000LL),    // INV_SIGN_MASK
+  INTCONST(1, 1LL),                                // I1
+  INTCONST(2, 2LL),                                // I2
+  INTCONST(4, 4LL),                                // I4
+  INTCONST(~1, ~1LL),                              // INV_I1
 
   // Polynomial coefficients for natural logarithm.
   FLTCONST(0.707106781186547524),  // CEPHES_SQRTHF
@@ -475,14 +542,33 @@ Express::Constant Express::constants[Express::NUM_CONSTANTS] = {
   FLTCONST(-1.453152027),          // ERF_A4
   FLTCONST(1.061405429),           // ERF_A5
   FLTCONST(0.3275911),             // ERF_P
+
+  // Constants for sine and cosine functions.
+  FLTCONST(-0.78515625),                // CEPHES_MINUS_DP1
+  FLTCONST(-2.4187564849853515625e-4),  // CEPHES_MINUS_DP2
+  FLTCONST(-3.77489497744594108e-8),    // CEPHES_MINUS_DP3
+  FLTCONST(-1.9515295891e-4),           // SINCOF_P0
+  FLTCONST(8.3321608736e-3),            // SINCOF_P1
+  FLTCONST(-1.6666654611e-1),           // SINCOF_P2
+  FLTCONST(2.443315711809948e-5),       // COSCOF_P0
+  FLTCONST(-1.388731625493765e-3),      // COSCOF_P1
+  FLTCONST(4.166664568298827e-2),       // COSCOF_P2
+
+  // Constants for arctan.
+  FLTCONST(8.05374449538e-2),           // ATAN_P0
+  FLTCONST(-1.38776856032e-1),          // ATAN_P1
+  FLTCONST(1.99777106478e-1),           // ATAN_P2
+  FLTCONST(-3.33329491539e-1),          // ATAN_P3
 };
 
-int Express::IdentityValue(OpType type) {
+int Express::NeutralValue(OpType type) {
   switch (type) {
     case SUM: return ZERO;
     case PRODUCT: return ONE;
     case MIN: return PINF;
     case MAX: return NINF;
+    case ALL: return QNAN;
+    case ANY: return ZERO;
     default: return ZERO;
   }
 }
@@ -506,8 +592,8 @@ const string &Express::OpName(OpType type) {
   return opname[type];
 }
 
-void Express::Parse(const string &recipe, bool expand) {
-  RecipeParser parser(recipe, this, expand);
+void Express::Parse(const string &recipe) {
+  RecipeParser parser(recipe, this);
   parser.Parse();
 }
 
@@ -572,44 +658,69 @@ Express::Op *Express::OperationAfter(Op *pos, OpType type) {
   return op;
 }
 
-Express::Op *Express::Function(OpType type,
-                               std::vector<Var *> &args,
-                               bool expand) {
-  // Expand intrinsics.
-  if (expand) {
-    Express::Var *result = nullptr;
-    if (args.size() == 1) {
-      switch (type) {
-        case Express::NEG: result = Neg(args[0]); break;
-        case Express::ABS: result = Abs(args[0]); break;
-        case Express::SIGN: result = Sign(args[0]); break;
-        case Express::RELU: result = Relu(args[0]); break;
-        case Express::SOFTSIGN: result = Softsign(args[0]); break;
-        case Express::SOFTPLUS: result = Softplus(args[0]); break;
-        case Express::LOGSIGMOID: result = LogSigmoid(args[0]); break;
-        case Express::RECIPROCAL: result = Reciprocal(args[0]); break;
-        case Express::SQUARE: result = Square(args[0]); break;
-        case Express::LOG: result = Log(args[0]); break;
-        case Express::EXP: result = Exp(args[0]); break;
-        case Express::SIGMOID: result = Sigmoid(args[0]); break;
-        case Express::TANH: result = Tanh(args[0]); break;
-        case Express::ERF: result = Erf(args[0]); break;
-        default: ;
-      }
-    }
-
-    // Create result node.
-    if (result != nullptr) {
-      Express::Op *op = Operation(Express::MOV);
-      op->AddArgument(result);
-      return op;
-    }
-  }
-
+Express::Op *Express::Function(OpType type, std::vector<Var *> &args) {
   // Create new op with arguments.
   Express::Op *op = Operation(type);
   for (Var *arg : args) op->AddArgument(arg);
   return op;
+}
+
+Express::Var *Express::Expand(OpType type, std::vector<Var *> &args) {
+  Express::Var *result = nullptr;
+  if (args.size() == 1) {
+    switch (type) {
+      case Express::NEG: result = Neg(args[0]); break;
+      case Express::NOT: result = Not(args[0]); break;
+      case Express::ABS: result = Abs(args[0]); break;
+      case Express::SIGN: result = Sign(args[0]); break;
+      case Express::RELU: result = Relu(args[0]); break;
+      case Express::SOFTSIGN: result = Softsign(args[0]); break;
+      case Express::SOFTPLUS: result = Softplus(args[0]); break;
+      case Express::LOGSIGMOID: result = LogSigmoid(args[0]); break;
+      case Express::RECIPROCAL: result = Reciprocal(args[0]); break;
+      case Express::SQUARE: result = Square(args[0]); break;
+      case Express::RSQRT: result = Rsqrt(args[0]); break;
+      case Express::LOG: result = Log(args[0]); break;
+      case Express::EXP: result = Exp(args[0]); break;
+      case Express::SIGMOID: result = Sigmoid(args[0]); break;
+      case Express::ERF: result = Erf(args[0]); break;
+      case Express::SIN: result = Sin(args[0]); break;
+      case Express::COS: result = Cos(args[0]); break;
+      case Express::TAN: result = Tan(args[0]); break;
+      case Express::COT: result = Cot(args[0]); break;
+      case Express::SEC: result = Sec(args[0]); break;
+      case Express::CSC: result = Csc(args[0]); break;
+      case Express::ASIN: result = Asin(args[0]); break;
+      case Express::ACOS: result = Acos(args[0]); break;
+      case Express::ATAN: result = Atan(args[0]); break;
+      case Express::ACOT: result = Acot(args[0]); break;
+      case Express::ASEC: result = Asec(args[0]); break;
+      case Express::ACSC: result = Acsc(args[0]); break;
+      case Express::SINH: result = Sinh(args[0]); break;
+      case Express::COSH: result = Cosh(args[0]); break;
+      case Express::TANH: result = Tanh(args[0]); break;
+      case Express::COTH: result = Coth(args[0]); break;
+      case Express::SECH: result = Sech(args[0]); break;
+      case Express::CSCH: result = Csch(args[0]); break;
+      case Express::ASINH: result = Asinh(args[0]); break;
+      case Express::ACOSH: result = Acosh(args[0]); break;
+      case Express::ATANH: result = Atanh(args[0]); break;
+      case Express::ACOTH: result = Acoth(args[0]); break;
+      case Express::ASECH: result = Asech(args[0]); break;
+      case Express::ACSCH: result = Acsch(args[0]); break;
+      case Express::COUNT: result = Count(args[0]); break;
+      default: ;
+    }
+  } else if (args.size() == 2) {
+    switch (type) {
+      case Express::ANDNOT: result = AndNot(args[0], args[1]); break;
+      case Express::SELECT: result = Select(args[0], args[1]); break;
+      case Express::POW: result = Pow(args[0], args[1]); break;
+      default: ;
+    }
+  }
+
+  return result;
 }
 
 Express::Var *Express::Number(ConstantNumber number) {
@@ -662,6 +773,18 @@ int Express::NumOps(OpType type) const {
     if (op->type == type) n++;
   }
   return n;
+}
+
+bool Express::Has(std::initializer_list<OpType> ops) const {
+  // Build instruction set.
+  bool instr[NUM_OPTYPES] = {false};
+  for (OpType op : ops) instr[op] = true;
+
+  // Check if expression contains any instructions in the set.
+  for (Op *op : ops_) {
+    if (instr[op->type]) return true;
+  }
+  return false;
 }
 
 int Express::Complexity() const {
@@ -1039,6 +1162,36 @@ void Express::Merge(Express *other, const Map &varmap) {
   if (temps_moved) CompactTempVars();
 }
 
+void Express::Translate(Express *translated) const {
+  VariableMap varmap(translated);
+  std::vector<Var *> args;
+  for (Op *op : ops_) {
+    // Translate arguments.
+    args.clear();
+    for (Var *arg : op->args) args.push_back(varmap[arg]);
+
+    // Translate operation.
+    Var *result = nullptr;
+    if (!translated->Supports(op->type)) {
+      // Try to expand unsupported operation.
+      result = translated->Expand(op->type, args);
+      if (result != nullptr) {
+        varmap.rename(op->result, result);
+      } else {
+        LOG(WARNING) << "Cannot translate unsupported op " << OpName(op->type)
+                     << " in " << AsRecipe();
+      }
+    }
+    if (result == nullptr) {
+      // Copy operation verbatim.
+      Op *copy = translated->Operation(op->type);
+      for (Var *arg : args) copy->AddArgument(arg);
+      copy->Assign(varmap[op->result]);
+    }
+  }
+  translated->CompactTempVars();
+}
+
 void Express::Fuse(OpType outer, OpType inner, OpType left, OpType right) {
   bool again = true;
   while (again) {
@@ -1123,7 +1276,7 @@ void Express::Optimize(bool fma, int spare_regs) {
   // Optionally fuse multiply and add/sub.
   if (fma) {
     FuseMulAdd();
-    if (target_ != NVIDIA) FuseMulSub();
+    if (Supports(MULSUB132)) FuseMulSub();
   }
 
   // Cache inputs and results used in multiple ops in temporary variables.
@@ -1142,7 +1295,6 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
   VariableMap varmap(rewritten);
 
   // Translate all ops to conform to target model.
-  rewritten->target_ = target_;
   bool success = true;
   for (Op *op : ops_) {
     // Get operation type, result, and arguments.
@@ -1436,11 +1588,11 @@ bool Express::Rewrite(const Model &model, Express *rewritten) const {
       // Put source into a register if memory operands are not available.
       if (args[1]->type == CONST || args[1]->type == NUMBER) {
         if (!model.func_reg_imm) {
-          source = rewritten->Temp();
+          source2 = rewritten->Temp();
         }
       } else if (!args[1]->IsRegister()) {
         if (!model.func_reg_mem || args[1]->single) {
-          source = rewritten->Temp();
+          source2 = rewritten->Temp();
         }
       }
 
@@ -1700,7 +1852,7 @@ int Express::AllocateRegisters(bool predicate_regs) {
 
     // Get register for accumulation.
     if (op->reduction()) {
-      op->acc = regs.AllocateExtra();
+      op->acc = regs.AllocateExtra(op->preduction());
       CHECK(op->acc != -1);
     }
   }
@@ -1742,13 +1894,14 @@ void Express::GetRegisterTypes(std::vector<bool> *regs) const {
   for (auto *op : ops_) {
     if (op->acc == -1) continue;
     if (op->acc >= regs->size()) regs->resize(op->acc + 1);
+    if (op->preduction()) (*regs)[op->acc] = true;
   }
 }
 
 // Natural logarithm.
-// See also: http://gruntthepeon.free.fr/ssemath/sse_mathfun.h
+// See also: http://software-lisc.fbk.eu/avx_mathfun/avx_mathfun.h
 Express::Var *Express::Log(Var *x) {
-  if (target_ == NVIDIA) {
+  if (Supports(LOG2)) {
     // Compute natural logarithm from base-2 logarithm.
     return Mul(Do(LOG2, x), Number(LN2));
   } else {
@@ -1816,7 +1969,7 @@ Express::Var *Express::Log(Var *x) {
 // range [-1,1).
 // See also: https://git.io/vHyVR
 Express::Var *Express::Exp(Var *x) {
-  if (target_ == NVIDIA) {
+  if (Supports(EXP2)) {
     // Compute e^x = 2^(x * log2(e)).
     return Do(EXP2, Mul(x, Number(LOG2E)));
   } else {
@@ -1852,12 +2005,179 @@ Express::Var *Express::Exp(Var *x) {
   }
 }
 
+// Trigonometric functions.
+// See also: http://software-lisc.fbk.eu/avx_mathfun/avx_mathfun.h
+Express::Var *Express::Trig(OpType type, Var *x) {
+  // Compute directly using sin and cos if supported.
+  if (Supports(SIN) && Supports(COS)) {
+    switch (type) {
+      case SIN: return Do(SIN, x);
+      case COS: return Do(COS, x);
+      case TAN: return Div(Do(SIN, x), Do(COS, x));
+      case COT: return Div(Do(COS, x), Do(SIN, x));
+      case SEC: return Reciprocal(Do(COS, x));
+      case CSC: return Reciprocal(Do(SIN, x));
+      default: LOG(FATAL) << "Unsupported trigonometric function";
+    }
+  }
+
+  // Check if sine and/or cosine are needed.
+  bool sin_needed = (type != COS && type != SEC);
+  bool cos_needed = (type != SIN && type != CSC);
+
+  // Extract the sign bit for sine.
+  Var *sign = nullptr;
+  if (sin_needed) {
+    sign = Do(BITAND, x, Number(SIGN_MASK));
+  }
+
+  // Take the absolute value.
+  x = Do(BITAND, x, Number(INV_SIGN_MASK));
+
+  // Scale by 4/pi.
+  Var *y = Mul(x, Number(FOPI));
+
+  // Get the integer part of y.
+  Var *j = Do(CVTFLTINT, y);
+
+  // Compute j=(j+1) & (~1).
+  j = Do(ADDINT, j, Number(I1));
+  j = Do(BITAND, j, Number(INV_I1));
+  y = Do(CVTINTFLT, j);
+
+  // Get the sign swap masks.
+  Var *signswap_sin = nullptr;
+  Var *signswap_cos = nullptr;
+  Var *four = Number(I4);
+  if (sin_needed) {
+    signswap_sin = Do(BITXOR, sign, Do(QUADSIGN, Do(BITAND, j, four)));
+  }
+  if (cos_needed) {
+    signswap_cos = Do(QUADSIGN, Do(BITANDNOT, Do(SUBINT, j, Number(I2)), four));
+  }
+
+  // Get the polynomial selection mask. There is one polynomial for 0<=x<=pi/4
+  // and another one for pi/4<x<=pi/2. Both branches will be computed.
+  Var *polymask = Do(BITEQ, Do(BITAND, j, Number(I2)), Zero());
+
+  // Extended precision modular arithmetic.
+  // x = ((x - y * DP1) - y * DP2) - y * DP3
+  x = Add(x, Mul(y, Number(CEPHES_MINUS_DP1)));
+  x = Add(x, Mul(y, Number(CEPHES_MINUS_DP2)));
+  x = Add(x, Mul(y, Number(CEPHES_MINUS_DP3)));
+
+  // Evaluate the first polynomial (0<=x<=pi/4).
+  Var *z = Mul(x, x);
+  Var *p1 = Number(COSCOF_P0);
+  p1 = Mul(p1, z);
+  p1 = Add(p1, Number(COSCOF_P1));
+  p1 = Mul(p1, z);
+  p1 = Add(p1, Number(COSCOF_P2));
+  p1 = Mul(p1, z);
+  p1 = Mul(p1, z);
+  p1 = Sub(p1, Mul(z, Number(HALF)));
+  p1 = Add(p1, One());
+
+  // Evaluate the second polynomial (pi/4<=x<=pi/2).
+  Var *p2 = Number(SINCOF_P0);
+  p2 = Mul(p2, z);
+  p2 = Add(p2, Number(SINCOF_P1));
+  p2 = Mul(p2, z);
+  p2 = Add(p2, Number(SINCOF_P2));
+  p2 = Mul(p2, z);
+  p2 = Mul(p2, x);
+  p2 = Add(p2, x);
+
+  // Compute sine and cosine.
+  Var *sin = nullptr;
+  Var *cos = nullptr;
+  if (sin_needed) {
+    sin = Do(BITXOR, Cond(polymask, p2, p1), signswap_sin);
+  }
+  if (cos_needed) {
+    Var *y1 = Sub(p1, Select(Not(polymask), p1));
+    Var *y2 = Sub(p2, Select(polymask, p2));
+    cos = Do(BITXOR, Add(y1, y2), signswap_cos);
+  }
+
+  // Return result.
+  switch (type) {
+    case SIN: return sin;
+    case COS: return cos;
+    case TAN: return Div(sin, cos);
+    case COT: return Div(cos, sin);
+    case SEC: return Reciprocal(cos);
+    case CSC: return Reciprocal(sin);
+    default: LOG(FATAL) << "Unsupported trigonometric function";
+  }
+}
+
+Express::Var *Express::Asin(Var *x) {
+  return Atan(Mul(x, Rsqrt(Mul(Add(One(), x), Sub(One(), x)))));
+}
+
+Express::Var *Express::Acos(Var *x) {
+  return Add(Atan(Div(Sqrt(Mul(Add(One(), x), Sub(One(), x))), x)),
+             Select(CmpLt(x, Zero()), Number(PI)));
+}
+
+Express::Var *Express::Atan(Var *x) {
+  // Extract the sign bit.
+  Var *sign = Do(BITAND, x, Number(SIGN_MASK));
+
+  // Take the absolute value.
+  x = Do(BITAND, x, Number(INV_SIGN_MASK));
+
+  // Range reduction.
+  Var *over_tan3pio8 = CmpGt(x, Number(TAN3PIO8));
+  Var *over_tanpio8 = CmpGt(x, Number(TANPIO8));
+  x = Cond(over_tan3pio8, Div(Number(N1), x),
+           Cond(over_tanpio8, Div(Sub(x, One()), Add(x, One())), x));
+  Var *y = Cond(over_tan3pio8, Number(PIO2),
+                Cond(over_tanpio8, Number(PIO4), Zero()));
+
+  // Compute polynomial.
+  Var *z = Square(x);
+  Var *p = Number(ATAN_P0);
+  p = MulAdd(p, z, Number(ATAN_P1));
+  p = MulAdd(p, z, Number(ATAN_P2));
+  p = MulAdd(p, z, Number(ATAN_P3));
+  y = Add(y, Add(Mul(Mul(p, z), x), x));
+
+  // Adjust sign.
+  y = Do(BITXOR, y, sign);
+  return y;
+}
+
+Express::Var *Express::HyperTrig(OpType type, Var *x) {
+  // Compute exp(x), exp(-x), and exp(2x).
+  Var *pexp = nullptr;
+  Var *nexp = nullptr;
+  Var *texp = nullptr;
+  if (type == TANH || type == COTH) {
+    texp = Exp(Mul(x, Two()));
+  } else {
+    pexp = Exp(x);
+    nexp = Exp(Neg(x));
+  }
+
+  switch (type) {
+    case SINH: return Div(Sub(pexp, nexp), Two());
+    case COSH: return Div(Add(pexp, nexp), Two());
+    case TANH: return Div(Sub(texp, One()), Add(texp, One()));
+    case COTH: return Div(Add(texp, One()), Sub(texp, One()));
+    case SECH: return Div(Two(), Add(pexp, nexp));
+    case CSCH: return Div(Two(), Sub(pexp, nexp));
+    default: LOG(FATAL) << "Unsupported hyperbolic function";
+  }
+}
+
 // Hyperbolic tangent function.
 // Compute 13/6-degree rational interpolant which is accurate up to a couple of
 // ulp in the range [-9, 9], outside of which the fl(tanh(x)) = +/-1.
 // See: https://git.io/vHyiz
 Express::Var *Express::Tanh(Var *x) {
-  if (target_ == NVIDIA) {
+  if (Supports(EXP) || Supports(EXP2)) {
     // Compute tanh(x) = 2*sigmoid(2*x) - 1.
     return Sub(Mul(Sigmoid(Mul(x, Two())), Two()), One());
   } else {
@@ -1897,7 +2217,7 @@ Express::Var *Express::Erf(Var *x) {
   x = Abs(x);
 
   // A&S formula 7.1.26.
-  Var *t = Div(One(), Add(One(), Mul(Number(ERF_P), x)));
+  Var *t = Reciprocal(Add(One(), Mul(Number(ERF_P), x)));
   Var *p = MulAdd(Number(ERF_A5), t, Number(ERF_A4));
   p = MulAdd(p, t, Number(ERF_A3));
   p = MulAdd(p, t, Number(ERF_A2));
@@ -2038,7 +2358,7 @@ void Express::Op::Assign(Var *var, bool reassign) {
   var->producer = this;
 
   // Set predicate flag for result.
-  var->predicate = logic() || compare();
+  if (logic() || compare() || preduction()) var->predicate = true;
 }
 
 void Express::Op::AddArgument(Var *arg) {
@@ -2049,7 +2369,9 @@ void Express::Op::AddArgument(Var *arg) {
   args.push_back(arg);
 
   // Set predicate flag for argument.
-  if (logic() || (conditional() && args.size() == 1)) {
+  if (logic() || type == COUNT ||
+      (conditional() && args.size() == 1) ||
+      (type == MOV && arg->predicate)) {
     arg->predicate = true;
   }
 }

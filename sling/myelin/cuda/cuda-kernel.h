@@ -44,11 +44,34 @@ class PTXMacroAssembler : public PTXAssembler {
   // Return grid size for kernel.
   int grid_size() const { return grid_dim_[0] * grid_dim_[1] * grid_dim_[2]; }
 
+  // Block dimensions for kernel.
+  int block_dim(int d) const { return block_dim_[d]; }
+  void set_block_dim(int d, int size) { block_dim_[d] = size; }
+  void set_block_dims(int x = 1, int y = 1, int z = 1) {
+    block_dim_[0] = x;
+    block_dim_[1] = y;
+    block_dim_[2] = z;
+  }
+
+  // Return requested block size for kernel.
+  int block_size() const {
+    return block_dim_[0] * block_dim_[1] * block_dim_[2];
+  }
+
   // Load address of tensor into register.
   void LoadTensorAddress(const PTXReg &reg, Tensor *tensor);
 
-  // Compute the kernel thread index for dimension.
-  void GetThreadIndex(const PTXReg &idx, int d);
+  // Load the kernel thread index for dimension.
+  void LoadThreadIndex(const PTXReg &idx, int d);
+
+  // Load the kernel thread index within block for dimension.
+  void LoadBlockThreadIndex(const PTXReg &idx, int d);
+
+  // Load the kernel block index for dimension.
+  void LoadBlockIndex(const PTXReg &idx, int d);
+
+  // Load the kernel block size for dimension.
+  void LoadBlockDim(const PTXReg &idx, int d);
 
  private:
   // Data instance parameter.
@@ -56,6 +79,9 @@ class PTXMacroAssembler : public PTXAssembler {
 
   // Grid size for x, y, and z dimension.
   int grid_dim_[3];
+
+  // Block size. This is estimated automaticallly if not explicitly set.
+  int block_dim_[3];
 };
 
 // Kernel for launching CUDA kernels on GPUs.
