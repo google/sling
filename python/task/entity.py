@@ -159,7 +159,7 @@ class EntityWorkflow:
 
   def label_documents(self, indocs=None, outdocs=None, language=None):
     if indocs == None: indocs = self.wiki.wikipedia_documents(language)
-    if outdocs == None: indocs = self.labeled_documents(language)
+    if outdocs == None: outdocs = self.labeled_documents(language)
     if language == None: language = flags.arg.language
 
     with self.wf.namespace(language + "-ner"):
