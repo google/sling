@@ -71,6 +71,9 @@ class Registers {
   // Allocate argument register (1-6) or return register (0).
   Register arg(int n);
 
+  // Allocate extra preserved register. This needs to be restored and freed.
+  Register alloc_extra();
+
   // Mark register as being in use.
   void use(int r) { used_regs_ |= (1 << r); }
   void use(Register r) { use(r.code()); }
@@ -106,6 +109,10 @@ class Registers {
   static bool preserved(int r) { return ((1 << r) & kPreservedRegisters) != 0; }
   static bool preserved(Register r) { return preserved(r.code()); }
 
+  // Check if register is an extra callee-saved register.
+  static bool extra(int r) { return ((1 << r) & kExtraRegisters) != 0; }
+  static bool extra(Register r) { return extra(r.code()); }
+
   // Return the number of free registers.
   int num_free() const;
 
@@ -115,6 +122,14 @@ class Registers {
     1 << Register::kCode_rbx |
     1 << Register::kCode_rsp |
     1 << Register::kCode_rbp |
+    1 << Register::kCode_r12 |
+    1 << Register::kCode_r13 |
+    1 << Register::kCode_r14 |
+    1 << Register::kCode_r15;
+
+  // Extra callee-saved registers.
+  static const int kExtraRegisters =
+    1 << Register::kCode_rbx |
     1 << Register::kCode_r12 |
     1 << Register::kCode_r13 |
     1 << Register::kCode_r14 |
@@ -299,6 +314,7 @@ class MacroAssembler : public jit::Assembler {
 
   // Find existing static data block.
   StaticData *FindDataBlock(const void *data, int size, int repeat = 1);
+  StaticData *FindDataBlock(const void *data, int size, const string &symbol);
 
   // Create new static data block with (repeated) constant.
   template<typename T> StaticData *Constant(T value, int repeat = 1) {
@@ -330,8 +346,8 @@ class MacroAssembler : public jit::Assembler {
   // Get static data block for external reference.
   StaticData *GetExtern(const string &symbol, const void *address) {
     int size = sizeof(void *);
-    StaticData *data = FindDataBlock(&address, size);
-    if (data == nullptr || data->symbol() != symbol) {
+    StaticData *data = FindDataBlock(&address, size, symbol);
+    if (data == nullptr) {
       data = CreateDataBlock(size);
       data->AddData(&address, size);
       data->set_symbol(symbol);
@@ -415,8 +431,12 @@ class MacroAssembler : public jit::Assembler {
   void ResetRegisterUsage();
 
   // Call to external function.
-  void call_extern(void *func, const string &symbol) {
-    call(GetExtern(symbol, func)->address());
+  void call_extern(const void *func, const string &symbol) {
+    if (options_.pic) {
+      call(func, symbol);
+    } else {
+      call(GetExtern(symbol, func)->address());
+    }
   }
 
   // Type-dependent instructions.

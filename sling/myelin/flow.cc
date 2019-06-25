@@ -178,6 +178,15 @@ int Shape::CommonSize(const Shape &other) const {
   return n;
 }
 
+bool Shape::IsSingleBroadcast(const Shape &other) const {
+  int r = rank();
+  if (r == 0 || r != other.rank()) return false;
+  for (int d = 0; d < r - 1; ++d) {
+    if (dim(d) != other.dim(d)) return false;
+  }
+  return dim(r - 1) > 1 && other.dim(r - 1) == 1;
+}
+
 string Shape::ToString() const {
   string str;
   for (int d = 0; d < rank(); ++d) {

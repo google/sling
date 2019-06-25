@@ -247,6 +247,7 @@ class Express {
     Op *producer;                 // operation producing value for variable
     std::vector<Op *> consumers;  // consumers of variable
     bool single = false;          // single-element memory variable
+    bool unhoistable = false;     // variable is not loop invariant
     bool predicate = false;       // predicate variable
 
     // Live range for variable.

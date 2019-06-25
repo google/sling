@@ -404,7 +404,8 @@ class Assembler : public CodeGenerator {
   void repstosq() { emit_repstos(kInt64Size); }
 
   // Loads an external reference into a register.
-  void load_extern(Register dst, const void *ptr, const string &symbol);
+  void load_extern(Register dst, const void *ptr, const string &symbol,
+                   bool pic = false);
 
   // Instruction to load from an immediate 64-bit pointer into RAX.
   void load_rax(const void *ptr);
@@ -681,6 +682,9 @@ class Assembler : public CodeGenerator {
 
   // Call near absolute indirect, address in register
   void call(Register adr);
+
+  // Call external using pc-relative relocation.
+  void call(const void *target, const string &symbol);
 
   // Jumps
   // Jump short or near relative.

@@ -113,12 +113,18 @@ class Label {
 // An external symbol is a reference to code or data outside the code buffer
 // of the code generator.
 struct Extern {
+  struct Ref {
+    Ref(int offset, bool relative) : offset(offset), relative(relative) {}
+    int offset;     // offset of reference in code buffer
+    bool relative;  // absolute or relative fixup
+  };
+
   Extern(const string &symbol, Address address)
       : symbol(symbol), address(address) {}
 
   string symbol;           // symbolic name of external reference
   Address address;         // address of external reference
-  std::vector<int> refs;   // offsets of references to symbol in code buffer
+  std::vector<Ref> refs;   // references to symbol in code buffer
 };
 
 // A code generator emits machine code instructons into a buffer. If the
@@ -177,7 +183,7 @@ class CodeGenerator {
   }
 
   // Add external reference.
-  void AddExtern(const string &symbol, Address address);
+  void AddExtern(const string &symbol, Address address, bool relative = false);
 
   // List of external symbols in code buffer.
   const std::vector<Extern> &externs() const { return externs_; }

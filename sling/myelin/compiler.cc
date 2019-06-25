@@ -55,6 +55,7 @@ DEFINE_bool(sync_steps, false, "Synchronize all compute steps");
 DEFINE_bool(fast_math, false, "Fast approximate math ops");
 DEFINE_bool(graph_all_vars, false, "Include all variables in DOT graph");
 DEFINE_string(graph_layout, "", "DOT graph layout");
+DEFINE_string(data_profile, "", "File name prefix for data instance diagrams");
 DEFINE_bool(jit_debug, false, "Debug break in jit code");
 DEFINE_int32(cuda_device, -1, "CUDA device number");
 DEFINE_int32(cuda_context_flags, 0, "CUDA context flags");
@@ -171,6 +172,15 @@ void Compiler::Compile(Flow *flow, Network *net) {
   if (FLAGS_dump_cells) {
     for (Cell *cell : net->cells()) {
       LOG(INFO) << "Cell " << cell->name() << "\n" << cell->ToString();
+    }
+  }
+
+  // Optionally output data layout diagrams.
+  if (!FLAGS_data_profile.empty()) {
+    for (Cell *cell : net->cells()) {
+      DataProfile profile(cell);
+      string filename = FLAGS_data_profile + cell->name() + ".svg";
+      File::WriteContents(filename, profile.AsSVG());
     }
   }
 

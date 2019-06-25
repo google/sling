@@ -217,8 +217,8 @@ class GenericFltMatMatMul : public Kernel {
     Shape a = A->shape();
     Shape b = B->shape();
     Shape c = C->shape();
-    if (transpose_a) a = a.transpose();
-    if (transpose_b) b = b.transpose();
+    if (transpose_a) a = a.transposed();
+    if (transpose_b) b = b.transposed();
 
     if (a.dim(0) != c.dim(0)) return false;
     if (a.dim(1) != b.dim(0)) return false;
@@ -660,7 +660,7 @@ class TransposeTransformer : public Transformer {
       Shape perm2;
       if (!t1->GetAttr("perm", &perm1)) perm1.reverse(rank1);
       if (!t2->GetAttr("perm", &perm2)) perm2.reverse(rank2);
-      Shape perm = perm2.permute(perm1);
+      Shape perm = perm2.permuted(perm1);
       t1->SetAttr("perm", perm);
 
       t2->outputs[0]->shape = t2->inputs[0]->shape;

@@ -272,7 +272,9 @@ class SIMDMatMul : public Kernel {
     args.c().tensor->SetMiniumAlignment(vecbytes);
 
     // Reserve registers.
-    step->SetRegisterUsage(SIMDAssembler::RegisterUsage(type) + 8);
+    int regs = SIMDAssembler::RegisterUsage(type) + 8;
+    if (args.a().batch_size() > 1) regs++;
+    step->SetRegisterUsage(regs);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -307,9 +309,9 @@ class SIMDMatMul : public Kernel {
   void GenerateVertical(Step *step, MacroAssembler *masm,
                         const MatMulArgs &args, bool strided) {
     // Create SIMD code generators.
-    Type type = args.c().tensor->type();
+    Type type = args.c().type();
     int dsize = TypeTraits::of(type).size();
-    int vecbytes = SIMDAssembler::VectorBytes(args.c().type());
+    int vecbytes = SIMDAssembler::VectorBytes(type);
     int batchsize = args.a().batch_size();
     SIMDAssembler sasm(masm, type, args.Aligned(vecbytes));
     step->set_variant(sasm.name() + (strided ? "CR" : "RR"));
@@ -547,7 +549,7 @@ class SIMDMatMul : public Kernel {
     }
   }
 
-  // Compute dot products between row blocks in A and row blocks in B  using
+  // Compute dot products between row blocks in A and row blocks in B using
   // horizontal summation.
   void GenerateHorizontal(Step *step, MacroAssembler *masm,
                           const MatMulArgs &args) {
@@ -706,10 +708,11 @@ class SIMDMatMul : public Kernel {
     CHECK_EQ(args.a().height(), args.b().width());
     CHECK_EQ(args.a().batch_size(), 1);
 
-    // Allocate registers.
-    Register a = masm->rr().alloc();
-    Register b = masm->rr().alloc();
-    Register c = masm->rr().alloc();
+    // Allocate registers. Allocate some preserved registers to avoid register
+    // overflow.
+    Register a = masm->rr().alloc_extra();
+    Register b = masm->rr().alloc_extra();
+    Register c = masm->rr().alloc_extra();
     Register b_ptr = masm->rr().alloc();
     Register a_end = masm->rr().alloc();
     Register b_end = masm->rr().alloc();
@@ -717,6 +720,11 @@ class SIMDMatMul : public Kernel {
     Register b_ofs = masm->rr().alloc();
     auto elem = sasm.alloc();
     auto sum = sasm.alloc();
+
+    // Save preserved registers.
+    __ pushq(a);
+    __ pushq(b);
+    __ pushq(c);
 
     // Load tensor addresses.
     __ LoadTensorAddress(a, args.a().tensor);
@@ -778,6 +786,17 @@ class SIMDMatMul : public Kernel {
       __ cmpq(a, a_end);
       __ j(less, &l1);
     }
+
+    // Restore preserved registers.
+    __ popq(c);
+    __ popq(b);
+    __ popq(a);
+    masm->rr().release(a);
+    masm->rr().release(b);
+    masm->rr().release(c);
+    masm->rr().free(a);
+    masm->rr().free(b);
+    masm->rr().free(c);
   }
 
   int64 Complexity(const Step *step) override {
@@ -789,7 +808,7 @@ class SIMDMatMul : public Kernel {
   }
 
  private:
-  bool accumulate_;  // matmul with assignment.
+  bool accumulate_;  // matmul with assignment
 };
 
 void RegisterSIMDMatMulLibrary(Library *library) {

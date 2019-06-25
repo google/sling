@@ -168,18 +168,33 @@ class Shape {
   }
 
   // Return transposed shape.
-  Shape transpose() const {
+  Shape transposed() const {
     Shape t;
     for (int d = rank() - 1; d >= 0; --d) t.add(dim(d));
     return t;
   }
 
   // Return permuted shape.
-  Shape permute(const Shape &perm) const {
+  Shape permuted(const Shape &perm) const {
     CHECK_EQ(rank(), perm.rank());
     Shape p;
     for (int d = 0; d < rank(); ++d) p.add(dim(perm.dim(d)));
     return p;
+  }
+
+  // Return reduced shape.
+  Shape reduced(int axis, bool keepdims = false) const {
+    Shape r;
+    if (axis >= 0) {
+      for (int d = 0; d < rank(); ++d) {
+        if (d != axis) {
+          r.add(dim(d));
+        } else if (keepdims) {
+          r.add(1);
+        }
+      }
+    }
+    return r;
   }
 
   // Return the rank of the shape, i.e. the number of dimensions.
@@ -233,6 +248,10 @@ class Shape {
     return n;
   }
 
+  // Index operator.
+  int &operator [](int d) { return dims_[d]; }
+  const int &operator [](int d) const { return dims_[d]; }
+
   // Check if shape is the same as another shape. Undefined dimensions are
   // not compared.
   bool IsSameSize(const Shape &other) const;
@@ -245,6 +264,10 @@ class Shape {
   // Return the common size between this shape and another shape. The common
   // size is the product of all the shared suffix dimensions.
   int CommonSize(const Shape &other) const;
+
+  // Check if shape is a singular broadcast, i.e. all dimensions except the
+  // last are the same, and the last dimension is scalar.
+  bool IsSingleBroadcast(const Shape &other) const;
 
   // Return shape as string.
   string ToString() const;

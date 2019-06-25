@@ -64,8 +64,9 @@ class Elf {
     void AddPtr32(Buffer *buffer, int offset);
     void AddExternPtr(Elf::Symbol *symbol);
 
-    // Clear qword at offset in section buffer.
-    void Clear64(int offset);
+    // Clear dword/qword at offset in section buffer and return previous value.
+    int32_t Clear32(int offset);
+    int64_t Clear64(int offset);
 
     // Pad buffer to alignment.
     void Align(int alignment);

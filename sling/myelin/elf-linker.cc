@@ -65,9 +65,14 @@ void ElfLinker::EndCell(Cell *cell,
     }
 
     // Add relocations to code.
-    for (int offset : e.refs) {
-      code_.AddReloc(sym, R_X86_64_64, 0, code_start + offset);
-      code_.Clear64(code_start + offset);
+    for (auto &ref : e.refs) {
+      if (ref.relative) {
+        int addend = code_.Clear32(code_start + ref.offset);
+        code_.AddReloc(sym, R_X86_64_PC32, addend, code_start + ref.offset);
+      } else {
+        code_.AddReloc(sym, R_X86_64_64, 0, code_start + ref.offset);
+        code_.Clear64(code_start + ref.offset);
+      }
     }
   }
 

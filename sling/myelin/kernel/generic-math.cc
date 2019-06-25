@@ -85,7 +85,6 @@ class GenericFltMathFunction : public Kernel {
     Register input = masm->rr().alloc_preserved();
     Register output = masm->rr().alloc_preserved();
     Register ofs = masm->rr().alloc_preserved();
-    Register func = masm->rr().alloc_preserved();
     XMMRegister value = xmm0;
 
     // Load tensor locations.
@@ -98,7 +97,6 @@ class GenericFltMathFunction : public Kernel {
 
     // Get address of underlying function implementing function.
     void *funcaddr = reinterpret_cast<void *>(Function());
-    __ load_extern(func, funcaddr, FunctionSymbol());
     __ xorq(ofs, ofs);
 
     // Loop over elements in tensor.
@@ -108,7 +106,7 @@ class GenericFltMathFunction : public Kernel {
     __ movss(value, Operand(input, ofs));
 
     // Call function.
-    __ call(func);
+    __ call_extern(funcaddr, FunctionSymbol());
 
     // Save result in output.
     __ movss(Operand(output, ofs), value);

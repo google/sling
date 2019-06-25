@@ -231,8 +231,18 @@ void Elf::Buffer::AddExternPtr(Elf::Symbol *symbol) {
   Add64(0);
 }
 
-void Elf::Buffer::Clear64(int offset) {
-  for (int n = 0; n < 8; ++n) content[offset + n] = 0;
+int32_t Elf::Buffer::Clear32(int offset) {
+  int32_t *ptr = reinterpret_cast<int32_t *>(&content[offset]);
+  int32_t prev = *ptr;
+  *ptr = 0;
+  return prev;
+}
+
+int64_t Elf::Buffer::Clear64(int offset) {
+  int64_t *ptr = reinterpret_cast<int64_t *>(&content[offset]);
+  int64_t prev = *ptr;
+  *ptr = 0;
+  return prev;
 }
 
 void Elf::Buffer::Align(int alignment) {

@@ -241,12 +241,17 @@ struct Expression {
     prototype = step->GetPrototype();
     Type type = prototype->type();
 
-    // Compute the maximum common size between inputs and outputs. Scalars are
-    // not used for computing the maximum size since these can be broadcast to
-    // the vector size.
+    // Compute the maximum common size between inputs and outputs. Scalars and
+    // singular broadcasts are not used for computing the maximum size since
+    // these can be broadcast to the vector size.
     int elements = prototype->elements();
+    bool single_bcast = false;
     for (auto *input : step->inputs()) {
       if (input->elements() == 1) continue;
+      if (prototype->shape().IsSingleBroadcast(input->shape())) {
+        single_bcast = true;
+        continue;
+      }
       int common = prototype->shape().CommonSize(input->shape());
       if (common < elements) elements = common;
     }
@@ -258,6 +263,16 @@ struct Expression {
     // needed in this case.
     if (elements == 1) {
       for (auto *v : expr.vars()) v->single = false;
+    } else if (single_bcast) {
+      // Mark singular broadcast inputs as single element but not loop
+      // invariant.
+      for (int i = 0; i < step->indegree(); ++i) {
+        if (prototype->shape().IsSingleBroadcast(step->input(i)->shape())) {
+          Express::Var *var = expr.Variable(Express::INPUT, i);
+          var->single = true;
+          var->unhoistable = true;
+        }
+      }
     }
 
     // Select expression generator.
@@ -516,7 +531,7 @@ class PowerTransformer : public Transformer {
           // pow(x, 2) = square(x).
           replacement = "Square";
         } else if (exponent == 0.5) {
-          // pow(x, 0,5) = sqrt(x).
+          // pow(x, 0.5) = sqrt(x).
           replacement = "Sqrt";
         } else if (exponent == -0.5) {
           // pow(x, -0.5) = rsqrt(x).

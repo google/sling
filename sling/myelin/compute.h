@@ -39,6 +39,7 @@ class CUDADevice;
 class CustomKernel;
 class InstanceAllocator;
 class ProfileSummary;
+class Options;
 
 // Element order.
 enum Order {
@@ -69,20 +70,26 @@ class Kernel {
  public:
   virtual ~Kernel() = default;
 
+  // Return name of operation supported by kernel.
+  virtual string Operation() = 0;
+
   // Return descriptive name for kernel.
-  virtual string Name() = 0;
+  virtual string Name() { return Operation(); }
 
   // Return location of kernel computation.
   virtual Placement Location() { return HOST; }
 
-  // Return name of operation support by kernel.
-  virtual string Operation() = 0;
-
   // Check if kernel supports generating code for step.
-  virtual bool Supports(Step *step) = 0;
+  virtual bool Supports(Step *step) { return false; }
+  virtual bool Supports(Step *step, const Options &options) {
+    return Supports(step);
+  }
 
   // Let kernel adjust alignment constraints for step.
   virtual void Adjust(Step *step) {}
+  virtual void Adjust(Step *step, const Options &options) {
+    Adjust(step);
+  }
 
   // Generate code for step.
   virtual void Generate(Step *step, MacroAssembler *masm) = 0;
@@ -1278,6 +1285,8 @@ struct Options {
   bool dynamic_allocation = false;           // dynamic instance allocation
   bool sync_steps = false;                   // synchronize all steps
   bool fast_math = false;                    // fast approximate math ops
+  bool aot = false;                          // ahead-of-time compilation
+  bool pic = false;                          // position-independent code
   int64 *flops_address = nullptr;            // address of FLOPs counter
 
   bool ref_profiler() const { return external_profiler || global_profiler; }

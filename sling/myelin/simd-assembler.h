@@ -67,6 +67,7 @@ class SIMDGenerator {
                       bool retain) = 0;
 
   // Accumulate value in src into acc.
+  virtual void Accumulate(Reduction op, int acc, int src);
   virtual void Accumulate(Reduction op, int acc, const jit::Operand &src);
 
   // Horizontal sum of all elements in register.
@@ -128,6 +129,9 @@ class SIMDAssembler {
 
   // Vertical sum of list of registers. Result is in the first register.
   void Sum(const std::vector<int> &regs);
+
+  // Vertical reduction of list of registers. Result is in the first register.
+  void Reduce(Reduction op, const std::vector<int> &regs);
 
   // Check if type is supported.
   static bool Supports(Type type);

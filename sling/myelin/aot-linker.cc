@@ -46,7 +46,7 @@ AOTLinker::AOTLinker(const Options &options) : options_(options) {
 
 void AOTLinker::BeginCell(Cell *cell) {
   // Align code buffer before generating new cell computation function.
-  code_.Align(16);
+  code_.Align(64);
 
   // Entry point for cell function.
   string entry_name = Sanitized(cell->name() + "_entry");
@@ -153,9 +153,14 @@ void AOTLinker::EndCell(Cell *cell,
     }
 
     // Add relocations to code.
-    for (int offset : e.refs) {
-      code_.AddReloc(sym, R_X86_64_64, 0, code_start + offset);
-      code_.Clear64(code_start + offset);
+    for (auto &ref : e.refs) {
+      if (ref.relative) {
+        int addend = code_.Clear32(code_start + ref.offset);
+        code_.AddReloc(sym, R_X86_64_PC32, addend, code_start + ref.offset);
+      } else {
+        code_.AddReloc(sym, R_X86_64_64, 0, code_start + ref.offset);
+        code_.Clear64(code_start + ref.offset);
+      }
     }
   }
 

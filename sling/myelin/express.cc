@@ -919,6 +919,7 @@ void Express::Hoist(int limit) {
     // Find constant or number variable with the most usages.
     Var *candidate = nullptr;
     for (Var *v : vars_) {
+      if (v->unhoistable) continue;
       if (v->type == CONST || v->type == NUMBER) {
         if (hoisted.count(v) == 0) {
           if (candidate == nullptr || v->usages() > candidate->usages()) {
@@ -969,9 +970,9 @@ void Express::Hoist(int limit) {
       Op *op = ops_[i];
 
       // Check if all arguments are cached.
-      bool invariant = true;
+      bool invariant = op->result->unhoistable;
       for (Var *arg : op->args) {
-        if (hoisted.count(arg) == 0) {
+        if (hoisted.count(arg) == 0 || arg->unhoistable) {
           invariant = false;
           break;
         }

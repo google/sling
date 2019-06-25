@@ -34,6 +34,7 @@ DEFINE_string(hdr, "", "C++ header file for accessing model");
 DEFINE_string(data, "", "Separate data file for storing parameters");
 DEFINE_string(ns, "", "C++ name space for generated code");
 DEFINE_bool(upper, false, "Uppercase class names");
+DEFINE_bool(pic, false, "Generate position-independent code");
 
 using namespace sling;
 using namespace sling::myelin;
@@ -70,6 +71,8 @@ int main(int argc, char *argv[]) {
   // Compile flow.
   Network net;
   net.set_linker(&linker);
+  net.options().aot = true;
+  net.options().pic = FLAGS_pic;
   Compiler compiler;
   compiler.set_perf_flopctr(false);
   compiler.Compile(&flow, &net);

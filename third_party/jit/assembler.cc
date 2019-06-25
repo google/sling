@@ -325,6 +325,13 @@ void Assembler::call(Address target) {
   emitl(static_cast<int32_t>(displacement));
 }
 
+void Assembler::call(const void *target, const string &symbol) {
+  EnsureSpace ensure_space(this);
+  emit(0xE8);
+  AddExtern(symbol, static_cast<Address>(const_cast<void *>(target)), true);
+  emitl(-4);
+}
+
 void Assembler::clc() {
   EnsureSpace ensure_space(this);
   emit(0xF8);
@@ -743,12 +750,23 @@ void Assembler::emit_lea(Register dst, const Operand &src, int size) {
 }
 
 void Assembler::load_extern(Register dst, const void *value,
-                            const string &symbol) {
+                            const string &symbol, bool pic) {
   EnsureSpace ensure_space(this);
-  emit_rex(dst, kPointerSize);
-  emit(0xB8 | dst.low_bits());
-  AddExtern(symbol, static_cast<Address>(const_cast<void *>(value)));
-  emitp(value);
+  DCHECK(kPointerSize == kInt64Size);
+  if (pic) {
+    // PC-relative load, lea dst, [rip+disp].
+    emit(0x48 | dst.high_bit() << 2 | 1);  // REX.64
+    emit(0x8D);
+    emit(0x05 | dst.low_bits() << 3);  // mod:0, reg: dst, rm: 101
+    AddExtern(symbol, static_cast<Address>(const_cast<void *>(value)), true);
+    emitl(-4);
+  } else {
+    // Absolute load, mov dst, imm64.
+    emit_rex(dst, kPointerSize);
+    emit(0xB8 | dst.low_bits());
+    AddExtern(symbol, static_cast<Address>(const_cast<void *>(value)));
+    emitp(value);
+  }
 }
 
 void Assembler::load_rax(const void *value) {

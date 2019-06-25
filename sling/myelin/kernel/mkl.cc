@@ -26,7 +26,6 @@
 #include "sling/myelin/macro-assembler.h"
 
 DEFINE_string(mklrt, "", "Intel MKL runtime model");
-DEFINE_bool(mklnojit, false, "Disable Intel MKL JIT");
 
 #define __ masm->
 
@@ -58,17 +57,16 @@ enum MKLJITStatus : mkl_int_t {
 
 typedef void *gemm_jit_kernel_t;
 
-// Handle to MKL library.
-static void *mkl_lib = nullptr;
-
-// MKL JIT support.
+// MKL support.
+static bool mkl_support = false;
+static bool mkl_batch_support = false;
 static bool mkl_jit_support = false;
 
 // MKL functions.
-void *cblas_sgemm = nullptr;
-void *cblas_dgemm = nullptr;
-void *cblas_sgemm_batch = nullptr;
-void *cblas_dgemm_batch = nullptr;
+const void *cblas_sgemm = nullptr;
+const void *cblas_dgemm = nullptr;
+const void *cblas_sgemm_batch = nullptr;
+const void *cblas_dgemm_batch = nullptr;
 
 // MKL JIT functions.
 
@@ -173,69 +171,82 @@ static bool LoadMKLLibrary() {
   }
 
   // Resolve library functions.
-  cblas_sgemm = CHECK_NOTNULL(dlsym(lib, "cblas_sgemm"));
-  cblas_dgemm = CHECK_NOTNULL(dlsym(lib, "cblas_dgemm"));
-  cblas_sgemm_batch = CHECK_NOTNULL(dlsym(lib, "cblas_sgemm_batch"));
-  cblas_dgemm_batch = CHECK_NOTNULL(dlsym(lib, "cblas_dgemm_batch"));
+  LOAD_MKL_FUNCTION(cblas_sgemm);
+  LOAD_MKL_FUNCTION(cblas_dgemm);
+  LOAD_MKL_FUNCTION(cblas_sgemm_batch);
+  LOAD_MKL_FUNCTION(cblas_dgemm_batch);
+  LOAD_MKL_FUNCTION(mkl_cblas_jit_create_sgemm);
+  LOAD_MKL_FUNCTION(mkl_cblas_jit_create_dgemm);
+  LOAD_MKL_FUNCTION(mkl_jit_destroy);
+  LOAD_MKL_FUNCTION(mkl_jit_get_sgemm_ptr);
+  LOAD_MKL_FUNCTION(mkl_jit_get_dgemm_ptr);
 
-  // Resolve MKL JIT functions.
-  if (!FLAGS_mklnojit) {
-    LOAD_MKL_FUNCTION(mkl_cblas_jit_create_sgemm);
-    LOAD_MKL_FUNCTION(mkl_cblas_jit_create_dgemm);
-    LOAD_MKL_FUNCTION(mkl_jit_destroy);
-    LOAD_MKL_FUNCTION(mkl_jit_get_sgemm_ptr);
-    LOAD_MKL_FUNCTION(mkl_jit_get_dgemm_ptr);
-  }
-
-  mkl_lib  = lib;
+  mkl_support = (cblas_sgemm != nullptr);
+  mkl_batch_support = (cblas_sgemm_batch != nullptr);
   mkl_jit_support = (mkl_cblas_jit_create_sgemm != nullptr);
 
   return true;
 }
 
 // Check if MKL is supported.
-bool SupportsMKL() {
+static bool SupportsMKL() {
   std::call_once(mkl_initialized, []() { LoadMKLLibrary(); });
-  return mkl_lib != nullptr;
+  return mkl_support;
 }
 
 // Matrix multiplication using Intel Math Kernel Library, C = A * B.
 class MKLMatMul : public Kernel {
  public:
-  string Name() override { return "MKLMatMul"; }
-  string Operation() override { return "MatMul"; }
+  MKLMatMul(bool accumulate) : accumulate_(accumulate)  {}
 
-  bool Supports(Step *step) override {
-    // Two inputs and one output.
-    if (step->indegree() != 2) return false;
-    if (step->outdegree() != 1) return false;
-    Args args(step);
+  string Name() override {
+    return accumulate_ ? "MKLAccMatMul" : "MKLMatMul";
+  }
+  string Operation() override {
+    return accumulate_ ? "AssignAddMatMul" : "MatMul";
+  }
 
-    // Check type and shape.
+  bool Supports(Step *step, const Options &options) override {
+    // Check arguments.
+    if (accumulate_) {
+      if (step->indegree() != 3) return false;
+      if (step->outdegree() != 0) return false;
+    } else {
+      if (step->indegree() != 2) return false;
+      if (step->outdegree() != 1) return false;
+    }
+    Args args(step, accumulate_);
+
+    // Check type, shape and order.
     if (!args.Compatible()) return false;
-
-    // Check that MKL is supported.
     if (!args.A.tensor->SupportsOrder(ROW_MAJOR)) return false;
     if (!args.B.tensor->SupportsOrder(ROW_MAJOR)) return false;
     if (!args.C.tensor->SupportsOrder(ROW_MAJOR)) return false;
-    if (!SupportsMKL()) return false;
+
+    // Check that MKL is supported.
+    if (!options.aot) {
+      if (!SupportsMKL()) return false;
+      if (args.C.batchsize() > 1 && !mkl_batch_support) return false;
+    }
 
     return true;
   }
 
-  void Adjust(Step *step) override {
-    Args args(step);
+  void Adjust(Step *step, const Options &options) override {
+    Args args(step, accumulate_);
 
     // Only row-major supported for now.
     args.A.tensor->RequireOrder(ROW_MAJOR);
     args.B.tensor->RequireOrder(ROW_MAJOR);
     args.C.tensor->RequireOrder(ROW_MAJOR);
 
-    // Set alignment to largest vector size supported by CPU.
+    // Set alignment to largest vector size supported by CPU. Assume max
+    // alignment in AOT mode.
     int alignment = args.traits.size();
     if (CPU::Enabled(SSE)) alignment = 16;
     if (CPU::Enabled(AVX)) alignment = 32;
     if (CPU::Enabled(AVX512F)) alignment = 64;
+    if (options.aot) alignment = 64;
     args.A.tensor->SetMiniumAlignment(alignment);
     args.B.tensor->SetMiniumAlignment(alignment);
     args.C.tensor->SetMiniumAlignment(alignment);
@@ -243,7 +254,7 @@ class MKLMatMul : public Kernel {
 
   void Generate(Step *step, MacroAssembler *masm) override {
     // Get arguments.
-    Args args(step);
+    Args args(step, accumulate_);
 
     // Get dimensions for matrices.
     int dsize = args.traits.size();
@@ -256,19 +267,20 @@ class MKLMatMul : public Kernel {
     int batch = args.C.batchsize();
 
     if (batch == 1) {
+      // Try to get JIT-compiled MKL kernel. Never use JIT in AOT mode.
       bool jitted = false;
-      if (mkl_jit_support) {
+      if (mkl_jit_support && !masm->options().aot) {
         // Get jitter for MKL function.
         MKLJITStatus status;
         void *jitter;
         if (args.type == DT_FLOAT) {
           status = mkl_cblas_jit_create_sgemm(
               &jitter, MKL_ROW_MAJOR, args.A.op(), args.B.op(),
-              m, n, k, 1.0, lda, ldb, 0.0, ldc);
+              m, n, k, 1.0, lda, ldb, accumulate_ ? 1.0 : 0.0, ldc);
         } else {
           status = mkl_cblas_jit_create_dgemm(
               &jitter, MKL_ROW_MAJOR, args.A.op(), args.B.op(),
-              m, n, k, 1.0, lda, ldb, 0.0, ldc);
+              m, n, k, 1.0, lda, ldb, accumulate_ ? 1.0 : 0.0, ldc);
         }
         if (status == MKL_JIT_SUCCESS || status == MKL_NO_JIT) {
           // Get pointer to JIT function.
@@ -292,6 +304,7 @@ class MKLMatMul : public Kernel {
         }
       }
 
+      // Generate call to standard gemm function if no JIT was provided.
       if (!jitted) {
         // Set up arguments to gemm routine.
         Register a = masm->rr().alloc();
@@ -311,11 +324,20 @@ class MKLMatMul : public Kernel {
         if (args.type == DT_FLOAT) {
           auto *one = masm->GetConstant<float>(1.0);
           __ movss(xmm0, one->address());  // alpha=1.0
+          if (accumulate_) {
+            __ movss(xmm1, xmm0);          // beta=1.0
+          } else {
+            __ pxor(xmm1, xmm1);           // beta=0.0
+          }
         } else {
           auto *one = masm->GetConstant<double>(1.0);
           __ movsd(xmm0, one->address());  // alpha=1.0
+          if (accumulate_) {
+            __ movsd(xmm1, xmm0);          // beta=1.0
+          } else {
+            __ pxor(xmm1, xmm1);           // beta=0.0
+          }
         }
-        __ pxor(xmm1, xmm1); // beta=0.0
 
         __ movq(arg_reg_1, Immediate(MKL_ROW_MAJOR));
         __ movq(arg_reg_2, Immediate(args.A.op()));
@@ -350,10 +372,10 @@ class MKLMatMul : public Kernel {
       StaticData *beta_array;
       if (args.type == DT_FLOAT) {
         alpha_array = masm->GetConstant<float>(1.0);
-        beta_array = masm->GetConstant<float>(0.0);
+        beta_array = masm->GetConstant<float>(accumulate_ ? 1.0 : 0.0);
       } else {
         alpha_array = masm->GetConstant<double>(1.0);
-        beta_array = masm->GetConstant<double>(0.0);
+        beta_array = masm->GetConstant<double>(accumulate_ ? 1.0 : 0.0);
       }
 
       auto *transa_array = masm->GetConstant<mkl_int_t>(args.A.op());
@@ -400,7 +422,7 @@ class MKLMatMul : public Kernel {
   }
 
   int64 Complexity(const Step *step) override {
-    Args args(step);
+    Args args(step, accumulate_);
     int64 ops = args.C.rows() * args.C.cols();
     ops *= args.A.cols() * 2;
     ops *= args.C.batchsize();
@@ -470,13 +492,15 @@ class MKLMatMul : public Kernel {
 
   // Arguments for MatMul kernel.
   struct Args {
-    Args(const Step *step)
-      : A(step->input(0), step->GetAttr("transpose_a", false)),
-        B(step->input(1), step->GetAttr("transpose_b", false)),
-        C(step->output(0), step->GetAttr("transpose_c", false)),
+    Args(const Step *step, bool accumulate)
+      : A(accumulate ? step->input(1) : step->input(0),
+          step->GetAttr("transpose_a", false)),
+        B(accumulate ? step->input(2) : step->input(1),
+          step->GetAttr("transpose_b", false)),
+        C(accumulate ? step->input(0) : step->output(0),
+          step->GetAttr("transpose_c", false)),
         type(C.type()),
-        traits(TypeTraits::of(type)) {
-    }
+        traits(TypeTraits::of(type)) {}
 
     // Check that shapes and types are compatible.
     bool Compatible() const {
@@ -520,10 +544,14 @@ class MKLMatMul : public Kernel {
     ~MKLJitter() override { mkl_jit_destroy(jitter); }
     void *jitter;
   };
+
+ private:
+  bool accumulate_;  // matmul with assignment
 };
 
 void RegisterMKLLibrary(Library *library) {
-  library->Register(new MKLMatMul());
+  library->Register(new MKLMatMul(false));
+  library->Register(new MKLMatMul(true));
 }
 
 }  // namespace myelin

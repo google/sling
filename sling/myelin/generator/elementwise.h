@@ -30,6 +30,7 @@ namespace myelin {
 //  - SCALAR (scalar input broadcast over all the elemements)
 //  - CONST (scalar constant input broadcast over all the elemements)
 //  - REPEAT (iterator repeated over all the elements)
+//  - SINGLE (single element broadcast over inner dimensions)
 //  - BROADCAST (general broadcast iterator with one broadcast dimension)
 class ElementwiseIndexGenerator : public IndexGenerator {
  public:
@@ -61,7 +62,7 @@ class ElementwiseIndexGenerator : public IndexGenerator {
   bool single() const { return single_; }
 
  private:
-  enum IteratorType {SIMPLE, SCALAR, CONST, REPEAT, BROADCAST};
+  enum IteratorType {SIMPLE, SCALAR, CONST, REPEAT, SINGLE, BROADCAST};
   struct Locator;
   struct Iterator;
 

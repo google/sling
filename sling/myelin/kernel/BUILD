@@ -13,6 +13,7 @@ cc_library(
   deps = [
     "//sling/base",
     "//sling/myelin:compute",
+    "//sling/myelin:simd-assembler",
   ],
 )
 

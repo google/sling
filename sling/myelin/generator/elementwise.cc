@@ -121,8 +121,8 @@ ElementwiseIndexGenerator::Locator *ElementwiseIndexGenerator::GetLocator(
       }
     } else if (d1 >= 0 && d2 >= 0 && var->dim(d1) == 1 &&
                var->elements() * shape_.dim(d2) == shape_.elements()) {
-      // Create broadcast iterator over one dimension.
-      loc->iterator = GetIterator(BROADCAST, n);
+      // Create broadcast iterator over one (singular) dimension.
+      loc->iterator = GetIterator(n == 1 ? SINGLE : BROADCAST, n);
       loc->broadcast = shape_.dim(d2);
     } else {
       LOG(FATAL) << "Unsupported broadcast: " << var->name()
@@ -188,6 +188,7 @@ bool ElementwiseIndexGenerator::AllocateRegisters() {
           if (!loc->base.is_valid()) return false;
         }
         break;
+      case SINGLE:
       case BROADCAST:
         // Allocate base and broadcast registers.
         loc->base = rr.try_alloc();
@@ -290,6 +291,27 @@ void ElementwiseIndexGenerator::GenerateLoopEnd() {
           __ xorq(it->offset, it->offset);
           __ bind(&l);
         }
+      } else if (it->type == SINGLE) {
+        for (Locator *loc : locators_) {
+          if (loc->iterator != it) continue;
+          int stride = vecsize_ / element_size();
+          if (stride == 1) {
+            __ incq(loc->repeat);
+          } else {
+            __ addq(loc->repeat, Immediate(stride));
+          }
+          Label l2;
+          if ((loc->broadcast & (loc->broadcast - 1)) == 0) {
+            __ andq(loc->repeat, Immediate(loc->broadcast - 1));
+            __ j(not_zero, &l2);
+          } else {
+            __ cmpq(loc->repeat, Immediate(loc->broadcast));
+            __ j(less, &l2);
+            __ xorq(loc->repeat, loc->repeat);
+          }
+          __ addq(loc->base, Immediate(element_size()));
+          __ bind(&l2);
+        }
       } else if (it->type == BROADCAST) {
         size_t block_size = element_size() * it->size;
         Label l1;
@@ -338,6 +360,9 @@ bool ElementwiseIndexGenerator::NeedsBroadcast(Express::Var *var) {
   // Get locator.
   CHECK(Valid(var));
   Locator *loc = LookupLocator(var);
+
+  // Single broadcasts need broadcast.
+  if (loc->iterator->type == SINGLE) return true;
 
   // Memory variable needs broadcast if it is a scalar value and the vector size
   // of the generator is more than one element.
@@ -447,6 +472,9 @@ Operand ElementwiseIndexGenerator::addr(Express::Var *var) {
                            loc->var->offset());
           }
         }
+      case SINGLE:
+        // Return block base.
+        return Operand(loc->base);
       case BROADCAST:
         // Return block base plus block offset.
         return Operand(loc->base, loc->iterator->offset);

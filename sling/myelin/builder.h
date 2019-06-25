@@ -258,12 +258,12 @@ class FlowBuilder : public Scope {
 
   // Matrix transpose.
   Variable *Transpose(Variable *x) {
-    return Op("Transpose", {x}, x->type, x->shape.transpose());
+    return Op("Transpose", {x}, x->type, x->shape.transposed());
   }
 
   // Tensor transpose.
   Variable *Transpose(Variable *x, const Shape &perm) {
-    auto *t = Op("Transpose", {x}, x->type, x->shape.permute(perm));
+    auto *t = Op("Transpose", {x}, x->type, x->shape.permuted(perm));
     t->producer->SetAttr("perm", perm);
     return t;
   }

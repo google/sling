@@ -165,6 +165,10 @@ class Builder:
     return op
 
   def const(self, value, dtype=None, shape=None):
+    # Scalar type conversion.
+    if type(value) is int and dtype == DT_FLOAT: value = float(value)
+    if type(value) is float and dtype == DT_INT: value = int(value)
+
     # Convert scalars and lists.
     if type(value) is float:
       if dtype is None: dtype = DT_FLOAT
