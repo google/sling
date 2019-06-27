@@ -4,10 +4,10 @@ def _genembed_impl(ctx):
   # Generate arguments to the embedded data compiler.
   args = []
   for i in ctx.attr.srcs:
-    args += [f.path for f in i.files]
+    args += [f.path for f in i.files.to_list()]
 
   # Run embedded data compiler.
-  ctx.action(
+  ctx.actions.run(
     inputs = ctx.files.srcs,
     outputs = [ctx.outputs.out],
     arguments = ["-o", ctx.outputs.out.path] + args,

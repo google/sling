@@ -52,8 +52,6 @@ class TransitionGenerator:
     self.commons = commons
     self._id = commons["id"]
     self._isa = commons["isa"]
-    self._thing = commons["thing"]  # fallback type
-    assert self._thing.isglobal()
 
 
   # Returns whether 'handle' refers to another frame.
@@ -98,10 +96,6 @@ class TransitionGenerator:
           nb_edge.inverse = edge
           edge.inverse = nb_edge
           pending.append(value)
-
-    # Assign a fallback type.
-    if info.type is None:
-      info.type = self._thing
 
     # Initialize bookkeeping for all frames pointed to by this frame.
     for p in pending:

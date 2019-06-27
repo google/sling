@@ -330,7 +330,9 @@ class ParserState:
     frames = {}
 
     for f in self.frames:
-      frame = store.frame({"isa": f.type})
+      frame = store.frame({})
+      if f.type is not None:
+        frame["isa"] = f.type
       frames[f] = frame
       if len(f.spans) == 0:
         document.add_theme(frame)
