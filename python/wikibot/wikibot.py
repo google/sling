@@ -35,6 +35,11 @@ flags.define("--test",
              default=False,
              action='store_true')
 
+flags.define("--verbose",
+             help="verbose mode",
+             default=False,
+             action='store_true')
+
 flags.define("--batch",
              help="number of records to update",
              default=3,
@@ -143,10 +148,13 @@ class StoreFactsBot:
     self.record_file.close()
 
   def get_sources(self, h_item, category):
+    sources = [self.time_claim]
+    cat_item = pywikibot.ItemPage(self.repo, category)
+    if cat_item.exists() and not cat_item.isRedirectPage():
+      source_claim = pywikibot.Claim(self.repo, "P3452") # inferred from
+      source_claim.setTarget(cat_item)
+      sources.append(source_claim)
     h_cat = self.store[category]
-    source_claim = pywikibot.Claim(self.repo, "P3452") # inferred from
-    source_claim.setTarget(pywikibot.ItemPage(self.repo, category))
-    sources = [source_claim, self.time_claim]
     for lang in self.languages:
       item_doc = self.record_db[lang].lookup(h_item.id)
       if item_doc is None: continue
@@ -207,7 +215,7 @@ class StoreFactsBot:
     return False
 
   def log_status_skip(self, item, facts, error):
-    print("Skipping", item.id, " -- ", facts, error)
+    if flags.arg.verbose: print("Skipping", item.id, " -- ", facts, error)
     status_record = self.rs.frame({
       self.n_item: item,
       self.n_facts: facts,
@@ -216,7 +224,7 @@ class StoreFactsBot:
     self.status_file.write(str(item.id), status_record.data(binary=True))
 
   def log_status_stored(self, item, facts, rev_id):
-    print("Storing", item.id, " -- ", facts)
+    if flags.arg.verbose: print("Storing", item.id, " -- ", facts)
     url = "https://www.wikidata.org/w/index.php?title="
     url += str(item.id)
     url += "&type=revision&diff="
@@ -249,6 +257,8 @@ class StoreFactsBot:
   def store_records(self, records, batch_size=3):
     updated = 0
     recno = 0
+    url_prefix = "https://www.wikidata.org/wiki/"
+    oldval = ""
     for item_bytes, record in records:
       item_str = item_bytes.decode()
       recno += 1
@@ -259,7 +269,7 @@ class StoreFactsBot:
       if updated >= batch_size:
         print("Hit batch size of", batch_size)
         break
-      print("Processing https://www.wikidata.org/wiki/" + item_str)
+      print(updated, "records updated. Processing", url_prefix + item_str)
       fact_record = self.rs.parse(record)
       item = fact_record[self.n_item]
       facts = fact_record[self.n_facts]
@@ -285,6 +295,10 @@ class StoreFactsBot:
         prop_str = str(prop.id)
         fact = self.rs.frame({prop: val})
         claim = pywikibot.Claim(self.repo, prop_str)
+        if val != oldval:
+          oldval = val
+          print(provenance[self.n_category],
+                self.store[provenance[self.n_category]].name)
         if prop in self.uniq_prop:
           if prop_str not in wd_claims:
             if self.ever_had_prop(wd_item, prop_str):
@@ -366,7 +380,8 @@ class StoreFactsBot:
           claim.addSources(sources)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
-      print("Item:", item.id, "Record: ", recno)
+      print("Record: ", recno, end=' ')
+      if flags.arg.verbose: print("Item:", item.id, "Record: ", recno)
     print("Last record:", recno, "Total:", updated, "records updated.")
 
 
