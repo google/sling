@@ -260,7 +260,7 @@ class CUDAMatMulBase : public CUDAKernel {
     ptx_emit(mov.u64, atile, PTXLiteral("ablock"));
     ptx_emit(mov.u64, btile, PTXLiteral("bblock"));
 
-    // Get block x and y indicies.
+    // Get block x and y indices.
     ptx_decl(u32, bx);
     ptx_decl(u32, by);
     ptx->LoadBlockIndex(bx, 0);

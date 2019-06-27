@@ -1491,6 +1491,9 @@ void Flow::Eliminate(Operation *op) {
 
       DeleteVariable(output);
     }
+  } else {
+    // Clear producer for outputs.
+    for (Variable *var : op->outputs) var->producer = nullptr;
   }
 
   DeleteOperation(op);

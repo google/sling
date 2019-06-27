@@ -194,7 +194,7 @@ class Profile {
 
 class ProfileOverview {
  public:
-  // Add profile informaiton for cell.
+  // Add profile information for cell.
   void Add(const Profile &profile) {
     cells_.emplace_back(profile);
     total_time_ += profile.time() * profile.invocations();
