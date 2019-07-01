@@ -587,6 +587,10 @@ class Builder:
     result.type = DT_INT
     return result
 
+  def assign(self, x, y, name=None):
+    op = self.rawop("Assign", name)
+    op.add_input(x)
+    op.add_input(y)
 
 # Set builder factory for flows.
 def builder_factory(flow, name):

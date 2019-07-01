@@ -494,7 +494,7 @@ class SIMDMatMul : public Kernel {
         if (inner_single) {
           gen->Broadcast(elem, Operand(a));
           if (accumulate_) {
-            gen->MaskedLoad(elem, Operand(c));
+            gen->MaskedLoad(sum[0], Operand(c));
             gen->MaskedMulAdd(sum[0], elem, Operand(b, blkstart));
           } else {
             gen->MaskedMul(sum[0], elem, Operand(b, blkstart));

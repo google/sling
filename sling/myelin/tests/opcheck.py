@@ -18,10 +18,10 @@
 import sling
 import sling.flags as flags
 import sling.myelin as myelin
+import sling.myelin.simulator as simulator
 import numpy as np
 import sys
 import struct
-import math
 
 flags.define("--dt", default=myelin.DT_FLOAT)
 flags.define("--test")
@@ -53,219 +53,8 @@ tests = {}
 # Initialize myelin compiler.
 compiler = myelin.Compiler()
 
-# Myelin to NumPy type conversion.
-nptypes = {
-  myelin.DT_FLOAT32: np.float32,
-  myelin.DT_FLOAT64: np.float64,
-  myelin.DT_INT8: np.int8,
-  myelin.DT_INT16: np.int16,
-  myelin.DT_INT32: np.int32,
-  myelin.DT_INT64: np.int64,
-}
-
-# NumPy functions.
-def sigmoid(x):
-  return 1 / (1 + np.exp(-x))
-
-def relu(x):
-  return np.maximum(x, 0)
-
-def erf(x):
-  return np.array([math.erf(v) for v in x])
-
-# Compute flow function using numpy.
-def simulate(flow, f, data):
-  # Copy input tensors.
-  v = {}
-  for i in flow.inputs(f):
-    if i.data != None:
-      v[i] = np.array(i.data, dtype=nptypes[i.type])
-    else:
-      v[i] = np.asarray(data.tensor(i))
-
-  # Get ops in computation order.
-  _, ops = flow.order(f)
-
-  # Compute ops using numpy.
-  for op in ops:
-    i = op.inputs
-    o = op.outputs
-
-    if op.type == "MatMul":
-      v[o[0]] = np.matmul(v[i[0]], v[i[1]])
-    elif op.type == "Exp":
-      v[o[0]] = np.exp(v[i[0]])
-    elif op.type == "Sigmoid":
-      v[o[0]] = sigmoid(v[i[0]])
-    elif op.type == "Log":
-      v[o[0]] = np.log(v[i[0]])
-    elif op.type == "Pow":
-      v[o[0]] = np.power(v[i[0]], v[i[1]])
-    elif op.type == "Erf":
-      v[o[0]] = erf(v[i[0]])
-    elif op.type == "Sin":
-      v[o[0]] = np.sin(v[i[0]])
-    elif op.type == "Cos":
-      v[o[0]] = np.cos(v[i[0]])
-    elif op.type == "Tan":
-      v[o[0]] = np.tan(v[i[0]])
-    elif op.type == "Asin":
-      v[o[0]] = np.arcsin(v[i[0]])
-    elif op.type == "Acos":
-      v[o[0]] = np.arccos(v[i[0]])
-    elif op.type == "Atan":
-      v[o[0]] = np.arctan(v[i[0]])
-    elif op.type == "Sinh":
-      v[o[0]] = np.sinh(v[i[0]])
-    elif op.type == "Cosh":
-      v[o[0]] = np.cosh(v[i[0]])
-    elif op.type == "Tanh":
-      v[o[0]] = np.tanh(v[i[0]])
-    elif op.type == "Asinh":
-      v[o[0]] = np.arcsinh(v[i[0]])
-    elif op.type == "Acosh":
-      v[o[0]] = np.arccosh(v[i[0]])
-    elif op.type == "Atanh":
-      v[o[0]] = np.arctanh(v[i[0]])
-    elif op.type == "Relu":
-      v[o[0]] = relu(v[i[0]])
-    elif op.type == "Sqrt":
-      v[o[0]] = np.sqrt(v[i[0]])
-    elif op.type == "Rsqrt":
-      v[o[0]] = 1 / np.sqrt(v[i[0]])
-    elif op.type == "Square":
-      v[o[0]] = np.square(v[i[0]])
-    elif op.type == "Neg":
-      v[o[0]] = -v[i[0]]
-    elif op.type == "Abs":
-      v[o[0]] = np.abs(v[i[0]])
-    elif op.type == "Sign":
-      v[o[0]] = np.sign(v[i[0]])
-    elif op.type == "Add":
-      v[o[0]] = v[i[0]] + v[i[1]]
-    elif op.type == "Sub":
-      v[o[0]] = v[i[0]] - v[i[1]]
-    elif op.type == "Mul":
-      v[o[0]] = v[i[0]] * v[i[1]]
-    elif op.type == "Div":
-      v[o[0]] = np.divide(v[i[0]], v[i[1]]).astype(nptypes[dt])
-    elif op.type == "Minimum":
-      v[o[0]] = np.minimum(v[i[0]], v[i[1]])
-    elif op.type == "Maximum":
-      v[o[0]] = np.maximum(v[i[0]], v[i[1]])
-    elif op.type == "Reciprocal":
-      v[o[0]] = np.divide(1, v[i[0]])
-    elif op.type == "Floor":
-      v[o[0]] = np.floor(v[i[0]])
-    elif op.type == "Ceil":
-      v[o[0]] = np.ceil(v[i[0]])
-    elif op.type == "Round":
-      v[o[0]] = np.round(v[i[0]])
-    elif op.type == "Trunc":
-      v[o[0]] = np.trunc(v[i[0]])
-    elif op.type == "Sum":
-      axis = op.attrs.get("axis")
-      if axis is None:
-        v[o[0]] = np.sum(v[i[0]])
-      else:
-        keepdims = bool(op.attrs.get("keepdims"))
-        v[o[0]] = np.sum(v[i[0]], int(axis), keepdims=keepdims)
-    elif op.type == "Max":
-      axis = op.attrs.get("axis")
-      if axis is None:
-        v[o[0]] = np.max(v[i[0]])
-      else:
-        keepdims = bool(op.attrs.get("keepdims"))
-        v[o[0]] = np.max(v[i[0]], int(axis), keepdims=keepdims)
-    elif op.type == "Min":
-      axis = op.attrs.get("axis")
-      if axis is None:
-        v[o[0]] = np.min(v[i[0]])
-      else:
-        keepdims = bool(op.attrs.get("keepdims"))
-        v[o[0]] = np.min(v[i[0]], int(axis), keepdims=keepdims)
-    elif op.type == "Product":
-      axis = op.attrs.get("axis")
-      if axis is None:
-        v[o[0]] = np.prod(v[i[0]])
-      else:
-        keepdims = bool(op.attrs.get("keepdims"))
-        v[o[0]] = np.prod(v[i[0]], int(axis), keepdims=keepdims)
-    elif op.type == "All":
-      axis = op.attrs.get("axis")
-      if axis is None:
-        v[o[0]] = np.all(v[i[0]])
-      else:
-        keepdims = bool(op.attrs.get("keepdims"))
-        v[o[0]] = np.all(v[i[0]], int(axis), keepdims=keepdims)
-    elif op.type == "Any":
-      axis = op.attrs.get("axis")
-      if axis is None:
-        v[o[0]] = np.any(v[i[0]])
-      else:
-        keepdims = bool(op.attrs.get("keepdims"))
-        v[o[0]] = np.any(v[i[0]], axis, keepdims=keepdims)
-    elif op.type == "Count":
-      v[o[0]] = np.array(np.count_nonzero(v[i[0]]), nptypes[dt])
-    elif op.type == "ArgMin":
-      v[o[0]] = np.argmin(v[i[0]])
-    elif op.type == "ArgMax":
-      v[o[0]] = np.argmax(v[i[0]])
-    elif op.type == "Equal":
-      v[o[0]] = np.equal(v[i[0]], v[i[1]])
-    elif op.type == "NotEqual":
-      v[o[0]] = np.not_equal(v[i[0]], v[i[1]])
-    elif op.type == "Less":
-      v[o[0]] = np.less(v[i[0]], v[i[1]])
-    elif op.type == "LessEqual":
-      v[o[0]] = np.less_equal(v[i[0]], v[i[1]])
-    elif op.type == "Greater":
-      v[o[0]] = np.greater(v[i[0]], v[i[1]])
-    elif op.type == "GreaterEqual":
-      v[o[0]] = np.greater_equal(v[i[0]], v[i[1]])
-    elif op.type == "And":
-      v[o[0]] = np.logical_and(v[i[0]], v[i[1]])
-    elif op.type == "Or":
-      v[o[0]] = np.logical_or(v[i[0]], v[i[1]])
-    elif op.type == "Xor":
-      v[o[0]] = np.logical_xor(v[i[0]], v[i[1]])
-    elif op.type == "Not":
-      v[o[0]] = np.logical_not(v[i[0]])
-    elif op.type == "Cond":
-      v[o[0]] = np.where((v[i[0]] != 0), v[i[1]], v[i[2]])
-    elif op.type == "Select":
-      v[o[0]] = np.where((v[i[0]] != 0), v[i[1]], 0)
-    elif op.type == "Transpose":
-      if "perm" in op.attrs:
-        perm = eval(op.attrs["perm"])
-        v[o[0]] = np.transpose(v[i[0]], axes=perm)
-      else:
-        v[o[0]] = np.transpose(v[i[0]])
-    elif op.type == "Shape":
-      v[o[0]] = np.array(v[i[0]].shape)
-    elif op.type == "Size":
-      v[o[0]] = np.array(v[i[0]].size)
-    elif op.type == "Rank":
-      v[o[0]] = np.array(len(v[i[0]].shape))
-    elif op.type == "Identity":
-      v[o[0]] = v[i[0]]
-    elif op.type == "ConcatV2":
-      n = int(op.attr("N"))
-      axis = v[i[n]]
-      seq = []
-      for k in range(n): seq.append(v[i[k]])
-      v[o[0]] = np.concatenate(tuple(seq), axis)
-    elif op.type == "Split":
-      splits = np.split(v[i[0]], v[i[1]], v[i[2]])
-      for k in range(len(splits)): v[o[k]] = splits[k]
-    else:
-      raise Exception("No NumPy support for " + op.type)
-
-  # Return results.
-  return v
-
 # Compare flow functions against numpy.
-def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8):
+def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8, check=None):
   # Ensure that inputs are not overwritten.
   for i in flow.inputs(): i.output = True
 
@@ -296,19 +85,22 @@ def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8):
         r = np.random.ranf(a.shape) * (hi - lo) + lo
       np.copyto(a, r, casting="unsafe")
 
+    # Compute function using numpy.
+    baseline = simulator.compute(flow, f, data)
+
     # Compute cell.
     for n in range(flags.arg.repeat):
       data.compute()
 
-    # Compute function using numpy.
-    baseline = simulate(flow, f, data)
-
-    # Check outputs.
+    # Create new test if does not already exist.
     test = tests.get(f.name)
     if test == None:
       test = Test(f)
       tests[f.name] = test
-    for o in flow.outputs(f):
+
+    # Check outputs
+    if check is None: check = flow.outputs(f)
+    for o in check:
       test.runs += 1
       t = data.tensor(o)
       b = baseline[o]
@@ -820,11 +612,11 @@ def bcast_test(n):
   y = f.mul(x, f.const(7, dt))
   check(flow, n)
 
-def bcast_repeat_test(n):
+def bcast_repeat_test(n, m, k):
   flow = myelin.Flow()
   f = flow.define("bcast_repeat")
-  x = f.var("x", dt, [n, 256])
-  y = f.var("y", dt, [n, 1])
+  x = f.var("x", dt, [n, m])
+  y = f.var("y", dt, [n, k])
   z = f.square(f.sub(x, y))
   check(flow, n)
 
@@ -971,6 +763,24 @@ def negfold_test(n):
   z = f.sub(x, f.neg(y))
   check(flow, n)
 
+def acc_matmul_transpose_test():
+  flow = myelin.Flow()
+  f = flow.define("acc_matmul_transpose")
+  w1 = f.var("w1", dt, [32, 2])
+  l = f.var("l", dt, [1, 2])
+  r = f.var("r", dt, [1, 32])
+  f.assign(w1, f.add(w1, f.matmul(f.transpose(r), l)))
+  check(flow, [], 0, 10, check=[w1])
+
+def acc_matmul_test(m, k, n):
+  flow = myelin.Flow()
+  f = flow.define("acc_matmul")
+  c = f.var("c", dt, [m, n])
+  a = f.var("a", dt, [m, k])
+  b = f.var("b", dt, [k, n])
+  f.assign(c, f.add(c, f.matmul(a, b)))
+  check(flow, (m, k, n), 0, 10, check=[c])
+
 # Check for specific test to run.
 if flags.arg.test:
   print("Running test", flags.arg.test)
@@ -1003,7 +813,7 @@ for i in sizes:
   square_test(i)
   relu_test(i)
   bcast_test(i)
-  bcast_repeat_test(i)
+  bcast_repeat_test(i, 256, 1)
   shape_test(i)
   size_test(i)
   if i < 32: rank_test(i)
@@ -1074,6 +884,7 @@ for i in sizes:
       matmul_test(i, j, k)
       matmul_add_test(i, j, k)
       matmul_batch_test(i, j, k, 8)
+      acc_matmul_test(i, j, k)
       transpose_test(i, j, k, [1, 0, 2])
       transpose_test(i, j, k, [1, 2, 0])
       if flags.arg.thorough:

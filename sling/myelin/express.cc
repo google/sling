@@ -173,6 +173,7 @@ class VariableMap {
       m = expr_->Variable(var->type, var->id);
       m->predicate = var->predicate;
       m->single = var->single;
+      m->unhoistable = var->unhoistable;
     }
     return m;
   }
@@ -183,6 +184,7 @@ class VariableMap {
     to->id = from->id;
     to->predicate = from->predicate;
     to->single = from->single;
+    to->unhoistable = from->unhoistable;
   }
 
  private:
@@ -970,7 +972,7 @@ void Express::Hoist(int limit) {
       Op *op = ops_[i];
 
       // Check if all arguments are cached.
-      bool invariant = op->result->unhoistable;
+      bool invariant = !op->result->unhoistable;
       for (Var *arg : op->args) {
         if (hoisted.count(arg) == 0 || arg->unhoistable) {
           invariant = false;
