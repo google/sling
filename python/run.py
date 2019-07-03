@@ -121,6 +121,11 @@ flags.define("--train_fact_embeddings",
              default=False,
              action='store_true')
 
+flags.define("--train_fact_plausibility",
+             help="train fact plausibility model",
+             default=False,
+             action='store_true')
+
 flags.define("--extract_wikilinks",
              help="extract link graph from wikipedias",
              default=False,
@@ -284,6 +289,13 @@ def train_embeddings():
     log.info("Train fact and category embeddings")
     wf = embedding.EmbeddingWorkflow("fact-embeddings")
     wf.train_fact_embeddings()
+    workflow.run(wf.wf)
+
+  # Train fact plausibility model.
+  if flags.arg.train_fact_plausibility:
+    log.info("Train fact plausibility model")
+    wf = embedding.EmbeddingWorkflow("plausibility")
+    wf.train_fact_plausibility()
     workflow.run(wf.wf)
 
 

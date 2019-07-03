@@ -84,6 +84,7 @@ static PyObject *RegisterPythonModule() {
   PyWikiConverter::Define(module);
   PyFactExtractor::Define(module);
   PyTaxonomy::Define(module);
+  PyPlausibility::Define(module);
 
   PyCompiler::Define(module);
   PyNetwork::Define(module);

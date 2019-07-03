@@ -39,7 +39,10 @@ class LearnerTask : public Process {
   virtual void Worker(int index, myelin::Network *model) = 0;
 
   // Model evaluation. Return false to end training.
-  virtual bool Evaluate(int64 epoch, myelin::Network *model) = 0;
+  virtual bool Evaluate(int64 epoch, myelin::Network *model) { return true; }
+
+  // Checkpoint model.
+  virtual void Checkpoint(int64 epoch, myelin::Network *model) {}
 
  private:
   // Total number of training epochs.
@@ -60,6 +63,10 @@ class LearnerTask : public Process {
   // Signal model evaluation or completions.
   Mutex eval_mu_;
   std::condition_variable eval_model_;
+
+  // Checkpoint model at regular intervals.
+  int checkpoint_interval_ = 100000;
+  int last_checkpoint_ = 0;
 
   // Staticstics.
   Counter *num_workers_ = nullptr;

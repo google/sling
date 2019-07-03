@@ -139,25 +139,7 @@ Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
   return new Taxonomy(this, default_taxonomy);
 }
 
-void Facts::ExtractFor(Handle item, const HandleSet &properties) {
-  // Extract facts from the properties of the item.
-  auto &extractors = catalog_->property_extractors_;
-  for (const Slot &s : Frame(store_, item)) {
-    if (properties.find(s.name) == properties.end()) continue;
-
-    // Look up extractor for property.
-    auto f = extractors.find(s.name);
-    if (f == extractors.end()) continue;
-
-    // Extract facts for property.
-    FactCatalog::Extractor extractor = f->second;
-    push(s.name);
-    (this->*extractor)(s.value);
-    pop();
-  }
-}
-
-bool Facts::ItemInClosure(Handle property, Handle coarse, Handle fine) {
+bool FactCatalog::ItemInClosure(Handle property, Handle coarse, Handle fine) {
   if (coarse == fine) return true;
 
   Handles closure(store_);
@@ -170,7 +152,7 @@ bool Facts::ItemInClosure(Handle property, Handle coarse, Handle fine) {
         Handle value = store_->Resolve(s.value);
         if (value == coarse) {
           return true;
-        } else if (!catalog_->IsBaseItem(value)) {
+        } else if (!IsBaseItem(value)) {
           bool known = false;
           for (Handle h : closure) {
             if (value == h) {
@@ -187,27 +169,11 @@ bool Facts::ItemInClosure(Handle property, Handle coarse, Handle fine) {
   return false;
 }
 
-void Facts::Extract(Handle item) {
-  // Extract facts from the properties of the item.
-  auto &extractors = catalog_->property_extractors_;
-  for (const Slot &s : Frame(store_, item)) {
-    // Look up extractor for property.
-    auto f = extractors.find(s.name);
-    if (f == extractors.end()) continue;
-
-    // Extract facts for property.
-    FactCatalog::Extractor extractor = f->second;
-    push(s.name);
-    (this->*extractor)(s.value);
-    pop();
-  }
-}
-
-void Facts::ExtractItemTypes(Handle item, Handles *types) {
+void FactCatalog::ExtractItemTypes(Handle item, std::vector<Handle> *types) {
   // Get types for item.
   item = store_->Resolve(item);
   for (const Slot &s : Frame(store_, item)) {
-    if (s.name == catalog_->p_instance_of_) {
+    if (s.name == p_instance_of_) {
       Handle type = store_->Resolve(s.value);
       types->push_back(type);
     }
@@ -217,9 +183,9 @@ void Facts::ExtractItemTypes(Handle item, Handles *types) {
   int current = 0;
   while (current < types->size()) {
     Frame f(store_, (*types)[current++]);
-    if (catalog_->IsBaseItem(f.handle())) continue;
+    if (IsBaseItem(f.handle())) continue;
     for (const Slot &s : f) {
-      if (s.name != catalog_->p_subclass_of_) continue;
+      if (s.name != p_subclass_of_) continue;
 
       // Check if new item is already known.
       Handle newitem = store_->Resolve(s.value);
@@ -232,6 +198,61 @@ void Facts::ExtractItemTypes(Handle item, Handles *types) {
       }
       if (!known) types->push_back(newitem);
     }
+  }
+}
+
+
+void Facts::Extract(Handle item) {
+  // Extract facts from the properties of the item.
+  auto &extractors = catalog_->property_extractors_;
+  for (const Slot &s : Frame(store_, item)) {
+    // Look up extractor for property.
+    auto f = extractors.find(s.name);
+    if (f == extractors.end()) continue;
+
+    // Extract facts for property.
+    FactCatalog::Extractor extractor = f->second;
+    push(s.name);
+    int start = delimiters_.size();
+    (this->*extractor)(s.value);
+    int end = delimiters_.size();
+    if (end > start) groups_.push_back(end);
+    pop();
+  }
+}
+
+void Facts::Expand(Handle property, Handle value) {
+  auto &extractors = catalog_->property_extractors_;
+  auto f = extractors.find(property);
+  if (f == extractors.end()) return;
+
+  FactCatalog::Extractor extractor = f->second;
+  push(property);
+  int start = delimiters_.size();
+  (this->*extractor)(value);
+  int end = delimiters_.size();
+  if (end > start) groups_.push_back(end);
+  pop();
+}
+
+void Facts::ExtractFor(Handle item, const HandleSet &properties) {
+  // Extract facts from the properties of the item.
+  auto &extractors = catalog_->property_extractors_;
+  for (const Slot &s : Frame(store_, item)) {
+    if (properties.find(s.name) == properties.end()) continue;
+
+    // Look up extractor for property.
+    auto f = extractors.find(s.name);
+    if (f == extractors.end()) continue;
+
+    // Extract facts for property.
+    FactCatalog::Extractor extractor = f->second;
+    push(s.name);
+    int start = delimiters_.size();
+    (this->*extractor)(s.value);
+    int end = delimiters_.size();
+    if (end > start) groups_.push_back(end);
+    pop();
   }
 }
 
@@ -386,12 +407,32 @@ void Facts::ExtractTeam(Handle team) {
 
 void Facts::AddFact(Handle value) {
   if (value.IsNil()) return;
-  push(value);
-  Handle *begin = path_.data();
-  Handle *end = begin + path_.size();
-  Handle fact = store_->AllocateArray(begin, end);
-  list_.push_back(fact);
-  pop();
+  for (Handle p : path_) list_.push_back(p);
+  list_.push_back(value);
+  delimiters_.push_back(list_.size());
+}
+
+Handle Facts::AsArrays(Store *store) const {
+  Array array(store, delimiters_.size());
+  int pos = 0;
+  for (int i = 0; i < delimiters_.size(); ++i) {
+    int begin = pos;
+    int end = delimiters_[i];
+    array.set(i, store->AllocateArray(&list_[begin], &list_[end]));
+    pos = end;
+  }
+  return array.handle();
+}
+
+void Facts::AsArrays(Store *store, Handles *array) const {
+  array->clear();
+  int pos = 0;
+  for (int i = 0; i < delimiters_.size(); ++i) {
+    int begin = pos;
+    int end = delimiters_[i];
+    array->push_back(store->AllocateArray(&list_[begin], &list_[end]));
+    pos = end;
+  }
 }
 
 Taxonomy::Taxonomy(const FactCatalog *catalog, const std::vector<Text> &types) {

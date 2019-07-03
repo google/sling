@@ -49,7 +49,6 @@ struct PyPhraseMatch : public PyBase {
   static void Define(PyObject *module);
 };
 
-
 // Python wrapper for phrase table.
 struct PyPhraseTable : public PyBase {
   // Initialize phrase table wrapper.

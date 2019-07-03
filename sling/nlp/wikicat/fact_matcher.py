@@ -185,10 +185,10 @@ class FactMatcher:
       return True
 
     if closure_property is not None:
-      return self.extractor.in_closure(store, closure_property, coarse, fine)
+      return self.extractor.in_closure(closure_property, coarse, fine)
     else:
-      return self.extractor.in_closure(store, self.p_subclass, coarse, fine) \
-          or self.extractor.in_closure(store, self.p_parent_org, coarse, fine)
+      return self.extractor.in_closure(self.p_subclass, coarse, fine) \
+          or self.extractor.in_closure(self.p_parent_org, coarse, fine)
 
 
   # Returns a FactMatchType value depending on how 'proposed' compares against

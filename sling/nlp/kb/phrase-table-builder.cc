@@ -276,15 +276,14 @@ class PhraseTableBuilder : public task::FrameProcessor {
       if (phrase->entities.size() < 2) continue;
 
       // Build mappings between entity items and entity indices.
-      Store store(commons_);
       int num_items = phrase->entities.size();
-      Handles entity_item(&store);
+      Handles entity_item(commons_);
       HandleMap<int> entity_index;
       entity_item.resize(num_items);
       for (int i = 0; i < num_items; ++i) {
         const EntityPhrase &e = phrase->entities[i];
         const Entity &entity = entity_table_[e.index];
-        Handle item = store.Lookup(entity.id);
+        Handle item = commons_->Lookup(entity.id);
         entity_item[i] = item;
         entity_index[item] = i;
       }
@@ -295,15 +294,12 @@ class PhraseTableBuilder : public task::FrameProcessor {
       std::vector<int> years;
       for (int source = 0; source < num_items; ++source) {
         // Get set of facts for item.
-        Facts facts(&catalog_, &store);
+        Facts facts(&catalog_);
         facts.Extract(entity_item[source]);
-        for (Handle h :  facts.list()) {
-          Array fact(&store, h);
-          DCHECK_GE(fact.length(), 2);
-
-          // Get head property and target value.
-          Handle p = fact.get(0);
-          Handle t = fact.get(fact.length() - 1);
+        for (int i = 0; i < facts.size(); ++i) {
+          // Get base property and target value.
+          Handle p = facts.first(i);
+          Handle t = facts.last(i);
 
           // Collect numbers and years.
           if (p == n_instance_of_) {

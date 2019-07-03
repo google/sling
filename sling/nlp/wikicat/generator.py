@@ -312,7 +312,7 @@ class CategoryParseGenerator:
 
         # Slow-check for whether 'value' satisfies category_contains.
         for a in allowed:
-          if self.extractor.in_closure(store, self.h_subclassof, a, value):
+          if self.extractor.in_closure(self.h_subclassof, a, value):
             valid = True
             break
         if valid:

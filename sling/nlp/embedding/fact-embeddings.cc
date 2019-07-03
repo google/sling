@@ -44,8 +44,8 @@ class FactLexiconExtractor : public Process {
     // Get parameters.
     int64 bloom_size = task->Get("bloom_size", 4000000000L);
     int bloom_hashes = task->Get("bloom_hashes", 4);
-    int fact_threshold = task->Get("fact_threshold", 10);
-    int category_threshold = task->Get("category_threshold", 10);
+    int fact_threshold = task->Get("fact_threshold", 30);
+    int category_threshold = task->Get("category_threshold", 30);
 
     // Set up counters.
     Counter *num_items = task->GetCounter("items");
@@ -101,11 +101,13 @@ class FactLexiconExtractor : public Process {
 
       // Extract facts from item.
       Store store(&commons);
-      Facts facts(&catalog, &store);
+      Facts facts(&catalog);
       facts.Extract(handle);
+      Handles fact_list(&store);
+      facts.AsArrays(&store, &fact_list);
 
       // Add facts to fact lexicon.
-      for (Handle fact : facts.list()) {
+      for (Handle fact : fact_list) {
         int64 fp = store.Fingerprint(fact);
         if (filter.add(fp)) {
           auto &entry = fact_lexicon[fp];
@@ -169,6 +171,7 @@ class FactExtractor : public Process {
     // Set up counters.
     Counter *num_items = task->GetCounter("items");
     Counter *num_facts = task->GetCounter("facts");
+    Counter *num_groups = task->GetCounter("groups");
     Counter *num_facts_extracted = task->GetCounter("facts_extracted");
     Counter *num_facts_skipped = task->GetCounter("facts_skipped");
     Counter *num_no_facts = task->GetCounter("items_without_facts");
@@ -207,24 +210,40 @@ class FactExtractor : public Process {
 
       // Extract facts from item.
       Store store(&commons_);
-      Facts facts(&catalog, &store);
+      Facts facts(&catalog);
       facts.Extract(handle);
+      Handles fact_list(&store);
+      facts.AsArrays(&store, &fact_list);
 
-      // Add facts to fact lexicon.
+      // Add all facts for item found in fact lexicon.
       Handles fact_indices(&store);
-      for (Handle fact : facts.list()) {
-        uint64 fp = store.Fingerprint(fact);
-        auto f = fact_lexicon_.find(fp);
-        if (f != fact_lexicon_.end()) {
-          fact_indices.push_back(Handle::Integer(f->second));
+      Handles group_indices(&store);
+      int start = 0;
+      for (int g = 0; g < facts.groups().size(); ++g) {
+        int end = facts.groups()[g];
+        int prev = fact_indices.size();
+        for (int i = start; i < end; ++i) {
+          Handle fact = fact_list[i];
+          uint64 fp = store.Fingerprint(fact);
+          auto f = fact_lexicon_.find(fp);
+          if (f != fact_lexicon_.end()) {
+            fact_indices.push_back(Handle::Integer(f->second));
+          }
         }
+        int curr = fact_indices.size();
+        if (curr > prev) {
+          group_indices.push_back(Handle::Integer(curr));
+        }
+        start = end;
       }
+
       int total = facts.list().size();
       int extracted = fact_indices.size();
       int skipped = total - extracted;
       num_facts->Increment(total);
       num_facts_extracted->Increment(extracted);
       num_facts_skipped->Increment(skipped);
+      num_groups->Increment(group_indices.size());
       if (extracted == 0) num_no_facts->Increment();
 
       // Extract categories from item.
@@ -245,8 +264,9 @@ class FactExtractor : public Process {
 
       // Build frame with resolved facts.
       Builder builder(&store);
-      builder.Add(p_item_, item.id());
+      builder.Add(p_item_, item);
       builder.Add(p_facts_, Array(&store, fact_indices));
+      builder.Add(p_groups_, Array(&store, group_indices));
       builder.Add(p_categories_, Array(&store, category_indices));
 
       // Output frame with resolved facts on output channel.
@@ -298,6 +318,7 @@ class FactExtractor : public Process {
 
   Name p_item_{names_, "item"};
   Name p_facts_{names_, "facts"};
+  Name p_groups_{names_, "groups"};
   Name p_categories_{names_, "categories"};
 };
 
@@ -311,6 +332,7 @@ class FactEmbeddingsTrainer : public LearnerTask {
     // Get training parameters.
     task->Fetch("embedding_dims", &embedding_dims_);
     task->Fetch("batch_size", &batch_size_);
+    task->Fetch("batches_per_update", &batches_per_update_);
     task->Fetch("max_features", &max_features_);
     task->Fetch("learning_rate", &learning_rate_);
     task->Fetch("min_learning_rate", &min_learning_rate_);
@@ -427,49 +449,52 @@ class FactEmbeddingsTrainer : public LearnerTask {
     DualEncoderBatch batch(flow_, *model, loss_);
 
     for (;;) {
-      // Reset gradients.
+      // Compute gradients for epoch.
       batch.Reset();
+      float epoch_loss = 0.0;
+      for (int b = 0; b < batches_per_update_; ++b) {
+        // Random sample instances for batch.
+        for (int i = 0; i < flow_.batch_size; ++i) {
+          int sample = rnd.UniformInt(instances_.size());
+          Frame instance(&store_, instances_[sample]);
+          Array facts = instance.Get(p_facts_).AsArray();
+          Array categories = instance.Get(p_categories_).AsArray();
 
-      // Random sample instances for batch.
-      for (int i = 0; i < flow_.batch_size; ++i) {
-        int sample = rnd.UniformInt(instances_.size());
-        Frame instance(&store_, instances_[sample]);
-        Array facts = instance.Get(p_facts_).AsArray();
-        Array categories = instance.Get(p_categories_).AsArray();
-
-        // Set fact features for instance.
-        int *f = batch.left_features(i);
-        int *fend = f + flow_.left.max_features;
-        for (int i = 0; i < facts.length(); ++i) {
-          if (f == fend) {
-            num_feature_overflows_->Increment();
-            break;
+          // Set fact features for instance.
+          int *f = batch.left_features(i);
+          int *fend = f + flow_.left.max_features;
+          for (int i = 0; i < facts.length(); ++i) {
+            if (f == fend) {
+              num_feature_overflows_->Increment();
+              break;
+            }
+            *f++ = facts.get(i).AsInt();
           }
-          *f++ = facts.get(i).AsInt();
-        }
-        if (f < fend) *f = -1;
+          if (f < fend) *f = -1;
 
-        // Set category features for instance.
-        int *c = batch.right_features(i);
-        int *cend = c + flow_.right.max_features;
-        for (int i = 0; i < categories.length(); ++i) {
-          if (c == cend) {
-            num_feature_overflows_->Increment();
-            break;
+          // Set category features for instance.
+          int *c = batch.right_features(i);
+          int *cend = c + flow_.right.max_features;
+          for (int i = 0; i < categories.length(); ++i) {
+            if (c == cend) {
+              num_feature_overflows_->Increment();
+              break;
+            }
+            *c++ = categories.get(i).AsInt();
           }
-          *c++ = categories.get(i).AsInt();
+          if (c < cend) *c = -1;
         }
-        if (c < cend) *c = -1;
+
+        // Process batch.
+        float loss = batch.Compute();
+        epoch_loss += loss;
       }
-
-      // Process batch.
-      float loss = batch.Compute();
 
       // Update parameters.
       optimizer_mu_.Lock();
       optimizer_->Apply(batch.gradients());
-      loss_sum_ += loss;
-      loss_count_++;
+      loss_sum_ += epoch_loss;
+      loss_count_ += batches_per_update_;
       optimizer_mu_.Unlock();
 
       // Check if we are done.
@@ -479,6 +504,9 @@ class FactEmbeddingsTrainer : public LearnerTask {
 
   // Evaluate model.
   bool Evaluate(int64 epoch, myelin::Network *model) override {
+    // Skip evaluation if there are no data.
+    if (loss_count_ == 0) return true;
+
     // Compute average loss of epochs since last eval.
     float loss = loss_sum_ / loss_count_;
     float p = exp(-loss) * 100.0;
@@ -516,13 +544,14 @@ class FactEmbeddingsTrainer : public LearnerTask {
   // Training parameters.
   int embedding_dims_ = 256;           // size of embedding vectors
   int max_features_ = 512;             // maximum features per item
-  int batch_size_ = 1024;              // number of examples per epoch
+  int batch_size_ = 1024;              // number of examples per batch
+  int batches_per_update_ = 1;         // number of batches per epoch
 
   // Mutex for serializing access to optimizer.
   Mutex optimizer_mu_;
 
   // Evaluation statistics.
-  float learning_rate_ = 0.01;
+  float learning_rate_ = 1.0;
   float min_learning_rate_ = 0.01;
   float prev_loss_ = 0.0;
   float loss_sum_ = 0.0;

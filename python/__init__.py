@@ -16,6 +16,7 @@ Calendar=api.Calendar
 Date=api.Date
 WikiConverter=api.WikiConverter
 FactExtractor=api.FactExtractor
+PlausibilityModel=api.PlausibilityModel
 
 MILLENNIUM=api.MILLENNIUM
 CENTURY=api.CENTURY

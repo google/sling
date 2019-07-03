@@ -15,6 +15,7 @@
 #ifndef SLING_PYAPI_PYWIKI_H_
 #define SLING_PYAPI_PYWIKI_H_
 
+#include "sling/nlp/embedding/plausibility-model.h"
 #include "sling/nlp/kb/facts.h"
 #include "sling/nlp/wiki/wikidata-converter.h"
 #include "sling/pyapi/pybase.h"
@@ -68,6 +69,14 @@ struct PyFactExtractor : public PyBase {
   // Fact extractor.
   nlp::FactCatalog *catalog;
 
+  // Type checking.
+  static bool TypeCheck(PyBase *object) {
+    return PyBase::TypeCheck(object, &type);
+  }
+  static bool TypeCheck(PyObject *object) {
+    return PyBase::TypeCheck(object, &type);
+  }
+
   // Registration.
   static PyTypeObject type;
   static PyMethodTable methods;
@@ -87,6 +96,26 @@ struct PyTaxonomy : public PyBase {
 
   // Taxonomy.
   nlp::Taxonomy *taxonomy;
+
+  // Registration.
+  static PyTypeObject type;
+  static PyMethodTable methods;
+  static void Define(PyObject *module);
+};
+
+// Python wrapper for plausibility model.
+struct PyPlausibility : public PyBase {
+  int Init(PyObject *args, PyObject *kwds);
+  void Dealloc();
+
+  // Return fact plausibility score for item.
+  PyObject *Score(PyObject *args);
+
+  // Fact extractor for plausibility model.
+  PyFactExtractor *pyextractor;
+
+  // Plausibility model.
+  nlp::PlausibilityModel *model;
 
   // Registration.
   static PyTypeObject type;
