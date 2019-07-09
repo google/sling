@@ -134,9 +134,9 @@ cell f {  // size 2336
 
 Finally, the Myelin JIT compiler converts the optimized operations into
 [assembler code](flowasm.txt) using the selected kernel generators. The code
-generated for each function depends the negotiated layout and alignment of the
-input and output tensors as well as the features support by the CPU (SSE, AVX,
-AVX2, FMA3, AVX512, etc.).
+generated for each function depends on the negotiated layout and alignment of
+the input and output tensors as well as the features support by the CPU (SSE,
+AVX, AVX2, FMA3, AVX512, etc.).
 
 ### Computing using network cell instances
 
