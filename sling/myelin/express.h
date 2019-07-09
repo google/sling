@@ -704,7 +704,33 @@ class Express {
   bool approx() const { return approx_; }
   void set_approx(bool approx) { approx_ = approx; }
 
+  // Check if expression is sparse computation compatible, i.e. it evaluates to
+  // zero when the non-single inputs are zero.
+  bool SparseCompatible() const;
+
+  // Check if expression sparse assignment compatible, i.e. it evaluates to
+  // zero plus the first input when the remaining non-single inputs are zero.
+  bool SparseAssignCompatible() const;
+
  private:
+  // Check if variable always evaluates to zero when non-single inputs are zero.
+  bool ZeroFixpoint(Var *x) const;
+
+  // Check if variable always evaluates to zero.
+  bool AlwaysZero(Var *x) const;
+
+  // Check if variable always evaluates to one.
+  bool AlwaysOne(Var *x) const;
+
+  // Check if y always evaluates to x.
+  bool Identical(Var *y, Var *x) const;
+
+  // Check if y evaluates to x+z where z does not depend on x.
+  bool Additive(Var *y, Var *x) const;
+
+  // Check if y depends on x.
+  bool DependsOn(Var *y, Var *x) const;
+
   // Try to eliminate identical operations from expression. Return true if any
   // operations were removed.
   bool TryToEliminateOps();

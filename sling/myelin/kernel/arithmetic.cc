@@ -243,25 +243,47 @@ struct Expression {
 
     // Compute the maximum common size between inputs and outputs. Scalars and
     // singular broadcasts are not used for computing the maximum size since
-    // these can be broadcast to the vector size.
+    // these can be broadcast to the vector size. Also, the expression is
+    // eligible for sparse computation if there is only one sparse non-trivial
+    // input.
+    bool assignment = step->outdegree() == 0;
     int elements = prototype->elements();
     bool single_bcast = false;
+    bool sparse = false;
+    bool dense = false;
+    Tensor *bitmap = nullptr;
     for (auto *input : step->inputs()) {
       if (input->elements() == 1) continue;
       if (prototype->shape().IsSingleBroadcast(input->shape())) {
         single_bcast = true;
         continue;
       }
+      if (input->sparse()) {
+        if (bitmap == nullptr) {
+          // Input has sparsity vector, so we can use sparse computation.
+          bitmap = input->sparse();
+          sparse = true;
+        } else if (bitmap != input->sparse()) {
+          // Only one sparsity vector per expression.
+          sparse = false;
+        }
+      } else if (!(assignment && input == prototype)) {
+        // Dense input.
+        dense = true;
+      }
       int common = prototype->shape().CommonSize(input->shape());
       if (common < elements) elements = common;
     }
 
+    // Sparse and dense inputs cannot be mixed.
+    if (dense) sparse = false;
+
     // Compile expression to be computed.
     InitExpression(step, &expr);
 
-    // Clear single flag for scalar ops since broadcasting and hoisting is not
-    // needed in this case.
     if (elements == 1) {
+      // Clear single flag for scalar ops since broadcasting and hoisting is not
+      // needed in this case.
       for (auto *v : expr.vars()) v->single = false;
     } else if (single_bcast) {
       // Mark singular broadcast inputs as single element but not loop
@@ -273,6 +295,13 @@ struct Expression {
           var->unhoistable = true;
         }
       }
+    } else if (sparse) {
+      // Check if expression supports sparse assignment/computation.
+      if (assignment) {
+        if (!expr.SparseAssignCompatible()) sparse = false;
+      } else {
+        if (!expr.SparseCompatible()) sparse = false;
+      }
     }
 
     // Select expression generator.
@@ -282,6 +311,9 @@ struct Expression {
 
     // Initialize expression and index generators.
     generator->Initialize(expr, type, spare_regs, &index);
+
+    // Enable sparse iterators in index generator.
+    if (sparse) index.EnableSparse(bitmap);
   }
 
   ~Expression() { delete generator; }

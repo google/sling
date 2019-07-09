@@ -415,7 +415,7 @@ class Flow:
       v = Variable(name)
       self.vars[name] = v
       v.type = type
-      if shape != None: v.shape = shape
+      if shape is not None: v.shape = shape
     return v
 
   def op(self, name):

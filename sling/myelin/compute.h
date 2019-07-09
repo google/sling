@@ -589,6 +589,14 @@ class Tensor {
   // Cell that tensor belongs to.
   Cell *cell() const { return cell_; }
 
+  // Bitmap for sparse tensor.
+  Tensor *sparse() const { return sparse_; }
+  void set_sparse(Tensor *sparse) { sparse_ = sparse; }
+
+  // Add sparsity map to make a sparse tensor. The sparsity map is over the
+  // first dimension of the tensor.
+  Tensor *MakeSparse(bool ref = false);
+
   // Input and output flags.
   bool in() const { return in_; }
   bool out() const { return out_; }
@@ -687,6 +695,10 @@ class Tensor {
 
   // Steps that consume tensor.
   std::vector<Step *> consumers_;
+
+  // A sparse tensor has a bitmap tensor that keeps track of non-zero
+  // sub-tensors.
+  Tensor *sparse_ = nullptr;
 
   // Input and output flags.
   bool in_ = false;
@@ -1287,6 +1299,7 @@ struct Options {
   bool fast_math = false;                    // fast approximate math ops
   bool aot = false;                          // ahead-of-time compilation
   bool pic = false;                          // position-independent code
+  int sparse_threshold = 64;                 // threshold for sparse update
   int64 *flops_address = nullptr;            // address of FLOPs counter
 
   bool ref_profiler() const { return external_profiler || global_profiler; }
@@ -1341,6 +1354,9 @@ class Network {
     CHECK(global->IsGlobal());
     return TensorData(global->data(), global);
   }
+
+  // Add tensor to network.
+  void AddTensor(Tensor *tensor);
 
   // Allocate memory in memory pool.
   char *AllocateMemory(size_t size, int alignment);

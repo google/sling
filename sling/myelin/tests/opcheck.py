@@ -77,7 +77,7 @@ def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8, check=None):
 
     # Fill inputs.
     for i in flow.inputs(f):
-      if i.data != None: continue
+      if i.data is not None: continue
       a = np.asarray(data.tensor(i))
       if type(lo) == int and type(hi) == int:
         r = np.random.randint(lo, hi, a.shape)
@@ -94,7 +94,7 @@ def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8, check=None):
 
     # Create new test if does not already exist.
     test = tests.get(f.name)
-    if test == None:
+    if test is None:
       test = Test(f)
       tests[f.name] = test
 
@@ -113,7 +113,7 @@ def check(flow, variant, lo=-10.0, hi=10.0, rtol=1e-5, atol=1e-8, check=None):
         if not flags.arg.skipdiff:
           print("inputs:")
           for i in flow.inputs(f):
-            if i.data == None:
+            if i.data is None:
               print(i.name)
               print(np.asarray(data.tensor(i)))
           print("myelin:")
@@ -754,6 +754,23 @@ def pow_test(n, p):
   y = f.const(p, dt)
   x = f.pow(x, y)
   check(flow, (n, p), 0.0, 10.0)
+
+def gather_test(n, d, s):
+  flow = myelin.Flow()
+  f = flow.define("gather")
+  emb = f.array("emb", np.random.ranf((n, d)).astype(simulator.nptypes[dt]))
+  ind = f.var("ind", myelin.DT_INT32, [1, s])
+  v = f.gather(emb, ind)
+  check(flow, (n, d, s), 0, n)
+
+def scatter_add_test(n, d, s):
+  flow = myelin.Flow()
+  f = flow.define("scatter_add")
+  m = f.var("m", dt, [n, d])
+  ind = f.var("ind", myelin.DT_INT32, [1, s])
+  v = f.var("v", dt, [1, d])
+  f.scatter_add(m, ind, v)
+  check(flow, (n, d, s), 0, n, check=[m])
 
 def negfold_test(n):
   flow = myelin.Flow()

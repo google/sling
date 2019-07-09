@@ -1232,13 +1232,14 @@ class ScatterAdd : public Kernel {
 
     // Check inputs and outputs.
     if (step->indegree() != (scale_ ? 4 : 3)) return false;
-    if (step->outdegree() != 0) return false;
+    if (step->outdegree() > 1) return false;
 
     // Check types.
     Tensor *var = step->input(0);
     Tensor *indices = step->input(1);
     Tensor *value = step->input(2);
     Tensor *scaler = scale_ ? step->input(3) : nullptr;
+    Tensor *ref = step->outdegree() > 0 ? step->output(0) : nullptr;
     if (var->type() != DT_FLOAT || var->rank() != 2) return false;
     if (var->constant()) return false;
     if (indices->type() != DT_INT32 || indices->rank() != 2) return false;
@@ -1248,13 +1249,30 @@ class ScatterAdd : public Kernel {
       if (scaler->type() != DT_FLOAT) return false;
       if (scaler->elements() != 1) return false;
     }
+    if (ref) {
+      if (ref->type() != var->type()) return false;
+      if (ref->shape() != var->shape()) return false;
+      if (!ref->ref()) return false;
+    }
 
     return true;
   }
 
-  void Adjust(Step *step) override {
+  void Adjust(Step *step, const Options &options) override {
     Tensor *var = step->input(0);
     Tensor *value = step->input(2);
+    Tensor *ref = step->outdegree() > 0 ? step->output(0) : nullptr;
+
+    // Add sparsity bitmap index.
+    if (options.sparse_threshold > 0 &&
+        var->dim(0) >= options.sparse_threshold &&
+        step->GetAttr("sparse", true)) {
+      Tensor *sparse = var->MakeSparse();
+      if (ref) ref->set_sparse(sparse);
+    }
+
+    // Link output reference to input variable.
+    if (ref) var->Link(ref);
 
     // Align to one SIMD register.
     int align = 4;
@@ -1278,23 +1296,39 @@ class ScatterAdd : public Kernel {
     Tensor *indices = step->input(1);
     Tensor *value = step->input(2);
     Tensor *scaler = scale_ ? step->input(3) : nullptr;
+    Tensor *ref = step->outdegree() > 0 ? step->output(0) : nullptr;
+    Tensor *sparse = var->sparse();
     bool single = indices->elements() == 1;
     int n = value->elements();
 
     // Allocate registers.
+    Register bit = masm->rr().alloc_fixed(rcx);
     Register acc = masm->rr().alloc();
-    Register ofs = masm->rr().alloc();
     Register varaddr = masm->rr().alloc();
     Register idxaddr = masm->rr().alloc();
     Register valaddr = masm->rr().alloc();
+    Register bmaddr = masm->rr().alloc();
     Register fidx = masm->rr().alloc();
-    Register src = masm->rr().alloc();
+    Register ofs = masm->rr().alloc();
+    Register src = bit;
+    Register aux = ofs;
+
     ZMMRegister factor = masm->mm().allocz(false);
 
     // Load tensor locations.
     __ LoadTensorAddress(varaddr, var);
     __ LoadTensorAddress(idxaddr, indices);
     __ LoadTensorAddress(valaddr, value);
+    if (sparse) {
+      __ LoadTensorAddress(bmaddr, sparse);
+    }
+
+    // Optionally output reference to assigned variable.
+    if (ref != nullptr) {
+      CHECK(ref->IsLocal());
+      CHECK(ref->ref());
+      __ movq(Operand(masm->instance(), ref->offset()), varaddr);
+    }
 
     // Load scaling value.
     if (scaler) {
@@ -1329,7 +1363,16 @@ class ScatterAdd : public Kernel {
     __ testq(acc, acc);
     __ j(negative, &l2);
 
-    //  look up address of index in embedding
+    // Update sparsity bitmap.
+    if (sparse) {
+      __ movq(bit, acc);
+      __ movq(aux, Immediate(1));
+      __ shlq_cl(aux);
+      __ shrq(bit, Immediate(6));
+      __ orq(Operand(bmaddr, bit, times_8), aux);
+    }
+
+    //  Look up address of index in embedding.
     __ Multiply(acc, var->stride(0));
     __ addq(acc, varaddr);
 

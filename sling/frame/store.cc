@@ -1020,7 +1020,7 @@ uint64 Store::Fingerprint(ArrayDatum *array,
 uint64 Store::Fingerprint(const Handle *begin, const Handle *end) const {
   uint64 fp = HashMix(0, FP_ARRAY);
   for (const Handle *h = begin; h < end; ++h) {
-    fp = Fingerprint(*h, false, fp);
+    fp = Fingerprint(*h, true, fp);
   }
   return fp;
 }

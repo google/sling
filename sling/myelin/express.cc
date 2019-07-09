@@ -811,6 +811,149 @@ int Express::Complexity() const {
   return n;
 }
 
+bool Express::SparseCompatible() const {
+  for (Var *v : vars_) {
+    if (v->type == OUTPUT && !ZeroFixpoint(v)) return false;
+  }
+  return true;
+}
+
+bool Express::SparseAssignCompatible() const {
+  Var *in = Lookup(INPUT, 0);
+  Var *out = Lookup(OUTPUT, 0);
+  if (in == nullptr || out == nullptr) return false;
+  return Additive(out, in) && SparseCompatible();
+}
+
+bool Express::ZeroFixpoint(Var *x) const {
+  Op *op = x->producer;
+  if (op == nullptr) {
+    if (x->type == NUMBER) return x->id == ZERO;
+    return !x->single;
+  }
+  switch (op->type) {
+    case MOV:
+      return ZeroFixpoint(op->args[0]);
+    case ADD:
+    case SUB:
+    case MINIMUM:
+    case MAXIMUM:
+    case AND:
+    case BITAND:
+      return ZeroFixpoint(op->args[0]) && ZeroFixpoint(op->args[1]);
+    case MUL:
+    case OR:
+    case BITOR:
+      return ZeroFixpoint(op->args[0]) || ZeroFixpoint(op->args[1]);
+    case DIV:
+    case POW:
+      return ZeroFixpoint(op->args[0]);
+    case NEG: case ABS: case SIGN: case RELU: case SOFTSIGN:
+    case SQUARE: case SQRT: case SIGMOID: case ERF:
+    case SIN: case TAN:
+    case ASIN: case ATAN:
+    case SINH: case TANH:
+    case ASINH: case ATANH:
+    case FLOOR: case CEIL: case ROUND: case TRUNC:
+    case SUM:
+      return ZeroFixpoint(op->args[0]);
+    default:
+      return false;
+  }
+}
+
+bool Express::AlwaysZero(Var *x) const {
+  if (x->type == NUMBER && x->id == ZERO) return true;
+  Op *op = x->producer;
+  if (op == nullptr) return false;
+  switch (op->type) {
+    case MOV:
+      return AlwaysZero(op->args[0]);
+    case ADD:
+    case SUB:
+      return (AlwaysZero(op->args[0]) && AlwaysZero(op->args[1])) ||
+             (AlwaysOne(op->args[0]) && AlwaysOne(op->args[1]));
+    case MUL:
+      return AlwaysZero(op->args[0]) || AlwaysZero(op->args[1]);
+    case DIV:
+      return AlwaysZero(op->args[0]) && !AlwaysZero(op->args[1]);
+    default:
+      return false;
+  }
+}
+
+bool Express::AlwaysOne(Var *x) const {
+  if (x->type == NUMBER && x->id == ONE) return true;
+  Op *op = x->producer;
+  if (op == nullptr) return false;
+  switch (op->type) {
+    case MOV:
+      return AlwaysOne(op->args[0]);
+    case ADD:
+      return (AlwaysOne(op->args[0]) && AlwaysZero(op->args[1])) ||
+             (AlwaysZero(op->args[0]) && AlwaysOne(op->args[1]));
+    case SUB:
+      return AlwaysOne(op->args[0]) && AlwaysZero(op->args[1]);
+    case MUL:
+    case DIV:
+      return AlwaysOne(op->args[0]) && AlwaysOne(op->args[1]);
+    default:
+      return false;
+  }
+}
+
+bool Express::Identical(Var *y, Var *x) const {
+  if (x == y) return true;
+  Op *op = y->producer;
+  if (op == nullptr) return false;
+  switch (op->type) {
+    case MOV:
+      return Identical(op->args[0], x);
+    case ADD:
+      return (Identical(op->args[0], x) && AlwaysZero(op->args[1])) ||
+             (Identical(op->args[1], x) && AlwaysZero(op->args[0]));
+    case MUL:
+      return (Identical(op->args[0], x) && AlwaysOne(op->args[1])) ||
+             (Identical(op->args[1], x) && AlwaysOne(op->args[0]));
+    case SUB:
+      return Identical(op->args[0], x) && AlwaysZero(op->args[1]);
+    case DIV:
+      return Identical(op->args[0], x) && AlwaysOne(op->args[1]);
+    default:
+      return false;
+  }
+}
+
+bool Express::Additive(Var *y, Var *x) const {
+  if (x == y) return true;
+  Op *op = y->producer;
+  if (op == nullptr) return false;
+  switch (op->type) {
+    case MOV:
+      return Additive(op->args[0], x);
+    case ADD:
+      return (Identical(op->args[0], x) && !DependsOn(op->args[1], x)) ||
+             (Identical(op->args[1], x) && !DependsOn(op->args[0], x));
+    case SUB:
+      return Identical(op->args[0], x) && !DependsOn(op->args[1], x);
+    case MUL:
+      return (Identical(op->args[0], x) && AlwaysOne(op->args[1])) ||
+             (Identical(op->args[1], x) && AlwaysOne(op->args[0]));
+    default:
+      return false;
+  }
+}
+
+bool Express::DependsOn(Var *y, Var *x) const {
+  if (x == y) return true;
+  if (y->producer != nullptr) {
+    for (Var *arg : y->producer->args) {
+      if (DependsOn(arg, x)) return true;
+    }
+  }
+  return false;
+}
+
 void Express::EliminateInput(int id) {
   for (Var *v : vars_) {
     if ((v->type == INPUT || v->type == CONST) && v->id > id) v->id--;

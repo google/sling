@@ -146,6 +146,31 @@ void ElementwiseIndexGenerator::Initialize(size_t vecsize) {
   single_ = shape_.elements() * element_size() == vecsize_;
 }
 
+bool ElementwiseIndexGenerator::EnableSparse(Tensor *sparse) {
+  // Check if sparse iteration can be used.
+  if (single_) return false;
+  Iterator *inner = nullptr;
+  for (Iterator *it : iterators_) {
+    if (it->type == SIMPLE) {
+      // Only one simple iterator allowed for sparse iteration.
+      if (inner != nullptr) return false;
+      inner = it;
+    } else if (it->type != SCALAR) {
+      // Only simple and scalar iterators can be combined with sparse iteration.
+      return false;
+    }
+  }
+  if (inner == nullptr) return false;
+
+  // Check that the vector size is compatible the inner block size.
+  if (shape_.rank() < 1) return false;
+  size_t block_size = shape_.inner(1) * element_size();
+  if (block_size % vecsize_ != 0) return false;
+
+  sparse_ = sparse;
+  return true;
+}
+
 bool ElementwiseIndexGenerator::AllocateRegisters() {
   // Allocate temp vars.
   if (!IndexGenerator::AllocateRegisters()) return false;
@@ -207,6 +232,18 @@ bool ElementwiseIndexGenerator::AllocateRegisters() {
     if (!input_[0]->base.is_valid()) return false;
   }
 
+  // Allocate registers for sparse iterator.
+  if (sparse_) {
+    bitmap_ = rr.try_alloc();
+    if (!bitmap_.is_valid()) return false;
+    bits_ = rr.try_alloc();
+    if (!bits_.is_valid()) return false;
+    mask_ = rr.try_alloc();
+    if (!mask_.is_valid()) return false;
+    iend_ = rr.try_alloc();
+    if (!iend_.is_valid()) return false;
+  }
+
   // Try to allocate extra base registers as an optimization. The base registers
   // can be shared between local tensors with the same location.
   if (!single_) {
@@ -257,12 +294,52 @@ void ElementwiseIndexGenerator::GenerateInit() {
       __ xorq(it->offset, it->offset);
     }
   }
+
+  // Load address of sparsity bitmap.
+  if (sparse_) {
+    __ LoadTensorAddress(bitmap_, sparse_);
+  }
 }
 
 void ElementwiseIndexGenerator::GenerateLoopBegin() {
   // Generate loop start, unless there is only one iteration.
   MacroAssembler *masm = masm_;
-  if (!single_) {
+  if (sparse_) {
+    // Use the sparsity bitmap to loop over all the non-zero inner blocks.
+    size_t size = shape_.elements() * element_size();
+    size_t block_size = shape_.inner(1) * element_size();
+    __ xorq(offset_, offset_);
+
+    // Get next 64-bit word from bitmap.
+    __ bind(&begin_);
+    __ movq(bits_, Operand(bitmap_));
+    __ addq(bitmap_, Immediate(sizeof(uint64)));
+
+    // If all bits are zero, skip all 64 inner blocks.
+    __ testq(bits_, bits_);
+    __ j(not_zero, &spl1_);
+    __ addq(offset_, Immediate(64 * block_size));
+    __ cmpq(offset_, Immediate(size));
+    __ j(less, &begin_);
+
+    // Initialize mask.
+    __ bind(&spl1_);
+    __ movq(mask_, Immediate(1));
+
+    // If current bit is zero, skip inner block.
+    __ bind(&spl2_);
+    __ testq(bits_, mask_);
+    __ j(not_zero, &spl3_);
+    __ addq(offset_, Immediate(block_size));
+    __ jmp(&spl5_);
+
+    // Loop over inner block.
+    __ bind(&spl3_);
+    if (block_size != vecsize_) {
+      __ leaq(iend_, Operand(offset_, block_size));
+      __ bind(&spl4_);
+    }
+  } else if (!single_) {
     __ xorq(offset_, offset_);
     __ bind(&begin_);
   }
@@ -270,7 +347,25 @@ void ElementwiseIndexGenerator::GenerateLoopBegin() {
 
 void ElementwiseIndexGenerator::GenerateLoopEnd() {
   MacroAssembler *masm = masm_;
-  if (!single_) {
+  if (sparse_) {
+    // Move to next output element.
+    size_t size = shape_.elements() * element_size();
+    size_t block_size = shape_.inner(1) * element_size();
+    __ addq(offset_, Immediate(vecsize_));
+    if (block_size != vecsize_) {
+      __ cmpq(offset_, iend_);
+      __ j(less, &spl4_);
+    }
+
+    // Next bit, loop until all 64 bits have been tested.
+    __ bind(&spl5_);
+    __ shlq(mask_, Immediate(1));
+    __ j(not_zero, &spl2_);
+
+    // Check if we have reached the end of the output.
+    __ cmpq(offset_, Immediate(size));
+    __ j(less, &begin_);
+  } else if (!single_) {
     // Move to next output element.
     __ addq(offset_, Immediate(vecsize_));
 

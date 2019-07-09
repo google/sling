@@ -201,7 +201,6 @@ void FactCatalog::ExtractItemTypes(Handle item, std::vector<Handle> *types) {
   }
 }
 
-
 void Facts::Extract(Handle item) {
   // Extract facts from the properties of the item.
   auto &extractors = catalog_->property_extractors_;

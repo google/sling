@@ -39,6 +39,9 @@ class IndexGenerator {
   // Initialize index generator.
   virtual void Initialize(size_t vecsize) = 0;
 
+  // Enable sparse iteration. Return true if sparse iteration was enabled.
+  virtual bool EnableSparse(Tensor *sparse) = 0;
+
   // Allocate registers. Return false in case of register overflow.
   virtual bool AllocateRegisters();
 

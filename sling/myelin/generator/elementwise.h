@@ -41,6 +41,9 @@ class ElementwiseIndexGenerator : public IndexGenerator {
   // Initialize index generator for vector size.
   void Initialize(size_t vecsize) override;
 
+  // Enable sparse iteration.
+  bool EnableSparse(Tensor *sparse) override;
+
   // Allocate registers. Return false in case of register overflow.
   bool AllocateRegisters() override;
 
@@ -127,6 +130,15 @@ class ElementwiseIndexGenerator : public IndexGenerator {
 
   // Whether only one iteration is needed.
   bool single_ = false;
+
+  // Bitmap tensor for sparse iteration.
+  Tensor *sparse_ = nullptr;
+
+  // Registers for sparse iterator.
+  jit::Register bitmap_, bits_, mask_, iend_;
+
+  // Labels for sparse iterator.
+  jit::Label spl1_, spl2_, spl3_, spl4_, spl5_;
 
   // Output for storing reference to assignment target.
   Tensor *output_ref_ = nullptr;

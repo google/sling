@@ -71,6 +71,12 @@ class Reference : public Kernel {
     Tensor *var = GetReference(step);
     CHECK(var != nullptr);
     step->output(0)->Link(var);
+
+    // Propagate corresponding sparsity tensors.
+    if (var->sparse()) {
+      Tensor *sparse_ref = step->output(0)->MakeSparse(true);
+      sparse_ref->Link(var->sparse());
+    }
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -95,6 +101,19 @@ class Reference : public Kernel {
       }
     }
     __ movq(Operand(masm->instance(), ref->offset()), addr);
+
+    // Output reference to sparsity vector.
+    if (ref->sparse()) {
+      CHECK(ref->sparse()->IsLocal());
+      CHECK(var->sparse()->IsLocal());
+      __ movq(addr, Operand(masm->instance(), instance->offset()));
+      if (var->sparse()->ref()) {
+        __ movq(addr, Operand(addr, var->sparse()->offset()));
+      } else if (var->sparse()->offset() != 0) {
+        __ addq(addr, Immediate(var->sparse()->offset()));
+      }
+      __ movq(Operand(masm->instance(), ref->sparse()->offset()), addr);
+    }
   }
 
   int64 Complexity(const Step *step) override {

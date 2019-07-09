@@ -302,10 +302,10 @@ class FactPlausibilityTrainer : public LearnerTask {
               << " lr=" << learning_rate_
               << " loss=" << loss
               << " p=" << p
-              << " train: +acc=" << pos_accuracy
-              << " -acc=" << neg_accuracy
-              << " eval: +acc=" << (eval.positive_accuracy() * 100.0)
-              << " -acc=" << (eval.negative_accuracy() * 100.0);
+              << " train: +ve=" << pos_accuracy
+              << " -ve=" << neg_accuracy
+              << " eval: +ve=" << (eval.positive_accuracy() * 100.0)
+              << " -ve=" << (eval.negative_accuracy() * 100.0);
 
     return true;
   }

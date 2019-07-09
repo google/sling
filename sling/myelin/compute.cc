@@ -599,6 +599,35 @@ bool Tensor::HasDenseLayout() const {
   return true;
 }
 
+Tensor *Tensor::MakeSparse(bool ref) {
+  if (sparse_ == nullptr) {
+    // Make a bit map tensor over the fist dimension.
+    CHECK_GT(rank(), 0);
+    CHECK(IsLocal());
+    int bits = dim(0);
+
+    // The size of the bitmap is rounded up to a multiple of 64 bits.
+    int words = (bits + 63) / 64;
+
+    // Allocate bitmap tensor as int64 array.
+    sparse_ = new Tensor();
+    sparse_->name_ = name_ + "/sparse";
+    sparse_->cell_ = cell_;
+    sparse_->local_ = local_;
+    sparse_->type_ = DT_INT64;
+    sparse_->ref_ = ref;
+    sparse_->shape_.assign(words);
+    sparse_->aligned_ = sparse_->shape_;
+    sparse_->minalign_.assign(sizeof(int64));
+    sparse_->stride_.assign(sizeof(int64));
+    sparse_->in_ = sparse_->out_ = true;
+    sparse_->placement_ = HOST;
+    sparse_->current_placement_ = HOST;
+    cell_->network()->AddTensor(sparse_);
+  }
+  return sparse_;
+}
+
 int Tensor::ConsumerTask() const {
   int consumer_task = -2;
   for (Step *step : consumers_) {
@@ -1021,6 +1050,15 @@ void Network::SaveLearnedWeights(Flow *flow) const {
   }
 }
 
+void Network::AddTensor(Tensor *tensor) {
+  names_[tensor->name()] = tensor;
+  if (tensor->IsLocal()) {
+    parameters_.push_back(tensor);
+  } else {
+    globals_.push_back(tensor);
+  }
+}
+
 char *Network::AllocateMemory(size_t size, int alignment) {
   char *data = MemAlloc(size, alignment);
   memory_.push_back(data);
@@ -1057,20 +1095,15 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   }
 
   // Create tensors for all the variables (parameters and constants).
-  std::unordered_map<void *, Tensor *> tensors;
+  std::unordered_map<Flow::Variable *, Tensor *> varmap;
   for (Flow::Variable *var : flow.vars()) {
+    // Allocate new tensor.
     Tensor *tensor = new Tensor();
-    tensors[var] = tensor;
+    varmap[var] = tensor;
     tensor->constant_ = var->constant();
     tensor->local_ = !var->global();
-    if (tensor->local_) {
-      parameters_.push_back(tensor);
-    } else {
-      globals_.push_back(tensor);
-      tensor->random_init_ = var->random() && var->learnable();
-    }
+    tensor->random_init_ = var->global() && var->random() && var->learnable();
     tensor->name_ = var->name;
-    names_[var->name] = tensor;
     for (const string &alias : var->aliases) {
       names_[alias] = tensor;
     }
@@ -1081,6 +1114,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     tensor->minalign_.fill(var->rank(), 1);
     tensor->stride_.fill(var->rank(), 0);
     tensor->byte_alignment_ = TypeTraits::of(var->type).size();
+
+    // Add tensor to network.
+    AddTensor(tensor);
 
     // Input variables are initially placed in host memory.
     tensor->in_ = var->in();
@@ -1136,9 +1172,9 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   // Link tensors in each connector.
   for (Flow::Connector *cnx : flow.cnxs()) {
     if (cnx->links.empty()) continue;
-    Tensor *t = tensors[cnx->links[0]];
+    Tensor *t = varmap[cnx->links[0]];
     for (int i = 1; i < cnx->links.size(); ++i) {
-      Tensor *l = tensors[cnx->links[i]];
+      Tensor *l = varmap[cnx->links[i]];
       l->Link(t);
     }
   }
@@ -1160,77 +1196,79 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // be allocated in the instance block. For example, identity functions does
     // not have any operations, but the inputs and outputs are aliased.
     for (Flow::Variable *v : func->unused) {
-      tensors[v]->cell_ = cell;
+      varmap[v]->cell_ = cell;
     }
   }
 
   // Create steps for all the operations.
-  for (Flow::Operation *op : flow.ops()) {
-    // Create step for operation.
-    Step *step = new Step();
-    steps_.push_back(step);
-    step->name_ = op->name;
-    step->type_ = op->type;
-    step->CopyAttrsFrom(*op);
+  for (Flow::Function *func : flow.funcs()) {
+    for (Flow::Operation *op : func->ops) {
+      // Create step for operation.
+      Step *step = new Step();
+      steps_.push_back(step);
+      step->name_ = op->name;
+      step->type_ = op->type;
+      step->CopyAttrsFrom(*op);
 
-    // Set cell for step.
-    Cell *cell = cells[op->func];
-    cell->steps_.push_back(step);
-    step->cell_ = cell;
+      // Set cell for step.
+      Cell *cell = cells[op->func];
+      cell->steps_.push_back(step);
+      step->cell_ = cell;
 
-    // Add inputs to step.
-    for (Flow::Variable *input : op->inputs) {
-      Tensor *tensor = tensors[input];
-      CHECK(tensor != nullptr);
-      step->inputs_.push_back(tensor);
-      tensor->consumers_.push_back(step);
+      // Add inputs to step.
+      for (Flow::Variable *input : op->inputs) {
+        Tensor *tensor = varmap[input];
+        CHECK(tensor != nullptr);
+        step->inputs_.push_back(tensor);
+        tensor->consumers_.push_back(step);
 
-      // Assign input parameter to cell.
-      if (step->cell_ != nullptr && tensor->IsLocal()) {
-        if (tensor->cell_ != nullptr && tensor->cell_ != step->cell_) {
-          LOG(FATAL) << tensor->name_ << " belongs to both "
-                     << tensor->cell_->name_ << " and "
-                     << step->cell_->name_;
-        }
-        tensor->cell_ = step->cell_;
-      }
-    }
-
-    // Add outputs to step.
-    for (Flow::Variable *output : op->outputs) {
-      Tensor *tensor = tensors[output];
-      CHECK(tensor != nullptr);
-      step->outputs_.push_back(tensor);
-      CHECK(tensor->producer_ == nullptr);
-      tensor->producer_ = step;
-
-      // Assign output parameter to cell.
-      if (step->cell_ != nullptr && tensor->IsLocal()) {
-        if (tensor->cell_ != nullptr && tensor->cell_ != step->cell_) {
-          LOG(FATAL) << tensor->name_ << " belongs to both "
-                     << tensor->cell_->name_ << " and "
-                     << step->cell_->name_;
-        }
-        tensor->cell_ = step->cell_;
-      }
-    }
-
-    // Assign task to step.
-    if (runtime_->SupportsAsync() && op->task != 0) {
-      // Add task to cell.
-      int taskidx = -1;
-      for (int i = 0; i < cell->tasks_.size(); ++i) {
-        if (cell->tasks_[i].task == op->task) {
-          taskidx = i;
-          break;
+        // Assign input parameter to cell.
+        if (step->cell_ != nullptr && tensor->IsLocal()) {
+          if (tensor->cell_ != nullptr && tensor->cell_ != step->cell_) {
+            LOG(FATAL) << tensor->name_ << " belongs to both "
+                       << tensor->cell_->name_ << " and "
+                       << step->cell_->name_;
+          }
+          tensor->cell_ = step->cell_;
         }
       }
-      if (taskidx == -1) {
-        // Add new task to cell.
-        taskidx = cell->tasks_.size();
-        cell->tasks_.emplace_back(op->task);
+
+      // Add outputs to step.
+      for (Flow::Variable *output : op->outputs) {
+        Tensor *tensor = varmap[output];
+        CHECK(tensor != nullptr);
+        step->outputs_.push_back(tensor);
+        CHECK(tensor->producer_ == nullptr);
+        tensor->producer_ = step;
+
+        // Assign output parameter to cell.
+        if (step->cell_ != nullptr && tensor->IsLocal()) {
+          if (tensor->cell_ != nullptr && tensor->cell_ != step->cell_) {
+            LOG(FATAL) << tensor->name_ << " belongs to both "
+                       << tensor->cell_->name_ << " and "
+                       << step->cell_->name_;
+          }
+          tensor->cell_ = step->cell_;
+        }
       }
-      step->task_index_ = taskidx;
+
+      // Assign task to step.
+      if (runtime_->SupportsAsync() && op->task != 0) {
+        // Add task to cell.
+        int taskidx = -1;
+        for (int i = 0; i < cell->tasks_.size(); ++i) {
+          if (cell->tasks_[i].task == op->task) {
+            taskidx = i;
+            break;
+          }
+        }
+        if (taskidx == -1) {
+          // Add new task to cell.
+          taskidx = cell->tasks_.size();
+          cell->tasks_.emplace_back(op->task);
+        }
+        step->task_index_ = taskidx;
+      }
     }
   }
 
@@ -1277,7 +1315,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     step->kernel_->Adjust(step, options_);
   }
 
-  // Add tensors for profiling.
+  // Add tensor for profiling.
   if (options_.profiling) {
     for (Cell *cell : cells_) {
       // Allocate tensor for storing profiling information. The tensor is an
@@ -1307,11 +1345,15 @@ bool Network::Compile(const Flow &flow, const Library &library) {
       profile->current_placement_ = HOST;
       profile->in_ = true;
       profile->out_ = true;
-      parameters_.push_back(profile);
-      tensors[profile] = profile;
       cell->profile_ = profile;
+      AddTensor(profile);
     }
   }
+
+  // Collect all tensors (global and local).
+  std::vector<Tensor *> tensors;
+  for (Tensor *t : globals_) tensors.push_back(t);
+  for (Tensor *t : parameters_) tensors.push_back(t);
 
   // Propagate constraints between linked tensors.
   bool again = true;
@@ -1319,8 +1361,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     // Keep propagating alignment constraints until there are no more
     // constraints to propagate.
     again = false;
-    for (auto it : tensors) {
-      Tensor *t = it.second;
+    for (Tensor *t : tensors) {
       Tensor *l = t->next_link_;
       if (l == t) continue;
 
@@ -1380,9 +1421,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   }
 
   // Compute tensor sizes.
-  for (auto it : tensors) {
-    Tensor *tensor = it.second;
-
+  for (Tensor *tensor : tensors) {
     // Determine final element order.
     tensor->order_ = FinalOrder(tensor->order_, ROW_MAJOR);
     if (tensor->order_ == CONFLICTING_ORDER) {
@@ -1448,8 +1487,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
   }
 
   // Propagate size and alignment for shared tensors.
-  for (auto it : tensors) {
-    Tensor *tensor = it.second;
+  for (Tensor *tensor : tensors) {
     Tensor *next = tensor->shared_;
     while (next != nullptr) {
       if (next->size_ < tensor->size_) {
@@ -1933,11 +1971,15 @@ void Network::ComputeLiveRanges() {
     }
   }
 
-  // Extend live range for all shared variables.
+  // Extend live range for all shared variables and sparsity vectors.
   for (Tensor *t : parameters_) {
     if (t->shared_ != nullptr) {
       if (t->first_ < t->shared_->first_) t->shared_->first_ = t->first_;
       if (t->last_ > t->shared_->last_) t->shared_->last_ = t->last_;
+    }
+    if (t->sparse_ != nullptr) {
+      if (t->first_ < t->sparse_->first_) t->sparse_->first_ = t->first_;
+      if (t->last_ > t->sparse_->last_) t->sparse_->last_ = t->last_;
     }
   }
 }
@@ -2092,6 +2134,9 @@ string Cell::ToString() const {
       }
       if (t->linked()) {
         StringAppendF(&str, " linked to %s", t->next_link()->name().c_str());
+      }
+      if (t->sparse()) {
+        StringAppendF(&str, " sparsity %s", t->sparse()->name().c_str());
       }
       str.append("\n");
       prev_offset = t->offset();

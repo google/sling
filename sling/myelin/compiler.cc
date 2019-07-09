@@ -59,6 +59,7 @@ DEFINE_string(data_profile, "", "File name prefix for data instance diagrams");
 DEFINE_bool(jit_debug, false, "Debug break in jit code");
 DEFINE_int32(cuda_device, -1, "CUDA device number");
 DEFINE_int32(cuda_context_flags, 0, "CUDA context flags");
+DEFINE_int32(sparse_threshold, 64, "Minimum dimension size for sparse update");
 
 namespace sling {
 namespace myelin {
@@ -162,6 +163,7 @@ void Compiler::Compile(Flow *flow, Network *net) {
   if (FLAGS_sync_steps) net->options().sync_steps = true;
   if (FLAGS_jit_debug) net->options().debug = true;
   if (FLAGS_fast_math) net->options().fast_math = true;
+  net->options().sparse_threshold = FLAGS_sparse_threshold;
 
   CHECK(net->Compile(*flow, *library_));
 

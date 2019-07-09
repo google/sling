@@ -229,6 +229,11 @@ def compute(flow, f, data):
       for k in range(len(splits)): v[o[k]] = splits[k]
     elif op.type == "Gather":
       v[o[0]] = gather(v[i[0]], v[i[1]])
+    elif op.type == "ScatterAdd":
+      m = v[i[0]]
+      f = v[i[1]]
+      x = v[i[2]]
+      m[f] += x
     elif op.type == "Reshape":
       v[o[0]] = np.reshape(v[i[0]], v[i[1]])
     elif op.type == "Assign":
