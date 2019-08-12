@@ -374,10 +374,10 @@ class StoreFactsBot:
           continue
         summary = provenance[self.n_method] + " " + s
         claim.setTarget(target)
-        wd_item.addClaim(claim, summary=summary)
-        rev_id = str(wd_item.latest_revision_id)
         if len(sources) > 0:
           claim.addSources(sources)
+        wd_item.addClaim(claim, summary=summary)
+        rev_id = str(wd_item.latest_revision_id)
         self.log_status_stored(item, fact, rev_id)
         updated += 1
       print("Record: ", recno, end=' ')
