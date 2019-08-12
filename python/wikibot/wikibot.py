@@ -295,7 +295,7 @@ class StoreFactsBot:
         prop_str = str(prop.id)
         fact = self.rs.frame({prop: val})
         claim = pywikibot.Claim(self.repo, prop_str)
-        if val != oldval:
+        if provenance[self.n_category] and val != oldval:
           oldval = val
           print(provenance[self.n_category],
                 self.store[provenance[self.n_category]].name)
@@ -315,23 +315,28 @@ class StoreFactsBot:
                 self.log_status_skip(item, fact, "has property more than once")
                 continue
               old = wd_claims[prop_str][0].getTarget()
-              if old is not None:
-                if old.precision >= target.precision:
-                  err_str = "precise date already exists"
-                  self.log_status_skip(item, fact, err_str)
-                  continue
-                if old.year != date.year:
-                  self.log_status_skip(item, fact, "conflicting year in date")
-                  continue
-                if old.precision >= pywikibot.WbTime.PRECISION['month'] and \
-                   old.month != date.month:
-                  self.log_status_skip(item, fact, "conflicting month in date")
-                  continue
-                # Item already has property with a same year less precise date.
-                # Ensure sources are all WP or empty
-                if not self.all_WP(wd_claims[prop_str][0].getSources()):
-                  self.log_status_skip(item, fact, "date with non-WP source(s)")
-                  continue
+              if old is None:
+                print("+++++++++++++++++++++++++++++++++++++++++++", \
+                  item_str, "had unknown date", \
+                  "+++++++++++++++++++++++++++++++++++++++++++")
+                continue
+              if old.precision >= target.precision:
+                err_str = "precise date already exists"
+                self.log_status_skip(item, fact, err_str)
+                continue
+              if old.year != date.year:
+                self.log_status_skip(item, fact, "conflicting year in date")
+                continue
+              if old.precision >= pywikibot.WbTime.PRECISION['month'] and \
+                 old.month != date.month:
+                self.log_status_skip(item, fact, "conflicting month in date")
+                continue
+              # Item already has property with a same year less precise date.
+              # Ensure sources are all WP or empty
+              if not self.all_WP(wd_claims[prop_str][0].getSources()):
+                self.log_status_skip(item, fact, "date with non-WP source(s)")
+                continue
+              print("++++++++++++++ Removing old date for", item_str)
               wd_item.removeClaims(wd_claims[prop_str])
           elif claim.type == 'wikibase-item':
             if prop_str in wd_claims:
