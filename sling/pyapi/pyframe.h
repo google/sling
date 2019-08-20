@@ -90,8 +90,8 @@ struct PyFrame : public PyBase, public Root {
   // Check if frame is anonymous.
   PyObject *IsAnonymous();
 
-  // Check if frame is named, i.e. has an id slot.
-  PyObject *IsNamed();
+  // Check if frame is public, i.e. has an id slot.
+  PyObject *IsPublic();
 
   // Resolve frame by following is: chain.
   PyObject *Resolve();

@@ -22,6 +22,10 @@
 
 namespace sling {
 
+string Snapshot::Filename(const string &filename) {
+  return filename + ".snap";
+}
+
 bool Snapshot::Valid(const string &filename) {
   // Get timestamp for store.
   FileStat stat;
@@ -30,7 +34,7 @@ bool Snapshot::Valid(const string &filename) {
 
   // Try to open snapshot file.
   File *file;
-  if (!File::Open(filename + ".snap", "r", &file).ok()) return false;
+  if (!File::Open(Filename(filename), "r", &file).ok()) return false;
 
   // Check that snapshot is not stale.
   bool ok = file->Stat(&stat).ok() && mtime < stat.mtime;
@@ -51,7 +55,7 @@ Status Snapshot::Read(Store *store, const string &filename) {
 
   // Read snapshot header.
   File *file;
-  Status st = File::Open(filename + ".snap", "r", &file);
+  Status st = File::Open(Filename(filename), "r", &file);
   if (!st.ok()) return st;
 
   Header hdr;
@@ -71,6 +75,7 @@ Status Snapshot::Read(Store *store, const string &filename) {
   store->first_heap_ = store->last_heap_ = store->current_heap_ = heap;
 
   // Read heaps from snapshot.
+  Heap *symheap = nullptr;
   for (int i = 0; i < hdr.heaps; ++i) {
     // Read heap size.
     uint64 heapsize;
@@ -91,6 +96,9 @@ Status Snapshot::Read(Store *store, const string &filename) {
 
     // Mark all space in heap as used.
     heap->set_end(heap->address(heapsize));
+
+    // Check if this is the symbol table heap.
+    if (hdr.symheap == i) symheap = heap;
   }
 
   // Allocate handle table.
@@ -98,23 +106,31 @@ Status Snapshot::Read(Store *store, const string &filename) {
   auto &handles = store->handles_;
   handles.reserve(handle_table_size);
   handles.set_end(handles.base() + hdr.handles);
-  store->pools_[Handle::kGlobal] = reinterpret_cast<Address>(handles.base());
+  store->pools_[Handle::kGlobal] = handles.base();
 
   // Clear handle table, leaving the nil entry intact.
   memset(handles.base() + 1, 0, (hdr.handles - 1) * sizeof(Store::Reference));
 
-  // Restore handle table from self handles in objects.
+  // Restore handle table from self handles in objects. If snapshot has a
+  // separate heap for the symbol table, all the other heaps are frozen.
   store->free_handle_ = nullptr;
   for (Heap *heap = store->first_heap_; heap != nullptr; heap = heap->next()) {
+    bool freeze = (symheap != nullptr && heap != symheap);
     Datum *object = heap->base();
     Datum *end = heap->end();
     while (object < end) {
       if (!object->IsInvalid()) {
+        // Update handle table from self handle.
         store->Assign(object->self, object);
         DCHECK(store->IsValidReference(object->self));
+
+        // Set mark bit for objects in frozen heaps to prevent the GC from
+        // traversing these objects.
+        if (freeze) object->mark();
       }
       object = object->next();
     }
+    if (freeze) heap->set_frozen(true);
   }
 
   // Set up symbol table.
@@ -135,7 +151,7 @@ Status Snapshot::Write(Store *store, const string &filename) {
 
   // Open output file.
   File *file;
-  Status st = File::Open(filename + ".snap", "w", &file);
+  Status st = File::Open(Filename(filename), "w", &file);
   if (!st.ok()) return st;
 
   // Write header.
@@ -147,7 +163,10 @@ Status Snapshot::Write(Store *store, const string &filename) {
   hdr.symbols = store->num_symbols_;
   hdr.buckets = store->num_buckets_;
   hdr.heaps = 0;
+  hdr.symheap = -1;
+  Heap *symheap = store->GetSymbolHeap();
   for (Heap *heap = store->first_heap_; heap != nullptr; heap = heap->next()) {
+    if (heap == symheap) hdr.symheap = hdr.heaps;
     hdr.heaps++;
   }
   st = file->Write(&hdr, sizeof(Header));

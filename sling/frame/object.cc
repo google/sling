@@ -67,8 +67,10 @@ Object &Object::operator =(const Object &other) {
 Type Object::type() const {
   if (handle_.IsRef()) {
     return datum()->type();
+  } else if (handle_.IsInt()) {
+    return INTEGER;
   } else {
-    return static_cast<Type>(handle_.tag() | Handle::kSimple);
+    return FLOAT;
   }
 }
 
@@ -118,13 +120,7 @@ Frame::Frame(Store *store, Slot *begin, Slot *end)
 
 Text Frame::Id() const {
   if (IsNil()) return Text();
-  Handle id = frame()->get(Handle::id());
-  if (id.IsNil()) return Text();
-  Datum *datum = store_->Deref(id);
-  if (!datum->IsSymbol()) return Text();
-  SymbolDatum *symbol = datum->AsSymbol();
-  StringDatum *symstr = store_->GetString(symbol->name);
-  return symstr->str();
+  return store_->FrameId(handle());
 }
 
 Frame &Frame::operator =(const Frame &other) {
@@ -337,6 +333,10 @@ bool Frame::IsA(const Name &type) const {
   return IsA(type.Lookup(store_));
 }
 
+bool Frame::IsA(const Object &type) const {
+  return IsA(type.handle());
+}
+
 bool Frame::Is(Handle type) const {
   for (const Slot *slot = frame()->begin(); slot < frame()->end(); ++slot) {
     if (slot->name.IsIs() && slot->value == type) return true;
@@ -346,6 +346,10 @@ bool Frame::Is(Handle type) const {
 
 bool Frame::Is(const Name &type) const {
   return Is(type.Lookup(store_));
+}
+
+bool Frame::Is(const Object &type) const {
+  return Is(type.handle());
 }
 
 Frame &Frame::Add(Handle name, Handle value) {
@@ -1656,13 +1660,13 @@ Builder &Builder::SetLink(Text name, Text symbol) {
   return *this;
 }
 
-Frame Builder::Create() const {
-  Handle h = store_->AllocateFrame(slots_.base(), slots_.end(), handle_);
-  return Frame(store_, h);
+Frame Builder::Create() {
+  handle_ = store_->AllocateFrame(slots_.base(), slots_.end(), handle_);
+  return Frame(store_, handle_);
 }
 
-void Builder::Update() const {
-  store_->AllocateFrame(slots_.base(), slots_.end(), handle_);
+void Builder::Update() {
+  handle_ = store_->AllocateFrame(slots_.base(), slots_.end(), handle_);
 }
 
 void Builder::GetReferences(Range *range) {

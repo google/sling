@@ -128,9 +128,6 @@ void Printer::PrintString(const StringDatum *str) {
     UTF, UTF, UTF, UTF, UTF, UTF, UTF, UTF,            // 0xF8
   };
 
-  // Hexadecimal digits.
-  static char hexdigit[] = "0123456789abcdef";
-
   WriteChar('"');
   bool done = false;
   unsigned char *s = str->payload();
@@ -158,15 +155,16 @@ void Printer::PrintString(const StringDatum *str) {
       case BSLASH: WriteChars('\\', '\\'); t++; break;
       case UTF:
         if (utf8_) {
-          t += WriteUTF8(t, end);
-          break;
+          int n = WriteUTF8(t, end);
+          if (n > 0) {
+            t += n;
+            break;
+          }
         }
         [[fallthrough]];
       case HEX:
         WriteChars('\\', 'x');
-        WriteChar(hexdigit[*t >> 4]);
-        WriteChar(hexdigit[*t & 0x0f]);
-        t++;
+        WriteHex(*t++);
         break;
     }
     s = t;
@@ -264,13 +262,29 @@ void Printer::PrintSymbol(const SymbolDatum *symbol, bool reference) {
   const char *end = p + name->size();
   DCHECK(p != end);
   if (utf8_) {
-    if (!ascii_isalpha(*p) && *p != '/' && *p != '_' && (*p & 0x80) == 0) {
-      WriteChar('\\');
+    if (*p & 0x80) {
+      int n = WriteUTF8(p, end);
+      if (n < 0) {
+        WriteChar('%');
+        WriteHex(*p++);
+      } else {
+        p += n;
+      }
+    } else {
+      if (!ascii_isalpha(*p) && *p != '/' && *p != '_') {
+        WriteChar('\\');
+      }
+      WriteChar(*p++);
     }
-    p += WriteUTF8(p, end);
     while (p < end) {
       if (*p & 0x80) {
-        p += WriteUTF8(p, end);
+        int n = WriteUTF8(p, end);
+        if (n < 0) {
+          WriteChar('%');
+          WriteHex(*p++);
+        } else {
+          p += n;
+        }
       } else {
         char c = *p++;
         if (!ascii_isalnum(c) && c != '/' && c != '_' && c != '-') {
@@ -304,7 +318,7 @@ void Printer::PrintLink(Handle handle) {
         return;
       } else {
         const FrameDatum *frame = datum->AsFrame();
-        if (frame->IsNamed()) {
+        if (frame->IsPublic()) {
           if (shallow_ || (!global_ && handle.IsGlobalRef())) {
             // Print reference.
             Print(frame->get(Handle::id()), true);
@@ -331,23 +345,40 @@ void Printer::PrintFloat(float number) {
   output_->Write(str, strlen(str));
 }
 
+void Printer::WriteHex(unsigned char c) {
+  // Hexadecimal digits.
+  static char hexdigit[] = "0123456789abcdef";
+
+  WriteChar(hexdigit[c >> 4]);
+  WriteChar(hexdigit[c & 0x0f]);
+}
+
 int Printer::WriteUTF8(const unsigned char *str, const unsigned char *end) {
   // Get UTF8 length.
   DCHECK(str != end);
-  int code = *str;
+  unsigned char c = *str;
   int n;
-  if (code <= 0x7f) {
+  if ((c & 0x80) == 0x00) {
     n = 1;
-  } else if (code <= 0x7ff) {
+  } else if ((c & 0xe0) == 0xc0) {
     n = 2;
-  } else if (code <= 0xffff) {
+  } else if ((c & 0xf0) == 0xe0) {
+    if (c == 0xed) return -1;
     n = 3;
-  } else {
+  } else if ((c & 0xf8) == 0xf0) {
+    if (c == 0xf4) return -1;
     n = 4;
+  } else {
+    return false;
   }
 
   // Check boundaries.
-  if (str + n > end) n = 1;
+  if (str + n > end) return -1;
+
+  // Check that UTF-8 code point is valid.
+  for (int i = 1; i < n; ++i) {
+    if ((str[i] & 0xc0) != 0x80) return -1;
+  }
 
   // Output UTF8-encoded code point.
   output_->Write(str, n);

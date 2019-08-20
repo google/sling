@@ -165,6 +165,11 @@ template<typename T> class Space : public Region {
     return reinterpret_cast<Address>(ptr) - base_;
   }
 
+  // Returns index of element in region.
+  Word index(T *ptr) const {
+    return ptr - base();
+  }
+
  private:
   DISALLOW_COPY_AND_ASSIGN(Space);
 };
@@ -187,9 +192,9 @@ inline Word Align(Word n) {
 //    332222222222111111111100000000 00
 //    109876543210987654321098765432 10
 //   +------------------------------+--+
-//   | global handle table index   M|00| global heap object reference
+//   | global handle table index    |00| global heap object index
 //   +------------------------------+--+
-//   | local handle table index    M|01| local heap object reference
+//   | local handle table index     |01| local heap object index
 //   +------------------------------+--+
 //   | 30-bit signed integer        |10| integer
 //   +------------------------------+--+
@@ -198,22 +203,16 @@ inline Word Align(Word n) {
 //   |1111111111 20-bit index       |11| index (not an integer)
 //   +------------------------------+--+
 //
-// Bit 2 is used as mark bit for reachable heap objects during garbage
-// collection.
-//
 // The handle class is implemented as a POD type to make it efficient to pass by
 // value.
 struct Handle {
   static const int kIntShift     = 2;   // integers are shifted two bits
   static const int kHandleBits   = 32;  // handles are 32-bit integers
   static const int kTagBits      = 2;   // the two lowest bits are tag bits
-  static const int kRefTagBits   = 3;   // tag bits plus mark bit
 
   static const Word kTagMask     = 0x00000003;  // bit mask for handle tag
-  static const Word kRefTagMask  = 0x00000007;  // object reference tag bit mask
   static const Word kIntTag      = 0x00000002;  // 30-bit signed integer
   static const Word kFloatTag    = 0x00000003;  // 30-bit floating point number
-  static const Word kExtra       = 0x00000004;  // extra tag for object handles
 
   static const Word kRef         = 0x00000000;  // reference bit
   static const Word kNumber      = 0x00000002;  // number bit
@@ -222,16 +221,13 @@ struct Handle {
   static const Word kGlobal      = 0x00000000;  // global object pool
   static const Word kLocal       = 0x00000001;  // local object pool
 
-  static const Word kMark        = kExtra;      // mark bit for reachable object
-  static const Word kSimple      = kExtra;      // simple type
-
   static const Word kGlobalTag   = kRef | kGlobal;
   static const Word kLocalTag    = kRef | kLocal;
 
   static const Word kNil         = kGlobalTag | 0x00000000;
-  static const Word kId          = kGlobalTag | 0x00000008;
-  static const Word kIsA         = kGlobalTag | 0x00000010;
-  static const Word kIs          = kGlobalTag | 0x00000018;
+  static const Word kId          = kGlobalTag | 0x00000004;
+  static const Word kIsA         = kGlobalTag | 0x00000008;
+  static const Word kIs          = kGlobalTag | 0x0000000C;
 
   static const Word kZero        = kIntTag | (0 << kIntShift);
   static const Word kOne         = kIntTag | (1 << kIntShift);
@@ -243,7 +239,7 @@ struct Handle {
   static const int kMaxInt       = 2147483647 >> kIntShift;
 
   // Maximum number of handles (local or global).
-  static const int kMaxHandles   = 1 << (kHandleBits - kRefTagBits);
+  static const int kMaxHandles   = 1 << (kHandleBits - kTagBits);
 
   // Returns the tag bits for the value.
   Word tag() const { return bits & kTagMask; }
@@ -287,14 +283,14 @@ struct Handle {
   // Returns raw handle value.
   Word raw() const { return bits; }
 
-  // Returns the handle value without the object reference tag bits.
-  Word offset() const { return bits & ~kRefTagMask; }
+  // Returns the index of the object in the handle table.
+  Word idx() const { return bits >> kTagBits; }
+
+  // Returns the pool for the object (global or local).
+  Word pool() const { return bits & kPoolMask; }
 
   // Returns the handle value without the tag bits.
   Word untagged() const { return bits & ~kTagMask; }
-
-  // Sets mark bit in handle.
-  void mark() { bits |= kMark; }
 
   // Constructs integer handle.
   static constexpr Handle Integer(int n) {
@@ -312,10 +308,9 @@ struct Handle {
   }
 
   // Constructs object reference handle.
-  static Handle Ref(Word offset, Word tag) {
-    DCHECK_EQ(offset & kRefTagMask, 0);
-    DCHECK_EQ(tag & ~kRefTagMask, 0);
-    return Handle{offset | tag};
+  static Handle Ref(Word idx, Word tag) {
+    DCHECK_EQ(tag & ~kTagMask, 0);
+    return Handle{(idx << kTagBits) | tag};
   }
 
   // Constructs float handle from bits.
@@ -328,7 +323,7 @@ struct Handle {
 
   // You can use an index handle for representing "special" integers using
   // negative floating-point NaN values. These do not collide with the normal
-  // integers in the handle encoding. There are 20-bit used for representing
+  // integers in the handle encoding. There are 20 bits used for representing
   // index handles.
   static const Word kIndexMask = 0xFFC00000 | kFloatTag;
 
@@ -377,8 +372,8 @@ struct Handle {
   static constexpr Handle one() { return Handle{kOne}; }
   static constexpr Handle error() { return Handle{kError}; }
 
-  // Handle is represented as an 32-bit unsigned integer where the lower bit are
-  // used as tag bits to encode the handle type.
+  // Handle is represented as an 32-bit unsigned integer where the lower bits
+  // are used as tag bits to encode the handle type.
   Word bits;
 };
 
@@ -409,48 +404,53 @@ struct Range {
 
 // The object type is stored in the upper bits of the size field in the object
 // preamble. The top-most bit is 1 for frames and 0 for other object types. For
-// frames, the lower three bits of the type are used for encoding identifier
+// frames, the lower two bits of the type are used for encoding identifier
 // information like whether the frame has an id and if the frame is a proxy.
 const Word kSizeBits = 28;
 const Word kSizeMask = (1 << kSizeBits) - 1;
-const Word kTypeMask = 0xF0000000;
+const Word kTypeMask = 0xE0000000;
+const Word kTypeShift = kSizeBits + 1;
+const Word kMarkMask = 0x10000000;
 const Word kObjectSizeLimit = (1 << kSizeBits);
 const Word kMapSizeLimit = kObjectSizeLimit / sizeof(Handle);
 
 // Types.
 enum Type : Word {
   // Heap object types.
-  STRING  = 0x0UL << kSizeBits,
-  SYMBOL  = 0x1UL << kSizeBits,
-  ARRAY   = 0x2UL << kSizeBits,
-  INVALID = 0x3UL << kSizeBits,
-  FRAME   = 0x8UL << kSizeBits,
+  STRING  = 0x0UL << kTypeShift,
+  SYMBOL  = 0x1UL << kTypeShift,
+  ARRAY   = 0x2UL << kTypeShift,
+  INVALID = 0x3UL << kTypeShift,
+  FRAME   = 0x4UL << kTypeShift,
 
   // Simple value types. These types are never stored in the heaps and are only
   // used for returning types for number-based handles.
-  INTEGER = Handle::kIntTag | Handle::kSimple,
-  FLOAT   = Handle::kFloatTag | Handle::kSimple,
+  INTEGER = 0x1UL,
+  FLOAT   = 0x2UL,
 };
 
 // Frame type flags.
 enum FrameFlags : Word {
-  PROXY   = 0x1UL << kSizeBits,  // frame is a proxy (i.e. only has an id slot)
-  NAMED   = 0x2UL << kSizeBits,  // frame has an id
-  UNUSED_FRAME_FLAG = 0x4UL << kSizeBits,
+  PROXY   = 0x1UL << kTypeShift,  // frame is a proxy (i.e. only has an id slot)
+  PUBLIC  = 0x2UL << kTypeShift,  // frame has an id
 };
 
 // All heap objects starts with an 8 byte preamble that contains the handle for
-// the object, the object size, and the object type. The object type is stored
-// in the upper bits of the size field.
+// the object, the object size, and the object type. The object type and the
+// mark bit are stored in the upper bits of the size field.
 //
 //    33222222222211111111110000000000
 //    10987654321098765432109876543210
 //   +--------------------------------+
-//   |TTTT      payload size          | TTTT=type
+//   |FTTM      payload size          | F=frame TT=type M=mark
 //   +--------------------------------+
-//   |      object handle          MTT| M=mark TT=tag
+//   |      object handle           TT| TT=tag
 //   +--------------------------------+
 //
+// The F bit indicates if the object is a frame. The TT bits for frames encodes
+// if the frame is a proxy and whether the frame has an id. The M bit is a mark
+// bit used for marking live objects during garbage collection. The mark bit is
+// also set for all objects in frozen heaps.
 struct Datum {
   // Returns address of object payload after the object preamble.
   const Address payload() const {
@@ -476,17 +476,17 @@ struct Datum {
   Type type() const { return (info & FRAME) != 0 ? FRAME : typebits(); }
 
   // Returns true if heap object is marked.
-  bool marked() const { return (self.raw() & Handle::kMark) != 0; }
+  bool marked() const { return (info & kMarkMask) != 0; }
 
   // Marks/unmarks heap object.
-  void mark() { self = Handle{self.raw() | Handle::kMark}; }
-  void unmark() { self = Handle{self.raw() & ~Handle::kMark}; }
+  void mark() { info |= kMarkMask; }
+  void unmark() { info &= ~kMarkMask; }
 
   // Invalidate heap object by setting the type to INVALID.
-  void invalidate() { info = size() | INVALID; }
+  void invalidate() { info = (info & ~kTypeMask) | INVALID; }
 
   // Resize object.
-  void resize(int size) { info = size | typebits(); }
+  void resize(int size) { info = (info & ~kSizeMask) | size; }
 
   // Returns the next object in the heap.
   Datum *next() const {
@@ -659,14 +659,14 @@ struct FrameDatum : public Datum {
     return false;
   }
 
-  // Updates the named flag for frame.
-  void AddFlags(Word flags) { info |= (flags & NAMED); }
+  // Updates the public flag for frame.
+  void AddFlags(Word flags) { info |= (flags & PUBLIC); }
 
   // Returns true if frame has an id.
-  bool IsNamed() const { return (info & NAMED) != 0; }
+  bool IsPublic() const { return (info & PUBLIC) != 0; }
 
   // Returns true if frame is anonymous, i.e. it has no ids.
-  bool IsAnonymous() const { return (info & NAMED) == 0; }
+  bool IsAnonymous() const { return (info & PUBLIC) == 0; }
 };
 
 // A symbol links a name to a value. Symbols are usually stored in maps which
@@ -797,7 +797,7 @@ class Root {
 
 // External objects can hold references to objects in the store and will be
 // called during GC to mark the active objects. In contrast to root objects
-// which only track one object, an external objects can track a dynamic array of
+// which only track one object, an external object can track a dynamic array of
 // objects.
 class External {
  public:
@@ -884,15 +884,23 @@ struct MemoryUsage {
 // leaving a contiguous area at the end of the heap for allocating new objects.
 class Heap : public Space<Datum> {
  public:
-  Heap() : next_(nullptr) {}
+  Heap() : next_(nullptr), frozen_(false) {}
 
+  // Next heap in store.
   Heap *next() const { return next_; }
   void set_next(Heap *next) { next_ = next; }
+
+  // Read-only heap.
+  bool frozen() const { return frozen_; }
+  void set_frozen(bool frozen) { frozen_ = frozen; }
 
  private:
   // Next heap for store. All the heaps for a store are linked together in a
   // linked list.
   Heap *next_;
+
+  // A heap can be frozen making the objects in the heap read-only.
+  bool frozen_;
 
   DISALLOW_COPY_AND_ASSIGN(Heap);
 };
@@ -943,7 +951,7 @@ class Store {
     Options *local;
   };
 
-  // Initialize store with default configuration options.
+  // Initializes store with default configuration options.
   Store();
 
   // Initializes global store with custom configuration options.
@@ -1041,7 +1049,10 @@ class Store {
   const ProxyDatum *GetProxy(Handle h) const { return Deref(h)->AsProxy(); }
 
   // Resolve handle by following is: chain.
-  Handle Resolve(Handle handle);
+  Handle Resolve(Handle handle) const;
+
+  // Get frame id.
+  Text FrameId(Handle handle) const;
 
   // Freezes the store. This will convert all handles to global handles and make
   // the store read-only.
@@ -1104,6 +1115,14 @@ class Store {
   void Release() const;
 
  public:
+  // A reference in the handle table can be accessed as a heap object pointer or
+  // as a pointer to the next element in the handle free list.
+  union Reference {
+    Datum *object;    // reference to heap object for handle
+    Reference *next;  // reference to next element in handle free list
+    uint64 bits;      // ensure that reference elements are 8 bytes
+  };
+
   // The methods below are low-level methods for internal use.
 
   // Allocates uninitialized string object.
@@ -1133,18 +1152,15 @@ class Store {
   // Dereferences a handle and returns a pointer to the object data.
   Datum *Deref(Handle handle) {
     DCHECK(IsValidReference(handle));
-    Address table = pools_[handle.raw() & Handle::kPoolMask];
-    return *reinterpret_cast<Datum **>(table + handle.offset());
+    return pools_[handle.pool()][handle.idx()].object;
   }
   const Datum *Deref(Handle handle) const {
     DCHECK(IsValidReference(handle));
-    Address table = pools_[handle.raw() & Handle::kPoolMask];
-    return *reinterpret_cast<const Datum **>(table + handle.offset());
+    return pools_[handle.pool()][handle.idx()].object;
   }
 
   // Checks basic type of object. This will return false for number types.
   bool IsType(Handle handle, Type type) const {
-    DCHECK_EQ(type & Handle::kSimple, 0);
     if (!handle.IsRef() || handle.IsNil()) return false;
     return Deref(handle)->type() == type;
   }
@@ -1200,10 +1216,17 @@ class Store {
   // Performs garbage collection.
   void GC();
 
-  // Check is store is pristine, i.e. the store only contains the standard
+  // Checks if store is pristine, i.e. the store only contains the standard
   // frames. This can be used for checking if a snapshot can be used for
   // restoring the store without overwriting any existing content.
   bool Pristine() const;
+
+  // Returns heap containing symbol table. This will return null if the heap
+  // contains any objects besides the symbol table.
+  Heap *GetSymbolHeap();
+
+  // Allocates separate heap for symbol table.
+  void AllocateSymbolHeap();
 
   // Iterator for enumerating all objects in the heaps. This will also iterate
   // over invalidated object in the heaps. The iterator will be invalidated by
@@ -1237,17 +1260,6 @@ class Store {
   };
 
  private:
-  // A reference in the handle table can be accessed as a heap object pointer or
-  // as a pointer to the next element in the handle free list. Each element in
-  // the handle table needs to be 8 bytes. This assumption is used in the
-  // dereferencing routines to convert a handle to a byte offset into the handle
-  // table.
-  union Reference {
-    Datum *object;    // reference to heap object for handle
-    Reference *next;  // reference to next element in handle free list
-    uint64 bits;      // ensure that reference elements are 8 bytes
-  };
-
   // Allocates heap object. The size is the payload size without the preamble.
   Datum *AllocateDatum(Type type, Word size) {
     // Determine the number of bytes needed for the object on the heap including
@@ -1266,7 +1278,9 @@ class Store {
   // heap.
   Datum *AllocateDatumSlow(Type type, Word size);
 
-  // Allocates handle for object.
+  // Allocates handle for object. A new handle is allocated from the free list.
+  // If the free list is empty, the handle is allocated from the unsed part of
+  // the handle table unless the handle table is full,
   Handle AllocateHandle(Datum *object) {
     Reference *ref;
     if (free_handle_ != nullptr) {
@@ -1276,7 +1290,7 @@ class Store {
       return AllocateHandleSlow(object);
     }
 
-    Handle handle = Handle::Ref(handles_.offset(ref), store_tag_);
+    Handle handle = Handle::Ref(handles_.index(ref), store_tag_);
     ref->object = object;
     object->self = handle;
     return handle;
@@ -1287,8 +1301,7 @@ class Store {
 
   // Assigns heap object to handle.
   void Assign(Handle handle, Datum *object) {
-    Address table = pools_[store_tag_];
-    *reinterpret_cast<Datum **>(table + handle.offset()) = object;
+    pools_[store_tag_][handle.idx()].object = object;
   }
 
   // Replaces heap object for a handle with a new object.
@@ -1340,7 +1353,7 @@ class Store {
   // Pointers to the global and local handle tables. These must be first in
   // the store object for fast dereferencing of object handles. These will be
   // pointers to the handle tables of the global and local stores.
-  Address pools_[2];
+  Reference *pools_[2];
 
   // Handle tag bits for objects in this store. This is Handle::kGlobalTag for
   // global stores and Handle::kLocalTag for local stores.

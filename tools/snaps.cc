@@ -21,6 +21,7 @@
 #include "sling/base/flags.h"
 #include "sling/base/logging.h"
 #include "sling/base/types.h"
+#include "sling/file/file.h"
 #include "sling/frame/serialization.h"
 #include "sling/frame/snapshot.h"
 #include "sling/frame/store.h"
@@ -51,10 +52,12 @@ int main(int argc, char *argv[]) {
       std::cout << "done\n" << std::flush;
     } else {
       std::cout << file << ": " << std::flush;
+      File::Delete(Snapshot::Filename(file));
       std::cout << "load " << std::flush;
       Store store;
       LoadStore(file, &store);
       std::cout << "freeze " << std::flush;
+      store.AllocateSymbolHeap();
       store.Freeze();
       std::cout << "snapshot " << std::flush;
       CHECK(Snapshot::Write(&store, file));

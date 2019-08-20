@@ -28,6 +28,9 @@ namespace sling {
 // than reading the frame store in encoded format.
 class Snapshot {
  public:
+  // Filename for snapshot.
+  static string Filename(const string &filename);
+
   // Check if there is a valid snapshot file for the store.
   static bool Valid(const string &filename);
 
@@ -40,7 +43,7 @@ class Snapshot {
  private:
   // Current magic and version for snapshots.
   static const int MAGIC = 0x50414e53;
-  static const int VERSION = 1;
+  static const int VERSION = 2;
 
   // Snapshot file header.
   struct Header {
@@ -51,6 +54,7 @@ class Snapshot {
     Word symtab;    // symbol table handle
     int symbols;    // number of symbols in symbol table
     int buckets;    // number of hash buckets in the symbol table
+    int symheap;    // heap for symbol table (-1 means no separate heap)
   };
 };
 

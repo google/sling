@@ -55,7 +55,9 @@ class FrameStoreWriter : public Processor {
     CHECK(file != nullptr);
 
     // Compact store.
+    bool snapshot = task->Get("snapshot", false);
     store_->CoalesceStrings();
+    if (snapshot) store_->AllocateSymbolHeap();
     store_->GC();
 
     // Save store to output file.
@@ -69,7 +71,7 @@ class FrameStoreWriter : public Processor {
     CHECK(stream.Close());
 
     // Write snapshot if requested.
-    if (task->Get("snapshot", false)) {
+    if (snapshot) {
       CHECK(Snapshot::Write(store_, file->resource()->name()));
     }
 

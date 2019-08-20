@@ -22,46 +22,8 @@
 
 namespace sling {
 
-// Converts hexadecimal character to digit value.
-static int HexToDigit(int ch) {
-  if (ch >= '0' && ch <= '9') return ch - '0';
-  if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
-  if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
-  return -1;
-}
-
-Tokenizer::Tokenizer(Input *input) : input_(input) {
-  current_ = 0;
-  line_ = 1;
-  column_ = 1;
-  NextChar();
+Tokenizer::Tokenizer(Input *input) : Scanner(input) {
   NextToken();
-}
-
-void Tokenizer::NextChar() {
-  char ch;
-
-  if (current_ != -1 && input_->Next(&ch)) {
-    current_ = ch;
-  } else {
-    current_ = -1;
-  }
-  if (current_ == '\n') {
-    line_++;
-    column_ = 0;
-  } else {
-    column_++;
-  }
-}
-
-int Tokenizer::Select(char next, int then, int otherwise) {
-  NextChar();
-  if (current_ == next) {
-    NextChar();
-    return Token(then);
-  } else {
-    return Token(otherwise);
-  }
 }
 
 int Tokenizer::NextToken() {
@@ -364,57 +326,20 @@ int Tokenizer::ParseNumber(bool negative, bool fractional) {
   }
 }
 
-int Tokenizer::ParseDigits() {
-  int digits = 0;
-  while (current_ != -1 && ascii_isdigit(current_)) {
-    Append(current_);
-    NextChar();
-    digits++;
-  }
-  return digits;
-}
-
-bool Tokenizer::ParseUnicode(int digits) {
-  // Parse Unicode code point.
-  uint32 code = 0;
-  for (int i = 0; i < digits; ++i) {
-    int digit = HexToDigit(current_);
-    if (digit < 0) return false;
-    code = (code << 4) + digit;
-    if (code > 0x10ffff) return false;
-    NextChar();
-  }
-
-  // Convert code point to UTF-8.
-  if (code <= 0x7f) {
-    // One character sequence.
-    Append(code);
-  } else if (code <= 0x7ff) {
-    // Two character sequence.
-    Append(0xc0 | (code >> 6));
-    Append(0x80 | (code & 0x3f));
-  } else if (code <= 0xffff) {
-    // Three character sequence.
-    Append(0xe0 | (code >> 12));
-    Append(0x80 | ((code >> 6) & 0x3f));
-    Append(0x80 | (code & 0x3f));
-  } else {
-    // Four character sequence.
-    Append(0xf0 | (code >> 18));
-    Append(0x80 | ((code >> 12) & 0x3f));
-    Append(0x80 | ((code >> 6) & 0x3f));
-    Append(0x80 | (code & 0x3f));
-  }
-
-  return true;
-}
-
 bool Tokenizer::ParseName(int first) {
   // Save first character in symbol name.
+  int ch;
   if (first == '\\') {
     if (current_ == -1) return false;
     Append(current_);
     NextChar();
+  } else if (first == '%') {
+    ch = HexToDigit(current_);
+    NextChar();
+    ch = (ch << 4) + HexToDigit(current_);
+    NextChar();
+    if (ch < 0) return Error("Invalid hex escape in symbol");
+    Append(ch);
   } else {
     Append(first);
   }
@@ -444,6 +369,16 @@ bool Tokenizer::ParseName(int first) {
         if (current_ == -1) return false;
         Append(current_);
         NextChar();
+        break;
+
+      case '%':
+        NextChar();
+        ch = HexToDigit(current_);
+        NextChar();
+        ch = (ch << 4) + HexToDigit(current_);
+        NextChar();
+        if (ch < 0) return Error("Invalid hex escape in symbol");
+        Append(ch);
         break;
 
       default:
@@ -523,20 +458,6 @@ int Tokenizer::LookupKeyword() {
   }
 
   return SYMBOL_TOKEN;
-}
-
-void Tokenizer::SetError(const string &error_message) {
-  if (error_message_.empty()) error_message_ = error_message;
-  token_ = ERROR;
-}
-
-int Tokenizer::Error(const string &error_message) {
-  SetError(error_message);
-  return ERROR;
-}
-
-string Tokenizer::GetErrorMessage(const string &filename) const {
-  return StrCat(filename, ":", line_, ":", column_, ": ", error_message_);
 }
 
 }  // namespace sling

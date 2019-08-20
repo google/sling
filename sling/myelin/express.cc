@@ -879,7 +879,7 @@ bool Express::AlwaysZero(Var *x) const {
     case DIV:
       return AlwaysZero(op->args[0]) && !AlwaysZero(op->args[1]);
     default:
-      return false;
+      return op->arity() == 1 && AlwaysZero(op->args[0]) && ZeroFixpoint(x);
   }
 }
 

@@ -17,20 +17,17 @@
 
 #include <string>
 
-#include "sling/base/macros.h"
 #include "sling/stream/input.h"
+#include "sling/frame/scanner.h"
 
 namespace sling {
 
-class Tokenizer {
+class Tokenizer : public Scanner {
  public:
-  // Token types in the range 0-255 are used for single-character tokens.
+  // Token types.
   enum TokenType {
-    ERROR = 256,
-    END,
-
     // Literal types.
-    STRING_TOKEN,
+    STRING_TOKEN = FIRST_AVAILABLE_TOKEN_TYPE,
     INTEGER_TOKEN,
     FLOAT_TOKEN,
     SYMBOL_TOKEN,
@@ -91,67 +88,19 @@ class Tokenizer {
   // Initializes tokenizer with input.
   explicit Tokenizer(Input *input);
 
-  // Checks if all input has been read.
-  bool done() const { return token_ == END; }
-
-  // Returns true if errors were found while parsing input.
-  bool error() const { return token_ == ERROR; }
-
-  // Returns current line and column.
-  int line() const { return line_; }
-  int column() const { return column_; }
-
-  // Returns last error message.
-  const string &error_message() const { return error_message_; }
-
   // Reads the next input token.
   int NextToken();
-
-  // Returns current input token.
-  int token() const { return token_; }
-
-  // Returns token token.
-  const string &token_text() const { return token_text_; }
-
-  // Records error at current input position.
-  void SetError(const string &error_message);
-
-  // Records error and returns the ERROR token.
-  int Error(const string &error_message);
-
-  // Return error message with position information.
-  string GetErrorMessage(const string &filename) const;
 
   // Enables and disables function parsing mode.
   bool func_mode() const { return func_mode_; }
   void set_func_mode(bool func_mode) { func_mode_ =  func_mode; }
 
  private:
-  // Gets the next input character.
-  void NextChar();
-
-  // Sets current token and returns it.
-  int Token(int token) { token_ = token; return token; }
-
-  // Consumes current input character and returns token.
-  int Select(int token) { NextChar(); return Token(token); }
-
-  // Consumes current input character and return tokens dependent on the next
-  // input character.
-  int Select(char next, int then, int otherwise);
-
   // Parses string from input.
   int ParseString();
 
   // Parses number from input.
   int ParseNumber(bool negative, bool fractional);
-
-  // Parses a sequence of digits. Returns the number of digits parsed.
-  int ParseDigits();
-
-  // Parses a sequence of Unicode hex characters and appends these as UTF-8 to
-  // the token buffer. Returns false on error.
-  bool ParseUnicode(int digits);
 
   // Parses symbol name from input. Returns false if symbol is invalid.
   bool ParseName(int first);
@@ -161,29 +110,6 @@ class Tokenizer {
   // treated as a symbol token.
   int LookupKeyword();
 
-  // Adds character to token buffer.
-  void Append(char ch) { token_text_.push_back(ch); }
-
-  // Input for reader.
-  Input *input_;
-
-  // Current input character or -1 if end of input has been reached.
-  int current_;
-
-  // Current position in input.
-  int line_;
-  int column_;
-
-  // Last read token type. This is either a single-character token or one of the
-  // values from the TokenType enumeration.
-  int token_;
-
-  // Text for last read token. This contains string, symbol, and number tokens.
-  string token_text_;
-
-  // Last error message.
-  string error_message_;
-
   // In function parsing mode, the tokenization is slightly different to allow
   // for the richer syntax:
   //  - Single quote is used for character constants instead of literal symbols.
@@ -192,8 +118,6 @@ class Tokenizer {
   //  - Number signs are separate tokens.
   //  - Reserved keywords have separate token types.
   bool func_mode_ = false;
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(Tokenizer);
 };
 
 }  // namespace sling

@@ -25,7 +25,8 @@
 namespace sling {
 
 Encoder::Encoder(const Store *store, Output *output)
-    : store_(store), output_(output), global_(store->globals() == nullptr) {
+    : store_(store), output_(output),
+      global_(store != nullptr && store->globals() == nullptr) {
   // Insert special values in reference mapping.
   references_[Handle::nil()] = Reference(-WIRE_NIL);
   references_[Handle::id()] = Reference(-WIRE_ID);
@@ -157,7 +158,7 @@ void Encoder::EncodeLink(Handle handle) {
         link = datum->AsProxy()->symbol;
       } else {
         const FrameDatum *frame = datum->AsFrame();
-        if (frame->IsNamed()) {
+        if (frame->IsPublic()) {
           if (shallow_ || (!global_ && handle.IsGlobalRef())) {
             link = frame->get(Handle::id());
           }

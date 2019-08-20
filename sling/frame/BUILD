@@ -39,15 +39,26 @@ cc_library(
 )
 
 cc_library(
-  name = "tokenizer",
-  srcs = ["tokenizer.cc"],
-  hdrs = ["tokenizer.h"],
+  name = "scanner",
+  srcs = ["scanner.cc"],
+  hdrs = ["scanner.h"],
   deps = [
     "//sling/base",
     "//sling/stream:input",
     "//sling/string:ctype",
-    "//sling/string:numbers",
     "//sling/string:strcat",
+  ],
+)
+
+cc_library(
+  name = "tokenizer",
+  srcs = ["tokenizer.cc"],
+  hdrs = ["tokenizer.h"],
+  deps = [
+    ":scanner",
+    "//sling/base",
+    "//sling/stream:input",
+    "//sling/string:ctype",
   ],
 )
 
@@ -133,6 +144,21 @@ cc_library(
     "//sling/base",
     "//sling/stream:input",
     "//sling/web:xml-parser",
+  ],
+)
+
+cc_library(
+  name = "turtle",
+  srcs = ["turtle.cc"],
+  hdrs = ["turtle.h"],
+  deps = [
+    ":object",
+    ":scanner",
+    ":store",
+    "//sling/base",
+    "//sling/stream:input",
+    "//sling/string:ctype",
+    "//sling/string:numbers",
   ],
 )
 

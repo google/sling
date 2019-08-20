@@ -55,7 +55,8 @@ void PyFrame::Define(PyObject *module) {
   methods.Add("islocal", &PyFrame::IsLocal);
   methods.Add("isglobal", &PyFrame::IsGlobal);
   methods.Add("isanonymous", &PyFrame::IsAnonymous);
-  methods.Add("isnamed", &PyFrame::IsNamed);
+  methods.Add("ispublic", &PyFrame::IsPublic);
+  methods.Add("isnamed", &PyFrame::IsPublic);  // legacy
   methods.Add("resolve", &PyFrame::Resolve);
   type.tp_methods = methods.table();
 
@@ -320,7 +321,7 @@ PyObject *PyFrame::Str() {
 
 PyObject *PyFrame::Repr() {
   FrameDatum *f = frame();
-  if (f->IsNamed()) {
+  if (f->IsPublic()) {
     // Return frame id.
     Handle id = f->get(Handle::id());
     SymbolDatum *symbol = pystore->store->Deref(id)->AsSymbol();
@@ -392,8 +393,8 @@ PyObject *PyFrame::IsAnonymous() {
   return PyBool_FromLong(frame()->IsAnonymous());
 }
 
-PyObject *PyFrame::IsNamed() {
-  return PyBool_FromLong(frame()->IsNamed());
+PyObject *PyFrame::IsPublic() {
+  return PyBool_FromLong(frame()->IsPublic());
 }
 
 PyObject *PyFrame::Resolve() {

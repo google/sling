@@ -30,23 +30,23 @@ namespace sling {
 // when making changes to this table.
 static const Word kInitialHeap[] = {
   // id frame
-  FRAME | NAMED  |  8, 0x08, 0x08, 0x20,
+  FRAME | PUBLIC |  8, 0x04, 0x04, 0x10,
   // isa frame
-  FRAME | NAMED  |  8, 0x10, 0x08, 0x28,
+  FRAME | PUBLIC |  8, 0x08, 0x04, 0x14,
   // is frame
-  FRAME | NAMED  |  8, 0x18, 0x08, 0x30,
+  FRAME | PUBLIC |  8, 0x0C, 0x04, 0x18,
   // id symbol
-  SYMBOL         | 16, 0x20, 0x307A1C66, 0, 0x38, 0x08,
+  SYMBOL         | 16, 0x10, 0x307A1C66, 0, 0x1C, 0x04,
   // isa symbol
-  SYMBOL         | 16, 0x28, 0x6966506A, 0, 0x40, 0x10,
+  SYMBOL         | 16, 0x14, 0x6966506A, 0, 0x20, 0x08,
   // is symbol
-  SYMBOL         | 16, 0x30, 0xC089FC02, 0, 0x48, 0x18,
+  SYMBOL         | 16, 0x18, 0xC089FC02, 0, 0x24, 0x0C,
   // "id" string
-  STRING         |  2, 0x38, 'i' | ('d' << 8), 0,
+  STRING         |  2, 0x1C, 'i' | ('d' << 8), 0,
   // "isa" string
-  STRING         |  3, 0x40, 'i' | ('s' << 8) | ('a' << 16), 0,
+  STRING         |  3, 0x20, 'i' | ('s' << 8) | ('a' << 16), 0,
   // "is" string
-  STRING         |  2, 0x48, 'i' | ('s' << 8), 0,
+  STRING         |  2, 0x24, 'i' | ('s' << 8), 0,
 };
 
 // Size of pristine store.
@@ -131,7 +131,7 @@ Store::Store(const Options *options) : options_(options) {
   // Set up pools.
   globals_ = nullptr;
   store_tag_ = Handle::kGlobalTag;
-  pools_[Handle::kGlobal] = reinterpret_cast<Address>(handles_.base());
+  pools_[Handle::kGlobal] = handles_.base();
   pools_[Handle::kLocal] = nullptr;
 
   // Reserve the first global handle for the nil value. This is initialized
@@ -185,7 +185,7 @@ Store::Store(const Store *globals) : globals_(globals) {
   // Set up global and local pools.
   store_tag_ = Handle::kLocalTag;
   pools_[Handle::kGlobal] = globals_->pools_[Handle::kGlobal];
-  pools_[Handle::kLocal] = reinterpret_cast<Address>(handles_.base());
+  pools_[Handle::kLocal] = handles_.base();
 
   // Allocate symbol map. The symbol table of a local store is initially only
   // a single bucket.
@@ -342,7 +342,7 @@ Handle Store::AllocateFrame(Slot *begin, Slot *end, Handle original) {
 
         // Bind symbol to frame.
         symbol->value = handle;
-        frame->AddFlags(NAMED);
+        frame->AddFlags(PUBLIC);
       } else if (id->IsProxy()) {
         // This proxy is not the one used for replacement, because otherwise the
         // proxy would have been replaced by the symbol above, so the frame has
@@ -411,7 +411,7 @@ void Store::UpdateFrame(Handle handle, Slot *begin, Slot *end) {
 
       // Bind symbol to frame.
       symbol->value = handle;
-      frame->AddFlags(NAMED);
+      frame->AddFlags(PUBLIC);
     }
   }
 }
@@ -612,7 +612,7 @@ Handle Store::AllocateProxy(Handle symbol) {
   // Set id slot in proxy.
   proxy->id = Handle::id();
   proxy->symbol = symbol;
-  proxy->AddFlags(NAMED);
+  proxy->AddFlags(PUBLIC);
 
   // Allocate handle for proxy.
   return AllocateHandle(proxy);
@@ -898,7 +898,7 @@ bool Store::Equal(Handle x, Handle y, bool byref) const {
         // Compare named frames by reference.
         const FrameDatum *xframe = xdatum->AsFrame();
         const FrameDatum *yframe = ydatum->AsFrame();
-        if (xframe->IsNamed() || yframe->IsNamed()) return false;
+        if (xframe->IsPublic() || yframe->IsPublic()) return false;
 
         // Compare unnamed frames by value.
         const Slot *sx = xframe->begin();
@@ -959,7 +959,7 @@ uint64 Store::Fingerprint(Handle handle, bool byref, uint64 seed) const {
     const Datum *datum = GetObject(handle);
     if (datum->IsFrame()) {
       const FrameDatum *frame = datum->AsFrame();
-      if (frame->IsNamed()) {
+      if (frame->IsPublic()) {
         // Use the (first) frame id for hashing.
         Handle id = frame->get(Handle::id());
         DCHECK(!id.IsNil());
@@ -1126,26 +1126,26 @@ Handle Store::AllocateHandleSlow(Datum *object) {
   handles_.reserve(newsize);
 
   // Update the pool pointer to handle table.
-  pools_[store_tag_] = reinterpret_cast<Address>(handles_.base());
+  pools_[store_tag_] = handles_.base();
 
   // Allocate and initialize new handle.
   Reference *ref;
   CHECK(handles_.consume(sizeof(Reference), &ref));
-  Handle handle = Handle::Ref(handles_.offset(ref), store_tag_);
+  Handle handle = Handle::Ref(handles_.index(ref), store_tag_);
   ref->object = object;
   object->self = handle;
 
   return handle;
 }
 
-Handle Store::Resolve(Handle handle) {
+Handle Store::Resolve(Handle handle) const {
   for (;;) {
     if (!handle.IsRef() || handle.IsNil()) return handle;
-    Datum *datum = Deref(handle);
+    const Datum *datum = Deref(handle);
     if (!datum->IsFrame()) return handle;
 
-    FrameDatum *frame = datum->AsFrame();
-    if (frame->IsNamed()) return handle;
+    const FrameDatum *frame = datum->AsFrame();
+    if (frame->IsPublic()) return handle;
 
     Handle qua = frame->get(Handle::is());
     if (qua == Handle::nil()) return handle;
@@ -1153,10 +1153,57 @@ Handle Store::Resolve(Handle handle) {
   }
 }
 
+Text Store::FrameId(Handle handle) const {
+  if (!handle.IsRef() || handle.IsNil()) return Text();
+  const Datum *datum = Deref(handle);
+  if (!datum->IsFrame()) return Text();
+  const FrameDatum *frame = datum->AsFrame();
+  Handle id = frame->get(Handle::id());
+  if (id.IsNil()) return Text();
+  const Datum *iddatum = Deref(id);
+  if (!iddatum->IsSymbol()) return Text();
+  const SymbolDatum *symbol = iddatum->AsSymbol();
+  const StringDatum *symstr = GetString(symbol->name);
+  return symstr->str();
+}
+
 bool Store::Pristine() const {
   return globals_ == nullptr &&
          num_symbols_ == kPristineSymbols &&
          handles_.length() == kPristineHandles;
+}
+
+Heap *Store::GetSymbolHeap() {
+  MapDatum *symbols = GetMap(symbols_);
+  for (Heap *heap = first_heap_; heap != nullptr; heap = heap->next()) {
+    if (heap->base() == symbols && heap->end() == symbols->next()) {
+      return heap;
+    }
+  }
+  return nullptr;
+}
+
+void Store::AllocateSymbolHeap() {
+  // Check if symbol table is already in a separate heap.
+  if (GetSymbolHeap() != nullptr) return;
+
+  // Get current symbol table.
+  Datum *symbols = Deref(symbols_);
+  Word size = (symbols->next() - symbols) * sizeof(Datum);
+
+  // Allocate new heap for symbol table.
+  Heap *heap = new Heap();
+  heap->reserve(size);
+  last_heap_->set_next(heap);
+  last_heap_ = heap;
+
+  // Move symbol table to new heap.
+  Datum *map;
+  CHECK(heap->consume(size, &map));
+  memcpy(map, symbols, size);
+
+  // Replace the old symbol table with the new one.
+  Replace(symbols_, map);
 }
 
 void Store::Mark() {
@@ -1186,7 +1233,7 @@ void Store::Mark() {
 
   // Traverse all the objects reachable from the roots.
   Word pool_tag = store_tag_;
-  Address pool = pools_[pool_tag];
+  Reference *pool = pools_[pool_tag];
   while (!stack.empty()) {
     Range *top = stack.top();
     if (top->empty()) {
@@ -1203,7 +1250,7 @@ void Store::Mark() {
         // Dereference the handle. Here we take advantage of the fact that the
         // object is known to be owned so we can dereference the handle directly
         // through the owned handle table for the store.
-        Datum *object = *reinterpret_cast<Datum **>(pool + h.offset());
+        Datum *object = pool[h.idx()].object;
 
         // Mark the object if it is not already marked.
         if (!object->marked()) {
@@ -1225,6 +1272,9 @@ void Store::Compact() {
 
   // Compact all the heaps.
   for (Heap *heap = first_heap_; heap != nullptr; heap = heap->next()) {
+    // Do not compact frozen heaps.
+    if (heap->frozen()) continue;
+
     // Traverse all the objects in the heap and move all the surviving objects
     // to the beginning of the heap.
     Datum *object = heap->base();
@@ -1248,7 +1298,7 @@ void Store::Compact() {
           unused = Heap::address(unused, size);
         } else {
           // Object is dead. Free the associated handle.
-          Reference *ref = handles_.address(object->self.offset());
+          Reference *ref = handles_.base() + object->self.idx();
           ref->next = fh;
           fh = ref;
         }
@@ -1329,7 +1379,7 @@ bool Store::IsValidReference(Handle handle) const {
   CHECK(table != nullptr);
 
   // Check bounds on handle table.
-  Reference *ref = table->address(handle.offset());
+  Reference *ref = table->base() + handle.idx();
   if (ref < table->base() || ref >= table->end()) {
     LOG(ERROR) << "Handle outside handle table";
     return false;
@@ -1437,7 +1487,7 @@ void Store::Freeze() {
     num_dead_handles_--;
   }
   handles_.reserve(handles_.size());
-  pools_[store_tag_] = reinterpret_cast<Address>(handles_.base());
+  pools_[store_tag_] = handles_.base();
 
   // Remove all roots from store. After the store has been frozen the roots no
   // longer need to be tracked.

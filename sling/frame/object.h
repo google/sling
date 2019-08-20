@@ -399,7 +399,7 @@ class Frame : public Object {
   bool IsProxy() const { return frame()->IsProxy(); }
 
   // Checks if frame has an id.
-  bool IsNamed() const { return frame()->IsNamed(); }
+  bool IsPublic() const { return frame()->IsPublic(); }
 
   // Checks if frame is anonymous, i.e. has no ids.
   bool IsAnonymous() const { return frame()->IsAnonymous(); }
@@ -503,8 +503,10 @@ class Frame : public Object {
   // Checks frame type, i.e. checks if frame has an isa/is slot with the type.
   bool IsA(Handle type) const;
   bool IsA(const Name &type) const;
+  bool IsA(const Object &type) const;
   bool Is(Handle type) const;
   bool Is(const Name &type) const;
+  bool Is(const Object &type) const;
 
   // Adds handle slot to frame.
   Frame &Add(Handle name, Handle value);
@@ -928,10 +930,10 @@ class Builder : public External {
   Builder &SetLink(Text name, Text symbol);
 
   // Creates frame from the slots in the frame builder.
-  Frame Create() const;
+  Frame Create();
 
   // Update existing frame with new slots.
-  void Update() const;
+  void Update();
 
   // Clears all the slots.
   Builder &Clear() { slots_.reset(); return *this; }
@@ -946,6 +948,9 @@ class Builder : public External {
 
   // Returns the store behind the builder.
   Store *store() { return store_; }
+
+  // Returns the handle for the builder.
+  Handle handle() { return handle_; }
 
  private:
   // Initial number of slots reserved.

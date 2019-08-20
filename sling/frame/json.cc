@@ -187,7 +187,7 @@ void JSONWriter::WriteLink(Handle handle, bool reference) {
       } else {
         const FrameDatum *frame = datum->AsFrame();
         if (reference ||
-            (shallow_ && frame->IsNamed()) ||
+            (shallow_ && frame->IsPublic()) ||
             (!global_ && handle.IsGlobalRef() && !frame->IsAnonymous())) {
           // Output reference.
           Write(frame->get(Handle::id()));
