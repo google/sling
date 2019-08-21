@@ -207,7 +207,7 @@ class AVX512FloatGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT);
     if (neutral == nullptr) {
       Zero(r);
@@ -216,15 +216,15 @@ class AVX512FloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, zmm(acc), zmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_FLOAT, zmm(acc), src);
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     ZMMRegister aux = masm_->mm().allocz();
     masm_->Reduce(op, DT_FLOAT, zmm(r), aux);
     masm_->mm().release(aux);
@@ -266,7 +266,8 @@ class AVX512FloatGenerator : public SIMDGenerator {
     masm_->vfmadd231ps(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
   }
 
-  void MaskedAccumulate(Reduction op, int acc, const jit::Operand &src) {
+  void MaskedAccumulate(Reduction op, int acc,
+                        const jit::Operand &src) override {
     masm_->Accumulate(op, DT_FLOAT, zmm(acc), src, mask_);
   }
 
@@ -342,7 +343,7 @@ class AVX256FloatGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT);
     if (neutral == nullptr) {
       Zero(r);
@@ -351,15 +352,15 @@ class AVX256FloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, ymm(acc), ymm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_FLOAT, ymm(acc), src);
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     YMMRegister aux = masm_->mm().allocy();
     masm_->Reduce(op, DT_FLOAT, ymm(r), aux);
     masm_->mm().release(aux);
@@ -434,7 +435,7 @@ class AVX128FloatGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT);
     if (neutral == nullptr) {
       Zero(r);
@@ -443,15 +444,15 @@ class AVX128FloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_FLOAT, xmm(acc), src);
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     XMMRegister aux = masm_->mm().allocx();
     masm_->Reduce(op, DT_FLOAT, xmm(r), aux);
     masm_->mm().release(aux);
@@ -562,7 +563,7 @@ class SSE128FloatGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT, VectorSize());
     if (neutral == nullptr) {
       Zero(r);
@@ -571,11 +572,11 @@ class SSE128FloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     if (aligned_) {
       masm_->Accumulate(op, DT_FLOAT, xmm(acc), src);
     } else {
@@ -586,7 +587,7 @@ class SSE128FloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     XMMRegister aux = masm_->mm().allocx();
     masm_->Reduce(op, DT_FLOAT, xmm(r), aux);
     masm_->mm().release(aux);
@@ -651,7 +652,7 @@ class AVX512ScalarFloatGenerator : public SIMDGenerator {
     masm_->LoadMask(bits, mask_);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT);
     if (neutral == nullptr) {
       Zero(r);
@@ -660,11 +661,11 @@ class AVX512ScalarFloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, zmm(acc), zmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_FLOAT, zmm(acc), src, mask_);
   }
 
@@ -721,7 +722,7 @@ class AVXScalarFloatGenerator : public SIMDGenerator {
     }
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT);
     if (neutral == nullptr) {
       Zero(r);
@@ -730,11 +731,11 @@ class AVXScalarFloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     switch (op) {
       case REDUCE_ADD:
         masm_->vaddss(xmm(acc), xmm(acc), src);
@@ -817,7 +818,7 @@ class SSEScalarFloatGenerator : public SIMDGenerator {
     }
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_FLOAT);
     if (neutral == nullptr) {
       Zero(r);
@@ -826,11 +827,11 @@ class SSEScalarFloatGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_FLOAT, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     switch (op) {
       case REDUCE_ADD:
         masm_->addss(xmm(acc), src);
@@ -925,7 +926,7 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE);
     if (neutral == nullptr) {
       Zero(r);
@@ -934,15 +935,15 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, zmm(acc), zmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_DOUBLE, zmm(acc), src);
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     ZMMRegister aux = masm_->mm().allocz();
     masm_->Reduce(op, DT_DOUBLE, zmm(r), aux);
     masm_->mm().release(aux);
@@ -984,7 +985,8 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     masm_->vfmadd231pd(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
   }
 
-  void MaskedAccumulate(Reduction op, int acc, const jit::Operand &src) {
+  void MaskedAccumulate(Reduction op, int acc,
+                        const jit::Operand &src) override {
     masm_->Accumulate(op, DT_DOUBLE, zmm(acc), src, mask_);
   }
 
@@ -1060,7 +1062,7 @@ class AVX256DoubleGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE);
     if (neutral == nullptr) {
       Zero(r);
@@ -1069,15 +1071,15 @@ class AVX256DoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, ymm(acc), ymm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_DOUBLE, ymm(acc), src);
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     YMMRegister aux = masm_->mm().allocy();
     masm_->Reduce(op, DT_DOUBLE, ymm(r), aux);
     masm_->mm().release(aux);
@@ -1153,7 +1155,7 @@ class AVX128DoubleGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE, VectorSize());
     if (neutral == nullptr) {
       Zero(r);
@@ -1162,15 +1164,15 @@ class AVX128DoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_DOUBLE, xmm(acc), src);
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     XMMRegister aux = masm_->mm().allocx();
     masm_->Reduce(op, DT_DOUBLE, xmm(r), aux);
     masm_->mm().release(aux);
@@ -1281,7 +1283,7 @@ class SSE128DoubleGenerator : public SIMDGenerator {
     masm_->mm().release(acc);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE, VectorSize());
     if (neutral == nullptr) {
       Zero(r);
@@ -1290,11 +1292,11 @@ class SSE128DoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     if (aligned_) {
       masm_->Accumulate(op, DT_DOUBLE, xmm(acc), src);
     } else {
@@ -1305,7 +1307,7 @@ class SSE128DoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Reduce(Reduction op, int r) {
+  void Reduce(Reduction op, int r) override {
     XMMRegister aux = masm_->mm().allocx();
     masm_->Reduce(op, DT_DOUBLE, xmm(r), aux);
     masm_->mm().release(aux);
@@ -1370,7 +1372,7 @@ class AVX512ScalarDoubleGenerator : public SIMDGenerator {
     masm_->LoadMask(bits, mask_);
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE);
     if (neutral == nullptr) {
       Zero(r);
@@ -1379,11 +1381,11 @@ class AVX512ScalarDoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, zmm(acc), zmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     masm_->Accumulate(op, DT_DOUBLE, zmm(acc), src, mask_);
   }
 
@@ -1440,7 +1442,7 @@ class AVXScalarDoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE);
     if (neutral == nullptr) {
       Zero(r);
@@ -1449,11 +1451,11 @@ class AVXScalarDoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     switch (op) {
       case REDUCE_ADD:
         masm_->vaddsd(xmm(acc), xmm(acc), src);
@@ -1536,7 +1538,7 @@ class SSEScalarDoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     StaticData *neutral = NeutralElement(op, DT_DOUBLE);
     if (neutral == nullptr) {
       Zero(r);
@@ -1545,11 +1547,11 @@ class SSEScalarDoubleGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, int src) {
+  void Accumulate(Reduction op, int acc, int src) override {
     masm_->Accumulate(op, DT_DOUBLE, xmm(acc), xmm(src));
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     switch (op) {
       case REDUCE_ADD:
         masm_->addsd(xmm(acc), src);
@@ -1673,7 +1675,7 @@ class ScalarIntSIMDGenerator : public SIMDGenerator {
     }
   }
 
-  void LoadNeutral(Reduction op, int r) {
+  void LoadNeutral(Reduction op, int r) override {
     switch (op) {
       case REDUCE_ADD:
         Zero(r);
@@ -1696,7 +1698,7 @@ class ScalarIntSIMDGenerator : public SIMDGenerator {
     }
   }
 
-  void Accumulate(Reduction op, int acc, const jit::Operand &src) {
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
     switch (op) {
       case REDUCE_ADD:
         masm_->addq(reg(acc), src);

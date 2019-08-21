@@ -16,10 +16,16 @@ PKGS="pkg-config zip g++ zlib1g-dev unzip ${PYPKGS}"
 sudo apt-get install ${PKGS}
 
 # Install bazel.
-BAZELVER=0.13.0
+BAZELVER=0.28.0
 BAZELSH=bazel-${BAZELVER}-installer-linux-x86_64.sh
 BAZELREPO=https://github.com/bazelbuild/bazel
 BAZELURL=${BAZELREPO}/releases/download/${BAZELVER}/${BAZELSH}
+
+if [[ $UPGRADE_BAZEL = "1" ]]; then
+  echo "=== Forcing reinstall of Bazel"
+  sudo rm $(which bazel)
+fi
+
 if ! which bazel > /dev/null; then
   echo
   echo "=== Install Bazel build system"

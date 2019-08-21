@@ -365,7 +365,7 @@ Handle Store::AllocateFrame(Slot *begin, Slot *end, Handle original) {
 Handle Store::AllocateFrame(Word slots) {
   int size = slots * sizeof(Slot);
   FrameDatum *frame = AllocateDatum(FRAME, size)->AsFrame();
-  memset(frame->begin(), 0, size);
+  memset(frame->payload(), 0, size);
   return AllocateHandle(frame);
 }
 

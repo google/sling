@@ -39,7 +39,7 @@ class CUDADevice;
 class CustomKernel;
 class InstanceAllocator;
 class ProfileSummary;
-class Options;
+struct Options;
 
 // Element order.
 enum Order {
