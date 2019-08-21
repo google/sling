@@ -42,8 +42,8 @@ void FrameProcessor::Start(Task *task) {
   output_ = task->GetSink("output");
 
   // Bind names.
-  CHECK(names_.Bind(commons_));
   InitCommons(task);
+  CHECK(names_.Bind(commons_));
 
   // Start up processor.
   Startup(task);

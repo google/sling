@@ -115,6 +115,7 @@ class EntityWorkflow:
     """Fuse items including the link graph."""
     return self.wiki.fuse_items(extras=self.wikilinks() + [self.fanin()],
                                 output=self.fused_items())
+
   #---------------------------------------------------------------------------
   # Knowledge base
   #---------------------------------------------------------------------------
@@ -163,8 +164,10 @@ class EntityWorkflow:
     if language == None: language = flags.arg.language
 
     with self.wf.namespace(language + "-ner"):
-      mapper = self.wf.task("document-ner-labeler", "labeler")
+      mapper = self.wf.task("document-processor", "labeler")
+      mapper.add_annotator("ner")
       mapper.add_param("resolve", True)
+      mapper.add_param("language", language)
       mapper.attach_input("commons", self.knowledge_base())
       mapper.attach_input("aliases", self.wiki.phrase_table(language))
       mapper.attach_input("dictionary", self.idftable(language))

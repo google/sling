@@ -59,7 +59,7 @@ writers = {
 }
 
 # Track if workflow system has been activated, i.e. any workflow has been run.
-active=False
+active = False
 
 class Shard:
   """A shard is one part of a multi-part set."""
@@ -201,6 +201,7 @@ class Task:
     self.sources = []
     self.sinks = []
     self.params = {}
+    self.annotators = []
 
   def attach_input(self, name, resource):
     """Attach named input resource(s) to task."""
@@ -235,6 +236,10 @@ class Task:
     if params != None:
       for name, value in params.items():
         self.add_param(name, value)
+
+  def add_annotator(self, name):
+    """Add annotator to task."""
+    self.annotators.append(name)
 
   def __repr__(self):
     s = self.name
@@ -681,6 +686,8 @@ class Workflow(object):
       if task.shard: s += str(task.shard)
       s += " : " + task.type
       s += "\n"
+      for annotator in task.annotators:
+        s += "  annotator " + annotator + "\n"
       for param in task.params:
         s += "  param " + param + " = " + task.params[param] + "\n"
       for input in task.inputs:

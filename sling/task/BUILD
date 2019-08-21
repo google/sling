@@ -287,6 +287,7 @@ cc_library(
   deps = [
     ":frames",
     "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
   ],
 )
 

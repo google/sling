@@ -23,6 +23,20 @@ cc_library(
 )
 
 cc_library(
+  name = "annotator",
+  srcs = ["annotator.cc"],
+  hdrs = ["annotator.h"],
+  deps = [
+    ":document",
+    "//sling/base",
+    "//sling/file",
+    "//sling/frame:object",
+    "//sling/frame:serialization",
+    "//sling/task:task",
+  ],
+)
+
+cc_library(
   name = "text-tokenizer",
   srcs = ["text-tokenizer.cc"],
   hdrs = ["text-tokenizer.h"],
@@ -192,6 +206,8 @@ cc_binary(
   name = "corpus-browser",
   srcs = ["corpus-browser.cc"],
   deps = [
+    ":annotator",
+    ":annotator-components",
     ":corpus-app",
     ":document",
     ":document-service",
@@ -210,22 +226,32 @@ cc_binary(
   ],
 )
 
+cc_library(
+  name = "annotator-components",
+  deps = [
+    "//sling/nlp/ner:labeler",
+    "//sling/nlp/parser:parser-annotator",
+  ],
+)
+
 embed_data(
-  name = "lex-app",
+  name = "analyzer-app",
   srcs = [
-    "app/lex.html",
-    "app/lex.js",
-    "app/lex.css",
+    "app/analyzer.html",
+    "app/analyzer.js",
+    "app/analyzer.css",
   ],
 )
 
 cc_binary(
-  name = "lex-viewer",
-  srcs = ["lex-viewer.cc"],
+  name = "analyzer",
+  srcs = ["analyzer.cc"],
   deps = [
+    ":analyzer-app",
+    ":annotator",
+    ":annotator-components",
     ":document",
     ":document-service",
-    ":lex-app",
     "//app",
     "//sling/base",
     "//sling/file",

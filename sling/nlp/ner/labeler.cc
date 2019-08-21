@@ -12,45 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "sling/nlp/document/annotator.h"
 #include "sling/nlp/ner/annotators.h"
-#include "sling/task/documents.h"
 
 namespace sling {
 namespace nlp {
 
 using namespace task;
 
-// Run NER annotators on documents and resolve entity mentions.
-class DocumentNERLabeler : public DocumentProcessor {
+// Add NER annotations to documents and resolve entity mentions.
+class NamedEntityAnnotator : public Annotator {
  public:
-  void Startup(Task *task) override {
+  void Init(Task *task, Store *commons) override {
     // Initialize span annotator.
     SpanAnnotator::Resources resources;
     resources.aliases = task->GetInputFile("aliases");
     resources.dictionary = task->GetInputFile("dictionary");
     resources.resolve = task->Get("resolve", false);
-    annotator_.Init(commons_, resources);
 
-    // Add stop words.
-    // TODO: make this configurable.
-    std::vector<string> stop_words = {
-      ".", ",", "-", ":", ";", "(", ")", "``", "''", "'", "--", "/", "&", "?",
-      "the", "a", "an", "'s", "is", "was", "and",
-      "in", "of", "by", "to", "at", "as",
-    };
-    annotator_.AddStopWords(stop_words);
+    annotator_.Init(commons, resources);
   }
 
-  void Process(Slice key, const Document &document) override {
-    // Create unannotated output document.
-    Document output(document);
-    output.ClearAnnotations();
+  void Annotate(Document *document) override {
+    // Make a copy of the input document and clear annotations for output.
+    Document original(*document);
+    document->ClearAnnotations();
 
     // Annotate document.
-    annotator_.Annotate(document, &output);
-
-    // Output annotated document.
-    Output(key, output);
+    annotator_.Annotate(original, document);
   }
 
  private:
@@ -58,7 +47,7 @@ class DocumentNERLabeler : public DocumentProcessor {
   SpanAnnotator annotator_;
 };
 
-REGISTER_TASK_PROCESSOR("document-ner-labeler", DocumentNERLabeler);
+REGISTER_ANNOTATOR("ner", NamedEntityAnnotator);
 
 }  // namespace nlp
 }  // namespace sling

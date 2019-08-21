@@ -128,14 +128,11 @@ class Token {
 // well as other frames that are evoked by this mention.
 class Span {
  public:
-  Span(Document *document, int index, int begin, int end)
-      : document_(document), index_(index), begin_(begin), end_(end) {}
+  Span(Document *document, int begin, int end)
+      : document_(document), begin_(begin), end_(end) {}
 
   // Returns the document that that the span belongs to.
   Document *document() const { return document_; }
-
-  // Returns the index of the span in the document.
-  int index() const { return index_; }
 
   // Returns the begin and end token. This is a half-open interval, so the
   // span covers the tokens in the range [begin;end[.
@@ -183,12 +180,19 @@ class Span {
   void Evoke(const Frame &frame);
   void Evoke(Handle frame);
 
+  // Replaces evoked frame.
+  void Replace(Handle existing, Handle replacement);
+  void Replace(const Frame &existing, const Frame &replacement) {
+    Replace(existing.handle(), replacement.handle());
+  }
+
   // Returns (the first) evoked frame of a certain type.
   Frame Evoked(Handle type) const;
   Frame Evoked(const Name &type) const;
 
   // Returns the first evoked frame.
   Frame Evoked() const;
+  Handle evoked() const;
 
   // Returns all evoked frames.
   void AllEvoked(Handles *evoked) const;
@@ -206,9 +210,6 @@ class Span {
  private:
   // Document that span belongs to.
   Document *document_;
-
-  // Index of span in document.
-  int index_;
 
   // Tokens covered by span. The span covers tokens in the interval [begin;end[,
   // i.e. begin is inclusive and end is exclusive.
@@ -308,7 +309,8 @@ class Document {
   const std::vector<Span *> spans() const { return spans_; }
 
   // Return the number of tokens in the document.
-  int num_tokens() const { return tokens_.size(); }
+  int length() const { return tokens_.size(); }
+  int num_tokens() const { return tokens_.size(); }  // deprecated
 
   // Return token in the document.
   const Token &token(int index) const { return tokens_[index]; }
@@ -419,6 +421,9 @@ class Document {
   // Clears annotations (mentions and themes) from document.
   void ClearAnnotations();
 
+  // Document schema.
+  const DocumentNames *names() const { return names_; }
+
  private:
   // Inserts the span in the span index. If the span already exists, the
   // existing span is returned. Returns null if the new span crosses an existing
@@ -447,8 +452,7 @@ class Document {
   // in the document frame.
   bool tokens_changed_ = false;
 
-  // Span index. This contains all the spans in the document in index order,
-  // including the deleted spans.
+  // Document mention spans.
   std::vector<Span *> spans_;
 
   // List of thematic frames. These are frames that are not evoked by any

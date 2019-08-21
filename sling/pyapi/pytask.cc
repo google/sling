@@ -108,6 +108,14 @@ int PyJob::Init(PyObject *args, PyObject *kwds) {
     }
     Py_DECREF(params);
 
+    // Get annotators.
+    PyObject *annotators = PyAttr(pytask, "annotators");
+    for (int i = 0; i < PyList_Size(annotators); ++i) {
+      PyObject *annotator = PyList_GetItem(annotators, i);
+      task->AddAnnotator(PyUnicode_AsUTF8(annotator));
+    }
+    Py_DECREF(annotators);
+
     // Bind inputs.
     PyObject *inputs = PyAttr(pytask, "inputs");
     for (int i = 0; i < PyList_Size(inputs); ++i) {

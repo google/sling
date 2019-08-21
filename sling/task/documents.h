@@ -15,6 +15,7 @@
 #ifndef SLING_TASK_DOCUMENTS_H_
 #define SLING_TASK_DOCUMENTS_H_
 
+#include "sling/nlp/document/annotator.h"
 #include "sling/nlp/document/document.h"
 #include "sling/task/frames.h"
 
@@ -50,8 +51,11 @@ class DocumentProcessor : public FrameProcessor {
   // Document symbol names.
   const nlp::DocumentNames *docnames_ = nullptr;
 
+  // Document annotator pipeline for preprocessing incoming documents.
+  nlp::Pipeline pipeline_;
+
   // Statistics.
-  Counter *num_document_;
+  Counter *num_documents_;
   Counter *num_tokens_;
   Counter *num_spans_;
 };

@@ -54,6 +54,19 @@ void Span::Evoke(Handle frame) {
   document_->AddMention(frame, this);
 }
 
+void Span::Replace(Handle existing, Handle replacement) {
+  Handle n_evokes = document_->names_->n_evokes.handle();
+  FrameDatum *mention = mention_.store()->GetFrame(mention_.handle());
+  for (Slot *slot = mention->begin(); slot < mention->end(); ++slot) {
+    if (slot->name == n_evokes && slot->value == existing) {
+      document_->RemoveMention(existing, this);
+      slot->value = replacement;
+      document_->AddMention(replacement, this);
+      return;
+    }
+  }
+}
+
 Frame Span::Evoked(Handle type) const {
   Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
@@ -85,6 +98,15 @@ Frame Span::Evoked() const {
   }
 
   return Frame::nil();
+}
+
+Handle Span::evoked() const {
+  Handle n_evokes = document_->names_->n_evokes.handle();
+  for (const Slot &slot : mention_) {
+    if (slot.name == n_evokes) return slot.value;
+  }
+
+  return Handle::nil();
 }
 
 void Span::AllEvoked(Handles *evoked) const {
@@ -644,7 +666,7 @@ Span *Document::Insert(int begin, int end) {
     if (tail != nullptr) tail->sibling_ = nullptr;
 
     // Add new span top-level span.
-    span = new Span(this, spans_.size(), begin, end);
+    span = new Span(this, begin, end);
     spans_.push_back(span);
 
     // Add covered top-level spans as children.
@@ -669,7 +691,7 @@ Span *Document::Insert(int begin, int end) {
     }
 
     // Add new span.
-    span = new Span(this, spans_.size(), begin, end);
+    span = new Span(this, begin, end);
     spans_.push_back(span);
 
     // Insert span into tree.

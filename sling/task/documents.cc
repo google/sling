@@ -17,7 +17,12 @@
 namespace sling {
 namespace task {
 
+REGISTER_TASK_PROCESSOR("document-processor", DocumentProcessor);
+
 void DocumentProcessor::InitCommons(Task *task) {
+  // Initialize document annotation pipeline.
+  pipeline_.Init(task, commons_);
+
   // Bind document names.
   docnames_ = new nlp::DocumentNames(commons_);
 }
@@ -27,7 +32,7 @@ void DocumentProcessor::Start(Task *task) {
   FrameProcessor::Start(task);
 
   // Statistics.
-  num_document_ = task->GetCounter("documents");
+  num_documents_ = task->GetCounter("documents");
   num_tokens_ = task->GetCounter("tokens");
   num_spans_ = task->GetCounter("spans");
 }
@@ -35,15 +40,25 @@ void DocumentProcessor::Start(Task *task) {
 void DocumentProcessor::Process(Slice key, const Frame &frame) {
   // Create document from frame.
   nlp::Document document(frame, docnames_);
-  num_document_->Increment();
-  num_tokens_->Increment(document.num_tokens());
-  num_spans_->Increment(document.num_spans());
+
+  // Run preprocessing pipeline on document.
+  if (!pipeline_.empty()) {
+    pipeline_.Annotate(&document);
+    document.Update();
+  }
 
   // Process document.
   Process(key, document);
+
+  // Update statistics.
+  num_documents_->Increment();
+  num_tokens_->Increment(document.num_tokens());
+  num_spans_->Increment(document.num_spans());
 }
 
-void DocumentProcessor::Process(Slice key, const nlp::Document &document) {}
+void DocumentProcessor::Process(Slice key, const nlp::Document &document) {
+  Output(key, document);
+}
 
 void DocumentProcessor::Output(Text key, const nlp::Document &document) {
   FrameProcessor::Output(key, document.top());

@@ -105,3 +105,14 @@ cc_library(
     "//sling/string:strcat",
   ],
 )
+
+cc_library(
+  name = "parser-annotator",
+  srcs = ["parser-annotator.cc"],
+  deps = [
+    ":parser",
+    "//sling/nlp/document:annotator",
+  ],
+  alwayslink = 1,
+)
+

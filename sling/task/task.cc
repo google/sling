@@ -187,6 +187,8 @@ Task::Task(Environment *env, int id, const string &type,
   processor_ = Processor::Create(type);
 }
 
+Task::Task(Environment *env) : env_(env), id_(0), processor_(nullptr) {}
+
 Task::~Task() {
   delete processor_;
   for (auto b : inputs_) delete b;
@@ -401,24 +403,28 @@ void Task::AddParameter(const string &name, bool value) {
   AddParameter(name, value ? "true" : "false");
 }
 
+void Task::AddAnnotator(const string &annotator) {
+  annotators_.push_back(annotator);
+}
+
 Counter *Task::GetCounter(const string &name) {
   return env_->GetCounter(name);
 }
 
 void Task::AttachInput(Binding *resource) {
   inputs_.push_back(resource);
-  processor_->AttachInput(resource);
+  if (processor_ != nullptr) processor_->AttachInput(resource);
 }
 
 void Task::AttachOutput(Binding *resource) {
   outputs_.push_back(resource);
-  processor_->AttachOutput(resource);
+  if (processor_ != nullptr) processor_->AttachOutput(resource);
 }
 
 void Task::ConnectSource(Channel *channel) {
   // Add source channel.
   sources_.push_back(channel);
-  processor_->ConnectSource(channel);
+  if (processor_ != nullptr) processor_->ConnectSource(channel);
 
   // Add reference count for input channel.
   AddRef();
@@ -426,32 +432,36 @@ void Task::ConnectSource(Channel *channel) {
 
 void Task::ConnectSink(Channel *channel) {
   sinks_.push_back(channel);
-  processor_->ConnectSink(channel);
+  if (processor_ != nullptr) processor_->ConnectSink(channel);
 }
 
 void Task::OnReceive(Channel *channel, Message *message) {
   // Send message to processor.
-  AddRef();
-  processor_->Receive(channel, message);
-  Release();
+  if (processor_ != nullptr) {
+    AddRef();
+    processor_->Receive(channel, message);
+    Release();
+  }
 }
 
 void Task::OnClose(Channel *channel) {
   // Notify processor.
-  processor_->Close(channel);
+  if (processor_ != nullptr) processor_->Close(channel);
 
   // Release reference count for channel.
   Release();
 }
 
 void Task::Init() {
-  processor_->Init(this);
+  if (processor_ != nullptr) processor_->Init(this);
 }
 
 void Task::Start() {
-  AddRef();
-  processor_->Start(this);
-  Release();
+  if (processor_ != nullptr) {
+    AddRef();
+    processor_->Start(this);
+    Release();
+  }
 }
 
 void Task::Done() {
@@ -459,7 +469,7 @@ void Task::Done() {
   bool expected = false;
   if (done_.compare_exchange_strong(expected, true)) {
     // Notify processor.
-    processor_->Done(this);
+    if (processor_ != nullptr) processor_->Done(this);
 
     // The processor is no longer needed after it is done, so the processor is
     // deleted here to free up resources.

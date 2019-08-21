@@ -20,6 +20,7 @@
 #include "sling/http/http-server.h"
 #include "sling/http/static-content.h"
 #include "sling/http/web-service.h"
+#include "sling/nlp/document/annotator.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-service.h"
 #include "sling/nlp/kb/knowledge-service.h"
@@ -29,14 +30,17 @@ DEFINE_int32(port, 8080, "HTTP server port");
 DEFINE_string(commons, "", "Commons store");
 DEFINE_bool(kb, false, "Start knowledge base browser");
 DEFINE_string(names, "local/data/e/wiki/en/name-table.repo", "Name table");
+DEFINE_string(spec, "", "Document analyzer specification");
 
 using namespace sling;
 using namespace sling::nlp;
 
 class CorpusBrowser : public DocumentService {
  public:
-  CorpusBrowser(Store *commons, RecordDatabase *db)
-      : DocumentService(commons), db_(db) {}
+  CorpusBrowser(Store *commons,
+                RecordDatabase *db,
+                DocumentAnnotation *annotators)
+      : DocumentService(commons), db_(db), annotators_(annotators) {}
 
   // Register service.
   void Register(HTTPServer *http) {
@@ -62,14 +66,7 @@ class CorpusBrowser : public DocumentService {
       return;
     }
 
-    // Convert record to document.
-    Store *store = ws.store();
-    Frame top = Decode(store, record.value).AsFrame();
-    Document document(top);
-
-    // Return document in JSON format.
-    Frame json = Convert(document);
-    ws.set_output(json);
+    ProcessRecord(&record, &ws);
   }
 
   void HandleForward(HTTPRequest *request, HTTPResponse *response) {
@@ -82,14 +79,8 @@ class CorpusBrowser : public DocumentService {
       return;
     }
 
-    // Convert document to JSON.
-    Store *store = ws.store();
-    Frame top = Decode(store, record.value).AsFrame();
-    Document document(top);
 
-    // Return document in JSON format.
-    Frame json = Convert(document);
-    ws.set_output(json);
+    ProcessRecord(&record, &ws);
   }
 
   void HandleBack(HTTPRequest *request, HTTPResponse *response) {
@@ -102,14 +93,7 @@ class CorpusBrowser : public DocumentService {
       return;
     }
 
-    // Convert document to JSON.
-    Store *store = ws.store();
-    Frame top = Decode(store, record.value).AsFrame();
-    Document document(top);
-
-    // Return document in JSON format.
-    Frame json = Convert(document);
-    ws.set_output(json);
+    ProcessRecord(&record, &ws);
   }
 
   bool FetchRecord(Text key, Record *record) {
@@ -142,12 +126,29 @@ class CorpusBrowser : public DocumentService {
     return db_->Read(shard, position, record);
   }
 
+  void ProcessRecord(Record *record, WebService *ws) {
+    // Create document.
+    Store *store = ws->store();
+    Frame top = Decode(store, record->value).AsFrame();
+    Document document(top);
+
+    // Analyze document.
+    annotators_->Annotate(&document);
+
+    // Return document in JSON format.
+    Frame json = Convert(document);
+    ws->set_output(json);
+  }
+
  private:
   // Record database with documents.
   RecordDatabase *db_;
 
   // History of records read from database.
   std::vector<std::pair<int, int64>> history_;
+
+  // Document analyzer.
+  DocumentAnnotation *annotators_;
 
   // Static web content.
   StaticContent app_content_{"/doc", "sling/nlp/document/app"};
@@ -159,6 +160,8 @@ class CorpusBrowser : public DocumentService {
 
 int main(int argc, char *argv[]) {
   InitProgram(&argc, &argv);
+
+  // Get corpus files.
   std::vector<string> files;
   for (int i = 1; i < argc; ++i) {
     File::Match(argv[i], &files);
@@ -169,22 +172,18 @@ int main(int argc, char *argv[]) {
   RecordFileOptions recopts;
   RecordDatabase db(files, recopts);
 
-  // Load commons store.
+  // Load document annotation pipeline.
   Store commons;
-  if (FLAGS_kb && FLAGS_commons.empty()) {
-    FLAGS_commons = "local/data/e/wiki/kb.sling";
-  }
-  if (!FLAGS_commons.empty()) {
-    LOG(INFO) << "Loading " << FLAGS_commons;
-    LoadStore(FLAGS_commons, &commons);
-  }
+  LOG(INFO) << "Loading analyzer";
+  DocumentAnnotation annotators;
+  annotators.Init(&commons, FLAGS_spec);
 
   // Initialize knowledge base service.
   KnowledgeService kb;
   if (FLAGS_kb) kb.Load(&commons, FLAGS_names);
 
   // Initialize corpus browser.
-  CorpusBrowser browser(&commons, &db);
+  CorpusBrowser browser(&commons, &db, &annotators);
   commons.Freeze();
 
   LOG(INFO) << "Start HTTP server on port " << FLAGS_port;

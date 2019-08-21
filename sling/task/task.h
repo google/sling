@@ -289,6 +289,9 @@ class Task {
   Task(Environment *env, int id, const string &type,
        const string &name, Shard shard);
 
+  // Create task with no processor (for annotation pipeline).
+  Task(Environment *env);
+
   // Delete task.
   ~Task();
 
@@ -376,6 +379,12 @@ class Task {
   void AddParameter(const string &name, float value);
   void AddParameter(const string &name, bool value);
 
+  // Add annotator to task.
+  void AddAnnotator(const string &annotator);
+
+  // Return list of annotators.
+  const std::vector<string> &annotators() const { return annotators_; }
+
   // Get statistics counter.
   Counter *GetCounter(const string &name);
 
@@ -431,6 +440,9 @@ class Task {
 
   // Task parameters.
   std::vector<Parameter> parameters_;
+
+  // Annotators for pipeline.
+  std::vector<string> annotators_;
 
   // Processor for executing task.
   Processor *processor_;
