@@ -35,7 +35,7 @@ void Accumulator::Init(Channel *output, int num_buckets) {
 
 void Accumulator::Increment(Text key, int64 count) {
   uint64 fp = Fingerprint(key.data(), key.size());
-  uint64 b = fp % buckets_.size();
+  uint32 b = (fp ^ (fp >> 32)) % buckets_.size();
   MutexLock lock(&mu_);
   Bucket &bucket = buckets_[b];
   if (fp != bucket.hash || key != bucket.key) {
@@ -54,7 +54,7 @@ void Accumulator::Increment(Text key, int64 count) {
 }
 
 void Accumulator::Increment(uint64 key, int64 count) {
-  uint64 b = key % buckets_.size();
+  uint64 b = (key ^ (key >> 32)) % buckets_.size();
   MutexLock lock(&mu_);
   Bucket &bucket = buckets_[b];
   if (key != bucket.hash) {

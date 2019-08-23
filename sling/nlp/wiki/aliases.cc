@@ -30,6 +30,42 @@
 namespace sling {
 namespace nlp {
 
+// Compute Levenshtein edit distance between string in s of length m and string
+// in t of length n. See https://en.wikipedia.org/wiki/Levenshtein_distance.
+static int LevenshteinDistance(const int *s, int m, const int *t, int n) {
+  // Skip common prefix since this does not affect edit distance.
+  while (m > 0 && n > 0 && *s == *t) s++, t++, m--, n--;
+
+  // Keep track of previous and current cost.
+  std::vector<int> prev(n + 1);
+  std::vector<int> curr(n + 1);
+
+  // Initialize the previous distances, which is just the number of characters
+  // to delete from t.
+  for (int i = 0; i <= n; ++i) prev[i] = i;
+
+  // Perform dynamic program to calculate the edit distance.
+  for (int i = 0; i < m; ++i) {
+    // Calculate current distances from the previous distances. First, edit
+    // distance is delete i+1 characters from s to match empty t.
+    curr[0] = i + 1;
+
+    // Compute edit distance for remaining characters.
+    for (int j = 0; j < n; ++j) {
+      int deletion = prev[j + 1] + 1;
+      int insertion = curr[j] + 1;
+      int substitution = s[i] == t[j] ? prev[j] : prev[j] + 1;
+      int cost = std::min(std::min(deletion, insertion), substitution);
+      curr[j + 1] = cost;
+    }
+
+    // Swap current and previous for next iteration.
+    prev.swap(curr);
+  }
+
+  return prev[n];
+}
+
 // Extract aliases for items.
 class AliasExtractor : public task::FrameProcessor {
  public:
@@ -77,14 +113,23 @@ class AliasExtractor : public task::FrameProcessor {
                  s.name == n_iso3166_country_code_3_) {
         // Output country codes as alternative names.
         AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NAME);
-      } else if (s.name == n_nickname_) {
-        // Output nicknames as alternative names.
+      } else if (s.name == n_nickname_ || s.name == n_pseudonym_) {
+        // Output nicknames and pseudonyms as alternative names.
         AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NAME);
-      } else if (s.name == n_short_name_) {
-        // Output short names as alternative or foreign names.
+      } else if (s.name == n_short_name_ ||
+                 s.name == n_generic_name_ ||
+                 s.name == n_birth_name_ ||
+                 s.name == n_married_name_ ||
+                 s.name == n_official_name_ ||
+                 s.name == n_female_form_ ||
+                 s.name == n_male_form_ ||
+                 s.name == n_unit_symbol_) {
+        // Output names as alternative or foreign names.
         Handle lang = Handle::nil();
-        Frame f(store, s.value);
-        if (f.valid()) lang = f.GetHandle(n_lang_);
+        if (store->IsFrame(s.value)) {
+          Frame f(store, s.value);
+          lang = f.GetHandle(n_lang_);
+        }
         if (lang.IsNil() || lang == language_) {
           AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NAME);
         } else {
@@ -146,8 +191,16 @@ class AliasExtractor : public task::FrameProcessor {
   Name n_demonym_{names_, "P1549"};
   Name n_short_name_{names_, "P1813"};
   Name n_nickname_{names_, "P1449"};
+  Name n_pseudonym_{names_, "P742"};
+  Name n_generic_name_{names_, "P2561"};
+  Name n_official_name_{names_, "P1448"};
+  Name n_birth_name_{names_, "P1477"};
+  Name n_married_name_{names_, "P2562"};
+  Name n_female_form_{names_, "P2521"};
+  Name n_male_form_{names_, "P3321"};
   Name n_iso3166_country_code_2_{names_, "P297"};
   Name n_iso3166_country_code_3_{names_, "P298"};
+  Name n_unit_symbol_{names_, "P5061"};
 
   Name n_instance_of_{names_, "P31"};
 };
@@ -156,11 +209,45 @@ REGISTER_TASK_PROCESSOR("alias-extractor", AliasExtractor);
 
 class AliasReducer : public task::Reducer {
  public:
+  // Group of aliases with same fingerprint.
   struct Alias {
+    // Most common variant.
+    string name;
+
+    // Map of alias variants with same fingerprint with frequency counts.
     std::unordered_map<string, int> variants;
+
+    // Unicode representation for normalized version of most common variant.
+    ustring chars;
+
+    // Frequency counts for case forms.
     int forms[NUM_CASE_FORMS] = {};
+
+    // Bitmask with alias sources.
     int sources = 0;
+
+    // Total number of occurrences for alias.
     int count = 0;
+
+    // Whether the alias has been selected for output.
+    bool selected = false;
+
+    // Compute size of common prefix between this alias and another alias.
+    int CommonPrefix(const Alias *other) const {
+      int n = 0;
+      while (n < chars.size() &&
+             n < other->chars.size() &&
+             chars[n] == other->chars[n]) {
+        n++;
+      }
+      return n;
+    }
+
+    // Compute edit distance between this alias and another alias.
+    int EditDistance(const Alias *other) {
+      return LevenshteinDistance(chars.data(), chars.size(),
+                                 other->chars.data(), other->chars.size());
+    }
   };
 
   void Start(task::Task *task) override {
@@ -177,6 +264,8 @@ class AliasReducer : public task::Reducer {
     language_ = commons_.Lookup("/lang/" + lang);
     task->Fetch("anchor_threshold", &anchor_threshold_);
     task->Fetch("majority_form_fraction", &majority_form_fraction_);
+    task->Fetch("min_prefix", &min_prefix_);
+    task->Fetch("max_edit_distance", &max_edit_distance_);
     CHECK_GE(majority_form_fraction_, 0.5);
 
     // Read alias corrections.
@@ -213,6 +302,7 @@ class AliasReducer : public task::Reducer {
         uint64 fp;
         CaseForm form;
         tokenizer_.FingerprintAndForm(name, &fp, &form);
+        if (form == CASE_INVALID) continue;
 
         if (source == n_blacklist_) {
           // Blacklist alias for item.
@@ -221,7 +311,7 @@ class AliasReducer : public task::Reducer {
           // Add new alias for item.
           Alias *a = aliases[fp];
           if (a == nullptr) {
-            a = new Alias;
+            a = new Alias();
             aliases[fp] = a;
           }
           a->sources |= (1 << source.AsInt());
@@ -255,6 +345,7 @@ class AliasReducer : public task::Reducer {
         uint64 fp;
         CaseForm form;
         tokenizer_.FingerprintAndForm(name, &fp, &form);
+        if (form == CASE_INVALID) continue;
 
         // Check if alias has been blacklisted.
         if (blacklist.count(fp) > 0) continue;
@@ -262,7 +353,7 @@ class AliasReducer : public task::Reducer {
         // Update alias table.
         Alias *a = aliases[fp];
         if (a == nullptr) {
-          a = new Alias;
+          a = new Alias();
           aliases[fp] = a;
         }
         a->sources |= sources;
@@ -272,22 +363,70 @@ class AliasReducer : public task::Reducer {
       }
     }
 
-    // Select aliases.
-    Builder merged(&store);
+    // Find most common variant for each alias.
     for (auto it : aliases) {
       Alias *alias = it.second;
-      if (!SelectAlias(alias)) continue;
 
       // Find most common variant.
       int max_count = -1;
-      string name;
       for (auto &variant : alias->variants) {
         if (variant.second > max_count) {
           max_count = variant.second;
-          name = variant.first;
+          alias->name = variant.first;
         }
       }
-      if (name.empty()) continue;
+
+      // Normalize name of the most common variant for alias and convert it to
+      // Unicode code points for computing edit distance.
+      string normalized;
+      UTF8::Normalize(alias->name, tokenizer_.normalization(), &normalized);
+      UTF8::DecodeString(normalized, &alias->chars);
+    }
+
+    // Select aliases based on sources.
+    for (auto it : aliases) {
+      Alias *alias = it.second;
+      if (SelectAlias(alias)) alias->selected = true;
+    }
+
+    // Select aliases that are variations over already selected aliases.
+    if (max_edit_distance_ > 0) {
+      for (auto it : aliases) {
+        Alias *alias = it.second;
+        if (alias->selected) continue;
+        if (alias->sources == WIKIDATA_FOREIGN) continue;
+
+        // Check if alias is a variation over an already selected alias.
+        bool variation = false;
+        for (auto ot : aliases) {
+          Alias *a = ot.second;
+          if (!a->selected) continue;
+          if (a->sources & VARIATION) continue;
+
+          // A variation must have a common prefix with existing alias of a
+          // minimum size and the edit distance must be below a threshold.
+          if (alias->CommonPrefix(a) < min_prefix_) continue;
+          if (alias->EditDistance(a) > max_edit_distance_) continue;
+
+          // Variation found.
+          variation = true;
+          break;
+        }
+
+        // Select variation.
+        if (variation) {
+          alias->selected = true;
+          alias->sources |= VARIATION;
+        }
+      }
+    }
+
+    // Build new set of selected aliases.
+    Builder merged(&store);
+    for (auto it : aliases) {
+      Alias *alias = it.second;
+      if (!alias->selected) continue;
+      if (alias->name.empty()) continue;
 
       // Find majority form.
       int form = CASE_NONE;
@@ -301,7 +440,7 @@ class AliasReducer : public task::Reducer {
 
       // Add alias to output.
       Builder a(&store);
-      a.Add(n_name_, name);
+      a.Add(n_name_, alias->name);
       a.Add(n_lang_, language_);
       a.Add(n_count_, alias->count);
       a.Add(n_sources_, alias->sources);
@@ -371,6 +510,7 @@ class AliasReducer : public task::Reducer {
     WIKIDATA_NAME = 1 << SRC_WIKIDATA_NAME,
     WIKIPEDIA_NAME = 1 << SRC_WIKIPEDIA_NAME,
     WIKIPEDIA_NICKNAME = 1 << SRC_WIKIPEDIA_NICKNAME,
+    VARIATION = 1 << SRC_VARIATION,
   };
 
   // Commons store.
@@ -398,6 +538,12 @@ class AliasReducer : public task::Reducer {
   // Fraction of aliases that must have a certain case form for this form to
   // be considered the majority form.
   float majority_form_fraction_ = 0.75;
+
+  // Minimum common prefix size for alias variations.
+  int min_prefix_ = 2;
+
+  // Maximum edit distance for alias variations (0=disabled).
+  int max_edit_distance_ = 0;
 
   // Mapping from item id to corrections for item.
   HandleMap<Handle> item_corrections_;

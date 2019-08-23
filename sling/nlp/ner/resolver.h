@@ -48,7 +48,7 @@ class EntityResolver {
   float mention_weight_ = 100.0;
   float base_context_score = 1e-3;
   float case_form_penalty = 0.1;
-  int mention_boost_ = 10;
+  int mention_boost_ = 30;
 
   friend class ResolverContext;
 };
@@ -92,7 +92,7 @@ class ResolverContext {
   void AddMention(uint64 fp, CaseForm form, Handle entity, int count);
 
   // Score candidates for alias. The alias is specified using the fingerprint
-  // and case form. Returns a the top-k entities with the highest score.
+  // and case form. Returns the top-k entities with the highest score.
   void Score(uint64 fp, CaseForm form, Candidates *candidates) const;
 
   // Resolve entity in context. Return the highest scoring entity or nil if

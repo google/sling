@@ -84,6 +84,24 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "fact-lexicon",
+  srcs = ["fact-lexicon.cc"],
+  deps = [
+    ":facts",
+    "//sling/base",
+    "//sling/file:textmap",
+    "//sling/frame:object",
+    "//sling/frame:serialization",
+    "//sling/frame:store",
+    "//sling/task:frames",
+    "//sling/task:process",
+    "//sling/util:bloom",
+    "//sling/util:sortmap",
+  ],
+  alwayslink = 1,
+)
+
 embed_data(
   name = "app",
   srcs = [

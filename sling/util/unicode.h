@@ -17,6 +17,7 @@
 
 #include <string.h>
 #include <string>
+#include <vector>
 
 #include "sling/base/types.h"
 
@@ -145,58 +146,62 @@ Normalization ParseNormalization(const string &spec);
 // Return string with normalization specifiers for flags.
 string NormalizationString(Normalization normalization);
 
+// Unicode string. This is used instead of wstring where the size of wchar_t is
+// platform dependent.
+typedef std::vector<int> ustring;
+
 // Unicode code point categorization and conversion.
 class Unicode {
  public:
-   // Return Unicode category for code point.
-   static int Category(int c);
+  // Return Unicode category for code point.
+  static int Category(int c);
 
-   // Check if code point belongs to character mask.
-   static bool Is(int c, int mask);
+  // Check if code point belongs to character mask.
+  static bool Is(int c, int mask);
 
-   // Check if code point is lower case.
-   static bool IsLower(int c);
+  // Check if code point is lower case.
+  static bool IsLower(int c);
 
-   // Check if code point is upper case.
-   static bool IsUpper(int c);
+  // Check if code point is upper case.
+  static bool IsUpper(int c);
 
-   // Check if code point is title case.
-   static bool IsTitle(int c);
+  // Check if code point is title case.
+  static bool IsTitle(int c);
 
-   // Check if code point is a digit.
-   static bool IsDigit(int c);
+  // Check if code point is a digit.
+  static bool IsDigit(int c);
 
-   // Check if code point is defined.
-   static bool IsDefined(int c);
+  // Check if code point is defined.
+  static bool IsDefined(int c);
 
-   // Check if code point is a letter.
-   static bool IsLetter(int c);
+  // Check if code point is a letter.
+  static bool IsLetter(int c);
 
-   // Check if code point is a letter or digit.
-   static bool IsLetterOrDigit(int c);
+  // Check if code point is a letter or digit.
+  static bool IsLetterOrDigit(int c);
 
-   // Check if code point is a space.
-   static bool IsSpace(int c);
+  // Check if code point is a space.
+  static bool IsSpace(int c);
 
-   // Check if code point is whitespace.
-   static bool IsWhitespace(int c);
+  // Check if code point is whitespace.
+  static bool IsWhitespace(int c);
 
-   // Check if code point is punctuation.
-   static bool IsPunctuation(int c);
+  // Check if code point is punctuation.
+  static bool IsPunctuation(int c);
 
-   // Check if code point is name punctuation.
-   static bool IsNamePunctuation(int c);
+  // Check if code point is name punctuation.
+  static bool IsNamePunctuation(int c);
 
-   // Convert code point to lower case.
-   static int ToLower(int c);
+  // Convert code point to lower case.
+  static int ToLower(int c);
 
-   // Convert code point to upper case.
-   static int ToUpper(int c);
+  // Convert code point to upper case.
+  static int ToUpper(int c);
 
-   // Normalize code point based on normalization flags. Return zero for code
-   // points that should be removed.
-   static int Normalize(int c, int flags);
-   static int Normalize(int c) { return Normalize(c, NORMALIZE_DEFAULT); }
+  // Normalize code point based on normalization flags. Return zero for code
+  // points that should be removed.
+  static int Normalize(int c, int flags);
+  static int Normalize(int c) { return Normalize(c, NORMALIZE_DEFAULT); }
 };
 
 // Word case form.
@@ -243,6 +248,15 @@ class UTF8 {
   // Return next UTF8 code point in string. Returns -1 on errors.
   static int Decode(const char *s, int len);
   static int Decode(const char *s);
+
+  // Decode UTF8 string to sequence of Unicode code points.
+  static void DecodeString(const char *s, int len, ustring *result);
+  static void DecodeString(const char *s, ustring *result) {
+    return DecodeString(s, strlen(s), result);
+  }
+  static void DecodeString(const string &str, ustring *result) {
+    return DecodeString(str.data(), str.size(), result);
+  }
 
   // Encode one Unicode code point to at most UTF8::MAXLEN bytes and return
   // the number of bytes generated.

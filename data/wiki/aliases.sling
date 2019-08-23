@@ -75,5 +75,35 @@
   Q6700604: {
     "Political Career": blacklist  ; extra infobox
   }
+
+  ; googol
+  Q507: {
+    "Google": blacklist
+  }
+
+  ; Goodison Park
+  Q968420: {
+    "A": blacklist
+  }
+
+  ; Hwasa
+  Q19603912: {
+    "Don't": blacklist
+  }
+
+  ; party leader
+  Q1553195: {
+    "leader": 2
+  }
+
+  ; women's sports (Q920057)
+  Q920057: {
+    "women's": 2
+  }
+
+  ; men's sports (Q35555522)
+  Q35555522: {
+    "men's": 2
+  }
 }
 

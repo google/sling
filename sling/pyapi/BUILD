@@ -38,6 +38,7 @@ cc_library(
     "//sling/file:recordio",
     "//sling/frame",
     "//sling/frame:json",
+    "//sling/frame:turtle",
     "//sling/frame:xml",
     "//sling/http:http-server",
     "//sling/myelin:flow",
@@ -78,6 +79,9 @@ cc_library(
     "//sling/nlp/wiki:wikipedia-documents",
     "//sling/nlp/wiki:wikipedia-links",
 
+    "//sling/nlp/document:vocabulary-builder",
+
+    "//sling/nlp/kb:fact-lexicon",
     "//sling/nlp/kb:name-table-builder",
     "//sling/nlp/kb:phrase-table-builder",
 

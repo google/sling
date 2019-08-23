@@ -1,0 +1,19 @@
+; Custom phrase annotations for English.
+
+; New York (Q1384)
+[New York|Q1384]
+
+; South Korea (Q884)
+[South Korea|Q884]
+
+; United Kingdom (Q145)
+[United Kingdom|Q145]
+
+; United States of America (Q30)
+[United States|Q30]
+
+; Washington DC (Q61)
+[Washington, [D.C.|{=#1 +Q3551781}]|{+Q61 P131: #1}]
+[Washington [D.C.|{=#1 +Q3551781}]|{+Q61 P131: #1}]
+[Washington [DC|{=#1 +Q3551781}]|{+Q61 P131: #1}]
+

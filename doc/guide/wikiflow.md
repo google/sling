@@ -23,7 +23,6 @@ The Wiki processing pipeline performs the following tasks:
   * Build phrase table for matching phrases in text to entities (`phrase-table`)
   * Merging of Wikipedia categories across languages (`category-merging`)
   * Inversion of category membership graph (`category-inversion`)
-  * Compute item popularity from alias counts (`item-popularity`)
   * Fusing information about items to produce final item frame (`item-fusing`)
   * Build frame store with knowledge base (`knowledge-base`)
 
@@ -72,7 +71,6 @@ This is equivalent to running each of the step separately:
          --parse_wikipedia
          --merge_categories
          --invert_categories
-         --compute_item_popularity
          --fuse_items
          --build_kb
          --extract_names
@@ -345,7 +343,6 @@ The Wiki processing pipeline produces the following data sets in
   * `properties.rec` (produced by `wikidata-import` task)
   * `wikipedia-items.rec` (produced by `category-merging` task)
   * `wikipedia-members.rec` (produced by `category-inversion` task)
-  * `item-popularity.rec` (produced by `item-popularity` task)
   * `items-?????-of-?????.rec` (produced by `item-fusing` task)
   * `kb.sling` (produced by `knowledge-base` task)
 

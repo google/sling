@@ -53,6 +53,8 @@ cc_library(
     "//sling/frame:serialization",
     "//sling/frame:store",
     "//sling/nlp/document",
+    "//sling/nlp/document:fingerprinter",
+    "//sling/nlp/document:phrase-tokenizer",
     "//sling/nlp/kb:calendar",
     "//sling/nlp/kb:facts",
     "//sling/nlp/kb:phrase-table",
@@ -64,7 +66,25 @@ cc_library(
   srcs = ["labeler.cc"],
   deps = [
     ":annotators",
-    "//sling/task:documents",
+    "//sling/nlp/document:annotator",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "phrases",
+  srcs = ["phrases.cc"],
+  deps = [
+    ":chart",
+    "//sling/frame:serialization",
+    "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
+    "//sling/nlp/document:lex",
+    "//sling/nlp/kb:facts",
+    "//sling/nlp/kb:phrase-table",
+    "//sling/stream:file-input",
+    "//sling/util:fingerprint",
+    "//sling/util:mutex",
   ],
   alwayslink = 1,
 )

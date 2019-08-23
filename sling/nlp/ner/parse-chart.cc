@@ -51,17 +51,11 @@ int main(int argc, char *argv[]) {
   resources.kb = "local/data/e/ner/kb.sling";
   resources.aliases = "local/data/e/wiki/" + FLAGS_lang + "/phrase-table.repo";
   resources.dictionary = "local/data/e/ner/" + FLAGS_lang + "/idf.repo";
+  resources.language = FLAGS_lang;
   resources.resolve = FLAGS_resolve;
 
   SpanAnnotator annotator;
   annotator.Init(&commons, resources);
-
-  std::vector<string> stop_words = {
-    ".", ",", "-", ":", ";", "(", ")", "``", "''", "'", "--", "/", "&", "?",
-    "the", "a", "an", "'s", "is", "was", "and",
-    "in", "of", "by", "to", "at", "as",
-  };
-  annotator.AddStopWords(stop_words);
 
   commons.Freeze();
 

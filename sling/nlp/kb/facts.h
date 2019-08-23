@@ -80,6 +80,7 @@ class FactCatalog {
   Name p_location_{names_, "P276"};
   Name p_instance_of_{names_, "P31"};
   Name p_subclass_of_{names_, "P279"};
+  Name p_of_{names_, "P642"};
   Name p_subproperty_of_{names_, "P1647"};
   Name p_educated_at_{names_, "P69"};
   Name p_occupation_{names_, "P106"};
@@ -94,6 +95,7 @@ class FactCatalog {
   Name p_end_time_{names_, "P582"};
   Name p_described_by_source_{names_, "P1343"};
   Name p_different_from_{names_, "P1889"};
+  Name p_located_at_body_of_water_{names_, "P206"};
 
   Name n_time_{names_, "/w/time"};
   Name n_item_{names_, "/w/item"};
@@ -139,6 +141,9 @@ class Facts {
 
   // Extract fact with backoff through transitive property relation.
   void ExtractClosure(Handle item, Handle relation);
+
+  // Extract super-classes.
+  void ExtractSuperclass(Handle item);
 
   // Extract type with super-class backoff.
   void ExtractType(Handle type);
@@ -193,6 +198,12 @@ class Facts {
   // Return interval for fact, i.e. fact(i) = list[begin(i):end(i)].
   int begin(int i) const { return i == 0 ? 0 : delimiters_[i - 1]; }
   int end(int i) const { return delimiters_[i]; }
+
+  // Return length of fact chain.
+  int length(int i) const { return end(i) - begin(i); }
+
+  // Simple facts have length 2, i.e. a property and a value.
+  bool simple(int i) const { return length(i) == 2; }
 
   // Return base property for fact, i.e. first value in fact path.
   Handle first(int i) const { return list_[begin(i)]; }

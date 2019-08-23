@@ -62,8 +62,11 @@ void SpanPopulator::Annotate(const PhraseTable &aliases,
         if (form != CASE_TITLE && form != CASE_UPPER) continue;
       }
 
-      // Find matches in phrase table.
+      // Check if phrase has been black-listed.
       uint64 fp = chart->document()->PhraseFingerprint(b, e);
+      if (blacklist_.count(fp) > 0) continue;
+
+      // Find matches in phrase table.
       SpanChart::Item &span = chart->item(b - begin, e - begin);
       span.matches = aliases.Find(fp);
 
@@ -78,6 +81,11 @@ void SpanPopulator::Annotate(const PhraseTable &aliases,
 void SpanPopulator::AddStopWord(Text word) {
   uint64 fp = Fingerprinter::Fingerprint(word);
   stop_words_.insert(fp);
+}
+
+void SpanPopulator::Blacklist(Text phrase) {
+  uint64 fp = tokenizer_.Fingerprint(phrase);
+  blacklist_.insert(fp);
 }
 
 bool SpanPopulator::Discard(const Token &token) const {
@@ -143,6 +151,9 @@ void CommonWordPruner::Annotate(const IDFTable &dictionary, SpanChart *chart) {
     auto &item = chart->item(t);
     if (item.matches == nullptr) continue;
     const Token &token = chart->token(t);
+
+    // Keep predicates.
+    if (item.is(SPAN_PREDICATE)) continue;
 
     // Check case form.
     CaseForm form =  UTF8::Case(token.word());
@@ -221,10 +232,18 @@ void SpanTaxonomy::Init(Store *store) {
     {"Q202444",    SPAN_GIVEN_NAME},       // given name
     {"Q19838177",  SPAN_SUFFIX},           // suffix for person name
     {"Q215627",    SPAN_PERSON},           // person
+    {"Q15632617",  SPAN_PERSON},           // fictional human
+    {"Q12737077",  SPAN_PREDICATE},        // occupation
+    {"Q4164871",   SPAN_PREDICATE},        // position
+    {"Q828803",    SPAN_PREDICATE},        // job title
+    {"Q11862829",  SPAN_PREDICATE},        // academic discipline
     {"Q11032",     0},                     // newspaper
+    {"Q35127",     0},                     // website
+    {"Q167270",    0},                     // trademark
     {"Q838948",    SPAN_ART},              // work of art
     {"Q47461344",  SPAN_ART},              // written work
     {"Q17537576",  SPAN_ART},              // creative work
+    {"Q215380",    SPAN_ART},              // band
     {nullptr, 0},
   };
 
@@ -377,8 +396,15 @@ void PersonNameAnnotator::Annotate(SpanChart *chart) {
     // Parse notability particle.
     if (e < size && particles.count(chart->token(e).word()) > 0) e++;
 
-    // Parse family name(s).
+    // Parse dash followed by family names.
     int family_names = 0;
+    if (e < size && given_names > 0 && chart->item(e).is(SPAN_DASH)) {
+      int de = e + 1;
+      while (de < size && chart->item(de).is(SPAN_FAMILY_NAME)) de++;
+      if (de > e + 1) e = de;
+    }
+
+    // Parse family name(s).
     while (e < size && chart->item(e).is(SPAN_FAMILY_NAME)) {
       family_names++;
       e++;
@@ -501,7 +527,7 @@ Handle NumberAnnotator::ParseNumber(Text str, char tsep, char dsep, char msep) {
 
   // Parse integer part. The thousand groups must be two or three digits except
   // for the last, which should always be three digits. Indian numbers use two
-  // two digit groups for lakhs and crores.
+  // digit groups for lakhs and crores.
   double value = 0.0;
   const char *group = nullptr;
   while (p < end) {
@@ -742,7 +768,6 @@ void MeasureAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
             unit = match.item;
             break;
           }
-          if (!unit.IsNil()) break;
         }
       } else if (store->IsFrame(span.aux)) {
         Frame item(store, span.aux);
@@ -845,12 +870,15 @@ void DateAnnotator::AddDate(SpanChart *chart, int begin, int end,
 }
 
 Handle DateAnnotator::FindMatch(const PhraseTable &aliases,
-                                const PhraseTable::Phrase *phrase,
+                                const SpanChart::Item &span,
                                 const Name &type,
                                 Store *store) {
+  // Return resolved item if present.
+  if (span.aux.IsRef() && !span.aux.IsNil()) return span.aux;
+
   // Get matches from alias table.
   Handles matches(store);
-  aliases.GetMatches(phrase, &matches);
+  aliases.GetMatches(span.matches, &matches);
 
   // Find first match with the specified type.
   for (Handle h : matches) {
@@ -882,14 +910,18 @@ int DateAnnotator::GetYear(const PhraseTable &aliases,
     // Find matching year.
     Handle year = Handle::nil();
     if (span.is(SPAN_YEAR)) {
-      year = FindMatch(aliases, span.matches, n_year_, store);
+      if (span.aux.IsInt()) {
+        year = span.aux;
+      } else {
+        year = FindMatch(aliases, span, n_year_, store);
+      }
     } else if (span.is(SPAN_YEAR_BC)) {
-      year = FindMatch(aliases, span.matches, n_year_bc_, store);
+      year = FindMatch(aliases, span, n_year_bc_, store);
     }
 
     // Get year from match. Year 0 exists (Q23104) but is not a valid year.
     if (!year.IsNil()) {
-      Date date(Object(store, year));
+      Date date(Object(store, store->Resolve(year)));
       if (date.precision == Date::YEAR && date.year != 0) {
         *end = e;
         return date.year;
@@ -911,7 +943,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
       Date date;
       if (span.is(SPAN_CALENDAR_DAY)) {
         // Date with year, month and day.
-        Handle h = FindMatch(aliases, span.matches, n_calendar_day_, store);
+        Handle h = FindMatch(aliases, span, n_calendar_day_, store);
         if (!h.IsNil()) {
           Frame item(store, h);
           date.ParseFromFrame(item);
@@ -923,7 +955,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         }
       } else if (span.is(SPAN_CALENDAR_MONTH)) {
         // Date with month and year.
-        Handle h = FindMatch(aliases, span.matches, n_calendar_month_, store);
+        Handle h = FindMatch(aliases, span, n_calendar_month_, store);
         if (!h.IsNil()) {
           Frame item(store, h);
           date.ParseFromFrame(item);
@@ -935,7 +967,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         }
       } else if (span.is(SPAN_DAY_OF_YEAR)) {
         // Day of year with day and month.
-        Handle h = FindMatch(aliases, span.matches, n_day_of_year_, store);
+        Handle h = FindMatch(aliases, span, n_day_of_year_, store);
         if (calendar_.GetDayAndMonth(h, &date)) {
           int year = GetYear(aliases, store, chart, e, &e);
           if (year != 0) {
@@ -948,7 +980,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         }
       } else if (span.is(SPAN_CALENDAR_MONTH)) {
         // Month.
-        Handle h = FindMatch(aliases, span.matches, n_month_, store);
+        Handle h = FindMatch(aliases, span, n_month_, store);
         if (calendar_.GetMonth(h, &date)) {
           int year = GetYear(aliases, store, chart, e, &e);
           if (year != 0) {
@@ -961,7 +993,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         }
       } else if (span.is(SPAN_YEAR) && !span.is(SPAN_NUMBER)) {
         // Year.
-        Handle h = FindMatch(aliases, span.matches, n_year_, store);
+        Handle h = FindMatch(aliases, span, n_year_, store);
         date.ParseFromFrame(Frame(store, h));
         if (date.precision == Date::YEAR) {
           AddDate(chart, b, e, date);
@@ -970,7 +1002,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         }
       } else if (span.is(SPAN_DECADE)) {
         // Decade.
-        Handle h = FindMatch(aliases, span.matches, n_decade_, store);
+        Handle h = FindMatch(aliases, span, n_decade_, store);
         date.ParseFromFrame(Frame(store, h));
         if (date.precision == Date::DECADE) {
           AddDate(chart, b, e, date);
@@ -979,7 +1011,7 @@ void DateAnnotator::Annotate(const PhraseTable &aliases, SpanChart *chart) {
         }
       } else if (span.is(SPAN_CENTURY)) {
         // Century.
-        Handle h = FindMatch(aliases, span.matches, n_century_, store);
+        Handle h = FindMatch(aliases, span, n_century_, store);
         date.ParseFromFrame(Frame(store, h));
         if (date.precision == Date::CENTURY) {
           AddDate(chart, b, e, date);
@@ -1121,6 +1153,29 @@ void SpanAnnotator::Init(Store *commons, const Resources &resources) {
   }
   if (!resources.dictionary.empty()) {
     dictionary_.Load(resources.dictionary);
+  }
+
+  // Get stop words and black-listed phrases for language.
+  if (!resources.language.empty()) {
+    Frame lang(commons, "/lang/" + resources.language);
+
+    Handle sw = lang.GetHandle("/lang/wikilang/stop_words");
+    if (!sw.IsNil()) {
+      Array stopwords(commons, sw);
+      for (int i = 0; i < stopwords.length(); ++i) {
+        String word(commons, stopwords.get(i));
+        populator_.AddStopWord(word.value());
+      }
+    }
+
+    Handle bl = lang.GetHandle("/lang/wikilang/blacklisted_phrases");
+    if (!bl.IsNil()) {
+      Array blacklist(commons, bl);
+      for (int i = 0; i < blacklist.length(); ++i) {
+        String word(commons, blacklist.get(i));
+        populator_.Blacklist(word.value());
+      }
+    }
   }
 
   // Initialize annotators.
@@ -1283,10 +1338,14 @@ void SpanAnnotator::Annotate(const Document &document, Document *output) {
       if (!resolved && item.aux == kPersonMarker) {
         Builder b(output->store());
         b.Add(n_instance_of_, n_person_);
+        b.Add(n_name_, document.PhraseText(begin, end));
         Frame person = b.Create();
         span->Evoke(person);
 
         if (resolve_) {
+          // Add person to context model.
+          context.AddEntity(person.handle());
+
           // Add first and last name mentions.
           AddNameParts(document, begin, end, &context, person.handle(), 1);
         }
@@ -1300,7 +1359,10 @@ void SpanAnnotator::Annotate(const Document &document, Document *output) {
 
 bool SpanAnnotator::IsHuman(const Frame &item) const {
   for (const Slot &s : item) {
-    if (s.name == n_instance_of_ && s.value == n_human_) return true;
+    if (s.name == n_instance_of_ &&
+        (s.value == n_human_ || s.value == n_fictional_human_)) {
+      return true;
+    }
   }
   return false;
 }

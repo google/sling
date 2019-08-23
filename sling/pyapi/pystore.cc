@@ -15,6 +15,7 @@
 #include "sling/pyapi/pystore.h"
 
 #include "sling/frame/snapshot.h"
+#include "sling/frame/turtle.h"
 #include "sling/frame/xml.h"
 #include "sling/pyapi/pyarray.h"
 #include "sling/pyapi/pyframe.h"
@@ -186,14 +187,17 @@ PyObject *PyStore::Save(PyObject *args, PyObject *kw) {
 
 PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
   // Parse arguments.
-  static const char *kwlist[] = {"data", "binary", "json", "xml", nullptr};
+  static const char *kwlist[] = {
+    "data", "binary", "json", "xml", "ttl", nullptr
+  };
   PyObject *object = nullptr;
   bool force_binary = false;
   bool json = false;
   bool xml = false;
+  bool ttl = false;
   bool ok = PyArg_ParseTupleAndKeywords(
-                args, kw, "O|bbb", const_cast<char **>(kwlist),
-                &object, &force_binary, &json, &xml);
+                args, kw, "O|bbbb", const_cast<char **>(kwlist),
+                &object, &force_binary, &json, &xml, &ttl);
   if (!ok) return nullptr;
 
   // Check that store is writable.
@@ -219,6 +223,16 @@ PyObject *PyStore::Parse(PyObject *args, PyObject *kw) {
     Frame result = reader.Read();
     if (result.IsNil()) {
       PyErr_SetString(PyExc_IOError, "XML error");
+      return nullptr;
+    }
+    return PyValue(result.handle());
+  } else if (ttl) {
+    // Parse input as TTL.
+    Input input(&stream);
+    TurtleParser parser(store, &input);
+    Object result = parser.ReadAll();
+    if (parser.error()) {
+      PyErr_SetString(PyExc_IOError, parser.error_message().c_str());
       return nullptr;
     }
     return PyValue(result.handle());

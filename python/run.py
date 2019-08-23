@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 # Copyright 2017 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -348,7 +348,6 @@ if __name__ == '__main__':
     flags.arg.parse_wikipedia = True
     flags.arg.merge_categories = True
     flags.arg.invert_categories = True
-    flags.arg.compute_item_popularity = True
     flags.arg.fuse_items = True
     flags.arg.build_kb = True
     flags.arg.extract_names = True

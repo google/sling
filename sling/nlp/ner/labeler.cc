@@ -29,6 +29,7 @@ class NamedEntityAnnotator : public Annotator {
     resources.aliases = task->GetInputFile("aliases");
     resources.dictionary = task->GetInputFile("dictionary");
     resources.resolve = task->Get("resolve", false);
+    resources.language = task->Get("language", "en");
 
     annotator_.Init(commons, resources);
   }

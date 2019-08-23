@@ -96,7 +96,6 @@ void SpanChart::Solve() {
   }
 }
 
-
 void SpanChart::Extract(const Extractor &extractor) {
   std::vector<std::pair<int, int>> queue;
   queue.emplace_back(0, size_);

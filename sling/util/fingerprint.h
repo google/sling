@@ -21,9 +21,13 @@ namespace sling {
 // Concatenate two fingerprints.
 uint64 FingerprintCat(uint64 fp1, uint64 fp2);
 
-// This should be better (collision-wise) than the default hash<string>,
-// without being much slower. It never returns 0 or 1.
+// Compute 64-bit fingerprint for data. This should be better (collision-wise)
+// than the default hash<string>, without being much slower. It never returns
+// 0 or 1.
 uint64 Fingerprint(const char *bytes, size_t len);
+
+// Compute 32-bit fingerprint by folding 64-bit fingerprint.
+uint32 Fingerprint32(const char *bytes, size_t len);
 
 }  // namespace sling
 

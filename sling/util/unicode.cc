@@ -199,8 +199,10 @@ bool UTF8::Valid(const char *s, int len) {
     if ((c & 0xe0) == 0xc0) {
       len = 1;
     } else if ((c & 0xf0) == 0xe0) {
+      if (c == 0xed) return false;
       len = 2;
     } else if ((c & 0xf8) == 0xf0) {
+      if (c == 0xf4) return false;
       len = 3;
     } else {
       return false;
@@ -292,6 +294,30 @@ int UTF8::Decode(const char *s) {
   }
 
   return -1;
+}
+
+void UTF8::DecodeString(const char *s, int len, ustring *result) {
+  // Clear output string.
+  result->clear();
+  result->reserve(len);
+
+  // Try fast conversion where all characters are below 128. All characters
+  // below 128 are converted to one byte codes.
+  const char *end = s + len;
+  while (s < end) {
+    uint8 c = *reinterpret_cast<const uint8 *>(s);
+    if (c & 0x80) break;
+    result->push_back(c);
+    s++;
+  }
+
+  // Handle any remaining part of the string which can contain multi-byte
+  // characters.
+  while (s < end) {
+    int code = Decode(s);
+    result->push_back(code);
+    s = Next(s);
+  }
 }
 
 int UTF8::Encode(int code, char *s) {
@@ -495,6 +521,7 @@ bool UTF8::IsInitials(const char *s, int len) {
   const char *end = s + len;
   bool first = true;
   bool punctuated = false;
+  bool single = false;
   while (s < end) {
     int code = Decode(s);
     bool upper = Unicode::IsUpper(code);
@@ -502,15 +529,17 @@ bool UTF8::IsInitials(const char *s, int len) {
 
     if (first) {
       if (!upper) return false;
+      if (upper) single = true;
     } else {
       if (!upper && !punct) return false;
       if (punct) punctuated = true;
+      single = false;
     }
 
     first = false;
     s = Next(s);
   }
-  return punctuated;
+  return punctuated || single;
 }
 
 CaseForm UTF8::Case(const char *s, int len) {

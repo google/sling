@@ -45,23 +45,24 @@ enum WikipediaNamespace {
 
 // Alias sources.
 enum AliasSource {
-  SRC_GENERIC                  =  0,  //    1  0x0001
-  SRC_WIKIDATA_LABEL           =  1,  //    2  0x0002
-  SRC_WIKIDATA_ALIAS           =  2,  //    4  0x0004
-  SRC_WIKIPEDIA_TITLE          =  3,  //    8  0x0008
-  SRC_WIKIPEDIA_REDIRECT       =  4,  //   16  0x0010
-  SRC_WIKIPEDIA_ANCHOR         =  5,  //   32  0x0020
-  SRC_WIKIPEDIA_DISAMBIGUATION =  6,  //   64  0x0040
-  SRC_WIKIDATA_FOREIGN         =  7,  //  128  0x0080
-  SRC_WIKIDATA_NATIVE          =  8,  //  256  0x0100
-  SRC_WIKIDATA_DEMONYM         =  9,  //  512  0x0200
-  SRC_WIKIPEDIA_LINK           = 10,  // 1024  0x0400
-  SRC_WIKIDATA_NAME            = 11,  // 2048  0x0800
-  SRC_WIKIPEDIA_NAME           = 12,  // 4096  0x1000
-  SRC_WIKIPEDIA_NICKNAME       = 13,  // 8192  0x2000
+  SRC_GENERIC                  =  0,  //     1  0x0001
+  SRC_WIKIDATA_LABEL           =  1,  //     2  0x0002
+  SRC_WIKIDATA_ALIAS           =  2,  //     4  0x0004
+  SRC_WIKIPEDIA_TITLE          =  3,  //     8  0x0008
+  SRC_WIKIPEDIA_REDIRECT       =  4,  //    16  0x0010
+  SRC_WIKIPEDIA_ANCHOR         =  5,  //    32  0x0020
+  SRC_WIKIPEDIA_DISAMBIGUATION =  6,  //    64  0x0040
+  SRC_WIKIDATA_FOREIGN         =  7,  //   128  0x0080
+  SRC_WIKIDATA_NATIVE          =  8,  //   256  0x0100
+  SRC_WIKIDATA_DEMONYM         =  9,  //   512  0x0200
+  SRC_WIKIPEDIA_LINK           = 10,  //  1024  0x0400
+  SRC_WIKIDATA_NAME            = 11,  //  2048  0x0800
+  SRC_WIKIPEDIA_NAME           = 12,  //  4096  0x1000
+  SRC_WIKIPEDIA_NICKNAME       = 13,  //  8192  0x2000
+  SRC_VARIATION                = 14,  // 16384  0x4000
 };
 
-static const int kNumAliasSources = 14;
+static const int kNumAliasSources = 15;
 
 extern const char *kAliasSourceName[kNumAliasSources];
 

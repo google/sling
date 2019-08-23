@@ -23,6 +23,7 @@
 #include "sling/base/types.h"
 #include "sling/frame/store.h"
 #include "sling/nlp/document/document.h"
+#include "sling/nlp/document/phrase-tokenizer.h"
 #include "sling/nlp/kb/facts.h"
 #include "sling/nlp/kb/phrase-table.h"
 #include "sling/nlp/ner/chart.h"
@@ -61,6 +62,7 @@ enum SpanFlags {
   SPAN_ABBREVIATION      = (1 << 24),
   SPAN_PERSON            = (1 << 25),
   SPAN_ART               = (1 << 26),
+  SPAN_PREDICATE         = (1 << 27),
 };
 
 // Span markers.
@@ -81,12 +83,21 @@ class SpanPopulator {
   // Add stop word.
   void AddStopWord(Text word);
 
+  // Add black-listed phrase.
+  void Blacklist(Text phrase);
+
  private:
   // Check if token is a stop word.
   bool Discard(const Token &token) const;
 
   // Fingerprints for stop words.
   std::unordered_set<uint64> stop_words_;
+
+  // Fingerprints for black-listed phrases.
+  std::unordered_set<uint64> blacklist_;
+
+  // Phrase tokenizer for black-listed phrases.
+  PhraseTokenizer tokenizer_;
 };
 
 // Import existing spans in the underlying document into the span chart. Dates,
@@ -314,7 +325,7 @@ class DateAnnotator {
 
   // Find item for phrase with a certain type.
   Handle FindMatch(const PhraseTable &aliases,
-                   const PhraseTable::Phrase *phrase,
+                   const SpanChart::Item &span,
                    const Name &type,
                    Store *store);
 
@@ -368,6 +379,7 @@ class SpanAnnotator {
     string kb;             // knowledge base with entities and metadata
     string aliases;        // phrase table with phrase to entity mapping
     string dictionary;     // dictionary table with IDF scores for words
+    string language;       // language for documents
     bool resolve = false;  // resolve spans to entities in knowledge base
   };
 
@@ -423,7 +435,9 @@ class SpanAnnotator {
   Name n_instance_of_{names_, "P31"};
   Name n_person_{names_, "Q215627"};
   Name n_human_{names_, "Q5"};
+  Name n_fictional_human_{names_, "Q15632617"};
   Name n_page_item_{names_, "/wp/page/item"};
+  Name n_name_{names_, "name"};
 
   // Maximum phrase length.
   static constexpr int max_phrase_length = 10;

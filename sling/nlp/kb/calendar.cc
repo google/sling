@@ -14,8 +14,6 @@
 
 #include "sling/nlp/kb/calendar.h"
 
-#include <stdio.h>
-
 #include "sling/base/logging.h"
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"

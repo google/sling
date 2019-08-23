@@ -269,8 +269,8 @@ class WikiWorkflow:
   def template_defs(self, language=None):
     """Resource for template definitions."""
     if language == None: language = flags.arg.language
-    return self.wf.resource("templates-" + language + ".sling",
-                            dir=corpora.repository("data/wiki"),
+    return self.wf.resource("templates.sling",
+                            dir=corpora.repository("data/wiki/" + language),
                             format="store/frame")
 
   def wikipedia_import(self, input, name=None):
@@ -471,8 +471,7 @@ class WikiWorkflow:
   def fuse_items(self, items=None, extras=None, output=None):
     if items == None:
       items = self.wikidata_items() + [self.wikipedia_items(),
-                                       self.wikipedia_members(),
-                                       self.item_popularity()]
+                                       self.wikipedia_members()]
     if flags.arg.extra_items:
       extra = self.wf.resource(flags.arg.extra_items, format="records/frame")
       if isinstance(extra, list):
@@ -627,7 +626,10 @@ class WikiWorkflow:
 
     # Filter and select aliases.
     selector = self.wf.reduce(merged_aliases, names, "alias-reducer",
-                              params={"language": language})
+                              params={
+                                "language": language,
+                                "anchor_threshold": 30,
+                              })
     selector.attach_input("commons", self.alias_corrections())
     return names
 
