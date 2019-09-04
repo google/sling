@@ -725,7 +725,7 @@ class Frame : public Object {
 
    private:
     const Frame &frame_;
-    const Predicate &predicate_;
+    Predicate predicate_;
   };
 
   // Iterates over all slots with a given name.

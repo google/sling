@@ -15,3 +15,32 @@ cc_library(
     "//sling/string:strcat",
   ],
 )
+
+cc_library(
+  name = "transition-generator",
+  hdrs = ["transition-generator.h"],
+  srcs = ["transition-generator.cc"],
+  deps = [
+    "//sling/base",
+    "//sling/frame:object",
+    "//sling/frame:serialization",
+    "//sling/frame:store",
+    "//sling/nlp/document:document",
+    "//sling/nlp/parser:parser-action",
+  ],
+)
+
+cc_binary(
+  name = "generate-transitions",
+  srcs = ["generate-transitions.cc"],
+  deps = [
+    ":transition-generator",
+    "//sling/base",
+    "//sling/file:posix",
+    "//sling/frame:store",
+    "//sling/nlp/document:document",
+    "//sling/nlp/document:document-source",
+    "//sling/nlp/parser:parser-action",
+  ],
+)
+
