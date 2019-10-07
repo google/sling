@@ -472,13 +472,26 @@ void identity_grad(Flow::Operation *op, Gradients *g) {
   g->add(x, g->d(y));
 }
 
+// y = reshape(x, shape)
+// dx = reshape(dy, shape(x))
+void reshape_grad(Flow::Operation *op, Gradients *g) {
+  auto x = op->inputs[0];
+  auto y = op->outputs[0];
+  g->add(x, g->Reshape(g->d(y), g->v(x)->shape));
+}
+
 // v = gather(M, f)
 // dM = scatter(dv, f)
 void gather_grad(Flow::Operation *op, Gradients *g) {
   auto M = op->inputs[0];
   auto f = op->inputs[1];
   auto v = op->outputs[0];
-  g->add(M, g->Scatter(g->v(f), g->d(v), M->dim(0)));
+  if (op->indegree() == 3) {
+    auto oov = op->inputs[2];
+    g->add(M, g->Scatter(g->v(f), g->d(v), M->dim(0), g->d(oov)));
+  } else {
+    g->add(M, g->Scatter(g->v(f), g->d(v), M->dim(0)));
+  }
 }
 
 // v = gather_sum(M, f)
@@ -607,6 +620,7 @@ void RegisterStandardGradients(Transformations *library) {
   library->RegisterGradient("Relu", relu_grad);
   library->RegisterGradient("Norm", norm_grad);
   library->RegisterGradient("Identity", identity_grad);
+  library->RegisterGradient("Reshape", reshape_grad);
   library->RegisterGradient("Gather", gather_grad);
   library->RegisterGradient("GatherSum", gathersum_grad);
   library->RegisterGradient("ConcatV2", concat_grad);

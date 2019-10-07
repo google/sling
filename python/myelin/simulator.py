@@ -229,7 +229,13 @@ def compute(flow, f, data):
       for k in range(len(splits)): v[o[k]] = splits[k]
     elif op.type == "Gather":
       v[o[0]] = gather(v[i[0]], v[i[1]])
-    elif op.type == "ScatterAdd":
+    elif op.type == "GatherSum":
+      v[o[0]] = np.sum(gather(v[i[0]], v[i[1]]), axis=1)
+    elif op.type == "GatherMax":
+      v[o[0]] = np.max(gather(v[i[0]], v[i[1]]), axis=1)
+    elif op.type == "GatherAvg":
+      v[o[0]] = np.sum(gather(v[i[0]], v[i[1]]), axis=1) / v[i[1]].shape[1]
+    elif op.type == "AssignAddScatter":
       m = v[i[0]]
       f = v[i[1]]
       x = v[i[2]]

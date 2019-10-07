@@ -39,13 +39,17 @@ class SIMDGenerator {
   // Allocate SIMD register.
   virtual int Alloc() = 0;
 
+  // Move value from one regiser to another.
+  virtual void Move(int dst, int src) = 0;
+
   // Load memory into register.
   virtual void Load(int dst, const jit::Operand &src) = 0;
 
   // Store register into memory.
   virtual void Store(const jit::Operand &dst, int src) = 0;
 
-  // Broadcast memory into register.
+  // Broadcast value to all elements of register.
+  virtual void Broadcast(int dst, int src);
   virtual void Broadcast(int dst, const jit::Operand &src);
 
   // Clear register.
@@ -61,7 +65,7 @@ class SIMDGenerator {
   // Multiply src1 and src2 and store it in dst.
   virtual void Mul(int dst, int src1, const jit::Operand &src2) = 0;
 
-  // Multiply src1 and src2 and add it to dst. If the keep flag is false the
+  // Multiply src1 and src2 and add it to dst. If the retain flag is false the
   // contents of src1 can possibly be destroyed.
   virtual void MulAdd(int dst, int src1, const jit::Operand &src2,
                       bool retain) = 0;

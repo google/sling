@@ -336,6 +336,10 @@ class FlowBuilder : public Scope {
     int n = f->rank() == 0 ? 1 : f->dim(1);
     return Op("Gather", {M, f}, M->type, {n, M->dim(1)});
   }
+  Variable *Gather(Variable *M, Variable *f, Variable *oov) {
+    int n = f->rank() == 0 ? 1 : f->dim(1);
+    return Op("Gather", {M, f, oov}, M->type, {n, M->dim(1)});
+  }
   Variable *GatherSum(Variable *M, Variable *f) {
     return Op("GatherSum", {M, f}, M->type, {1, M->dim(1)});
   }
@@ -349,6 +353,9 @@ class FlowBuilder : public Scope {
   // Scatter for sparse embedding update.
   Variable *Scatter(Variable *f, Variable *v, int size) {
     return Op("Scatter", {f, v}, v->type, {size, v->dim(1)});
+  }
+  Variable *Scatter(Variable *f, Variable *v, int size, Variable *oov) {
+    return Op("Scatter", {f, v, oov}, v->type, {size, v->dim(1)});
   }
 
   // Assignment.
@@ -364,8 +371,8 @@ class FlowBuilder : public Scope {
     return Op("Assign", {var, value})->set_ref();
   }
 
-  Operation *ScatterAdd(Variable *M, Variable *f, Variable *v) {
-    return RawOp("ScatterAdd", {M, f, v});
+  Operation *AssignAddScatter(Variable *M, Variable *f, Variable *v) {
+    return RawOp("AssignAddScatter", {M, f, v});
   }
 
   // Concatenation.

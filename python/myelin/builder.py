@@ -35,7 +35,7 @@ typemap = {
   "f": DT_FLOAT32,
   "d": DT_FLOAT64,
   "i": DT_INT32,
-  "l": DT_INT32,
+  "l": DT_INT64,
   "B": DT_INT8,
   "h": DT_INT16,
   "b": DT_INT8,
@@ -592,8 +592,8 @@ class Builder:
     op.add_input(x)
     op.add_input(y)
 
-  def scatter_add(self, m, f, v, ref=False, name=None):
-    op = self.rawop("ScatterAdd", name)
+  def assign_add_scatter(self, m, f, v, ref=False, name=None):
+    op = self.rawop("AssignAddScatter", name)
     op.add_input(m)
     op.add_input(f)
     op.add_input(v)

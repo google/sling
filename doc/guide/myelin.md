@@ -21,10 +21,10 @@ Build system: Bazel<br>
 
 ## Using Myelin in Python
 
-Myelin represents a computation graph using a _flow_. The graph is divivded into
+Myelin represents a computation graph using a _flow_. The graph is divided into
 _functions_ which can be computed independently. A function is a set of
 _operations_ with tensor inputs and outputs. The tensor inputs and outputs are
-_variables_ in the flow. Variables can either be global constant tensor, e.g.
+_variables_ in the flow. Variables can either be global constant tensors, e.g.
 learned weights in a neural network, or parameter tensors, which are local to
 the function.
 

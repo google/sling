@@ -84,6 +84,12 @@ bool SIMDGenerator::SupportsUnroll() {
   return true;
 }
 
+void SIMDGenerator::Broadcast(int dst, int src) {
+  // Broadcast is just a move for scalars.
+  CHECK_EQ(VectorSize(), 1);
+  if (dst != src) Move(dst, src);
+}
+
 void SIMDGenerator::Broadcast(int dst, const Operand &src) {
   // Broadcast is just a load for scalars.
   CHECK_EQ(VectorSize(), 1);
@@ -160,6 +166,10 @@ class AVX512FloatGenerator : public SIMDGenerator {
   int VectorSize() override { return 16; }
   int Alloc() override { return masm_->mm().alloc(true); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovaps(zmm(dst), zmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->vmovaps(zmm(dst), src);
@@ -174,6 +184,10 @@ class AVX512FloatGenerator : public SIMDGenerator {
     } else {
       masm_->vmovups(dst, zmm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vbroadcastss(zmm(dst), zmm(src));
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -212,7 +226,7 @@ class AVX512FloatGenerator : public SIMDGenerator {
     if (neutral == nullptr) {
       Zero(r);
     } else {
-      masm_->vbroadcastss(zmm(r), neutral->address());
+      Broadcast(r, neutral->address());
     }
   }
 
@@ -286,6 +300,10 @@ class AVX256FloatGenerator : public SIMDGenerator {
   int VectorSize() override { return 8; }
   int Alloc() override { return masm_->mm().alloc(false); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovaps(ymm(dst), ymm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->vmovaps(ymm(dst), src);
@@ -300,6 +318,10 @@ class AVX256FloatGenerator : public SIMDGenerator {
     } else {
       masm_->vmovups(dst, ymm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vbroadcastss(ymm(dst), ymm(src));
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -348,7 +370,7 @@ class AVX256FloatGenerator : public SIMDGenerator {
     if (neutral == nullptr) {
       Zero(r);
     } else {
-      masm_->vbroadcastss(ymm(r), neutral->address());
+      Broadcast(r, neutral->address());
     }
   }
 
@@ -378,6 +400,10 @@ class AVX128FloatGenerator : public SIMDGenerator {
   int VectorSize() override { return 4; }
   int Alloc() override { return masm_->mm().alloc(false); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovaps(xmm(dst), xmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->vmovaps(xmm(dst), src);
@@ -392,6 +418,10 @@ class AVX128FloatGenerator : public SIMDGenerator {
     } else {
       masm_->vmovups(dst, xmm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vbroadcastss(xmm(dst), xmm(src));
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -440,7 +470,7 @@ class AVX128FloatGenerator : public SIMDGenerator {
     if (neutral == nullptr) {
       Zero(r);
     } else {
-      masm_->vbroadcastss(xmm(r), neutral->address());
+      Broadcast(r, neutral->address());
     }
   }
 
@@ -470,6 +500,10 @@ class SSE128FloatGenerator : public SIMDGenerator {
   int VectorSize() override { return 4; }
   int Alloc() override { return masm_->mm().alloc(false); }
 
+  void Move(int dst, int src) override {
+    masm_->movaps(xmm(dst), xmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->movaps(xmm(dst), src);
@@ -484,6 +518,11 @@ class SSE128FloatGenerator : public SIMDGenerator {
     } else {
       masm_->movups(dst, xmm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    if (dst != src) masm_->movss(xmm(dst), xmm(src));
+    masm_->shufps(xmm(dst), xmm(dst), 0);
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -610,6 +649,10 @@ class AVX512ScalarFloatGenerator : public SIMDGenerator {
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->mm().alloc(true); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovaps(zmm(dst), zmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     masm_->vmovss(zmm(dst), src);
   }
@@ -683,6 +726,10 @@ class AVXScalarFloatGenerator : public SIMDGenerator {
   int VectorBytes() override { return sizeof(float); }
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovaps(xmm(dst), xmm(src));
+  }
 
   void Load(int dst, const Operand &src) override {
     masm_->vmovss(xmm(dst), src);
@@ -777,6 +824,10 @@ class SSEScalarFloatGenerator : public SIMDGenerator {
   int VectorBytes() override { return sizeof(float); }
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->movss(xmm(dst), xmm(src));
+  }
 
   void Load(int dst, const Operand &src) override {
     masm_->movss(xmm(dst), src);
@@ -879,6 +930,10 @@ class AVX512DoubleGenerator : public SIMDGenerator {
   int VectorSize() override { return 8; }
   int Alloc() override { return masm_->mm().alloc(true); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovapd(zmm(dst), zmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->vmovapd(zmm(dst), src);
@@ -893,6 +948,10 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     } else {
       masm_->vmovupd(dst, zmm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vbroadcastsd(zmm(dst), zmm(src));
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -931,7 +990,7 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     if (neutral == nullptr) {
       Zero(r);
     } else {
-      masm_->vbroadcastsd(zmm(r), neutral->address());
+      Broadcast(r, neutral->address());
     }
   }
 
@@ -1005,6 +1064,10 @@ class AVX256DoubleGenerator : public SIMDGenerator {
   int VectorSize() override { return 4; }
   int Alloc() override { return masm_->mm().alloc(false); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovapd(ymm(dst), ymm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->vmovapd(ymm(dst), src);
@@ -1019,6 +1082,10 @@ class AVX256DoubleGenerator : public SIMDGenerator {
     } else {
       masm_->vmovupd(dst, ymm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vbroadcastsd(ymm(dst), ymm(src));
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -1067,7 +1134,7 @@ class AVX256DoubleGenerator : public SIMDGenerator {
     if (neutral == nullptr) {
       Zero(r);
     } else {
-      masm_->vbroadcastsd(ymm(r), neutral->address());
+      Broadcast(r, neutral->address());
     }
   }
 
@@ -1097,6 +1164,10 @@ class AVX128DoubleGenerator : public SIMDGenerator {
   int VectorSize() override { return 2; }
   int Alloc() override { return masm_->mm().alloc(false); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovapd(xmm(dst), xmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->vmovapd(xmm(dst), src);
@@ -1111,6 +1182,11 @@ class AVX128DoubleGenerator : public SIMDGenerator {
     } else {
       masm_->vmovupd(dst, xmm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    if (dst != src) masm_->vmovapd(xmm(dst), xmm(src));
+    masm_->vshufpd(xmm(dst), xmm(dst), xmm(dst), 0);
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -1190,6 +1266,10 @@ class SSE128DoubleGenerator : public SIMDGenerator {
   int VectorSize() override { return 2; }
   int Alloc() override { return masm_->mm().alloc(false); }
 
+  void Move(int dst, int src) override {
+    masm_->movapd(xmm(dst), xmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     if (aligned_) {
       masm_->movapd(xmm(dst), src);
@@ -1204,6 +1284,11 @@ class SSE128DoubleGenerator : public SIMDGenerator {
     } else {
       masm_->movupd(dst, xmm(src));
     }
+  }
+
+  void Broadcast(int dst, int src) override {
+    if (dst != src) masm_->movapd(xmm(dst), xmm(src));
+    masm_->shufpd(xmm(dst), xmm(dst), 0);
   }
 
   void Broadcast(int dst, const Operand &src) override {
@@ -1330,6 +1415,10 @@ class AVX512ScalarDoubleGenerator : public SIMDGenerator {
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->mm().alloc(true); }
 
+  void Move(int dst, int src) override {
+    masm_->vmovapd(zmm(dst), zmm(src));
+  }
+
   void Load(int dst, const Operand &src) override {
     masm_->vmovsd(zmm(dst), src);
   }
@@ -1403,6 +1492,10 @@ class AVXScalarDoubleGenerator : public SIMDGenerator {
   int VectorBytes() override { return sizeof(double); }
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovapd(xmm(dst), xmm(src));
+  }
 
   void Load(int dst, const Operand &src) override {
     masm_->vmovsd(xmm(dst), src);
@@ -1497,6 +1590,10 @@ class SSEScalarDoubleGenerator : public SIMDGenerator {
   int VectorBytes() override { return sizeof(double); }
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->movsd(xmm(dst), xmm(src));
+  }
 
   void Load(int dst, const Operand &src) override {
     masm_->movsd(xmm(dst), src);
@@ -1594,6 +1691,10 @@ class ScalarIntSIMDGenerator : public SIMDGenerator {
   int VectorSize() override { return 1; }
   int Alloc() override { return masm_->rr().alloc().code(); }
   bool SupportsUnroll() override { return false; }
+
+  void Move(int dst, int src) override {
+    masm_->movq(reg(dst), reg(src));
+  }
 
   void Load(int dst, const Operand &src) override {
     switch (type_) {
@@ -1800,9 +1901,12 @@ SIMDAssembler::SIMDAssembler(MacroAssembler *masm, Type type, bool aligned) {
         add(new AVX256DoubleGenerator(masm, aligned));
         add(new AVX128DoubleGenerator(masm, aligned));
         add(new AVXScalarDoubleGenerator(masm, aligned));
+      } else if (masm->Enabled(SSE2)) {
+        name_ = "SSE2Dbl";
+        add(new SSE128DoubleGenerator(masm, aligned));
+        add(new SSEScalarDoubleGenerator(masm, aligned));
       } else if (masm->Enabled(SSE)) {
         name_ = "SSEDbl";
-        add(new SSE128DoubleGenerator(masm, aligned));
         add(new SSEScalarDoubleGenerator(masm, aligned));
       }
       break;

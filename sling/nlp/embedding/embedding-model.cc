@@ -68,7 +68,7 @@ void MikolovFlow::BuildLayer1() {
 
   // Backprop layer 1.
   tf.AssignAdd(error, tf.Mul(embed, eta));
-  tf.ScatterAdd(W1, target, tf.Mul(h, eta));
+  tf.AssignAddScatter(W1, target, tf.Mul(h, eta));
 }
 
 void MikolovFlow::BuildLayer0Back() {
@@ -77,7 +77,7 @@ void MikolovFlow::BuildLayer0Back() {
 
   l0b_l0 = tf.Instance(layer0);
   l0b_l1 = tf.Instance(layer1);
-  tf.ScatterAdd(W0, tf.Ref(l0b_l0, fv), tf.Ref(l0b_l1, error));
+  tf.AssignAddScatter(W0, tf.Ref(l0b_l0, fv), tf.Ref(l0b_l1, error));
 }
 
 void DualEncoderFlow::Build(const Transformations &library) {

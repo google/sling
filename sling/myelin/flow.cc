@@ -1790,6 +1790,7 @@ Flow::Operation *Flow::AddOperation(Function *func,
                                     const string &type) {
   Operation *op = AddOperation(name, type);
   func->AddOperation(op);
+  if (op->name.empty()) op->name = OpName(func->name + "/" + type);
   return op;
 }
 
@@ -1798,8 +1799,7 @@ Flow::Operation *Flow::AddOperation(Function *func,
                                     const string &type,
                                     const std::vector<Variable *> &inputs,
                                     const std::vector<Variable *> &outputs) {
-  Operation *op = AddOperation(name, type);
-  func->AddOperation(op);
+  Operation *op = AddOperation(func, name, type);
   for (auto *input : inputs) op->AddInput(input);
   for (auto *output : outputs) op->AddOutput(output);
   return op;
@@ -2148,7 +2148,10 @@ Flow::Blob *Flow::DataBlock(const string &name) {
 string Flow::VarName(const string &prefix) {
   for (int n = 0;; ++n) {
     string name = prefix;
-    if (n > 0) name.append(std::to_string(n));
+    if (n > 0) {
+      name.push_back('_');
+      name.append(std::to_string(n));
+    }
     if (Var(name) == nullptr) return name;
   }
 }
@@ -2156,7 +2159,10 @@ string Flow::VarName(const string &prefix) {
 string Flow::OpName(const string &prefix) {
   for (int n = 0;; ++n) {
     string name = prefix;
-    if (n > 0) name.append(std::to_string(n));
+    if (n > 0) {
+      name.push_back('_');
+      name.append(std::to_string(n));
+    }
     if (Op(name) == nullptr) return name;
   }
 }
