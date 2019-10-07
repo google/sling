@@ -147,6 +147,10 @@ bool Frame::Has(Text name) const {
   return Has(store()->Lookup(name));
 }
 
+bool Frame::Has(Handle name, Handle value) const {
+  return frame()->has(name, value);
+}
+
 Object Frame::Get(Handle name) const {
   return Object(store(), frame()->get(name));
 }

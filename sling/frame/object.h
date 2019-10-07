@@ -436,6 +436,9 @@ class Frame : public Object {
   bool Has(const Name &name) const;
   bool Has(Text name) const;
 
+  // Checks if frame has slot with value.
+  bool Has(Handle name, Handle value) const;
+
   // Gets slot value.
   Object Get(Handle name) const;
   Object Get(const Object &name) const;

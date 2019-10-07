@@ -333,7 +333,9 @@ Handle Store::AllocateFrame(Slot *begin, Slot *end, Handle original) {
       if (id->IsSymbol()) {
         // Make sure the symbol is not already bound to another frame.
         SymbolDatum *symbol = id->AsSymbol();
-        if (!options_->symbol_rebinding) {
+        if (options_->symbol_rebinding) {
+          CHECK(!symbol->marked()) << "no rebinding of frozen symbols";
+        } else {
           CHECK(!symbol->bound()) << DebugString(symbol->self);
         }
 
@@ -402,7 +404,9 @@ void Store::UpdateFrame(Handle handle, Slot *begin, Slot *end) {
       SymbolDatum *symbol = id->AsSymbol();
 
       // Make sure the symbol is not already bound to another frame.
-      if (!options_->symbol_rebinding) {
+      if (options_->symbol_rebinding) {
+        CHECK(!symbol->marked()) << "no rebinding of frozen symbols";
+      } else {
         CHECK(!symbol->bound()) << DebugString(symbol->self);
       }
 
@@ -653,34 +657,81 @@ void Store::InsertSymbol(SymbolDatum *symbol) {
   // Resize symbol table if fill factor is more than 1:1, unless this would
   // make the symbol table exceed the maximum object size.
   if (num_symbols_ > num_buckets_ && num_buckets_ < kMapSizeLimit / 2) {
-    if (num_buckets_ == 1) {
-      // Get the initial size from the options.
-      num_buckets_ = options_->map_buckets;
-    } else {
-      // Double the number of buckets.
-      num_buckets_ *= 2;
-    }
-
-    // Allocate new bucket array.
-    int size = num_buckets_ * sizeof(Handle);
-    MapDatum *map = AllocateDatum(ARRAY, size)->AsMap();
-    for (Handle *h = map->begin(); h < map->end(); ++h) *h = Handle::nil();
-
-    // Move all the symbols to the new symbol map.
-    MapDatum *symbols = GetMap(symbols_);
-    for (Handle *bucket = symbols->begin(); bucket < symbols->end(); ++bucket) {
-      Handle h = *bucket;
-      while (!h.IsNil()) {
-        SymbolDatum *symbol = GetSymbol(h);
-        Handle next = symbol->next;
-        map->insert(symbol);
-        h = next;
-      }
-    }
-
-    // Replace the old symbol table with the new one.
-    Replace(symbols_, map);
+    ResizeSymbolTable();
   }
+}
+
+void Store::ResizeSymbolTable() {
+  if (num_buckets_ == 1) {
+    // Get the initial size from the options.
+    num_buckets_ = options_->map_buckets;
+  } else {
+    // Double the number of buckets.
+    num_buckets_ *= 2;
+  }
+
+  // Allocate new bucket array.
+  int size = num_buckets_ * sizeof(Handle);
+  MapDatum *map = AllocateDatum(ARRAY, size)->AsMap();
+  for (Handle *h = map->begin(); h < map->end(); ++h) *h = Handle::nil();
+
+  // Move all the symbols to the new symbol map.
+  MapDatum *symbols = GetMap(symbols_);
+  for (Handle *bucket = symbols->begin(); bucket < symbols->end(); ++bucket) {
+    // Move all symbols in bucket to new map. If we encounter a symbol with
+    // the mark bit set, it belongs to a frozen heap. These symbols need to be
+    // inserted last in the bucket chain to ensusre that all non-frozen
+    // symbols are traversed in the GC mark phase.
+    Handle h = *bucket;
+    while (!h.IsNil()) {
+      SymbolDatum *symbol = GetSymbol(h);
+      if (symbol->marked()) break;
+      Handle next = symbol->next;
+      map->insert(symbol);
+      h = next;
+    }
+
+    // Handle buckets with frozen symbols.
+    while (!h.IsNil()) {
+      SymbolDatum *symbol = GetSymbol(h);
+      Handle next = symbol->next;
+      if (!symbol->marked()) {
+        // Non-frozen symbols can be inserted at the head of the chain.
+        map->insert(symbol);
+      } else {
+        // Insert frozen symbols after non-frozen symbols.
+        Handle *b = map->bucket(symbol->hash);
+        if (b->IsNil()) {
+          // Empty bucket.
+          *b = symbol->self;
+          symbol->next = Handle::nil();
+        } else {
+          // If the head of the bucket chain is also frozen, the symbol can be
+          // inserted at the head.
+          SymbolDatum *head = GetSymbol(*b);
+          if (head->marked()) {
+            // Insert at head.
+            symbol->next = *b;
+            *b = symbol->self;
+          } else {
+            // Insert after non-frozen symbols.
+            SymbolDatum *prev = head;
+            while (!prev->marked() && !prev->next.IsNil()) {
+              prev = GetSymbol(prev->next);
+            }
+            symbol->next = prev->next;
+            prev->next = symbol->self;
+          }
+        }
+      }
+
+      // Next symbol in bucket chain.
+      h = next;
+    }
+  }
+
+  // Replace the old symbol table with the new one.
+  Replace(symbols_, map);
 }
 
 Handle Store::FindSymbol(Text name, Handle hash) const {
@@ -1136,6 +1187,14 @@ Handle Store::AllocateHandleSlow(Datum *object) {
   object->self = handle;
 
   return handle;
+}
+
+bool Store::IsPublic(Handle handle) const {
+  if (!handle.IsRef()) return false;
+  if (handle.IsNil()) return false;
+  const Datum *datum = Deref(handle);
+  if (!datum->IsFrame()) return false;
+  return datum->AsFrame()->IsPublic();
 }
 
 Handle Store::Resolve(Handle handle) const {

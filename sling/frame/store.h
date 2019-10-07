@@ -643,6 +643,14 @@ struct FrameDatum : public Datum {
     return false;
   }
 
+  // Checks if frame has a slot with name and value.
+  bool has(Handle name, Handle value) const {
+    for (const Slot *slot = begin(); slot < end(); ++slot) {
+      if (slot->name == name && slot->value == value) return true;
+    }
+    return false;
+  }
+
   // Checks if frame has isa: type.
   bool isa(Handle type) const {
     for (const Slot *slot = begin(); slot < end(); ++slot) {
@@ -1048,6 +1056,10 @@ class Store {
   ProxyDatum *GetProxy(Handle h) { return Deref(h)->AsProxy(); }
   const ProxyDatum *GetProxy(Handle h) const { return Deref(h)->AsProxy(); }
 
+  // Check if object is public, i.e. a frame with an id.
+  bool IsPublic(Handle handle) const;
+  bool IsAnonymous(Handle handle) const { return !IsPublic(handle); }
+
   // Resolve handle by following is: chain.
   Handle Resolve(Handle handle) const;
 
@@ -1220,6 +1232,9 @@ class Store {
   // frames. This can be used for checking if a snapshot can be used for
   // restoring the store without overwriting any existing content.
   bool Pristine() const;
+
+  // Resize symbol table.
+  void ResizeSymbolTable();
 
   // Returns heap containing symbol table. This will return null if the heap
   // contains any objects besides the symbol table.
