@@ -273,8 +273,18 @@ void WikiAnnotator::Category(const Node &node,
 void WikiAnnotator::AddToDocument(Document *document) {
   // Add annotated spans to document.
   for (Annotation &a : annotations_) {
-    int begin = document->Locate(a.begin.AsInt());
-    int end = document->Locate(a.end.AsInt());
+    // Get character span for annotation.
+    int b = a.begin.AsInt();
+    int e = a.end.AsInt();
+
+    // Map character span to token span. Discard annotation if span is not
+    // aligned with tokens.
+    int begin = document->Locate(b);
+    int end = document->Locate(e);
+    if (begin == end) continue;
+    if (document->token(begin).begin() != b) continue;
+
+    // Add span to document and evoke frame annotation.
     Span *span = document->AddSpan(begin, end);
     if (!a.evoked.IsNil()) {
       span->Evoke(a.evoked);

@@ -83,8 +83,7 @@ class WikipediaLinkExtractor : public task::DocumentProcessor {
         span->AllEvoked(&evoked);
         for (Handle link : evoked) {
           link = store->Resolve(link);
-          if (!store->IsFrame(link)) continue;
-          if (store->GetFrame(link)->IsPublic()) {
+          if (store->IsPublic(link)) {
             (*links)[link]++;
             num_mention_links_->Increment();
             num_links_->Increment();
@@ -97,7 +96,7 @@ class WikipediaLinkExtractor : public task::DocumentProcessor {
     for (Handle link : document.themes()) {
       link = store->Resolve(link);
       if (store->IsFrame(link)) {
-        if (store->GetFrame(link)->IsPublic()) {
+        if (store->IsPublic(link)) {
           if (extract_mention_links_) {
             (*links)[link]++;
             num_theme_links_->Increment();

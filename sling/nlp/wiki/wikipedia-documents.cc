@@ -194,6 +194,7 @@ class WikipediaDocumentBuilder : public task::FrameProcessor,
     WikiAnnotator annotator(page.store(), this);
     annotator.set_templates(&templates_);
     WikiExtractor extractor(parser);
+    extractor.set_skip_tables(skip_tables_);
     extractor.Extract(&annotator);
 
     // Add basic document information.

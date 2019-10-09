@@ -405,6 +405,7 @@
 "cn span": {type: "tag" argnum: 1 argname: "text"}
 "lang": {type: "tag" argnum: 2 argname: "text"}
 "nts": {type: "tag" argnum: 1}
+"nihongo": {type: "tag" argnum: 1}
 
 "plainlist": {type: "tag" argnum: 1 open: "<div>" close: "</div>"}
 "flatlist": {type: "tag" argnum: 1 open: "<div>" close: "</div>"}

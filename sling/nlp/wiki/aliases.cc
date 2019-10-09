@@ -106,9 +106,6 @@ class AliasExtractor : public task::FrameProcessor {
       } else if (s.name == n_native_name_ || s.name == n_native_label_) {
         // Output native names/labels as native aliases.
         AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NATIVE);
-      } else if (s.name == n_demonym_) {
-        // Output demonyms as demonym aliases.
-        AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_DEMONYM);
       } else if (s.name == n_iso3166_country_code_2_ ||
                  s.name == n_iso3166_country_code_3_) {
         // Output country codes as alternative names.
@@ -123,7 +120,8 @@ class AliasExtractor : public task::FrameProcessor {
                  s.name == n_official_name_ ||
                  s.name == n_female_form_ ||
                  s.name == n_male_form_ ||
-                 s.name == n_unit_symbol_) {
+                 s.name == n_unit_symbol_ ||
+                 s.name == n_demonym_) {
         // Output names as alternative or foreign names.
         Handle lang = Handle::nil();
         if (store->IsFrame(s.value)) {
@@ -131,7 +129,9 @@ class AliasExtractor : public task::FrameProcessor {
           lang = f.GetHandle(n_lang_);
         }
         if (lang.IsNil() || lang == language_) {
-          AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_NAME);
+          AliasSource source = SRC_WIKIDATA_NAME;
+          if (s.name == n_demonym_) source = SRC_WIKIDATA_DEMONYM;
+          AddAlias(&a, store->Resolve(s.value), source);
         } else {
           AddAlias(&a, store->Resolve(s.value), SRC_WIKIDATA_FOREIGN);
         }
@@ -486,7 +486,7 @@ class AliasReducer : public task::Reducer {
     }
 
     // Pure anchors need high counts to be selected.
-    if (alias->sources & (WIKIPEDIA_ANCHOR  | WIKIPEDIA_LINK)) {
+    if (alias->sources & (WIKIPEDIA_ANCHOR | WIKIPEDIA_LINK)) {
       if (alias->count >= anchor_threshold_) return true;
     }
 
