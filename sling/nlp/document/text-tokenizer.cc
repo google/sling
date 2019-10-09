@@ -46,7 +46,7 @@ class TrieNode {
   const TrieNode *FindMatch(const TokenizerText &text, int start,
                             int *length) const;
 
-  // Finds the longest matching token by traverse the text in reverse.
+  // Finds the longest matching token by traversing the text in reverse order.
   const TrieNode *FindReverseMatch(const TokenizerText &text, int start,
                                    int limit, int *length) const;
 
@@ -888,6 +888,15 @@ void StandardTokenization::Init(CharacterFlags *char_flags) {
   AddTokenType("'tis", TOKEN_WORD | TOKEN_SPLIT | 2);
   AddTokenType("'twas", TOKEN_WORD | TOKEN_SPLIT | 2);
   AddTokenType("wanna", TOKEN_WORD | TOKEN_SPLIT | 3);
+
+  // Clitics splitting.
+  AddTokenType("d'", 0);
+  AddTokenType("l'", 0);
+  AddTokenType("all'", 0);
+  AddTokenType("dell'", 0);
+  AddTokenType("dall'", 0);
+  AddTokenType("nell'", 0);
+  AddTokenType("sull'", 0);
 
   // Breaking tag tokens.
   const char **tag = kBreakingTags;
