@@ -188,6 +188,17 @@ LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
     features.push_back(f);
   }
 
+  // Pad feature vector.
+  if (spec.feature_padding > 0) {
+    int n = 0;
+    for (auto *f : features) n += f->elements();
+    if (n % spec.feature_padding != 0) {
+      int padding = spec.feature_padding - n % spec.feature_padding;
+      auto *f = tf.Const(nullptr, DT_FLOAT, {1, padding});
+      features.push_back(f);
+    }
+  }
+
   // Concatenate feature embeddings.
   Variables vars;
   vars.fv = tf.Name(tf.Concat(features), "feature_vector");

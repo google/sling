@@ -106,6 +106,19 @@ cc_library(
 )
 
 cc_library(
+  name = "document-corpus",
+  srcs = ["document-corpus.cc"],
+  hdrs = ["document-corpus.h"],
+  deps = [
+    ":document",
+    "//sling/base",
+    "//sling/file:recordio",
+    "//sling/frame:serialization",
+    "//sling/frame:store",
+  ],
+)
+
+cc_library(
   name = "document-source",
   srcs = ["document-source.cc"],
   hdrs = ["document-source.h"],

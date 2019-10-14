@@ -39,7 +39,7 @@ string ParserState::DebugString() const {
              attention_.size(), "\n");
   for (int i = 0; i < kMaxAttention; ++i) {
     if (i == attention_.size()) break;
-    StrAppend(&s, "AttentionIndex: ", i, 
+    StrAppend(&s, "AttentionIndex: ", i,
               " FrameType:", store()->DebugString(type(i)), "\n");
   }
   if (attention_.size() > kMaxAttention) {
@@ -128,7 +128,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
         if (marks_.size() == 0) return false;
         begin = marks_.back();
         end = current_ + 1;
-      } 
+      }
 
       // Check that phrase is inside the input buffer.
       if (end > end_) return false;
@@ -244,6 +244,9 @@ void ParserState::Evoke(int length, Handle type) {
   Slot slot(Handle::isa(), type);
   Handle h = store()->AllocateFrame(&slot, &slot + 1);
 
+  // Add new frame to the attention buffer.
+  Add(h);
+
   // Get or create a new mention.
   int begin = current_;
   int end = current_ + length;
@@ -255,9 +258,6 @@ void ParserState::Evoke(int length, Handle type) {
   auto *span = document_->AddSpan(begin, end);
   DCHECK(span != nullptr) << begin << " " << end;
   span->Evoke(h);
-
-  // Add new frame to the attention buffer.
-  Add(h);
 }
 
 void ParserState::Refer(int length, int index) {
@@ -315,13 +315,13 @@ void ParserState::Elaborate(int frame, Handle role, Handle type) {
   Slot slot(Handle::isa(), type);
   Handle h = store()->AllocateFrame(&slot, &slot + 1);
 
+  // Add new frame to the attention buffer.
+  Add(h);
+
   // Add link to new frame from source frame.
   Frame source(store(), Attention(frame));
   source.Add(role, h);
   elaborate_.emplace_back(Attention(frame), type);
-
-  // Add new frame to the attention buffer.
-  Add(h);
 
   // Add new frame as a thematic frame to the document.
   document_->AddTheme(h);

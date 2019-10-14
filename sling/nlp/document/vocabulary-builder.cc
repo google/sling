@@ -34,13 +34,17 @@ class WordVocabularyMapper : public DocumentProcessor {
     // Initialize accumulator.
     accumulator_.Init(output(), 1 << 24);
 
-    // Get normalization flags.
+    // Get parameters.
     normalization_ = ParseNormalization(task->Get("normalization", ""));
+    task->Fetch("only_lowercase", &only_lowercase_);
   }
 
   void Process(Slice key, const Document &document) override {
     // Output normalize token words.
     for (const Token &token : document.tokens()) {
+      // Check for lowercase words.
+      if (only_lowercase_ && token.Form() != CASE_LOWER) continue;
+
       // Normalize token.
       string normalized;
       UTF8::Normalize(token.word(), normalization_, &normalized);
@@ -63,6 +67,9 @@ class WordVocabularyMapper : public DocumentProcessor {
 
   // Token normalization flags.
   Normalization normalization_;
+
+  // Only extract lowercase words.
+  bool only_lowercase_ = false;
 };
 
 REGISTER_TASK_PROCESSOR("word-vocabulary-mapper", WordVocabularyMapper);

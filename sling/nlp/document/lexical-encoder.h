@@ -54,6 +54,7 @@ class LexicalFeatures {
     int digit_dim = 4;                  // digit feature embedding dimensions
     string word_embeddings;             // file with pre-trained word embeddings
     bool train_word_embeddings = true;  // train word embeddings jointly
+    int feature_padding = 0;            // padding for lexical feature vector
   };
 
   // Feature output and gradient input for module.

@@ -203,6 +203,7 @@ void Parser::Parse(Document *document) const {
       state.Apply(action);
 
       // Update state.
+      if (steps_since_shift > 5) action.type = ParserAction::SHIFT;
       switch (action.type) {
         case ParserAction::SHIFT:
           steps_since_shift = 0;

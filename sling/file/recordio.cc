@@ -453,6 +453,7 @@ RecordDatabase::RecordDatabase(const string &filepattern,
     reader->Rewind();
     shards_.push_back(index);
   }
+  Forward();
 }
 
 RecordDatabase::RecordDatabase(const std::vector<string> &filenames,
@@ -463,12 +464,21 @@ RecordDatabase::RecordDatabase(const std::vector<string> &filenames,
     reader->Rewind();
     shards_.push_back(index);
   }
+  Forward();
 }
 
 RecordDatabase::~RecordDatabase() {
   for (auto *s : shards_) {
     delete s->reader();
     delete s;
+  }
+}
+
+void RecordDatabase::Forward() {
+  while (current_shard_ < shards_.size()) {
+    RecordReader *reader = shards_[current_shard_]->reader();
+    if (!reader->Done()) break;
+    current_shard_++;
   }
 }
 
@@ -486,12 +496,21 @@ bool RecordDatabase::Lookup(const Slice &key, Record *record) {
 }
 
 bool RecordDatabase::Next(Record *record) {
-  while (current_shard_ < shards_.size()) {
-    RecordReader *reader = shards_[current_shard_]->reader();
-    if (!reader->Done() && reader->Read(record)) return true;
-    current_shard_++;
+  CHECK(!Done());
+  RecordReader *reader = shards_[current_shard_]->reader();
+  bool ok = reader->Read(record);
+  Forward();
+  return ok;
+}
+
+Status RecordDatabase::Rewind() {
+  for (auto *shard : shards_) {
+    Status s = shard->reader()->Rewind();
+    if (!s.ok()) return s;
   }
-  return false;
+  current_shard_ = 0;
+  Forward();
+  return Status::OK;
 }
 
 RecordWriter::RecordWriter(File *file, const RecordFileOptions &options)

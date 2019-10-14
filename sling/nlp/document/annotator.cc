@@ -77,6 +77,9 @@ void DocumentAnnotation::ChannelCompleted(Channel *channel) {}
 void DocumentAnnotation::TaskCompleted(Task *task) {}
 
 void DocumentAnnotation::InitTaskFromSpec(const string &spec) {
+  // Ignore empty specification.
+  if (spec.empty()) return;
+
   // Parse specification.
   Store store;
   Handle n_annotator = store.Lookup("annotator");

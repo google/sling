@@ -284,6 +284,7 @@ class PhraseTableBuilder : public task::FrameProcessor {
         const EntityPhrase &e = phrase->entities[i];
         const Entity &entity = entity_table_[e.index];
         Handle item = commons_->Lookup(entity.id);
+        CHECK(!item.IsNil()) << entity.id;
         entity_item[i] = item;
         entity_index[item] = i;
       }

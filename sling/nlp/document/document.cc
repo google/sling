@@ -119,7 +119,16 @@ void Span::AllEvoked(Handles *evoked) const {
   }
 }
 
-bool Span::Evokes(Handle type) const {
+bool Span::Evokes(Handle frame) const {
+  Handle n_evokes = document_->names_->n_evokes.handle();
+  for (const Slot &slot : mention_) {
+    if (slot.name == n_evokes && slot.value == frame) return true;
+  }
+
+  return false;
+}
+
+bool Span::EvokesType(Handle type) const {
   Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
@@ -130,7 +139,7 @@ bool Span::Evokes(Handle type) const {
   return false;
 }
 
-bool Span::Evokes(const Name &type) const {
+bool Span::EvokesType(const Name &type) const {
   Handle n_evokes = document_->names_->n_evokes.handle();
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
@@ -548,7 +557,7 @@ int Document::Locate(int position) const {
     int mid = index + width;
     if (tokens_[mid].begin() < position) {
       index = mid + 1;
-      len -=  width + 1;
+      len -= width + 1;
     } else {
       len = width;
     }
