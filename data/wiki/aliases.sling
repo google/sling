@@ -147,10 +147,6 @@
     "affiliated with": blacklist
   }
 
-  ; party leader (Q1553195)
-  Q1553195: {
-    "leader": 2
-
   ; American literature (Q233762)
   Q233762: {
     "American writer": blacklist
