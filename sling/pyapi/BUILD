@@ -68,6 +68,7 @@ cc_library(
     "-Wno-invalid-offsetof",
     "-DPYVER=35"
   ],
+  alwayslink = 1,
 )
 
 cc_library(
