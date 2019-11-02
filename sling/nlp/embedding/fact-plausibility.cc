@@ -33,7 +33,7 @@ using namespace myelin;
 // Fact plausibility flow.
 struct FactPlausibilityFlow : public Flow {
   // Build fact plausibility model.
-  void Build(const Transformations &library, bool learn) {
+  void Build(bool learn) {
     scorer = AddFunction("scorer");
     FlowBuilder f(this, scorer);
     auto *embeddings =
@@ -50,7 +50,7 @@ struct FactPlausibilityFlow : public Flow {
 
     if (learn) {
       // Create gradient computations.
-      gscorer = Gradient(this, scorer, library);
+      gscorer = Gradient(this, scorer);
       d_logits = GradientVar(logits);
       primal = PrimalVar(scorer);
     } else {
@@ -167,11 +167,7 @@ class FactPlausibilityTrainer : public LearnerTask {
     store_.Freeze();
 
     // Run training.
-    LOG(INFO) << "Starting training";
     Train(task, &model);
-
-    // Output profile.
-    LogProfile(model);
 
     // Save final model.
     if (!model_filename_.empty()) {
@@ -470,7 +466,7 @@ class FactPlausibilityTrainer : public LearnerTask {
     flow->facts = fact_lexicon_.length();
     flow->dims = embedding_dims_;
     flow->max_features = max_features_;
-    flow->Build(*compiler_.library(), learn);
+    flow->Build(learn);
   }
 
   // Save trained model to file.

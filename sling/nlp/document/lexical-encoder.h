@@ -77,7 +77,6 @@ class LexicalFeatures {
   // Build flow for lexical feature extraction. The lexicon must be initialized
   // before building the flow.
   Variables Build(myelin::Flow *flow,
-                  const myelin::Library &library,
                   const Spec &spec,
                   bool learn);
 
@@ -197,7 +196,6 @@ class LexicalEncoder {
   // Build flow for lexical encoder. Returns the output variables from the
   // LSTMs.
   myelin::BiLSTM::Outputs Build(myelin::Flow *flow,
-                                const myelin::Library &library,
                                 const LexicalFeatures::Spec &spec,
                                 Vocabulary::Iterator *words,
                                 int dim, bool learn);

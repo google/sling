@@ -161,7 +161,7 @@ class AVX512FloatGenerator : public SIMDGenerator {
     masm_->kk().release(mask_);
   }
 
-  // Sixteen 32-bit floats per YMM register.
+  // Sixteen 32-bit floats per ZMM register.
   int VectorBytes() override { return 64; }
   int VectorSize() override { return 16; }
   int Alloc() override { return masm_->mm().alloc(true); }
@@ -925,7 +925,7 @@ class AVX512DoubleGenerator : public SIMDGenerator {
     masm_->kk().release(mask_);
   }
 
-  // Eight 64-bit floats per YMM register.
+  // Eight 64-bit floats per ZMM register.
   int VectorBytes() override { return 64; }
   int VectorSize() override { return 8; }
   int Alloc() override { return masm_->mm().alloc(true); }
@@ -1680,6 +1680,963 @@ class SSEScalarDoubleGenerator : public SIMDGenerator {
   }
 };
 
+// AVX512 32-bit integer SIMD generator using 512-bit ZMM registers.
+class AVX512Int32Generator : public SIMDGenerator {
+ public:
+  AVX512Int32Generator(MacroAssembler *masm, bool aligned)
+      : SIMDGenerator(masm, aligned) {
+    mask_ = masm->kk().alloc();
+  }
+  ~AVX512Int32Generator() override {
+    masm_->kk().release(mask_);
+  }
+
+  // Sixteen 32-bit integers per ZMM register.
+  int VectorBytes() override { return 64; }
+  int VectorSize() override { return 16; }
+  int Alloc() override { return masm_->mm().alloc(true); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa32(zmm(dst), zmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    if (aligned_) {
+      masm_->vmovdqa32(zmm(dst), src);
+    } else {
+      masm_->vmovdqu32(zmm(dst), src);
+    }
+  }
+
+  void Store(const Operand &dst, int src) override {
+    if (aligned_) {
+      masm_->vmovdqa32(dst, zmm(src));
+    } else {
+      masm_->vmovdqu32(dst, zmm(src));
+    }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vpbroadcastd(zmm(dst), zmm(src));
+  }
+
+  void Broadcast(int dst, const Operand &src) override {
+    masm_->vpbroadcastd(zmm(dst), src);
+  }
+
+  void Zero(int r) override {
+    masm_->vpxord(zmm(r), zmm(r), zmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddd(zmm(dst), zmm(src1), zmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddd(zmm(dst), zmm(src1), src2);
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmulld(zmm(dst), zmm(src1), src2);
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      ZMMRegister acc = masm_->mm().allocz();
+      masm_->vpmulld(acc, zmm(src1), src2);
+      masm_->vpaddd(zmm(dst), zmm(dst), acc);
+      masm_->mm().release(acc);
+    } else {
+      masm_->vpmulld(zmm(src1), zmm(src1), src2);
+      masm_->vpaddd(zmm(dst), zmm(dst), zmm(src1));
+    }
+  }
+
+  void Sum(int r) override {
+    ZMMRegister sum = ZMMRegister::from_code(r);
+    ZMMRegister acc = masm_->mm().allocz();
+    masm_->Reduce(REDUCE_ADD, DT_INT32, sum, acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Broadcast(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, zmm(acc), zmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT32, zmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) override {
+    ZMMRegister aux = masm_->mm().allocz();
+    masm_->Reduce(op, DT_INT32, zmm(r), aux);
+    masm_->mm().release(aux);
+  }
+
+  bool SupportsMasking() override {
+    return true;
+  }
+
+  void SetMask(int bits) override {
+    masm_->LoadMask(bits, mask_);
+  }
+
+  void MaskedLoad(int dst, const jit::Operand &src) override {
+    if (aligned_) {
+      masm_->vmovdqa32(zmm(dst), src, Mask(mask_, zeroing));
+    } else {
+      masm_->vmovdqu32(zmm(dst), src, Mask(mask_, zeroing));
+    }
+  }
+
+  void MaskedStore(const jit::Operand &dst, int src) override  {
+    if (aligned_) {
+      masm_->vmovdqa32(dst, zmm(src), Mask(mask_, merging));
+    } else {
+      masm_->vmovdqu32(dst, zmm(src), Mask(mask_, merging));
+    }
+  }
+
+  void MaskedAdd(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddd(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
+  }
+
+  void MaskedMul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmulld(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
+  }
+
+  void MaskedMulAdd(int dst, int src1, const jit::Operand &src2) override {
+    ZMMRegister acc = masm_->mm().allocz();
+    masm_->vpmulld(acc, zmm(src1), src2, Mask(mask_, zeroing));
+    masm_->vpaddd(zmm(dst), zmm(dst), acc);
+    masm_->mm().release(acc);
+  }
+
+  void MaskedAccumulate(Reduction op, int acc,
+                        const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT32, zmm(acc), src, mask_);
+  }
+
+ private:
+   OpmaskRegister mask_;
+};
+
+// AVX256 32-bit integer SIMD generator using 256-bit YMM registers.
+class AVX256Int32Generator : public SIMDGenerator {
+ public:
+  AVX256Int32Generator(MacroAssembler *masm, bool aligned)
+      : SIMDGenerator(masm, aligned) {}
+
+  // Eight 32-bit integers per YMM register.
+  int VectorBytes() override { return 32; }
+  int VectorSize() override { return 8; }
+  int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa(ymm(dst), ymm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    if (aligned_) {
+      masm_->vmovdqa(ymm(dst), src);
+    } else {
+      masm_->vmovdqu(ymm(dst), src);
+    }
+  }
+
+  void Store(const Operand &dst, int src) override {
+    if (aligned_) {
+      masm_->vmovdqa(dst, ymm(src));
+    } else {
+      masm_->vmovdqu(dst, ymm(src));
+    }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vpbroadcastd(ymm(dst), ymm(src));
+  }
+
+  void Broadcast(int dst, const Operand &src) override {
+    masm_->vpbroadcastd(ymm(dst), src);
+  }
+
+  void Zero(int r) override {
+    masm_->vpxor(ymm(r), ymm(r), ymm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddd(ymm(dst), ymm(src1), ymm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddd(ymm(dst), ymm(src1), src2);
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmulld(ymm(dst), ymm(src1), src2);
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      YMMRegister acc = masm_->mm().allocy();
+      masm_->vpmulld(acc, ymm(src1), src2);
+      masm_->vpaddd(ymm(dst), ymm(dst), acc);
+      masm_->mm().release(acc);
+    } else {
+      masm_->vpmulld(ymm(src1), ymm(src1), src2);
+      masm_->vpaddd(ymm(dst), ymm(dst), ymm(src1));
+    }
+  }
+
+  void Sum(int r) override {
+    YMMRegister sum = YMMRegister::from_code(r);
+    YMMRegister acc = masm_->mm().allocy();
+    masm_->Reduce(REDUCE_ADD, DT_INT32, sum, acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Broadcast(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, ymm(acc), ymm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT32, ymm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) override {
+    YMMRegister aux = masm_->mm().allocy();
+    masm_->Reduce(op, DT_INT32, ymm(r), aux);
+    masm_->mm().release(aux);
+  }
+};
+
+// AVX128 32-bit integer SIMD generator using 128-bit XMM registers.
+class AVX128Int32Generator : public SIMDGenerator {
+ public:
+  AVX128Int32Generator(MacroAssembler *masm, bool aligned)
+      : SIMDGenerator(masm, aligned) {}
+
+  // Four 32-bit integers per XMM register.
+  int VectorBytes() override { return 16; }
+  int VectorSize() override { return 4; }
+  int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa(xmm(dst), xmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    if (aligned_) {
+      masm_->vmovdqa(xmm(dst), src);
+    } else {
+      masm_->vmovdqu(xmm(dst), src);
+    }
+  }
+
+  void Store(const Operand &dst, int src) override {
+    if (aligned_) {
+      masm_->vmovdqa(dst, xmm(src));
+    } else {
+      masm_->vmovdqu(dst, xmm(src));
+    }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vpbroadcastd(xmm(dst), xmm(src));
+  }
+
+  void Broadcast(int dst, const Operand &src) override {
+    masm_->vpbroadcastd(xmm(dst), src);
+  }
+
+  void Zero(int r) override {
+    masm_->vpxor(xmm(r), xmm(r), xmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddd(xmm(dst), xmm(src1), xmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddd(xmm(dst), xmm(src1), src2);
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmulld(xmm(dst), xmm(src1), src2);
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      XMMRegister acc = masm_->mm().allocx();
+      masm_->vpmulld(acc, xmm(src1), src2);
+      masm_->vpaddd(xmm(dst), xmm(dst), acc);
+      masm_->mm().release(acc);
+    } else {
+      masm_->vpmulld(xmm(src1), xmm(src1), src2);
+      masm_->vpaddd(xmm(dst), xmm(dst), xmm(src1));
+    }
+  }
+
+  void Sum(int r) override {
+    XMMRegister sum = XMMRegister::from_code(r);
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->Reduce(REDUCE_ADD, DT_INT32, sum, acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Broadcast(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, xmm(acc), xmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT32, xmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) override {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->Reduce(op, DT_INT32, xmm(r), aux);
+    masm_->mm().release(aux);
+  }
+};
+
+// SSE128 32-bit integer SIMD generator using 128-bit XMM registers.
+class SSE128Int32Generator : public SIMDGenerator {
+ public:
+  SSE128Int32Generator(MacroAssembler *masm, bool aligned)
+      : SIMDGenerator(masm, aligned) {}
+
+  // Four 32-bit integers per XMM register.
+  int VectorBytes() override { return 16; }
+  int VectorSize() override { return 4; }
+  int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->movdqa(xmm(dst), xmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    if (aligned_) {
+      masm_->movdqa(xmm(dst), src);
+    } else {
+      masm_->movdqu(xmm(dst), src);
+    }
+  }
+
+  void Store(const Operand &dst, int src) override {
+    if (aligned_) {
+      masm_->movdqa(dst, xmm(src));
+    } else {
+      masm_->movdqu(dst, xmm(src));
+    }
+  }
+
+  void Broadcast(int dst, int src) override {
+    if (dst != src) masm_->movdqa(xmm(dst), xmm(src));
+    masm_->shufps(xmm(dst), xmm(dst), 0);
+  }
+
+  void Broadcast(int dst, const Operand &src) override {
+    masm_->movd(xmm(dst), src);
+    masm_->shufps(xmm(dst), xmm(dst), 0);
+  }
+
+  void Zero(int r) override {
+    masm_->pxor(xmm(r), xmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    if (dst != src1) masm_->movdqa(xmm(dst), xmm(src1));
+    masm_->paddd(xmm(dst), xmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    if (dst != src1) masm_->movdqa(xmm(dst), xmm(src1));
+    if (aligned_) {
+      masm_->paddd(xmm(dst), src2);
+    } else {
+      XMMRegister mem = masm_->mm().allocx();
+      masm_->movdqu(mem, src2);
+      masm_->paddd(xmm(dst), mem);
+      masm_->mm().release(mem);
+    }
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    if (dst != src1) masm_->movdqa(xmm(dst), xmm(src1));
+    if (aligned_) {
+      masm_->pmulld(xmm(dst), src2);
+    } else {
+      XMMRegister mem = masm_->mm().allocx();
+      masm_->movdqu(mem, src2);
+      masm_->pmulld(xmm(dst), mem);
+      masm_->mm().release(mem);
+    }
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      if (aligned_) {
+        XMMRegister acc = masm_->mm().allocx();
+        masm_->movdqa(acc, xmm(src1));
+        masm_->pmulld(acc, src2);
+        masm_->paddd(xmm(dst), acc);
+        masm_->mm().release(acc);
+      } else {
+        XMMRegister acc = masm_->mm().allocx();
+        XMMRegister mem = masm_->mm().allocx();
+        masm_->movdqu(acc, xmm(src1));
+        masm_->movdqu(mem, src2);
+        masm_->pmulld(acc, mem);
+        masm_->paddd(xmm(dst), acc);
+        masm_->mm().release(acc);
+        masm_->mm().release(mem);
+      }
+    } else {
+      if (aligned_) {
+        masm_->pmulld(xmm(src1), src2);
+        masm_->paddd(xmm(dst), xmm(src1));
+      } else {
+        XMMRegister mem = masm_->mm().allocx();
+        masm_->movdqu(mem, src2);
+        masm_->pmulld(xmm(src1), mem);
+        masm_->paddd(xmm(dst), xmm(src1));
+        masm_->mm().release(mem);
+      }
+    }
+  }
+
+  void Sum(int r) override {
+    XMMRegister sum = XMMRegister::from_code(r);
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->Reduce(REDUCE_ADD, DT_INT32, sum, acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Broadcast(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, xmm(acc), xmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    if (aligned_) {
+      masm_->Accumulate(op, DT_INT32, xmm(acc), src);
+    } else {
+      XMMRegister mem = masm_->mm().allocx();
+      masm_->movdqu(mem, src);
+      masm_->Accumulate(op, DT_INT32, xmm(acc), mem);
+      masm_->mm().release(mem);
+    }
+  }
+
+  void Reduce(Reduction op, int r) override {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->Reduce(op, DT_INT32, xmm(r), aux);
+    masm_->mm().release(aux);
+  }
+};
+
+// AVX512 scalar 32-bit integer SIMD generator.
+class AVX512ScalarInt32Generator : public SIMDGenerator {
+ public:
+  AVX512ScalarInt32Generator(MacroAssembler *masm)
+      : SIMDGenerator(masm, false) {
+    mask_ = masm->kk().alloc();
+  }
+  ~AVX512ScalarInt32Generator() override {
+    masm_->kk().release(mask_);
+  }
+
+  // Only uses the lower 32-bit integer of ZMM register.
+  int VectorBytes() override { return sizeof(int32); }
+  int VectorSize() override { return 1; }
+  int Alloc() override { return masm_->mm().alloc(true); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa32(zmm(dst), zmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    masm_->vmovdqu32(zmm(dst), src, Mask(mask_, zeroing));
+  }
+
+  void Store(const Operand &dst, int src) override {
+    masm_->vmovdqu32(dst, zmm(src), Mask(mask_, merging));
+  }
+
+  void Zero(int r) override {
+    masm_->vpxord(zmm(r), zmm(r), zmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddd(zmm(dst), zmm(src1), zmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddd(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmulld(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      ZMMRegister acc = masm_->mm().allocz();
+      masm_->vpmulld(acc, zmm(src1), src2, Mask(mask_, zeroing));
+      masm_->vpaddd(zmm(dst), zmm(dst), acc);
+      masm_->mm().release(acc);
+    } else {
+      masm_->vpmulld(zmm(src1), zmm(src1), src2, Mask(mask_, zeroing));
+      masm_->vpaddd(zmm(dst), zmm(dst), zmm(src1));
+    }
+  }
+
+  void SetMask(int bits) override {
+    masm_->LoadMask(bits, mask_);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, zmm(acc), zmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT32, zmm(acc), src, mask_);
+  }
+
+ private:
+  OpmaskRegister mask_;
+};
+
+// AVX scalar 32-bit integer SIMD generator.
+class AVXScalarInt32Generator : public SIMDGenerator {
+ public:
+  AVXScalarInt32Generator(MacroAssembler *masm)
+      : SIMDGenerator(masm, false) {}
+
+  // Only uses the lower 32-bit integer of XMM register.
+  int VectorBytes() override { return sizeof(int32); }
+  int VectorSize() override { return 1; }
+  int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa(xmm(dst), xmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    masm_->vmovd(xmm(dst), src);
+  }
+
+  void Store(const Operand &dst, int src) override {
+    masm_->vmovd(dst, xmm(src));
+  }
+
+  void Zero(int r) override {
+    masm_->vpxor(xmm(r), xmm(r), xmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddd(xmm(dst), xmm(src1), xmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->vmovd(acc, src2);
+    masm_->vpaddd(xmm(dst), xmm(src1), acc);
+    masm_->mm().release(acc);
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->vmovd(acc, src2);
+    masm_->vpmulld(xmm(dst), xmm(src1), acc);
+    masm_->mm().release(acc);
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->vmovd(acc, src2);
+    masm_->vpmulld(acc, acc, xmm(src1));
+    masm_->vpaddd(xmm(dst), xmm(dst), acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, xmm(acc), xmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->vmovd(aux, src);
+    masm_->Accumulate(op, DT_INT32, xmm(acc), aux);
+    masm_->mm().release(aux);
+  }
+};
+
+// SSE scalar 32-bit integer SIMD generator.
+class SSEScalarInt32Generator : public SIMDGenerator {
+ public:
+  SSEScalarInt32Generator(MacroAssembler *masm)
+      : SIMDGenerator(masm, false) {}
+
+  // Only uses the lower 32-bit integer of XMM register.
+  int VectorBytes() override { return sizeof(int32); }
+  int VectorSize() override { return 1; }
+  int Alloc() override { return masm_->mm().alloc(false); }
+
+  void Move(int dst, int src) override {
+    masm_->movdqa(xmm(dst), xmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    masm_->movd(xmm(dst), src);
+  }
+
+  void Store(const Operand &dst, int src) override {
+    masm_->movd(dst, xmm(src));
+  }
+
+  void Zero(int r) override {
+    masm_->pxor(xmm(r), xmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    if (dst != src1) masm_->movdqa(xmm(dst), xmm(src1));
+    masm_->paddd(xmm(dst), xmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    if (dst != src1) {
+      masm_->movd(xmm(dst), src2);
+      masm_->paddd(xmm(dst), xmm(src1));
+    } else {
+      XMMRegister acc = masm_->mm().allocx();
+      masm_->movd(acc, src2);
+      masm_->paddd(xmm(dst), acc);
+      masm_->mm().release(acc);
+    }
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    if (dst != src1) masm_->movdqa(xmm(dst), xmm(src1));
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->movd(acc, src2);
+    masm_->pmulld(xmm(dst), acc);
+    masm_->mm().release(acc);
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    XMMRegister acc = masm_->mm().allocx();
+    masm_->movd(acc, src2);
+    masm_->pmulld(acc, xmm(src1));
+    masm_->paddd(xmm(dst), acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT32);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT32, xmm(acc), xmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    XMMRegister aux = masm_->mm().allocx();
+    masm_->movd(aux, src);
+    masm_->Accumulate(op, DT_INT32, xmm(acc), aux);
+    masm_->mm().release(aux);
+  }
+};
+
+// AVX512 64-bit integer SIMD generator using 512-bit ZMM registers.
+class AVX512Int64Generator : public SIMDGenerator {
+ public:
+  AVX512Int64Generator(MacroAssembler *masm, bool aligned)
+      : SIMDGenerator(masm, aligned) {
+    mask_ = masm->kk().alloc();
+  }
+  ~AVX512Int64Generator() override {
+    masm_->kk().release(mask_);
+  }
+
+  // Eight 64-bit integers per ZMM register.
+  int VectorBytes() override { return 64; }
+  int VectorSize() override { return 8; }
+  int Alloc() override { return masm_->mm().alloc(true); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa64(zmm(dst), zmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    if (aligned_) {
+      masm_->vmovdqa64(zmm(dst), src);
+    } else {
+      masm_->vmovdqu64(zmm(dst), src);
+    }
+  }
+
+  void Store(const Operand &dst, int src) override {
+    if (aligned_) {
+      masm_->vmovdqa64(dst, zmm(src));
+    } else {
+      masm_->vmovdqu64(dst, zmm(src));
+    }
+  }
+
+  void Broadcast(int dst, int src) override {
+    masm_->vpbroadcastq(zmm(dst), zmm(src));
+  }
+
+  void Broadcast(int dst, const Operand &src) override {
+    masm_->vpbroadcastq(zmm(dst), src);
+  }
+
+  void Zero(int r) override {
+    masm_->vpxorq(zmm(r), zmm(r), zmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddq(zmm(dst), zmm(src1), zmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddq(zmm(dst), zmm(src1), src2);
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmullq(zmm(dst), zmm(src1), src2);
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      ZMMRegister acc = masm_->mm().allocz();
+      masm_->vpmullq(acc, zmm(src1), src2);
+      masm_->vpaddq(zmm(dst), zmm(dst), acc);
+      masm_->mm().release(acc);
+    } else {
+      masm_->vpmullq(zmm(src1), zmm(src1), src2);
+      masm_->vpaddq(zmm(dst), zmm(dst), zmm(src1));
+    }
+  }
+
+  void Sum(int r) override {
+    ZMMRegister sum = ZMMRegister::from_code(r);
+    ZMMRegister acc = masm_->mm().allocz();
+    masm_->Reduce(REDUCE_ADD, DT_INT64, sum, acc);
+    masm_->mm().release(acc);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT64);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Broadcast(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT64, zmm(acc), zmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT64, zmm(acc), src);
+  }
+
+  void Reduce(Reduction op, int r) override {
+    ZMMRegister aux = masm_->mm().allocz();
+    masm_->Reduce(op, DT_INT64, zmm(r), aux);
+    masm_->mm().release(aux);
+  }
+
+  bool SupportsMasking() override {
+    return true;
+  }
+
+  void SetMask(int bits) override {
+    masm_->LoadMask(bits, mask_);
+  }
+
+  void MaskedLoad(int dst, const jit::Operand &src) override {
+    if (aligned_) {
+      masm_->vmovdqa64(zmm(dst), src, Mask(mask_, zeroing));
+    } else {
+      masm_->vmovdqu64(zmm(dst), src, Mask(mask_, zeroing));
+    }
+  }
+
+  void MaskedStore(const jit::Operand &dst, int src) override  {
+    if (aligned_) {
+      masm_->vmovdqa64(dst, zmm(src), Mask(mask_, merging));
+    } else {
+      masm_->vmovdqu64(dst, zmm(src), Mask(mask_, merging));
+    }
+  }
+
+  void MaskedAdd(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddq(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
+  }
+
+  void MaskedMul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmullq(zmm(dst), zmm(src1), src2, Mask(mask_, merging));
+  }
+
+  void MaskedMulAdd(int dst, int src1, const jit::Operand &src2) override {
+    ZMMRegister acc = masm_->mm().allocz();
+    masm_->vpmullq(acc, zmm(src1), src2, Mask(mask_, zeroing));
+    masm_->vpaddq(zmm(dst), zmm(dst), acc);
+    masm_->mm().release(acc);
+  }
+
+  void MaskedAccumulate(Reduction op, int acc,
+                        const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT64, zmm(acc), src, mask_);
+  }
+
+ private:
+   OpmaskRegister mask_;
+};
+
+// AVX512 scalar 64-bit integer SIMD generator.
+class AVX512ScalarInt64Generator : public SIMDGenerator {
+ public:
+  AVX512ScalarInt64Generator(MacroAssembler *masm)
+      : SIMDGenerator(masm, false) {
+    mask_ = masm->kk().alloc();
+  }
+  ~AVX512ScalarInt64Generator() override {
+    masm_->kk().release(mask_);
+  }
+
+  // Only uses the lower 64-bit integer of ZMM register.
+  int VectorBytes() override { return sizeof(int64); }
+  int VectorSize() override { return 1; }
+  int Alloc() override { return masm_->mm().alloc(true); }
+
+  void Move(int dst, int src) override {
+    masm_->vmovdqa64(zmm(dst), zmm(src));
+  }
+
+  void Load(int dst, const Operand &src) override {
+    masm_->vmovdqu64(zmm(dst), src, Mask(mask_, zeroing));
+  }
+
+  void Store(const Operand &dst, int src) override {
+    masm_->vmovdqu64(dst, zmm(src), Mask(mask_, merging));
+  }
+
+  void Zero(int r) override {
+    masm_->vpxorq(zmm(r), zmm(r), zmm(r));
+  }
+
+  void Add(int dst, int src1, int src2) override {
+    masm_->vpaddq(zmm(dst), zmm(src1), zmm(src2));
+  }
+
+  void Add(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpaddq(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+  }
+
+  void Mul(int dst, int src1, const jit::Operand &src2) override {
+    masm_->vpmullq(zmm(dst), zmm(src1), src2, Mask(mask_, zeroing));
+  }
+
+  void MulAdd(int dst, int src1, const Operand &src2, bool retain) override {
+    if (retain) {
+      ZMMRegister acc = masm_->mm().allocz();
+      masm_->vpmullq(acc, zmm(src1), src2, Mask(mask_, zeroing));
+      masm_->vpaddq(zmm(dst), zmm(dst), acc);
+      masm_->mm().release(acc);
+    } else {
+      masm_->vpmullq(zmm(src1), zmm(src1), src2, Mask(mask_, zeroing));
+      masm_->vpaddq(zmm(dst), zmm(dst), zmm(src1));
+    }
+  }
+
+  void SetMask(int bits) override {
+    masm_->LoadMask(bits, mask_);
+  }
+
+  void LoadNeutral(Reduction op, int r) override {
+    StaticData *neutral = NeutralElement(op, DT_INT64);
+    if (neutral == nullptr) {
+      Zero(r);
+    } else {
+      Load(r, neutral->address());
+    }
+  }
+
+  void Accumulate(Reduction op, int acc, int src) override {
+    masm_->Accumulate(op, DT_INT64, zmm(acc), zmm(src));
+  }
+
+  void Accumulate(Reduction op, int acc, const jit::Operand &src) override {
+    masm_->Accumulate(op, DT_INT64, zmm(acc), src, mask_);
+  }
+
+ private:
+  OpmaskRegister mask_;
+};
+
 // Scalar integer SIMD generator using regular registers.
 class ScalarIntSIMDGenerator : public SIMDGenerator {
  public:
@@ -1855,19 +2812,41 @@ bool SIMDAssembler::Supports(Type type) {
 }
 
 int SIMDAssembler::RegisterUsage(Type type) {
-  if (type == DT_INT8 || type == DT_INT16 ||
-      type == DT_INT32 || type == DT_INT64) {
-    return 1;
-  } else {
-    return 0;
+  switch (type) {
+    case DT_INT8:
+    case DT_INT16:
+      return 1;
+    case DT_INT32:
+      if (CPU::Enabled(AVX512F)) return 0;
+      if (CPU::Enabled(AVX2)) return 0;
+      if (CPU::Enabled(SSE4_1) && CPU::Enabled(SSSE3)) return 0;
+      return 1;
+    case DT_INT64:
+      if (CPU::Enabled(AVX512F)) return 0;
+      return 1;
+    default:
+      return 0;
   }
 }
 
 int SIMDAssembler::VectorBytes(Type type) {
-  if (type == DT_FLOAT || type == DT_DOUBLE) {
-    if (CPU::Enabled(AVX512F)) return 64;
-    if (CPU::Enabled(AVX)) return 32;
-    if (CPU::Enabled(SSE)) return 16;
+  switch (type) {
+    case DT_FLOAT:
+    case DT_DOUBLE:
+      if (CPU::Enabled(AVX512F)) return 64;
+      if (CPU::Enabled(AVX)) return 32;
+      if (CPU::Enabled(SSE)) return 16;
+      break;
+    case DT_INT32:
+      if (CPU::Enabled(AVX512F)) return 64;
+      if (CPU::Enabled(AVX2)) return 32;
+      if (CPU::Enabled(SSE4_1) && CPU::Enabled(SSSE3)) return 16;
+      break;
+    case DT_INT64:
+      if (CPU::Enabled(AVX512F)) return 64;
+      break;
+    default:
+      break;
   }
   return TypeTraits::of(type).size();
 }
@@ -1922,13 +2901,34 @@ SIMDAssembler::SIMDAssembler(MacroAssembler *masm, Type type, bool aligned) {
       break;
 
     case DT_INT32:
-      name_ = "Int32";
-      add(new ScalarIntSIMDGenerator(masm, DT_INT32));
+      if (masm->Enabled(AVX512F)) {
+        name_ = "AVX512Int32";
+        add(new AVX512Int32Generator(masm, aligned));
+        add(new AVX512ScalarInt32Generator(masm));
+      } else if (masm->Enabled(AVX2)) {
+        name_ = "AVX2Int32";
+        add(new AVX256Int32Generator(masm, aligned));
+        add(new AVX128Int32Generator(masm, aligned));
+        add(new AVXScalarInt32Generator(masm));
+      } else if (CPU::Enabled(SSE4_1) && CPU::Enabled(SSSE3)) {
+        name_ = "SSEInt32";
+        add(new SSE128Int32Generator(masm, aligned));
+        add(new SSEScalarInt32Generator(masm));
+      } else {
+        name_ = "Int32";
+        add(new ScalarIntSIMDGenerator(masm, DT_INT32));
+      }
       break;
 
     case DT_INT64:
-      name_ = "Int64";
-      add(new ScalarIntSIMDGenerator(masm, DT_INT64));
+      if (masm->Enabled(AVX512F)) {
+        name_ = "AVX512Int64";
+        add(new AVX512Int64Generator(masm, aligned));
+        add(new AVX512ScalarInt64Generator(masm));
+      } else {
+        name_ = "Int64";
+        add(new ScalarIntSIMDGenerator(masm, DT_INT64));
+      }
       break;
 
     default:

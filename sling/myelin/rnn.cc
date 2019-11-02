@@ -42,8 +42,9 @@ void BiLSTM::LSTM::Initialize(const Network &net, const string &name) {
 }
 
 // Build flows for LSTMs.
-BiLSTM::Outputs BiLSTM::Build(Flow *flow, const Library &library, int dim,
-                              Flow::Variable *input, Flow::Variable *dinput) {
+BiLSTM::Outputs BiLSTM::Build(Flow *flow, int dim,
+                              Flow::Variable *input,
+                              Flow::Variable *dinput) {
   Outputs out;
 
   // Build left-to-right LSTM flow.
@@ -61,8 +62,8 @@ BiLSTM::Outputs BiLSTM::Build(Flow *flow, const Library &library, int dim,
 
   // Build gradients for learning.
   if (dinput != nullptr) {
-    Gradient(flow, lr.func(), library);
-    Gradient(flow, rl.func(), library);
+    Gradient(flow, lr.func());
+    Gradient(flow, rl.func());
     out.dlr = flow->GradientVar(lr_input);
     out.drl = flow->GradientVar(rl_input);
     flow->Connect({dinput, out.dlr, out.drl});

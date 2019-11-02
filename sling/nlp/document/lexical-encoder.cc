@@ -125,7 +125,6 @@ void LexicalFeatures::InitializeLexicon(Vocabulary::Iterator *words,
 }
 
 LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
-                                                  const Library &library,
                                                   const Spec &spec,
                                                   bool learn) {
   // Build function for feature extraction and mapping.
@@ -206,7 +205,7 @@ LexicalFeatures::Variables LexicalFeatures::Build(Flow *flow,
 
   // Build gradient function for feature extractor.
   if (learn) {
-    Gradient(flow, tf.func(), library);
+    Gradient(flow, tf.func());
     vars.dfv = flow->GradientVar(vars.fv);
   } else {
     vars.dfv = nullptr;
@@ -458,15 +457,14 @@ void LexicalFeatureLearner::Backpropagate(Channel *dfv) {
 }
 
 BiLSTM::Outputs LexicalEncoder::Build(Flow *flow,
-                                      const Library &library,
                                       const LexicalFeatures::Spec &spec,
                                       Vocabulary::Iterator *words,
                                       int dim, bool learn) {
   if (words != nullptr) {
     lex_.InitializeLexicon(words, spec.lexicon);
   }
-  auto lexvars = lex_.Build(flow, library, spec, learn);
-  return bilstm_.Build(flow, library, dim, lexvars.fv, lexvars.dfv);
+  auto lexvars = lex_.Build(flow, spec, learn);
+  return bilstm_.Build(flow, dim, lexvars.fv, lexvars.dfv);
 }
 
 void LexicalEncoder::Initialize(const myelin::Network &net) {

@@ -15,6 +15,7 @@
 #ifndef SLING_MYELIN_GRADIENT_H_
 #define SLING_MYELIN_GRADIENT_H_
 
+#include <string>
 #include <vector>
 #include <unordered_map>
 
@@ -76,13 +77,21 @@ class Gradients : public FlowBuilder {
   std::unordered_map<Flow::Variable *, Flow::Variable *> refs_;
 };
 
+// Gradient function for differentiation of ops.
+typedef void (GradientFunc)(Flow::Operation *op, Gradients *g);
+typedef std::unordered_map<string, GradientFunc *> GradientFuncs;
+
+// Register gradient function.
+void RegisterGradient(const string &op, GradientFunc *func);
+
 // Build gradient for function.
 Flow::Function *Gradient(Flow *flow,
                          Flow::Function *func,
-                         const Transformations &library);
+                         const GradientFuncs &funcs);
+Flow::Function *Gradient(Flow *flow, Flow::Function *func);
 
 }  // namespace myelin
 }  // namespace sling
 
-#endif  // SLING_MYELIN_BUILDER_H_
+#endif  // SLING_MYELIN_GRADIENT_H_
 

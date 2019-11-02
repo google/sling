@@ -80,7 +80,7 @@ void MikolovFlow::BuildLayer0Back() {
   tf.AssignAddScatter(W0, tf.Ref(l0b_l0, fv), tf.Ref(l0b_l1, error));
 }
 
-void DualEncoderFlow::Build(const Transformations &library) {
+void DualEncoderFlow::Build() {
   // Create left and right encoders.
   left.name = name + "/left";
   BuildEncoder(&left);
@@ -97,9 +97,9 @@ void DualEncoderFlow::Build(const Transformations &library) {
   sim_cosine = tf.Name(tf.MatMul(sim_left, tf.Transpose(sim_right)), "cosine");
 
   // Create gradient computations.
-  left.backward = Gradient(this, left.forward, library);
-  right.backward = Gradient(this, right.forward, library);
-  gsim = Gradient(this, sim, library);
+  left.backward = Gradient(this, left.forward);
+  right.backward = Gradient(this, right.forward);
+  gsim = Gradient(this, sim);
 
   gsim_d_cosine = GradientVar(sim_cosine);
   gsim_d_left = GradientVar(sim_left);

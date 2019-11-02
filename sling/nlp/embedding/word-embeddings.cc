@@ -22,6 +22,7 @@
 #include "sling/frame/serialization.h"
 #include "sling/myelin/builder.h"
 #include "sling/myelin/compiler.h"
+#include "sling/myelin/profile.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/embedding/embedding-model.h"
 #include "sling/task/process.h"

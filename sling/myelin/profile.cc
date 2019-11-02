@@ -472,6 +472,29 @@ string DataProfile::AsSVG() {
   return svg;
 }
 
+void LogProfile(const Network &net) {
+  if (net.options().global_profiler) {
+    LOG(INFO) << "Profiling report:\n" << ProfileReport(net);
+  }
+}
+
+string ProfileReport(const Network &net) {
+  string report;
+  if (net.options().global_profiler) {
+    ProfileOverview overview;
+    for (const Cell *cell : net.cells()) {
+      Profile profile(cell->profile_summary());
+      report.append(profile.ASCIIReport());
+      report.append("\n");
+      overview.Add(profile);
+    }
+    report.append("Summary:\n");
+    report.append(overview.ASCIIReport());
+    report.append("\n");
+  }
+  return report;
+}
+
 }  // namespace myelin
 }  // namespace sling
 

@@ -14,6 +14,8 @@
 
 #include "sling/myelin/kernel/tensorflow.h"
 
+#include <mutex>
+
 #include "sling/myelin/compute.h"
 #include "sling/myelin/kernel/arithmetic.h"
 #include "sling/myelin/kernel/avx.h"
@@ -25,7 +27,9 @@
 namespace sling {
 namespace myelin {
 
-// Register Tensorflow library.
+static std::once_flag gradients_initialized;
+
+// Register Tensorflow ops.
 void RegisterTensorflowLibrary(Library *library) {
   RegisterArithmeticTransforms(library);
   RegisterGenericLibrary(library);
@@ -34,7 +38,8 @@ void RegisterTensorflowLibrary(Library *library) {
   RegisterArithmeticLibrary(library);
   RegisterPrecomputeLibrary(library);
   RegisterGenericTransforms(library);
-  RegisterStandardGradients(library);
+
+  std::call_once(gradients_initialized, RegisterStandardGradients);
 }
 
 }  // namespace myelin

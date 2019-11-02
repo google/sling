@@ -39,6 +39,7 @@
 #include "sling/frame/object.h"
 #include "sling/frame/serialization.h"
 #include "sling/myelin/compiler.h"
+#include "sling/myelin/profile.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-source.h"
 #include "sling/nlp/document/document-tokenizer.h"

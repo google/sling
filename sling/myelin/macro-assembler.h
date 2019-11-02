@@ -158,6 +158,7 @@ class SIMDRegisters {
   SIMDRegisters(const SIMDRegisters &mm) : used_regs_(mm.used_regs_) {}
   SIMDRegisters &operator=(const SIMDRegisters &mm) {
     used_regs_ = mm.used_regs_;
+    next_ = mm.next_;
     return *this;
   }
 
@@ -200,11 +201,14 @@ class SIMDRegisters {
   bool used(ZMMRegister r) { return used(r.code()); }
 
   // Reset allocated registers.
-  void reset() { used_regs_ = 0; }
+  void reset() { used_regs_ = 0; next_ = 0; }
 
  private:
   // Bit mask of registers that are in use.
   uint32 used_regs_;
+
+  // Next register to allocate in rotation.
+  int next_ = 0;
 };
 
 // Opmask register allocation.

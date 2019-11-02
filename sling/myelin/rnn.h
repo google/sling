@@ -45,8 +45,9 @@ class BiLSTM {
   BiLSTM(const string &name = "lstm") : name_(name) {}
 
   // Build flows for LSTMs.
-  Outputs Build(Flow *flow, const Library &library, int dim,
-                Flow::Variable *input, Flow::Variable *dinput = nullptr);
+  Outputs Build(Flow *flow, int dim,
+                Flow::Variable *input,
+                Flow::Variable *dinput = nullptr);
 
   // Initialize LSTMs.
   void Initialize(const Network &net);

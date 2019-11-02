@@ -32,7 +32,6 @@ cc_library(
     "pywiki.h",
   ],
   deps = [
-    ":tasks",
     "//sling/base",
     "//sling/file",
     "//sling/file:recordio",
@@ -45,6 +44,7 @@ cc_library(
     "//sling/myelin:compiler",
     "//sling/myelin:compute",
     "//sling/myelin:gradient",
+    "//sling/myelin:profile",
     "//sling/nlp/document",
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",
@@ -111,6 +111,7 @@ cc_binary(
   name = "pysling.so",
   deps = [
     ":pyapi",
+    ":tasks",
     "//sling/base",
     "//sling/file:posix",
   ],

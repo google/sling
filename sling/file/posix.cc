@@ -102,9 +102,9 @@ class PosixFile : public File {
     return Status::OK;
   }
 
-  void *MapMemory(uint64 pos, size_t size) override {
+  void *MapMemory(uint64 pos, size_t size, bool writable) override {
     void *mapping = mmap(nullptr, size, PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE, fd_, pos);
+                         writable ? MAP_SHARED : MAP_PRIVATE, fd_, pos);
     return mapping == MAP_FAILED ? nullptr : mapping;
   }
 
@@ -268,6 +268,11 @@ class PosixFileSystem : public FileSystem {
       filenames->push_back(globbuf.gl_pathv[i]);
     }
     globfree(&globbuf);
+    return Status::OK;
+  }
+
+  Status FlushMappedMemory(void *data, size_t size) {
+    if (msync(data, size, MS_SYNC) != 0) return IOError("msync", errno);
     return Status::OK;
   }
 

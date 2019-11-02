@@ -549,6 +549,7 @@ RecordWriter::RecordWriter(RecordReader *reader,
   file_ = reader->file();
   info_ = reader->info();
   info_.index_page_size = options.index_page_size;
+  position_ = reader->size();
 }
 
 RecordWriter::~RecordWriter() {

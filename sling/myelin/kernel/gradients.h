@@ -22,10 +22,10 @@ namespace sling {
 namespace myelin {
 
 // Register gradient functions for standard ops.
-void RegisterStandardGradients(Transformations *library);
+void RegisterStandardGradients();
 
 }  // namespace myelin
 }  // namespace sling
 
-#endif  // SLING_MYELIN_KERNEL_SSE_H_
+#endif  // SLING_MYELIN_KERNEL_GRADIENTS_H_
 

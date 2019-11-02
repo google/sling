@@ -280,10 +280,14 @@ class FlowBuilder : public Scope {
     return Div(Sum(x), Const(size));
   }
   Variable *Count(Variable *p, Type type = DT_FLOAT) {
-    return Op("Count", {p}, type, {});
+    return NoGradient(Op("Count", {p}, type, {}));
   }
-  Variable *ArgMin(Variable *x) { return Op("ArgMin", {x}, DT_INT32, {}); }
-  Variable *ArgMax(Variable *x) { return Op("ArgMax", {x}, DT_INT32, {}); }
+  Variable *ArgMin(Variable *x) {
+    return NoGradient(Op("ArgMin", {x}, DT_INT32, {}));
+  }
+  Variable *ArgMax(Variable *x) {
+    return NoGradient(Op("ArgMax", {x}, DT_INT32, {}));
+  }
 
   // Dot product between two vectors.
   Variable *DotProduct(Variable *x, Variable *y) {

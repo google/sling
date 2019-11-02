@@ -1055,9 +1055,11 @@ class Assembler : public CodeGenerator {
   void movd(XMMRegister dst, Register src);
   void movd(XMMRegister dst, const Operand &src);
   void movd(Register dst, XMMRegister src);
+  void movd(const Operand &dst, XMMRegister src);
   void movq(XMMRegister dst, Register src);
   void movq(Register dst, XMMRegister src);
   void movq(XMMRegister dst, XMMRegister src);
+  void movq(const Operand &dst, XMMRegister src);
 
   // Don't use this unless it's important to keep the
   // top half of the destination register unchanged.
@@ -1159,9 +1161,11 @@ class Assembler : public CodeGenerator {
   void vmovd(XMMRegister dst, Register src);
   void vmovd(XMMRegister dst, const Operand &src);
   void vmovd(Register dst, XMMRegister src);
+  void vmovd(const Operand &dst, XMMRegister src);
   void vmovq(XMMRegister dst, Register src);
   void vmovq(XMMRegister dst, const Operand &src);
   void vmovq(Register dst, XMMRegister src);
+  void vmovq(const Operand &dst, XMMRegister src);
 
   void vmovsd(XMMRegister dst, XMMRegister src1, XMMRegister src2) {
     vsd(0x10, dst, src1, src2);

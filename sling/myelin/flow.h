@@ -854,9 +854,6 @@ class Transformer {
 // Flow graph transformations.
 class Transformations {
  public:
-  // Gradient function for differentiation of ops.
-  typedef void (GradientFunc)(Flow::Operation *op, Gradients *g);
-
   ~Transformations();
 
   // Register flow transformation component. Transfers ownership from caller.
@@ -869,11 +866,6 @@ class Transformations {
     typers_.emplace_back(typer);
   }
 
-  // Register gradient function for op.
-  void RegisterGradient(const string &op, GradientFunc *func) {
-    gradients_[op] = func;
-  }
-
   // Flow transformation components.
   const std::vector<Transformer *> &transformers() const {
     return transformers_;
@@ -884,20 +876,12 @@ class Transformations {
     return typers_;
   }
 
-  // Gradient functions.
-  const std::unordered_map<string, GradientFunc *> &gradients() const {
-    return gradients_;
-  }
-
  private:
   // Flow transformation components.
   std::vector<Transformer *> transformers_;
 
   // Type inference components.
   std::vector<Typer *> typers_;
-
-  // Gradient components.
-  std::unordered_map<string, GradientFunc *> gradients_;
 };
 
 // Return name of corresponding gradient variable.

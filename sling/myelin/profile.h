@@ -231,6 +231,12 @@ class DataProfile {
   Cell *cell_;
 };
 
+// Log profile report if profiling enabled.
+void LogProfile(const Network &net);
+
+// Return profile report if profiling enabled.
+string ProfileReport(const Network &net);
+
 }  // namespace myelin
 }  // namespace sling
 

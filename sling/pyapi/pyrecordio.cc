@@ -212,10 +212,16 @@ PyObject *PyRecordDatabase::Lookup(PyObject *obj) {
 }
 
 PyObject *PyRecordDatabase::Next() {
+  // Check for end of record database.
+  if (db->Done()) {
+    PyErr_SetNone(PyExc_StopIteration);
+    return nullptr;
+  }
+
   // Read next record.
   Record record;
   if (!db->Next(&record)) {
-    PyErr_SetNone(PyExc_StopIteration);
+    PyErr_SetString(PyExc_IOError, "Error reading record");
     return nullptr;
   }
 

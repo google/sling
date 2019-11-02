@@ -478,21 +478,21 @@ def check_sum():
   flow = myelin.Flow()
   f = flow.define("sum")
   x = f.var("x", dtype, shape)
-  y = f.sum(x, "y")
+  y = f.sum(x, name="y")
   gradcheck(f, [x], [y], tol=1e-3)
 
 def check_max():
   flow = myelin.Flow()
   f = flow.define("max")
   x = f.var("x", dtype, shape)
-  y = f.max(x, "y")
+  y = f.max(x, name="y")
   gradcheck(f, [x], [y])
 
 def check_min():
   flow = myelin.Flow()
   f = flow.define("min")
   x = f.var("x", dtype, shape)
-  y = f.min(x, "y")
+  y = f.min(x, name="y")
   gradcheck(f, [x], [y])
 
 def check_matmul():

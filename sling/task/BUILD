@@ -328,6 +328,7 @@ cc_library(
     ":task",
     "//sling/base",
     "//sling/myelin:learning",
+    "//sling/myelin:profile",
     "//sling/util:mutex",
   ],
 )

@@ -331,13 +331,22 @@ size_t File::PageSize() {
   return sysconf(_SC_PAGESIZE);
 }
 
-void *File::MapMemory(uint64 pos, size_t size) {
+void *File::MapMemory(uint64 pos, size_t size, bool writable) {
   return nullptr;
+}
+
+Status File::FlushMappedMemory(void *data, size_t size) {
+  if (default_file_system == nullptr) return NoFileSystem("mmunmap");
+  return default_file_system->FlushMappedMemory(data, size);
 }
 
 Status File::FreeMappedMemory(void *data, size_t size) {
   if (default_file_system == nullptr) return NoFileSystem("mmunmap");
   return default_file_system->FreeMappedMemory(data, size);
+}
+
+Status FileSystem::FlushMappedMemory(void *data, size_t size) {
+  return Status(ENOSYS, "Memory-mapped files not supported");
 }
 
 Status FileSystem::FreeMappedMemory(void *data, size_t size) {

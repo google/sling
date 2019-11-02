@@ -98,7 +98,7 @@ struct DualEncoderFlow : public myelin::Flow {
     Variable *primal = nullptr;       // primal reference for gradient
   };
 
-  void Build(const myelin::Transformations &library);
+  void Build();
 
   string name = "dualenc";            // model name space
   Encoder left;                       // left encoder

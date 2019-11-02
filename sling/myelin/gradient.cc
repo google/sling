@@ -22,6 +22,9 @@
 namespace sling {
 namespace myelin {
 
+// Registered gradient components.
+static GradientFuncs gradient_funcs;
+
 // Return last part of name.
 static string basename(const string &name) {
   int slash = name.rfind('/');
@@ -136,7 +139,7 @@ void Gradients::MarkReferences() {
 
 Flow::Function *Gradient(Flow *flow,
                          Flow::Function *func,
-                         const Transformations &library) {
+                         const GradientFuncs &funcs) {
   // Get variables for gradients.
   std::vector<Flow::Variable *> vars;
   std::vector<Flow::Operation *> ops;
@@ -148,8 +151,8 @@ Flow::Function *Gradient(Flow *flow,
     Flow::Operation *op = ops[i];
     if (op->is(Flow::Operation::NOGRADIENT)) continue;
 
-    auto f = library.gradients().find(op->type);
-    if (f == library.gradients().end()) {
+    auto f = funcs.find(op->type);
+    if (f == funcs.end()) {
       LOG(FATAL) << "No gradient function for " << op->type;
     }
     auto *gradfunc = f->second;
@@ -186,6 +189,14 @@ Flow::Function *Gradient(Flow *flow,
   g.MarkReferences();
 
   return gradient;
+}
+
+void RegisterGradient(const string &op, GradientFunc *func) {
+  gradient_funcs[op] = func;
+}
+
+Flow::Function *Gradient(Flow *flow, Flow::Function *func) {
+  return Gradient(flow, func, gradient_funcs);
 }
 
 }  // namespace myelin

@@ -881,6 +881,7 @@ class PoolingGather : public Kernel {
     int vecbytes = SIMDAssembler::VectorBytes(type);
     bool aligned = M->stride(0) % vecbytes == 0;
     SIMDAssembler sasm(masm, type, aligned);
+    step->set_variant(sasm.name());
 
     // Compute vector processing strategy.
     SIMDStrategy strategy(&sasm, n);
@@ -1160,6 +1161,7 @@ class AssignAddScatter : public Kernel {
     int vecbytes = SIMDAssembler::VectorBytes(type);
     bool aligned = args.var->stride(0) % vecbytes == 0;
     SIMDAssembler sasm(masm, type, aligned);
+    step->set_variant(sasm.name());
 
     // Compute vector processing strategy.
     SIMDStrategy strategy(&sasm, n);

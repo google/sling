@@ -288,8 +288,8 @@ for line in fin.readlines():
       print("// Hmm! numargs mismatch")
     method.add_flags(flags)
 
-  if dt != 0: method.add_flag("EVEX_DT" + str(dt / 8))
-  if bt != 0: method.add_flag("EVEX_BT" + str(bt / 8))
+  if dt != 0: method.add_flag("EVEX_DT" + str(int(dt / 8)))
+  if bt != 0: method.add_flag("EVEX_BT" + str(int(bt / 8)))
   if ireg != -1: method.ireg = ireg
   if mask: method.mask = True
   if bcst: method.bcst = True

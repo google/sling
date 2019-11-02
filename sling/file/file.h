@@ -73,7 +73,7 @@ class File {
   Status WriteLine(const string &line);
 
   // Map file region into memory. Return null on error or if not supported.
-  virtual void *MapMemory(uint64 pos, size_t size);
+  virtual void *MapMemory(uint64 pos, size_t size, bool writable = false);
 
   // Set the current file position.
   virtual Status Seek(uint64 pos) = 0;
@@ -147,6 +147,11 @@ class File {
   // Find file names matching pattern.
   static Status Match(const string &pattern,
                       std::vector<string> *filenames);
+  static std::vector<string> Match(const string &pattern) {
+    std::vector<string> filenames;
+    CHECK(Match(pattern, &filenames));
+    return filenames;
+  }
 
   // Read contents of file.
   static Status ReadContents(const string &filename, string *data);
@@ -160,6 +165,9 @@ class File {
 
   // Return page size for memory mapping.
   static size_t PageSize();
+
+  // Flush mapped memory to disk.
+  static Status FlushMappedMemory(void *data, size_t size);
 
   // Free memory mapping.
   static Status FreeMappedMemory(void *data, size_t size);
@@ -209,6 +217,9 @@ class FileSystem : public Singleton<FileSystem> {
   // Find file names matching pattern.
   virtual Status Match(const string &pattern,
                        std::vector<string> *filenames) = 0;
+
+  // Flish mapped memory to disk.
+  virtual Status FlushMappedMemory(void *data, size_t size);
 
   // Release mapped memory.
   virtual Status FreeMappedMemory(void *data, size_t size);

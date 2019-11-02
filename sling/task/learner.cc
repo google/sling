@@ -16,6 +16,7 @@
 
 #include <unistd.h>
 
+#include "sling/myelin/profile.h"
 #include "sling/task/task.h"
 
 namespace sling {
@@ -39,6 +40,7 @@ void LearnerTask::Train(Task *task, myelin::Network *model) {
   num_epochs_total_->Increment(epochs_);
 
   // Start training threads.
+  LOG(INFO) << "Starting training";
   int threads = task->Get("workers", jit::CPU::Processors());
   WorkerPool pool;
   pool.Start(threads, [this, model](int index) {
@@ -69,11 +71,17 @@ void LearnerTask::Train(Task *task, myelin::Network *model) {
     }
   }
 
+  // Wait until workers complete.
+  pool.Join();
+
   // Run final evaluation.
   Evaluate(epoch_, model);
 
   // Wait until workers complete.
   pool.Join();
+
+  // Optionally output profiling information.
+  LogProfile(*model);
 }
 
 bool LearnerTask::EpochCompleted() {
