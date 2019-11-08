@@ -39,10 +39,7 @@ cc_library(
     "//sling/frame:object",
     "//sling/frame:serialization",
     "//sling/frame:store",
-    "//sling/string:numbers",
-    "//sling/string:strcat",
     "//sling/string:text",
-    "//sling/util:table-writer",
   ],
 )
 
@@ -54,6 +51,21 @@ cc_library(
     ":action-table",
     ":parser-state",
     "//sling/frame:object",
+  ],
+)
+
+cc_library(
+  name = "parser-features",
+  srcs = ["parser-features.cc"],
+  hdrs = ["parser-features.h"],
+  deps = [
+    ":parser-action",
+    ":parser-state",
+    ":roles",
+    ":trace",
+    "//sling/base",
+    "//sling/myelin:compute",
+    "//sling/myelin:rnn",
   ],
 )
 
@@ -93,6 +105,7 @@ cc_library(
   deps = [
     ":action-table",
     ":cascade",
+    ":parser-features",
     ":parser-state",
     ":roles",
     ":trace",
@@ -100,9 +113,9 @@ cc_library(
     "//sling/frame:serialization",
     "//sling/frame:store",
     "//sling/myelin:compiler",
+    "//sling/myelin:profile",
     "//sling/nlp/document",
     "//sling/nlp/document:lexical-encoder",
-    "//sling/string:strcat",
   ],
 )
 
@@ -112,6 +125,48 @@ cc_library(
   deps = [
     ":parser",
     "//sling/nlp/document:annotator",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "parser-trainer",
+  srcs = ["parser-trainer.cc"],
+  hdrs = ["parser-trainer.h"],
+  deps = [
+    ":parser-action",
+    ":parser-features",
+    ":roles",
+    "//sling/base",
+    "//sling/frame:store",
+    "//sling/myelin:builder",
+    "//sling/myelin:compiler",
+    "//sling/myelin:gradient",
+    "//sling/myelin:learning",
+    "//sling/nlp/document:document",
+    "//sling/nlp/document:document-corpus",
+    "//sling/nlp/document:lexical-encoder",
+    "//sling/nlp/document:lexicon",
+    "//sling/nlp/parser/trainer:frame-evaluation",
+    "//sling/task:learner",
+    "//sling/util:mutex",
+    "//sling/util:unicode",
+  ],
+)
+
+cc_library(
+  name = "caspar-trainer",
+  srcs = ["caspar-trainer.cc"],
+  deps = [
+    ":parser-trainer",
+    "//sling/base",
+    "//sling/myelin:builder",
+    "//sling/myelin:flow",
+    "//sling/myelin:gradient",
+    "//sling/myelin:learning",
+    "//sling/nlp/document:document",
+    "//sling/nlp/document:document-corpus",
+    "//sling/nlp/parser/trainer:transition-generator",
   ],
   alwayslink = 1,
 )

@@ -109,9 +109,13 @@ struct ParserAction {
   explicit ParserAction(Type t) : ParserAction() {
     type = t;
   }
-  ParserAction(Type t, uint8 len) : ParserAction() {
+  ParserAction(Type t, uint8 arg) : ParserAction() {
     type = t;
-    length = len;
+    if (t == CASCADE) {
+      delegate = arg;
+    } else {
+      length = arg;
+    }
   }
 
   // Checks for equality with 'other'.

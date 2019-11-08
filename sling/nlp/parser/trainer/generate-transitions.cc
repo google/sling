@@ -10,7 +10,7 @@
 #include "sling/frame/store.h"
 #include "sling/frame/serialization.h"
 #include "sling/nlp/document/document.h"
-#include "sling/nlp/document/document-source.h"
+#include "sling/nlp/document/document-corpus.h"
 #include "sling/nlp/parser/parser-action.h"
 #include "sling/nlp/parser/trainer/transition-generator.h"
 
@@ -21,12 +21,13 @@ using namespace sling::nlp;
 int main(int argc, char *argv[]) {
   sling::InitProgram(&argc, &argv);
 
-  DocumentSource *corpus = DocumentSource::Create(FLAGS_corpus);
   sling::Store commons;
+  DocumentCorpus corpus(&commons, FLAGS_corpus);
   commons.Freeze();
+
   for (int i = 0;; ++i) {
     sling::Store store(&commons);
-    Document *document = corpus->Next(&store);
+    Document *document = corpus.Next(&store);
     if (document == nullptr) break;
 
     Generate(*document, [&](const ParserAction &action) {

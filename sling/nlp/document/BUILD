@@ -119,24 +119,6 @@ cc_library(
 )
 
 cc_library(
-  name = "document-source",
-  srcs = ["document-source.cc"],
-  hdrs = ["document-source.h"],
-  deps = [
-    ":document",
-    "//sling/base",
-    "//sling/file:recordio",
-    "//sling/frame:object",
-    "//sling/frame:serialization",
-    "//sling/frame:store",
-    "//sling/stream:input",
-    "//sling/stream:stream",
-    "//sling/stream:zipfile",
-    "//sling/string",
-  ],
-)
-
-cc_library(
   name = "affix",
   srcs = ["affix.cc"],
   hdrs = ["affix.h"],

@@ -20,32 +20,21 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/parser/parser-action.h"
 
-namespace sling {                  
+namespace sling {
 namespace nlp {
-  
-// Generates transition sequences for [begin, end) token range in 'document',
-// calling 'callback' for every transition, and 'final_callback' at the end.
-void Generate(const Document &document,
-              int begin, int end,
-              std::function<void(const ParserAction &)> callback,
-              std::function<void()> final_callback);     
 
-// Same as above, except doesn't require a 'final_callback'.
+// Generates transition sequences for [begin, end) token range in 'document',
+// calling 'callback' for every transition.
 void Generate(const Document &document,
               int begin, int end,
               std::function<void(const ParserAction &)> callback);
 
-// Same as above except uses [0, document.size()) as the token range.
-void Generate(const Document &document,
-              std::function<void(const ParserAction &)> callback,
-              std::function<void()> final_callback);     
-
-// Same as above except uses [0, document.size()) as the token range, and
-// doesn't use a final callback.
+// Generates transition sequences for all tokens in 'document', calling
+// 'callback' for every transition.
 void Generate(const Document &document,
               std::function<void(const ParserAction &)> callback);
 
 }  // namespace nlp
 }  // namespace sling
-                             
+
 #endif  // SLING_NLP_PARSER_TRAINER_TRANSITION_GENERATOR_H_

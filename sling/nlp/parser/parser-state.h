@@ -27,12 +27,33 @@
 namespace sling {
 namespace nlp {
 
-// Parser state that represents the state of the transition-based parser.
+// Parser state that represents the state of the transition-based parser. When
+// actions are applied to the parser state, new spans and frames are added to
+// the document.
 class ParserState {
  public:
+  // Slot in attention buffer.
+  struct AttentionSlot {
+    AttentionSlot(Handle frame, int step, Span *span)
+      : frame(frame), created(step), focused(step), span(span) {}
+
+    Handle frame;    // evoked frame
+    int created;     // step that created frame
+    int focused;     // step that last brought frame to the center of attention
+    Span *span;      // last span that evoked this frame
+  };
+
+  // Position pushed on to the mark stack.
+  struct Marker {
+    Marker(int token, int step) : token(token), step(step) {}
+
+    int token;   // start token for the mark
+    int step;    // parse step when the mark was made
+  };
+
   // Initializes parse state.
   ParserState(Document *document, int begin, int end);
-  
+
   // Returns the underlying document.
   Document *document() const { return document_; }
 
@@ -45,13 +66,19 @@ class ParserState {
   // Returns current input token.
   int current() const { return current_; }
 
+  // Returns the current parse step.
+  int step() const { return step_; }
+
+  // Mark stack.
+  const std::vector<Marker> &marks() const { return marks_; }
+
   // Applies parser action to transition parser to new state. Caller should
   // ensure that 'action' is applicable using CanApply().
   void Apply(const ParserAction &action);
 
   // Returns the first type for a frame in the attention buffer. This will be
   // the type specified when the frame was created with EVOKE/EMBED/ELABORATE.
-  Handle type(int index) const;
+  Handle Type(int index) const;
 
   // Gets the handles of the k frames that are closest to the center of
   // attention in the order of attention. There might be less than k frames if
@@ -61,20 +88,16 @@ class ParserState {
   // Return the position in the attention buffer of a frame or -1 if the
   // frame is not in the attention buffer. The search can be
   // limited to the top-k frames that are closest to the center of attention.
-  int AttentionIndex(Handle handle, int k = -1) const;
-
-  // Creates final set of frames that the parse has generated.
-  void GetFrames(Handles *frames);
-
-  // Adds frames and mentions that the parse has generated to the document.
-  void AddParseToDocument(Document *document);
+  int AttentionIndex(Handle frame, int k = -1) const;
 
   // The parse is done when we have performed the first STOP action.
   bool done() const { return done_; }
 
-  // Returns handle of the frame in attention buffer. The center of attention
-  // has index 0.
-  Handle Attention(int index) const {
+  // Returns slot in attention buffer. The center of attention has index 0.
+  const AttentionSlot &Attention(int index) const {
+    return attention_[attention_.size() - index - 1];
+  }
+  AttentionSlot &Attention(int index) {
     return attention_[attention_.size() - index - 1];
   }
 
@@ -84,19 +107,11 @@ class ParserState {
   // Returns whether 'action' can be applied to the state.
   bool CanApply(const ParserAction &action) const;
 
-  // Returns a human readable representation of the state.
+  // Returns a human-readable representation of the state.
   string DebugString() const;
 
   // Returns the underlying store.
   Store *store() const { return document_->store(); }
-
-  // Returns the start token of the first span (if any) that evokes the
-  // frame at the specified attention buffer index, -1 otherwise.
-  int FrameEvokeBegin(int attention_index) const;
-
-  // Returns the end token of the first span (exclusive; if any) that evokes
-  // the frame at the specified attention buffer index, -1 otherwise.
-  int FrameEvokeEnd(int attention_index) const;
 
  private:
   // Applies individual actions, which are assumed to be applicable.
@@ -111,12 +126,13 @@ class ParserState {
   void Elaborate(int frame, Handle role, Handle type);
 
   // Adds frame to attention buffer, making it the new center of attention.
-  void Add(Handle handle) { attention_.push_back(handle); }
+  void Add(Handle frame, Span *span);
 
   // Moves element in attention buffer to the center of attention.
-  void Center(int index);
+  void Center(int index, Span *span);
 
-  // SLING document underlying the parser state.
+  // Document for the parser state. New frames and mentions are added to this
+  // document when
   Document *document_;
 
   // Token range to be parsed.
@@ -126,19 +142,27 @@ class ParserState {
   // Current input token.
   int current_;
 
+  // Current parse step.
+  int step_;
+
   // When we have performed the first STOP action, the parse is done.
   bool done_;
 
-  // Attention buffer. This contains handles of frames in order of attention.
-  Handles attention_;
+  // Attention buffer. This contains evoked frames in order of attention. The
+  // last element is the center of attention.
+  std::vector<AttentionSlot> attention_;
 
-  // Token index for marked tokens.
-  std::vector<int> marks_;
+  // Stack with positions for marked tokens. The mark stack tracks the start of
+  // each mention.
+  std::vector<Marker> marks_;
 
   // (Source/Target frame handle, Frame type) for frames embedded or elaborated
   // at the current position. This is cleared once the position advances.
   std::vector<std::pair<Handle, Handle>> embed_;
   std::vector<std::pair<Handle, Handle>> elaborate_;
+
+  // Maximum mark depth.
+  static const int MAX_MARK_DEPTH = 5;
 };
 
 }  // namespace nlp

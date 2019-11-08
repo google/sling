@@ -16,6 +16,7 @@
 # Used by ../tools/train_pytorch.py.
 
 import os
+import sys
 import sling
 import sling.myelin.flow as flow
 import time
@@ -245,6 +246,7 @@ class Trainer:
             "batches =", self.count, "examples): %.4f" % value.item(), \
             "incl. L2=%.6f" % (l2 / 3.0).item(), \
             "(%.1f" % (end - start), "secs)", mem())
+      sys.stdout.flush()
 
 
   # Swaps model parameters with their moving average counterparts.
@@ -310,6 +312,4 @@ class Trainer:
     # Process the partial batch (if any) at the end, and evaluate one last time.
     self.update()
     self.evaluate()
-
-
 

@@ -19,17 +19,17 @@
 #include <vector>
 
 #include "sling/frame/object.h"
-#include "sling/nlp/parser/action-table.h"
+#include "sling/nlp/parser/parser-action.h"
 #include "sling/nlp/parser/parser-state.h"
 
 namespace sling {
 namespace nlp {
 
-// A mapping of roles to role ids extracted from the action table.
+// A mapping of roles to role ids extracted from the action set.
 class RoleSet {
  public:
-  // Initialize role mapping from action table.
-  void Init(const ActionTable &actions);
+  // Initialize role mapping for action set.
+  void Init(const std::vector<ParserAction> &actions);
 
   // Look up role id for role. Return -1 if role is unknown.
   int Lookup(Handle role) const {
@@ -100,7 +100,7 @@ class RoleGraph {
     int target;
   };
 
-  // The maximum number of frame to use from the attention buffer.
+  // The maximum number of frames to use from the attention buffer.
   int limit_ = 0;
 
   // Number of roles in role set.

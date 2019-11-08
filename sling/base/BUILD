@@ -7,7 +7,6 @@ cc_library(
     "init.cc",
     "logging.cc",
     "status.cc",
-    "strtoint.cc",
   ],
   hdrs = [
     "bitcast.h",
@@ -18,7 +17,6 @@ cc_library(
     "port.h",
     "slice.h",
     "status.h",
-    "strtoint.h",
     "types.h",
   ],
   linkopts = [

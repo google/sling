@@ -100,19 +100,6 @@ cc_library(
 )
 
 cc_library(
-  name = "table-writer",
-  srcs = ["table-writer.cc"],
-  hdrs = ["table-writer.h"],
-  deps = [
-    "//sling/base",
-    "//sling/file",
-    "//sling/string:numbers",
-    "//sling/string:printf",
-    "//sling/string:strcat",
-  ],
-)
-
-cc_library(
   name = "vocabulary",
   srcs = ["vocabulary.cc"],
   hdrs = ["vocabulary.h"],

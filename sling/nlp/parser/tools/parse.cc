@@ -41,7 +41,7 @@
 #include "sling/myelin/compiler.h"
 #include "sling/myelin/profile.h"
 #include "sling/nlp/document/document.h"
-#include "sling/nlp/document/document-source.h"
+#include "sling/nlp/document/document-corpus.h"
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/document/lex.h"
 #include "sling/nlp/parser/parser.h"
@@ -83,13 +83,9 @@ class ParserEvaulationCorpus : public ParallelCorpus {
  public:
   ParserEvaulationCorpus(Store *commons, const Parser *parser,
                          const string &eval_corpus_filename)
-      : commons_(commons), parser_(parser) {
-    corpus_ = DocumentSource::Create(eval_corpus_filename);
-  }
-
-  ~ParserEvaulationCorpus() override {
-    delete corpus_;
-  }
+      : commons_(commons),
+        parser_(parser),
+        corpus_(commons, eval_corpus_filename) {}
 
   bool Next(Store **store, Document **golden, Document **predicted) override {
     // Stop if we have reached the maximum number of documents.
@@ -100,7 +96,7 @@ class ParserEvaulationCorpus : public ParallelCorpus {
     Store *locals = new Store(commons_);
 
     // Read next document from corpus.
-    Document *document = corpus_->Next(locals);
+    Document *document = corpus_.Next(locals);
     if (document == nullptr) {
       delete locals;
       return false;
@@ -124,7 +120,7 @@ class ParserEvaulationCorpus : public ParallelCorpus {
  private:
   Store *commons_;           // commons store
   const Parser *parser_;     // parser being evaluated
-  DocumentSource *corpus_;   // evaluation corpus with golden annotations
+  DocumentCorpus corpus_;    // evaluation corpus with golden annotations
   int num_documents_ = 0;    // number of documents processed
 };
 
@@ -172,7 +168,7 @@ int main(int argc, char *argv[]) {
     CHECK(!FLAGS_corpus.empty());
     LOG(INFO) << "Parse " << FLAGS_corpus;
     if (FLAGS_trace) LOG(INFO) << "Tracing on";
-    DocumentSource *corpus = DocumentSource::Create(FLAGS_corpus);
+    DocumentCorpus corpus(&commons, FLAGS_corpus);
     int num_documents = 0;
     RecordWriter *writer = nullptr;
     if (!FLAGS_output.empty()) {
@@ -182,7 +178,7 @@ int main(int argc, char *argv[]) {
       if (FLAGS_maxdocs != -1 && num_documents >= FLAGS_maxdocs) break;
 
       Store store(&commons);
-      Document *document = corpus->Next(&store);
+      Document *document = corpus.Next(&store);
 
       if (document == nullptr) break;
       num_documents++;
@@ -200,14 +196,13 @@ int main(int argc, char *argv[]) {
 
       delete document;
     }
-    delete corpus;
   }
 
   // Benchmark parser on corpus.
   if (FLAGS_benchmark) {
     CHECK(!FLAGS_corpus.empty());
     LOG(INFO) << "Benchmarking parser on " << FLAGS_corpus;
-    DocumentSource *corpus = DocumentSource::Create(FLAGS_corpus);
+    DocumentCorpus corpus(&commons, FLAGS_corpus);
     int num_documents = 0;
     int num_tokens = 0;
     clock.start();
@@ -215,7 +210,7 @@ int main(int argc, char *argv[]) {
       if (FLAGS_maxdocs != -1 && num_documents >= FLAGS_maxdocs) break;
 
       Store store(&commons);
-      Document *document = corpus->Next(&store);
+      Document *document = corpus.Next(&store);
       if (document == nullptr) break;
 
       num_documents++;
@@ -232,7 +227,6 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << num_documents << " documents, "
               << num_tokens << " tokens, "
               << num_tokens / clock.secs() << " tokens/sec";
-    delete corpus;
   }
 
   // Evaluate parser on gold corpus.

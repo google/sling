@@ -20,21 +20,36 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cfloat>
 #include <limits>
 #include <memory>
 #include <string>
 
 #include "sling/base/types.h"
 #include "sling/base/logging.h"
-#include "sling/base/strtoint.h"
 #include "sling/string/ctype.h"
 
 namespace sling {
+
+inline int64 strto64(const char *nptr, char **endptr, int base) {
+  return strtoll(nptr, endptr, base);
+}
+
+inline uint64 strtou64(const char *nptr, char **endptr, int base) {
+  return strtoull(nptr, endptr, base);
+}
+
+inline int32 strto32(const char *nptr, char **endptr, int base) {
+  return strtol(nptr, endptr, base);
+}
+
+inline uint32 strtou32(const char *nptr, char **endptr, int base) {
+  return strtoul(nptr, endptr, base);
+}
 
 // ----------------------------------------------------------------------
 // ParseLeadingInt32Value()

@@ -278,7 +278,7 @@ Document::Document(const Frame &top, const DocumentNames *names)
   }
 }
 
-Document::Document(const Document &other)
+Document::Document(const Document &other, bool annotations)
     : text_(other.text_),
       tokens_(other.tokens_),
       themes_(other.store()),
@@ -300,26 +300,28 @@ Document::Document(const Document &other)
     token.span_ = nullptr;
   }
 
-  // Copy mention spans.
-  for (const Span *s : other.spans_) {
-    Span *span = Insert(s->begin_, s->end_);
-    span->mention_ = Frame(store, store->Clone(s->mention_.handle()));
-    for (const Slot &s : span->mention_) {
-      if (s.name == names_->n_evokes) AddMention(s.value, span);
+  if (annotations) {
+    // Copy mention spans.
+    for (const Span *s : other.spans_) {
+      Span *span = Insert(s->begin_, s->end_);
+      span->mention_ = Frame(store, store->Clone(s->mention_.handle()));
+      for (const Slot &s : span->mention_) {
+        if (s.name == names_->n_evokes) AddMention(s.value, span);
+      }
     }
-  }
 
-  // Copy themes.
-  for (Handle h : other.themes_) {
-    themes_.push_back(h);
-  }
+    // Copy themes.
+    for (Handle h : other.themes_) {
+      themes_.push_back(h);
+    }
 
-  // Copy extra slots.
-  if (other.extras_ != nullptr) {
-    extras_ = new Slots(store);
-    extras_->reserve(other.extras_->size());
-    for (const Slot &s : *other.extras_) {
-      extras_->emplace_back(s.name, s.value);
+    // Copy extra slots.
+    if (other.extras_ != nullptr) {
+      extras_ = new Slots(store);
+      extras_->reserve(other.extras_->size());
+      for (const Slot &s : *other.extras_) {
+        extras_->emplace_back(s.name, s.value);
+      }
     }
   }
 }

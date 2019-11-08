@@ -45,6 +45,8 @@ struct Trace {
     void Add(int *ptr, int num, const string &name);
   };
 
+  Trace(int begin, int end) : begin(begin), end(end) {}
+
   // Beginning and ending tokens of the parser state.
   int begin;
   int end;

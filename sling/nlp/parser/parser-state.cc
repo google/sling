@@ -28,22 +28,22 @@ ParserState::ParserState(Document *document, int begin, int end)
       begin_(begin),
       end_(end),
       current_(begin),
-      done_(false),
-      attention_(document_->store()) {}
+      step_(0),
+      done_(false) {}
 
 string ParserState::DebugString() const {
-  static const int kMaxAttention = 10;
+  static const int MAX_ATTENTION = 10;
   string s =
       StrCat("Begin:", begin_, " End:", end_, " Current:", current_,
              " Done: ", (done_ ? "Y" : "N"), " AttentionSize: ",
              attention_.size(), "\n");
-  for (int i = 0; i < kMaxAttention; ++i) {
-    if (i == attention_.size()) break;
+  for (int i = 0; i < attention_.size(); ++i) {
+    if (i == MAX_ATTENTION) {
+      StrAppend(&s, "..and ", (attention_.size() - MAX_ATTENTION), " more.\n");
+      break;
+    }
     StrAppend(&s, "AttentionIndex: ", i,
-              " FrameType:", store()->DebugString(type(i)), "\n");
-  }
-  if (attention_.size() > kMaxAttention) {
-    StrAppend(&s, "..and ", (attention_.size() - kMaxAttention), " more.\n");
+              " FrameType:", store()->DebugString(Type(i)), "\n");
   }
 
   return s;
@@ -88,25 +88,18 @@ void ParserState::Apply(const ParserAction &action) {
       break;
 
     case ParserAction::CASCADE:
-      LOG(FATAL) << "CASCADE action shouldn't reach ParserState";
+      LOG(FATAL) << "Cannot apply CASCADE action";
       break;
   }
-}
-
-// Returns if 'frame' has a 'role' slot whose value is 'value'.
-static bool SlotPresent(const Frame &frame, Handle role, Handle value) {
-  for (const auto &slot : frame) {
-    if (slot.name == role && slot.value == value) return true;
-  }
-
-  return false;
+  step_++;
 }
 
 bool ParserState::CanApply(const ParserAction &action) const {
   if (done_) return false;
   switch (action.type) {
     case ParserAction::CASCADE:
-      return false;
+      // Do not allow cascading back to the main cascade.
+      return action.delegate > 0;
 
     case ParserAction::SHIFT:
       // Do not allow shifting past the end of the input buffer.
@@ -117,58 +110,69 @@ bool ParserState::CanApply(const ParserAction &action) const {
       return current_ == end_;
 
     case ParserAction::MARK:
-      return current_ < end_ && marks_.size() < 5;
+      return current_ < end_ && marks_.size() < MAX_MARK_DEPTH;
 
     case ParserAction::EVOKE: {
-      int begin = current_;
-      int end = current_ + action.length;
-
+      int begin, end;
       if (action.length == 0) {
         // EVOKE paired with MARK.
-        if (marks_.size() == 0) return false;
-        begin = marks_.back();
+        if (marks_.empty()) return false;
+        begin = marks_.back().token;
         end = current_ + 1;
+      } else {
+        // EVOKE with explicit length.
+        begin = current_;
+        end = current_ + action.length;
       }
 
       // Check that phrase is inside the input buffer.
       if (end > end_) return false;
 
+      // Check for crossing spans.
       bool crossing = false;
-      auto *enclosing = document_->EnclosingSpan(begin, end, &crossing);
+      Span *enclosing = document_->EnclosingSpan(begin, end, &crossing);
       if (crossing) return false;
 
       // Check for duplicates.
-      if (enclosing != nullptr && enclosing->begin() == begin &&
+      if (enclosing != nullptr &&
+          enclosing->begin() == begin &&
           enclosing->end() == end) {
-        return !enclosing->Evokes(action.label);
+        return !enclosing->EvokesType(action.label);
       }
       return true;
     }
 
     case ParserAction::REFER: {
-      int length = action.length;
-      int index = action.target;
+      int begin, end;
+      if (action.length == 0) {
+        // REFER paired with MARK.
+        if (marks_.empty()) return false;
+        begin = marks_.back().token;
+        end = current_ + 1;
+      } else {
+        // REFER with explicit length.
+        begin = current_;
+        end = current_ + action.length;
+      }
 
-      // Check that phrase is inside input buffer.
-      int end = current_ + length;
+      // Check that phrase is inside the input buffer.
       if (end > end_) return false;
 
-      // Check that 'index' is valid.
+      // Check that antecedent index is valid.
+      int index = action.target;
       if (index >= attention_.size()) return false;
 
+      // Check for crossing spans.
       bool crossing = false;
-      auto *enclosing = document_->EnclosingSpan(current_, end, &crossing);
+      Span *enclosing = document_->EnclosingSpan(begin, end, &crossing);
       if (crossing) return false;
 
       // Check for duplicates.
-      if (enclosing != nullptr && enclosing->begin() == current_ &&
+      if (enclosing != nullptr &&
+          enclosing->begin() == begin &&
           enclosing->end() == end) {
-        Handle proposed = Attention(index);
-        Handles evoked(store());
-        enclosing->AllEvoked(&evoked);
-        for (Handle h : evoked) {
-          if (h == proposed) return false;
-        }
+        Handle antecedent = Attention(index).frame;
+        if (enclosing->Evokes(antecedent)) return false;
       }
 
       return true;
@@ -180,8 +184,8 @@ bool ParserState::CanApply(const ParserAction &action) const {
       if (source >= attention_.size()) return false;
 
       // Check that we haven't output this assignment in the past.
-      Frame frame(store(), Attention(source));
-      return !SlotPresent(frame, action.role, action.label);
+      Frame frame(store(), Attention(source).frame);
+      return !frame.Has(action.role, action.label);
     }
 
     case ParserAction::CONNECT: {
@@ -192,8 +196,8 @@ bool ParserState::CanApply(const ParserAction &action) const {
       if (target >= attention_.size()) return false;
 
       // Check that we haven't output this connection before.
-      Frame frame(store(), Attention(source));
-      return !SlotPresent(frame, action.role, Attention(target));
+      Frame frame(store(), Attention(source).frame);
+      return !frame.Has(action.role, Attention(target).frame);
     }
 
     case ParserAction::EMBED: {
@@ -201,7 +205,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
       if (action.target >= attention_.size()) return false;
 
       // Check that we haven't embedded the same frame the same way.
-      Handle target = Attention(action.target);
+      Handle target = Attention(action.target).frame;
       for (const auto &e : embed_) {
         if (e.first == target && e.second == action.label) return false;
       }
@@ -214,7 +218,7 @@ bool ParserState::CanApply(const ParserAction &action) const {
       if (action.source >= attention_.size()) return false;
 
       // Check that we haven't elaborated the same frame the same way.
-      Handle source = Attention(action.source);
+      Handle source = Attention(action.source).frame;
       for (const auto &e : elaborate_) {
         if (e.first == source && e.second == action.label) return false;
       }
@@ -241,60 +245,79 @@ void ParserState::Stop() {
 
 void ParserState::Evoke(int length, Handle type) {
   // Create new frame.
-  Slot slot(Handle::isa(), type);
-  Handle h = store()->AllocateFrame(&slot, &slot + 1);
-
-  // Add new frame to the attention buffer.
-  Add(h);
+  Handle frame;
+  if (type.IsNil()) {
+    // Allocate empty frame.
+    frame = store()->AllocateFrame(nullptr, nullptr);
+  } else {
+    // Allocate frame with type.
+    Slot slot(Handle::isa(), type);
+    frame = store()->AllocateFrame(&slot, &slot + 1);
+  }
 
   // Get or create a new mention.
-  int begin = current_;
-  int end = current_ + length;
+  int begin, end;
   if (length == 0) {
-    begin = marks_.back();
+    begin = marks_.back().token;
     end = current_ + 1;
     marks_.pop_back();
+  } else {
+    begin = current_;
+    end = current_ + length;
   }
-  auto *span = document_->AddSpan(begin, end);
+  Span *span = document_->AddSpan(begin, end);
   DCHECK(span != nullptr) << begin << " " << end;
-  span->Evoke(h);
+  span->Evoke(frame);
+
+  // Add new frame to the attention buffer.
+  Add(frame, span);
 }
 
 void ParserState::Refer(int length, int index) {
-  // Create new mention.
-  auto *span = document_->AddSpan(current_, current_ + length);
+  // Get or create a new mention.
+  int begin, end;
+  if (length == 0) {
+    begin = marks_.back().token;
+    end = current_ + 1;
+    marks_.pop_back();
+  } else {
+    begin = current_;
+    end = current_ + length;
+  }
+  Span *span = document_->AddSpan(begin, end);
 
   // Refer to an existing frame.
-  Frame frame(store(), Attention(index));
-  span->Evoke(frame);
-  Center(index);
+  Handle antecedent = Attention(index).frame;
+  span->Evoke(antecedent);
+  Center(index, span);
 }
 
 void ParserState::Mark() {
-  marks_.emplace_back(current_);
+  marks_.emplace_back(current_, step_);
 }
 
 void ParserState::Connect(int source, Handle role, int target) {
   // Create new slot with the specified role linking source to target.
-  Frame source_frame(store(), Attention(source));
-  source_frame.Add(role, Attention(target));
+  Handle subject = Attention(source).frame;
+  Handle object = Attention(target).frame;
+  store()->Add(subject, role, object);
 
   // Move the source frame to the center of attention.
-  Center(source);
+  Center(source, nullptr);
 }
 
 void ParserState::Assign(int frame, Handle role, Handle value) {
   // Create new slot in the source frame.
-  Frame source_frame(store(), Attention(frame));
-  source_frame.Add(role, value);
+  Handle subject = Attention(frame).frame;
+  store()->Add(subject, role, value);
 
   // Move the frame to the center of attention.
-  Center(frame);
+  Center(frame, nullptr);
 }
 
 void ParserState::Embed(int frame, Handle role, Handle type) {
   // Create new frame with the specified type and add link to target frame.
-  Handle target = Attention(frame);
+  Handle target = Attention(frame).frame;
   Slot slots[2];
   slots[0].name = Handle::isa();
   slots[0].value = type;
@@ -304,7 +327,7 @@ void ParserState::Embed(int frame, Handle role, Handle type) {
   embed_.emplace_back(target, type);
 
   // Add new frame to the attention buffer.
-  Add(h);
+  Add(h, nullptr);
 
   // Add new frame as a thematic frame to the document.
   document_->AddTheme(h);
@@ -312,65 +335,58 @@ void ParserState::Embed(int frame, Handle role, Handle type) {
 
 void ParserState::Elaborate(int frame, Handle role, Handle type) {
   // Create new frame with the specified type.
+  Handle source = Attention(frame).frame;
   Slot slot(Handle::isa(), type);
-  Handle h = store()->AllocateFrame(&slot, &slot + 1);
-
-  // Add new frame to the attention buffer.
-  Add(h);
-
-  // Add link to new frame from source frame.
-  Frame source(store(), Attention(frame));
-  source.Add(role, h);
-  elaborate_.emplace_back(Attention(frame), type);
+  Handle target = store()->AllocateFrame(&slot, &slot + 1);
 
   // Add new frame as a thematic frame to the document.
-  document_->AddTheme(h);
+  document_->AddTheme(target);
+
+  // Add link to new frame from source frame.
+  store()->Add(source, role, target);
+  elaborate_.emplace_back(Attention(frame).frame, type);
+
+  // Add new frame to the attention buffer.
+  Add(target, nullptr);
 }
 
-void ParserState::Center(int index) {
-  if (index == 0) return;  // already the center of attention
-  Handle frame = Attention(index);
-  attention_.erase(attention_.end() - 1 - index);
-  attention_.push_back(frame);
+void ParserState::Add(Handle frame, Span *span) {
+  attention_.emplace_back(frame, step_, span);
+}
+
+void ParserState::Center(int index, Span *span) {
+  if (index == 0) {
+    // Already center of attention.
+    AttentionSlot &attention = Attention(index);
+    attention.focused = step_;
+    if (span != nullptr) attention.span = span;
+  } else {
+    // Move slot to the center of attention.
+    AttentionSlot attention = Attention(index);
+    attention.focused = step_;
+    if (span != nullptr) attention.span = span;
+    attention_.erase(attention_.end() - 1 - index);
+    attention_.push_back(attention);
+  }
 }
 
 void ParserState::GetFocus(int k, Handles *center) const {
   center->clear();
   for (int i = attention_.size() - 1; i >= 0 && center->size() < k; --i) {
-    center->push_back(attention_[i]);
+    center->push_back(attention_[i].frame);
   }
 }
 
-int ParserState::AttentionIndex(Handle handle, int k) const {
+int ParserState::AttentionIndex(Handle frame, int k) const {
   if (k < 0 || k > attention_.size()) k = attention_.size();
   for (int i = 0; i < k; ++i) {
-    if (Attention(i) == handle) return i;
+    if (Attention(i).frame == frame) return i;
   }
   return -1;
 }
 
-Handle ParserState::type(int index) const {
-  return store()->GetFrame(Attention(index))->get(Handle::isa());
-}
-
-int ParserState::FrameEvokeBegin(int attention_index) const {
-  if (attention_index >= attention_.size()) return -1;
-
-  Handle handle = Attention(attention_index);
-  for (const auto &it : document_->EvokingSpans(handle)) {
-    return it.second->begin();
-  }
-  return -1;
-}
-
-int ParserState::FrameEvokeEnd(int attention_index) const {
-  if (attention_index >= attention_.size()) return -1;
-
-  Handle handle = Attention(attention_index);
-  for (const auto &it : document_->EvokingSpans(handle)) {
-    return it.second->end();
-  }
-  return -1;
+Handle ParserState::Type(int index) const {
+  return store()->GetFrame(Attention(index).frame)->get(Handle::isa());
 }
 
 }  // namespace nlp

@@ -18,8 +18,9 @@
 
 #include "sling/base/logging.h"
 #include "sling/frame/serialization.h"
-#include "sling/nlp/document/document-source.h"
+#include "sling/nlp/document/document-corpus.h"
 #include "sling/string/strcat.h"
+#include "sling/string/printf.h"
 
 namespace sling {
 namespace nlp {
@@ -30,24 +31,16 @@ class FileParallelCorpus : public ParallelCorpus {
   // Open corpora.
   FileParallelCorpus(Store *commons,
                      const string &gold_file_pattern,
-                     const string &test_file_pattern) {
-    commons_ = commons;
-    gold_corpus_ = DocumentSource::Create(gold_file_pattern);
-    test_corpus_ = DocumentSource::Create(test_file_pattern);
-  }
-
-  // Close corpora.
-  ~FileParallelCorpus() override {
-    delete gold_corpus_;
-    delete test_corpus_;
-  }
+                     const string &test_file_pattern)
+      :  commons_(commons),
+         gold_corpus_(commons, gold_file_pattern),
+         test_corpus_(commons, test_file_pattern) {}
 
   // Read next document pair from corpora.
   bool Next(Store **store, Document **golden, Document **predicted) override {
     *store = new Store(commons_);
-    *golden = gold_corpus_->Next(*store);
-    *predicted = test_corpus_->Next(*store);
-    count_++;
+    *golden = gold_corpus_.Next(*store);
+    *predicted = test_corpus_.Next(*store);
     if (*golden == nullptr) {
       CHECK(*predicted == nullptr);
       delete *store;
@@ -60,9 +53,8 @@ class FileParallelCorpus : public ParallelCorpus {
 
  private:
   Store *commons_;               // commons store for documents
-  DocumentSource *gold_corpus_;  // corpus with gold annotations
-  DocumentSource *test_corpus_;  // corpus with predicted annotations
-  int count_ = 0;
+  DocumentCorpus gold_corpus_;   // corpus with gold annotations
+  DocumentCorpus test_corpus_;   // corpus with predicted annotations
 };
 
 bool FrameEvaluation::Alignment::Map(Handle source, Handle target) {
@@ -228,6 +220,13 @@ void FrameEvaluation::Benchmark::GetScores(const string &name,
   scores->emplace_back(StrCat(name, "_Precision"), p * 100.0);
   scores->emplace_back(StrCat(name, "_Recall"), r * 100.0);
   scores->emplace_back(StrCat(name, "_F1"), f1 * 100.0);
+}
+
+string FrameEvaluation::Benchmark::Summary() const {
+  double p = precision.accuracy() * 100.0;
+  double r = recall.accuracy() * 100.0;
+  double f1 = fscore() * 100.0;
+  return StringPrintf("P=%5.2f, R=%5.2f, F1=%5.2f", p, r, f1);
 }
 
 void FrameEvaluation::Output::GetScores(Scores *scores) const {

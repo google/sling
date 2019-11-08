@@ -23,7 +23,6 @@
 #include "sling/frame/store.h"
 #include "sling/myelin/compute.h"
 #include "sling/myelin/flow.h"
-#include "sling/nlp/parser/action-table.h"
 #include "sling/nlp/parser/parser-action.h"
 #include "sling/nlp/parser/parser-state.h"
 #include "sling/nlp/parser/trace.h"
@@ -90,10 +89,6 @@ class Cascade {
   Delegate *delegate(int i) const { return delegates_[i]; }
   int size() const { return delegates_.size(); }
 
-  // Action table accessors.
-  const ActionTable *actions() const { return actions_; }
-  void set_actions(const ActionTable *t) { actions_ = t; }
-
   // Sets 'action' to the fallback action for 'state'.
   void FallbackAction(const ParserState *state, ParserAction *action) const;
 
@@ -102,9 +97,6 @@ class Cascade {
 
   // List of delegates.
   std::vector<Delegate *> delegates_;
-
-  // Action table.
-  const ActionTable *actions_ = nullptr;
 
   // Fallback actions.
   ParserAction shift_;
@@ -138,7 +130,6 @@ class CascadeInstance {
   // The activation at index 'step' is used as input to all the delegates.
   // Adds the predicted and final actions to 'trace' if it is not nullptr.
   void Compute(myelin::Channel *activations,
-               int step,
                ParserState *state,
                ParserAction *output,
                Trace *trace = nullptr);

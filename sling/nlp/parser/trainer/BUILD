@@ -11,8 +11,9 @@ cc_library(
     "//sling/frame:serialization",
     "//sling/frame:store",
     "//sling/nlp/document:document",
-    "//sling/nlp/document:document-source",
+    "//sling/nlp/document:document-corpus",
     "//sling/string:strcat",
+    "//sling/string:printf",
   ],
 )
 
@@ -39,7 +40,7 @@ cc_binary(
     "//sling/file:posix",
     "//sling/frame:store",
     "//sling/nlp/document:document",
-    "//sling/nlp/document:document-source",
+    "//sling/nlp/document:document-corpus",
     "//sling/nlp/parser:parser-action",
   ],
 )

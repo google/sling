@@ -11,7 +11,7 @@ cc_binary(
     "//sling/frame:serialization",
     "//sling/myelin:profile",
     "//sling/nlp/document",
-    "//sling/nlp/document:document-source",
+    "//sling/nlp/document:document-corpus",
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",
     "//sling/nlp/parser",

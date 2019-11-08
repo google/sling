@@ -253,7 +253,8 @@ class Document {
   explicit Document(const Frame &top, const DocumentNames *names = nullptr);
 
   // Copy constructor for making a shallow copy of the whole document.
-  Document(const Document &other);
+  Document(const Document &other, bool annotations);
+  Document(const Document &other) : Document(other, true) {}
 
   // Make a shallow copy of parts of the document. Only annotations within the
   // token range are copied.

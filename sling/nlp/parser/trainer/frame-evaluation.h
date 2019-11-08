@@ -133,6 +133,9 @@ class FrameEvaluation {
 
     // Get scores for benchmark.
     void GetScores(const string &name, Scores *scores) const;
+
+    // Return benchmark summary with precision, recall, and F1.
+    string Summary() const;
   };
 
   // Holds evaluation output.
