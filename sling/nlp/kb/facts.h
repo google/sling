@@ -45,6 +45,9 @@ class FactCatalog {
   // Extract item types (P31) with closure over subclass of (P279).
   void ExtractItemTypes(Handle item, std::vector<Handle> *types);
 
+  // Check if item is a direct or indirect instance of of a type.
+  bool InstanceOf(Handle item, Handle type);
+
  private:
   // Set extractor for property type.
   void SetExtractor(Handle property, Extractor extractor) {
@@ -96,6 +99,7 @@ class FactCatalog {
   Name p_described_by_source_{names_, "P1343"};
   Name p_different_from_{names_, "P1889"};
   Name p_located_at_body_of_water_{names_, "P206"};
+  Name p_located_on_street_{names_, "P669"};
 
   Name n_time_{names_, "/w/time"};
   Name n_item_{names_, "/w/item"};
@@ -114,9 +118,13 @@ class Facts {
       : catalog_(catalog), store_(catalog_->store_), list_(store_),
         path_(store_) {}
 
-  // Accessor/mutator for whether closure will be performed on certain facts.
+  // Whether closure will be performed on certain facts.
   bool closure() const { return closure_; }
   void set_closure(bool c) { closure_ = c; }
+
+  // Whether numeric dates are extracted.
+  bool numeric_dates() const { return numeric_dates_; }
+  void set_numeric_dates(bool d) { numeric_dates_ = d; }
 
   // Extract facts for item.
   void Extract(Handle item);
@@ -252,6 +260,9 @@ class Facts {
 
   // Whether closure expansion is enabled.
   bool closure_ = true;
+
+  // Whether numeric dates are extracted.
+  bool numeric_dates_ = false;
 };
 
 // A taxonomy is a type system for classifying items into a list of types.

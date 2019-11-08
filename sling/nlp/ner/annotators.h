@@ -144,6 +144,28 @@ class EmphasisAnnotator {
   static constexpr int max_length = 20;
 };
 
+// Associate the first bolded mention in the first sentence with the topic
+// entity of the article.
+class IntroAnnotator {
+ public:
+  // Initialize intro annotator.
+  void Init(Store *store);
+
+  // Resolve first bolded mention to the topic entity.
+  void Annotate(SpanChart *chart);
+
+ private:
+  // Symbols.
+  Names names_;
+  Name n_page_item_{names_, "/wp/page/item"};
+
+  // Maximum offset of intro phrase.
+  static constexpr int max_offset = 5;
+
+  // Maximum length of intro phrase.
+  static constexpr int max_length = 20;
+};
+
 // Adds span flags based on taxonomy to the matched spans in the chart. All the
 // possible matches for a span are classified and their types are used for
 // adding flags to the matching span. The type-based span flags are used by
@@ -426,6 +448,7 @@ class SpanAnnotator {
   CommonWordPruner pruner_;
   CaseScorer case_;
   EmphasisAnnotator emphasis_;
+  IntroAnnotator intro_;
   AbbreviationAnnotator abbreviated_;
 
   // Symbols.

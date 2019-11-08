@@ -330,7 +330,21 @@ void CPU::Initialize() {
 #include <sys/sysinfo.h>
 
 int CPU::Processors() {
-  return get_nprocs();
+  static int cpus = -1;
+  if (cpus == -1) {
+    // Get the number of processors.
+    int processors = get_nprocs();
+
+    // Check if hyper-treading is enabled.
+    bool htt = false;
+    FILE *f = fopen("/sys/devices/system/cpu/smt/active", "r");
+    if (f) {
+      htt = fgetc(f) == '1';
+      fclose(f);
+    }
+    cpus = htt ? processors / 2 : processors;
+  }
+  return cpus;
 }
 
 #elif defined(__APPLE__)

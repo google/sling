@@ -49,6 +49,30 @@ class PhraseStructureAnnotator : public Annotator {
     for (const string &filename : task->GetInputFiles("phrases")) {
       LoadCache(filename);
     }
+
+    // Black-list some properties that are rarely expressed in phrases.
+    static const char *blacklist[] = {
+      "P22",    // father
+      "P25",    // mother
+      "P40",    // child
+      "P47",    // shares border with
+      "P530",   // diplomatic relation
+      "P190",   // twinned administrative body
+      "P1336",  // territory claimed by
+      "P1365",  // replaces
+      "P1366",  // replaced by
+      "P155",   // follows
+      "P460",   // said to be the same as
+      nullptr
+    };
+    for (const char **ptr = blacklist; *ptr; ++ptr) {
+      Handle property = commons->LookupExisting(*ptr);
+      if (property.IsNil()) {
+        LOG(WARNING) << "Unknown property" << *ptr;
+        continue;
+      }
+      blacklist_.insert(property);
+    }
   }
 
   // Annotate multi-word expressions in document with phrase structures.
@@ -101,7 +125,9 @@ class PhraseStructureAnnotator : public Annotator {
     facts.Extract(item);
     HandleSet targets;
     for (int i = 0; i < facts.size(); ++i) {
-      if (facts.simple(i)) targets.insert(facts.last(i));
+      if (!facts.simple(i)) continue;
+      if (blacklist_.count(facts.first(i)) > 0) continue;
+      targets.insert(facts.last(i));
     }
 
     // Try to match all subphrases to entities in the target set.
@@ -162,11 +188,14 @@ class PhraseStructureAnnotator : public Annotator {
       Handle relation = Handle::nil();
       for (int i = 0; i < facts.size(); ++i) {
         if (facts.last(i) == target && facts.simple(i)) {
-          relation = facts.first(i);
-          break;
+          Handle property = facts.first(i);
+          if (blacklist_.count(property) == 0) {
+            relation = facts.first(i);
+            break;
+          }
         }
       }
-      CHECK(!relation.IsNil());
+      if (relation.IsNil()) return;
 
       // A subphrase cannot resolve to the same meaning as the whole phrase.
       if (target == item) return;
@@ -344,6 +373,9 @@ class PhraseStructureAnnotator : public Annotator {
   // Phrase annotation cache.
   std::vector<Phrase> cache_;
   uint32 cache_size_;
+
+  // Black-listed relation types.
+  HandleSet blacklist_;
 
   // Mutex for accessing cache.
   Mutex mu_;

@@ -108,11 +108,7 @@ class ResolverContext {
  private:
   // Add tracking of anonymous frame to prevent it from being reclaimed.
   void Track(Handle h) {
-    if (!h.IsRef()) return;
-    if (h.IsNil()) return;
-    Datum *datum = store_->Deref(h);
-    if (!datum->IsFrame()) return;
-    if (datum->AsFrame()->IsAnonymous()) {
+    if (h.IsRef() && !h.IsNil() && store_->IsAnonymous(h)) {
       tracking_.push_back(h);
     }
   }

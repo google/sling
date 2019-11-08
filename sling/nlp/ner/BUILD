@@ -72,6 +72,18 @@ cc_library(
 )
 
 cc_library(
+  name = "anaphora",
+  srcs = ["anaphora.cc"],
+  deps = [
+    "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
+    "//sling/nlp/document:fingerprinter",
+    "//sling/nlp/kb:facts",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
   name = "phrases",
   srcs = ["phrases.cc"],
   deps = [
@@ -85,6 +97,17 @@ cc_library(
     "//sling/stream:file-input",
     "//sling/util:fingerprint",
     "//sling/util:mutex",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "relations",
+  srcs = ["relations.cc"],
+  deps = [
+    "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
+    "//sling/nlp/kb:facts",
   ],
   alwayslink = 1,
 )

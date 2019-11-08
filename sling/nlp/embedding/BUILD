@@ -26,6 +26,7 @@ cc_library(
     "//sling/frame:serialization",
     "//sling/myelin:builder",
     "//sling/myelin:compiler",
+    "//sling/myelin:profile",
     "//sling/nlp/document",
     "//sling/task:process",
     "//sling/util:embeddings",
