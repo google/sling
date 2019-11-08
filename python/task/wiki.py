@@ -629,6 +629,10 @@ class WikiWorkflow:
                               params={
                                 "language": language,
                                 "anchor_threshold": 30,
+                                "min_prefix": 1,
+                                "max_edit_distance": {
+                                  "fi": 5, "pl": 5
+                                }.get(language, 3)
                               })
     selector.attach_input("commons", self.alias_corrections())
     return names
