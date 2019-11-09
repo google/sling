@@ -116,7 +116,7 @@ class WikiWorkflow:
 
   def wikidata(self, dump=None):
     """Import Wikidata dump to frame format. It takes a Wikidata dump in JSON
-    format as inpput and converts each item and property to a SLING frame.
+    format as input and converts each item and property to a SLING frame.
     Returns the item and property output files."""
     if dump == None: dump = self.wikidata_dump()
     with self.wf.namespace("wikidata"):

@@ -74,6 +74,58 @@ class MultiClassDelegateLearner : public DelegateLearner {
     return new DelegateInstance(this);
   }
 
+  void Save(Flow *flow, Builder *data) override {
+    // Save delegate type.
+    data->Add("name", name_);
+    data->Add("runtime", "SoftmaxDelegate");
+    data->Add("cell", cell_->name());
+
+    // Save the action table.
+    Store *store = data->store();
+    Handle n_type = store->Lookup("/table/action/type");
+    Handle n_length = store->Lookup("/table/action/length");
+    Handle n_source = store->Lookup("/table/action/source");
+    Handle n_target = store->Lookup("/table/action/target");
+    Handle n_role = store->Lookup("/table/action/role");
+    Handle n_label = store->Lookup("/table/action/label");
+    Handle n_delegate = store->Lookup("/table/action/delegate");
+
+    Array actions(store, actions_.size());
+    int index = 0;
+    for (const ParserAction &action : actions_.list()) {
+      auto type = action.type;
+      Builder b(store);
+      b.Add(n_type, static_cast<int>(type));
+
+      if (type == ParserAction::REFER || type == ParserAction::EVOKE) {
+        if (action.length > 0) {
+          b.Add(n_length, static_cast<int>(action.length));
+        }
+      }
+      if (type == ParserAction::ASSIGN ||
+          type == ParserAction::ELABORATE ||
+          type == ParserAction::CONNECT) {
+        if (action.source != 0) {
+          b.Add(n_source, static_cast<int>(action.source));
+        }
+      }
+      if (type == ParserAction::EMBED ||
+          type == ParserAction::REFER ||
+          type == ParserAction::CONNECT) {
+        if (action.target != 0) {
+          b.Add(n_target, static_cast<int>(action.target));
+        }
+      }
+      if (type == ParserAction::CASCADE) {
+        b.Add(n_delegate, static_cast<int>(action.delegate));
+      }
+      if (!action.role.IsNil()) b.Add(n_role, action.role);
+      if (!action.label.IsNil()) b.Add(n_label, action.label);
+      actions.set(index++, b.Create().handle());
+    }
+    data->Add("actions", actions);
+  }
+
   // Multi-class delegate instance.
   class DelegateInstance : public DelegateLearnerInstance {
    public:
@@ -227,6 +279,15 @@ class CasparTrainer : public ParserTrainer {
       }
       transitions->push_back(action);
     });
+  }
+
+  // Save action table in model.
+  void SaveModel(Flow *flow, Store *store) override {
+    // Save action table in store.
+    Builder table(store);
+    table.AddId("/table");
+    actions_.Write(&table);
+    table.Create();
   }
 
  private:

@@ -46,12 +46,10 @@ CaseForm Token::Form() const {
 
 void Span::Evoke(const Frame &frame) {
   mention_.Add(document_->names_->n_evokes, frame);
-  document_->AddMention(frame.handle(), this);
 }
 
 void Span::Evoke(Handle frame) {
   mention_.Add(document_->names_->n_evokes, frame);
-  document_->AddMention(frame, this);
 }
 
 void Span::Replace(Handle existing, Handle replacement) {
@@ -59,9 +57,7 @@ void Span::Replace(Handle existing, Handle replacement) {
   FrameDatum *mention = mention_.store()->GetFrame(mention_.handle());
   for (Slot *slot = mention->begin(); slot < mention->end(); ++slot) {
     if (slot->name == n_evokes && slot->value == existing) {
-      document_->RemoveMention(existing, this);
       slot->value = replacement;
-      document_->AddMention(replacement, this);
       return;
     }
   }
@@ -268,9 +264,6 @@ Document::Document(const Frame &top, const DocumentNames *names)
       Span *span = Insert(begin, end);
       CHECK(span != nullptr) << "Crossing span: " << begin << "," << end;
       span->mention_ = Frame(store(), mention->self);
-      for (const Slot &s : span->mention_) {
-        if (s.name == names_->n_evokes) AddMention(s.value, span);
-      }
     } else if (slot->name == names_->n_theme.handle()) {
       // Add thematic frame.
       themes_.push_back(slot->value);
@@ -305,9 +298,6 @@ Document::Document(const Document &other, bool annotations)
     for (const Span *s : other.spans_) {
       Span *span = Insert(s->begin_, s->end_);
       span->mention_ = Frame(store, store->Clone(s->mention_.handle()));
-      for (const Slot &s : span->mention_) {
-        if (s.name == names_->n_evokes) AddMention(s.value, span);
-      }
     }
 
     // Copy themes.
@@ -366,9 +356,6 @@ Document::Document(const Document &other,
       if (b < 0 || e > length) continue;
       Span *span = Insert(b, e);
       span->mention_ = Frame(store, store->Clone(s->mention_.handle()));
-      for (const Slot &s : span->mention_) {
-        if (s.name == names_->n_evokes) AddMention(s.value, span);
-      }
     }
   }
 
@@ -511,13 +498,6 @@ void Document::DeleteSpan(Span *span) {
   // Remove span from span index.
   Remove(span);
 
-  // Remove all evoked frames from mention table.
-  for (const Slot &slot : span->mention_) {
-    if (slot.name == names_->n_evokes) {
-      RemoveMention(slot.value, span);
-    }
-  }
-
   // Clear the reference to the mention frame. This will mark the span as
   // deleted.
   span->mention_ = Frame::nil();
@@ -535,20 +515,6 @@ void Document::RemoveTheme(Handle handle) {
 void Document::AddExtra(Handle name, Handle value) {
   if (extras_ == nullptr) extras_ = new Slots(store());
   extras_->emplace_back(name, value);
-}
-
-void Document::AddMention(Handle handle, Span *span) {
-  mentions_.emplace(handle, span);
-}
-
-void Document::RemoveMention(Handle handle, Span *span) {
-  auto interval = mentions_.equal_range(handle);
-  for (auto it = interval.first; it != interval.second; ++it) {
-    if (it->second == span) {
-      mentions_.erase(it);
-      break;
-    }
-  }
 }
 
 int Document::Locate(int position) const {
@@ -781,7 +747,6 @@ void Document::ClearAnnotations() {
   for (Token &t : tokens_) t.span_ = nullptr;
   for (Span *s : spans_) delete s;
   spans_.clear();
-  mentions_.clear();
   themes_.clear();
 }
 

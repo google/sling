@@ -57,6 +57,7 @@ void LearnerTask::Train(Task *task, myelin::Network *model) {
       std::unique_lock<std::mutex> lock(eval_mu_);
       eval_model_.wait(lock);
     }
+    if (done_) break;
 
     // Run evaluation.
     if (!Evaluate(epoch_, model)) {

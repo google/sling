@@ -54,6 +54,9 @@ class ActionTable {
   // Returns the serialization of the table.
   string Serialize(const Store *global) const;
 
+  // Write action table in frame.
+  void Write(Builder *frame) const;
+
   // Initialize the action table from store.
   void Init(Store *store);
 

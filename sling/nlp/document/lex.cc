@@ -133,6 +133,7 @@ bool DocumentLexer::Lex(Document *document, Text lex) const {
   if (objects.size() != current_object + 1) return false;
 
   // Add mentions to document.
+  HandleSet added;
   for (auto &m : markables) {
     int begin = document->Locate(m.begin);
     int end = document->Locate(m.end);
@@ -140,7 +141,9 @@ bool DocumentLexer::Lex(Document *document, Text lex) const {
     if (m.object != -1) {
       Array evoked(store, objects[m.object]);
       for (int i = 0; i < evoked.length(); ++i) {
-        span->Evoke(evoked.get(i));
+        Handle frame = evoked.get(i);
+        span->Evoke(frame);
+        added.insert(frame);
       }
     }
   }
@@ -148,7 +151,7 @@ bool DocumentLexer::Lex(Document *document, Text lex) const {
   // Add thematic frames. Do not add frames that are evoked by spans.
   for (int theme : themes) {
     Handle frame = objects[theme];
-    if (document->EvokingSpanCount(frame) == 0) {
+    if (added.count(frame) == 0) {
       document->AddTheme(frame);
     }
   }

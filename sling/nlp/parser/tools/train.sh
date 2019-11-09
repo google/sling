@@ -84,5 +84,5 @@ then
   echo "Need sudo to link the sling python module.."
   sudo ln -s $(realpath python) $SLING_SYMLINK
 fi
-stdbuf -o 0 python sling/nlp/parser/tools/train_pytorch.py $ARGS 2>&1 | tee ${LOG_FILE}
+stdbuf -o 0 python3 sling/nlp/parser/tools/train_pytorch.py $ARGS 2>&1 | tee ${LOG_FILE}
 echo "Done. Log is available at ${LOG_FILE}."

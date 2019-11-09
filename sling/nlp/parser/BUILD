@@ -139,6 +139,7 @@ cc_library(
     ":roles",
     "//sling/base",
     "//sling/frame:store",
+    "//sling/frame:serialization",
     "//sling/myelin:builder",
     "//sling/myelin:compiler",
     "//sling/myelin:gradient",

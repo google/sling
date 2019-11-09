@@ -122,7 +122,7 @@ void AffixTable::Write(OutputStream *stream) const {
     output.WriteVarint32(affix->form().size());
     output.Write(affix->form());
     output.WriteVarint32(affix->length());
-    if (affix->length() > 1) {
+    if (affix->length() > 0) {
       CHECK(affix->shorter() != nullptr);
       output.WriteVarint32(affix->shorter()->id());
     }

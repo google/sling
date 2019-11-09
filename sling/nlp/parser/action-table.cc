@@ -38,37 +38,40 @@ void ActionTable::Init(Store *store) {
   CHECK(top.valid());
 
   // Get all the integer fields.
-  max_actions_per_token_ = top.GetInt("/table/max_actions_per_token");
-  frame_limit_ = top.GetInt("/table/frame_limit");
+  max_actions_per_token_ = top.GetInt("/table/max_actions_per_token", 5);
+  frame_limit_ = top.GetInt("/table/frame_limit", 5);
 
   // Read the action index.
   Array actions = top.Get("/table/actions").AsArray();
   CHECK(actions.valid());
 
-  Handle action_type = store->LookupExisting("/table/action/type");
-  Handle action_length = store->LookupExisting("/table/action/length");
-  Handle action_source = store->LookupExisting("/table/action/source");
-  Handle action_target = store->LookupExisting("/table/action/target");
-  Handle action_role = store->LookupExisting("/table/action/role");
-  Handle action_label = store->LookupExisting("/table/action/label");
+  Handle n_type = store->Lookup("/table/action/type");
+  Handle n_length = store->Lookup("/table/action/length");
+  Handle n_source = store->Lookup("/table/action/source");
+  Handle n_target = store->Lookup("/table/action/target");
+  Handle n_role = store->Lookup("/table/action/role");
+  Handle n_label = store->Lookup("/table/action/label");
+  Handle n_delegate = store->Lookup("/table/action/delegate");
   for (int i = 0; i < actions.length(); ++i) {
     ParserAction action;
     Frame item(store, actions.get(i));
     CHECK(item.valid());
 
     for (const Slot &slot : item) {
-      if (slot.name == action_type) {
+      if (slot.name == n_type) {
         action.type = static_cast<ParserAction::Type>(slot.value.AsInt());
-      } else if (slot.name == action_length) {
+      } else if (slot.name == n_length) {
         action.length = slot.value.AsInt();
-      } else if (slot.name == action_source) {
+      } else if (slot.name == n_source) {
         action.source = slot.value.AsInt();
-      } else if (slot.name == action_target) {
+      } else if (slot.name == n_target) {
         action.target = slot.value.AsInt();
-      } else if (slot.name == action_role) {
+      } else if (slot.name == n_role) {
         action.role = slot.value;
-      } else if (slot.name == action_label) {
+      } else if (slot.name == n_label) {
         action.label = slot.value;
+      } else if (slot.name == n_delegate) {
+        action.delegate = slot.value.AsInt();
       }
     }
 
@@ -82,66 +85,62 @@ void ActionTable::Save(const Store *global, const string &file) const {
 }
 
 string ActionTable::Serialize(const Store *global) const {
+  // Build frame with action table.
   Store store(global);
-  Builder top(&store);
-  top.AddId("/table");
+  Builder table(&store);
+  table.AddId("/table");
+  Write(&table);
 
+  StringEncoder encoder(&store);
+  encoder.Encode(table.Create());
+  return encoder.buffer();
+}
+
+void ActionTable::Write(Builder *frame) const {
   // Save the action table.
-  Handle action_type = store.Lookup("/table/action/type");
-  Handle action_length = store.Lookup("/table/action/length");
-  Handle action_source = store.Lookup("/table/action/source");
-  Handle action_target = store.Lookup("/table/action/target");
-  Handle action_role = store.Lookup("/table/action/role");
-  Handle action_label = store.Lookup("/table/action/label");
+  Store *store = frame->store();
+  Handle n_type = store->Lookup("/table/action/type");
+  Handle n_length = store->Lookup("/table/action/length");
+  Handle n_source = store->Lookup("/table/action/source");
+  Handle n_target = store->Lookup("/table/action/target");
+  Handle n_role = store->Lookup("/table/action/role");
+  Handle n_label = store->Lookup("/table/action/label");
+  Handle n_delegate = store->Lookup("/table/action/delegate");
 
-  Array actions(&store, actions_.size());
+  Array actions(store, actions_.size());
   int index = 0;
   for (const ParserAction &action : actions_) {
     auto type = action.type;
-    Builder b(&store);
-    b.Add(action_type, static_cast<int>(type));
+    Builder b(store);
+    b.Add(n_type, static_cast<int>(type));
 
     if (type == ParserAction::REFER || type == ParserAction::EVOKE) {
       if (action.length > 0) {
-        b.Add(action_length, static_cast<int>(action.length));
+        b.Add(n_length, static_cast<int>(action.length));
       }
     }
     if (type == ParserAction::ASSIGN ||
         type == ParserAction::ELABORATE ||
         type == ParserAction::CONNECT) {
       if (action.source != 0) {
-        b.Add(action_source, static_cast<int>(action.source));
+        b.Add(n_source, static_cast<int>(action.source));
       }
     }
     if (type == ParserAction::EMBED ||
         type == ParserAction::REFER ||
         type == ParserAction::CONNECT) {
       if (action.target != 0) {
-        b.Add(action_target, static_cast<int>(action.target));
+        b.Add(n_target, static_cast<int>(action.target));
       }
     }
-    if (!action.role.IsNil()) b.Add(action_role, action.role);
-    if (!action.label.IsNil()) b.Add(action_label, action.label);
+    if (type == ParserAction::CASCADE) {
+      b.Add(n_delegate, static_cast<int>(action.delegate));
+    }
+    if (!action.role.IsNil()) b.Add(n_role, action.role);
+    if (!action.label.IsNil()) b.Add(n_label, action.label);
     actions.set(index++, b.Create().handle());
   }
-  top.Add("/table/actions", actions);
-
-  // Add artificial links to symbols used in serialization. This is needed as
-  // some action types might be unseen, so their corresponding symbols won't be
-  // serialized. However we still want handles to them during Load().
-  // For example, if we have only seen EVOKE, SHIFT, and STOP actions, then
-  // the symbol /table/fp/refer for REFER won't be serialized unless the table
-  // links to it.
-  std::vector<Handle> symbols = {
-    action_type, action_length, action_source, action_target,
-    action_role, action_label
-  };
-  Array symbols_array(&store, symbols);
-  top.Add("/table/symbols", symbols_array);
-
-  StringEncoder encoder(&store);
-  encoder.Encode(top.Create());
-  return encoder.buffer();
+  frame->Add("/table/actions", actions);
 }
 
 }  // namespace nlp

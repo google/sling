@@ -16,6 +16,7 @@
 
 #include <math.h>
 
+#include "sling/frame/serialization.h"
 #include "sling/myelin/gradient.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/lexicon.h"
@@ -67,6 +68,12 @@ void ParserTrainer::Run(task::Task *task) {
   evaluation_corpus_ =
     new DocumentCorpus(&commons_, task->GetInputFiles("evaluation_corpus"));
 
+  // Output file for model.
+  auto *model_file = task->GetOutput("model");
+  if (model_file != nullptr) {
+    model_filename_ = model_file->resource()->name();
+  }
+
   // Set up encoder lexicon.
   string normalization = task->Get("normalization", "d");
   spec_.lexicon.normalization = ParseNormalization(normalization);
@@ -97,15 +104,15 @@ void ParserTrainer::Run(task::Task *task) {
   Setup(task);
 
   // Build parser model flow graph.
-  BuildFlow(&flow_, true);
+  Build(&flow_, true);
   optimizer_ = GetOptimizer(task);
   optimizer_->Build(&flow_);
 
   // Compile model.
-  compiler_.Compile(&flow_, &net_);
+  compiler_.Compile(&flow_, &model_);
 
   // Get decoder cells and tensors.
-  decoder_ = net_.GetCell("ff_trunk");
+  decoder_ = model_.GetCell("ff_trunk");
   activations_ = decoder_->GetParameter("ff_trunk/steps");
   gdecoder_ = decoder_->Gradient();
   primal_ = decoder_->Primal();
@@ -115,17 +122,23 @@ void ParserTrainer::Run(task::Task *task) {
   drl_ = gdecoder_->GetParameter("gradients/ff_trunk/d_rl_lstm");
 
   // Initialize model.
-  feature_model_.Init(net_.GetCell("ff_trunk"),
+  feature_model_.Init(model_.GetCell("ff_trunk"),
                       flow_.DataBlock("spec"),
                       &roles_, frame_limit_);
-  net_.InitLearnableWeights(seed_, 0.0, 0.01);
-  encoder_.Initialize(net_);
-  optimizer_->Initialize(net_);
-  for (auto *d : delegates_) d->Initialize(net_);
+  model_.InitLearnableWeights(seed_, 0.0, 0.01);
+  encoder_.Initialize(model_);
+  optimizer_->Initialize(model_);
+  for (auto *d : delegates_) d->Initialize(model_);
   commons_.Freeze();
 
   // Train model.
-  Train(task, &net_);
+  Train(task, &model_);
+
+  // Save final model.
+  if (!model_filename_.empty()) {
+    LOG(INFO) << "Writing parser model to " << model_filename_;
+    Save(model_filename_);
+  }
 
   // Clean up.
   delete optimizer_;
@@ -361,9 +374,13 @@ bool ParserTrainer::Evaluate(int64 epoch, Network *model) {
 }
 
 void ParserTrainer::Checkpoint(int64 epoch, Network *model) {
+  if (!model_filename_.empty()) {
+    LOG(INFO) << "Checkpointing model to " << model_filename_;
+    Save(model_filename_);
+  }
 }
 
-void ParserTrainer::BuildFlow(Flow *flow, bool learn) {
+void ParserTrainer::Build(Flow *flow, bool learn) {
   // Build document input encoder.
   BiLSTM::Outputs lstm;
   if (learn) {
@@ -433,6 +450,7 @@ void ParserTrainer::BuildFlow(Flow *flow, bool learn) {
     bins.append(std::to_string(d));
   }
   spec->SetAttr("mark_distance_bins", bins);
+  spec->SetAttr("frame_limit", frame_limit_);
 
   // Concatenate mapped feature inputs.
   auto *fv = f.Concat(features);
@@ -488,6 +506,45 @@ Document *ParserTrainer::GetNextTrainingDocument(Store *store) {
     document = training_corpus_->Next(store);
   }
   return document;
+}
+
+void ParserTrainer::Save(const string &filename) {
+  // Build model.
+  Flow flow;
+  Build(&flow, false);
+
+  // Copy weights from trained model.
+  model_.SaveLearnedWeights(&flow);
+
+  // Save lexicon.
+  encoder_.SaveLexicon(&flow);
+
+  // Save extra model data in store.
+  Store store(&commons_);
+  SaveModel(&flow, &store);
+
+  // Save delegates.
+  Builder cascade(&store);
+  cascade.AddId("/cascade");
+  Array delegates(&store, delegates_.size());
+  for (int i = 0; i < delegates_.size(); ++i) {
+    Builder data(&store);
+    delegates_[i]->Save(&flow, &data);
+    delegates.set(i, data.Create().handle());
+  }
+  cascade.Add("delegates", delegates);
+  cascade.Create();
+
+  // Save store in flow.
+  StringEncoder encoder(&store);
+  encoder.EncodeAll();
+
+  Flow::Blob *blob = flow.AddBlob("commons", "frames");
+  blob->data = flow.AllocateMemory(encoder.buffer());
+  blob->size = encoder.buffer().size();
+
+  // Save model to file.
+  flow.Save(filename);
 }
 
 ParserTrainer::ParserEvaulationCorpus::ParserEvaulationCorpus(

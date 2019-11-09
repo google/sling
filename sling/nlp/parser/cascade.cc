@@ -170,6 +170,5 @@ void CascadeInstance::Compute(myelin::Channel *activations,
   }
 }
 
-
 }  // namespace nlp
 }  // namespace sling

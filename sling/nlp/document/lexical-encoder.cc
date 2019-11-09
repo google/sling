@@ -54,7 +54,7 @@ void LexicalFeatures::LoadLexicon(Flow *flow) {
 void LexicalFeatures::SaveLexicon(myelin::Flow *flow) const {
   // Save word vocabulary.
   Flow::Blob *vocabulary = flow->AddBlob("lexicon", "dict");
-  vocabulary->SetAttr("delimiter", 10);
+  vocabulary->SetAttr("delimiter", 0);
   vocabulary->SetAttr("oov", lexicon_.oov());
   auto normalization = lexicon_.normalization();
   vocabulary->SetAttr("normalization", NormalizationString(normalization));

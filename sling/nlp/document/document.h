@@ -374,62 +374,6 @@ class Document {
     AddExtra(name.handle(), store()->AllocateString(value));
   }
 
-  // Types for mapping from frame to spans that evoke it.
-  typedef std::unordered_multimap<Handle, Span *, HandleHash> MentionMap;
-  typedef std::pair<MentionMap::const_iterator, MentionMap::const_iterator>
-      ConstMentionIteratorPair;
-  typedef std::pair<MentionMap::iterator, MentionMap::iterator>
-      MentionIteratorPair;
-
-  // Iterator adapters for mention ranges.
-  class ConstMentionRange {
-   public:
-    explicit ConstMentionRange(const ConstMentionIteratorPair &interval)
-        : interval_(interval) {}
-    MentionMap::const_iterator begin() const { return interval_.first; }
-    MentionMap::const_iterator end() const { return interval_.second; }
-
-   private:
-    ConstMentionIteratorPair interval_;
-  };
-
-  class MentionRange {
-   public:
-    explicit MentionRange(const MentionIteratorPair &interval)
-        : interval_(interval) {}
-    MentionMap::iterator begin() { return interval_.first; }
-    MentionMap::iterator end() { return interval_.second; }
-
-   private:
-    MentionIteratorPair interval_;
-  };
-
-  // Iterates over all spans that evoke a frame, e.g.:
-  //   for (const auto &it : document.EvokingSpans(h)) {
-  //     Span *s = it.second;
-  //   }
-  ConstMentionRange EvokingSpans(Handle handle) const {
-    return ConstMentionRange(mentions_.equal_range(handle));
-  }
-  ConstMentionRange EvokingSpans(const Frame &frame) const {
-    return ConstMentionRange(mentions_.equal_range(frame.handle()));
-  }
-
-  MentionRange EvokingSpans(Handle handle) {
-    return MentionRange(mentions_.equal_range(handle));
-  }
-  MentionRange EvokingSpans(const Frame &frame) {
-    return MentionRange(mentions_.equal_range(frame.handle()));
-  }
-
-  // Returns the number of spans evoking a frame.
-  int EvokingSpanCount(Handle handle) {
-    return mentions_.count(handle);
-  }
-  int EvokingSpanCount(const Frame &frame) {
-    return mentions_.count(frame.handle());
-  }
-
   // Clears annotations (mentions and themes) from document.
   void ClearAnnotations();
 
@@ -444,12 +388,6 @@ class Document {
 
   // Removes the span from the span index.
   void Remove(Span *span);
-
-  // Adds frame to mention mapping.
-  void AddMention(Handle handle, Span *span);
-
-  // Removes frame from mention mapping.
-  void RemoveMention(Handle handle, Span *span);
 
   // Document frame.
   Frame top_;
@@ -473,11 +411,6 @@ class Document {
 
   // Additional slots that should be added to document.
   Slots *extras_ = nullptr;
-
-  // Inverse mapping from frames to spans that can be used for looking up all
-  // mentions of a frame. The handles are tracked by the mention frame in the
-  // span.
-  MentionMap mentions_;
 
   // Document symbol names.
   const DocumentNames *names_;

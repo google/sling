@@ -2,11 +2,14 @@ import sling
 import sling.flags as flags
 import sling.task.workflow as workflow
 
+# Start up workflow system.
 flags.parse()
 workflow.startup()
 
+# Create worflow.
 wf = workflow.Workflow("parser-training")
 
+# Parser trainer inputs and outputs.
 training_corpus = wf.resource(
   "local/data/corpora/caspar/train_shuffled.rec",
   format="record/document"
@@ -22,6 +25,12 @@ word_embeddings = wf.resource(
   format="embeddings"
 )
 
+parser_model = wf.resource(
+  "local/data/e/caspar/caspar.flow",
+  format="flow"
+)
+
+# Parser trainer task.
 trainer = wf.task("caspar-trainer")
 
 trainer.add_params({
@@ -38,8 +47,11 @@ trainer.add_params({
 trainer.attach_input("training_corpus", training_corpus)
 trainer.attach_input("evaluation_corpus", evaluation_corpus)
 trainer.attach_input("word_embeddings", word_embeddings)
+trainer.attach_output("model", parser_model)
 
+# Run parser trainer.
 workflow.run(wf)
 
+# Shut down.
 workflow.shutdown()
 
