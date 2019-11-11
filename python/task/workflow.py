@@ -541,6 +541,14 @@ class Workflow(object):
 
     return output
 
+  def pipe(self, command, format=None, name=None):
+    """Run command and pipe output to channel."""
+    reader = self.task("pipe-reader", name, params={"command": command})
+    if type(format) == str: format = Format(format)
+    if format is None: format = Format("pipe/text")
+    output = self.channel(reader, format=format.as_message())
+    return output
+
   def collect(self, *args):
     """Return list of channels that collects the input from all the arguments.
     The arguments can be channels, resources, or lists of channels or

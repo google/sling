@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Workflow builder for Wikidata and Wikipedia processing"""
+"""Workflow for Wikidata and Wikipedia processing"""
 
 import sling.flags as flags
 from sling.task import *
@@ -42,6 +42,11 @@ flags.define("--extra_items",
              help="additional items with info",
              default=None,
              metavar="RECFILES")
+
+flags.define("--lbzip2",
+             help="use lbzip2 for parallel decompression",
+             default=False,
+             action='store_true')
 
 class WikiWorkflow:
   def __init__(self, name=None, wf=None):
@@ -120,7 +125,13 @@ class WikiWorkflow:
     Returns the item and property output files."""
     if dump == None: dump = self.wikidata_dump()
     with self.wf.namespace("wikidata"):
-      input = self.wf.parallel(self.wf.read(dump), threads=5)
+      if flags.arg.lbzip2:
+        input = self.wf.pipe("lbzip2 -d -c " + dump.name,
+                             name="wiki-decompress",
+                             format="text/json")
+      else:
+        input = self.wf.read(dump)
+      input = self.wf.parallel(input, threads=5)
       items, properties = self.wikidata_import(input)
       items_output = self.wikidata_items()
       self.wf.write(items, items_output, name="item-writer")
@@ -275,7 +286,7 @@ class WikiWorkflow:
 
   def wikipedia_import(self, input, name=None):
     """Task for converting Wikipedia dump to SLING articles and redirects.
-    Returns article and redirect channels."""
+    Returns article, categories, and redirect channels."""
     task = self.wf.task("wikipedia-importer", name=name)
     task.attach_input("input", input)
     articles = self.wf.channel(task, name="articles", format="message/frame")

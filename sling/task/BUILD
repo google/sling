@@ -167,6 +167,18 @@ cc_library(
 )
 
 cc_library(
+  name = "pipe-reader",
+  srcs = ["pipe-reader.cc"],
+  deps = [
+    ":process",
+    ":task",
+    "//sling/stream:input",
+    "//sling/stream:unix-file",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
   name = "message-printer",
   srcs = ["message-printer.cc"],
   deps = [

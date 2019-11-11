@@ -105,6 +105,7 @@ cc_library(
     "//sling/task:text-file-writer",
     "//sling/task:text-map-reader",
     "//sling/task:text-map-writer",
+    "//sling/task:pipe-reader",
     "//sling/task:workers",
   ],
 )
