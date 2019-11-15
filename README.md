@@ -44,7 +44,8 @@ intervening symbolic representation.
 
 The SLING framework includes an efficient and scalable
 [frame store](doc/guide/frames.md) implementation as well as a
-[neural network JIT compiler](doc/guide/myelin.md) for fast parsing at runtime.
+[neural network JIT compiler](doc/guide/myelin.md) for fast training and 
+parsing.
 
 A more detailed description of the SLING parser can be found in this paper:
 
@@ -56,8 +57,7 @@ A more detailed description of the SLING parser can be found in this paper:
 ## More information ...
 
   * [Installation and building](doc/guide/install.md)
-  * [Training a parser](doc/guide/training.md)
-  * [Running the parser](doc/guide/parsing.md)
+  * [CASPAR frame semantics parser](doc/guide/caspar.md)
   * [Semantic frames](doc/guide/frames.md)
   * [SLING Python API](doc/guide/pyapi.md)
   * [Myelin neural network JIT compiler](doc/guide/myelin.md)

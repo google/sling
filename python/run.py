@@ -22,7 +22,7 @@ import sling.task.corpora as corpora
 import sling.task.download as download
 import sling.task.wiki as wiki
 import sling.task.embedding as embedding
-import sling.task.entity as entity
+import sling.task.silver as silver
 import sling.task.workflow as workflow
 
 # Command-line flags.
@@ -61,8 +61,8 @@ flags.define("--invert_categories",
              default=False,
              action='store_true')
 
-flags.define("--compute_item_popularity",
-             help="compute item popularity from alias counts",
+flags.define("--extract_wikilinks",
+             help="extract link graph from wikipedias",
              default=False,
              action='store_true')
 
@@ -91,13 +91,13 @@ flags.define("--build_phrasetab",
              default=False,
              action='store_true')
 
-flags.define("--extract_vocabulary",
-             help="extract vocabulary for word embeddings",
+flags.define("--build_wiki",
+             help="run all workflow for building knowledge base",
              default=False,
              action='store_true')
 
-flags.define("--build_wiki",
-             help="run all workflow for building knowledge base",
+flags.define("--extract_vocabulary",
+             help="extract vocabulary for word embeddings",
              default=False,
              action='store_true')
 
@@ -126,28 +126,13 @@ flags.define("--train_fact_plausibility",
              default=False,
              action='store_true')
 
-flags.define("--extract_wikilinks",
-             help="extract link graph from wikipedias",
-             default=False,
-             action='store_true')
-
 flags.define("--build_idf",
              help="build IDF table from wikipedia",
              default=False,
              action='store_true')
 
-flags.define("--fuse_ner_items",
-             help="fuse items from wikidata, wikipedia, and links",
-             default=False,
-             action='store_true')
-
-flags.define("--build_ner_kb",
-             help="build NER knowledge base",
-             default=False,
-             action='store_true')
-
-flags.define("--label_wiki",
-             help="annotate wikipedia documents with NER labeling",
+flags.define("--silver_annotation",
+             help="annotate wikipedia documents with silver annotations",
              default=False,
              action='store_true')
 
@@ -191,7 +176,7 @@ def parse_wikipedia():
       wf.parse_wikipedia(language=language)
       workflow.run(wf.wf)
 
-def fuse_items():
+def build_knowledge_base():
   # Merge categories from wikipedias.
   if flags.arg.merge_categories:
     log.info("Merge wikipedia categories")
@@ -206,11 +191,11 @@ def fuse_items():
     wf.invert_wikipedia_categories()
     workflow.run(wf.wf)
 
-  # Compute item popularity.
-  if flags.arg.compute_item_popularity:
-    log.info("Compute item popularity")
-    wf = wiki.WikiWorkflow("item-popularity")
-    wf.compute_item_popularity()
+  # Extract link graph.
+  if flags.arg.extract_wikilinks:
+    log.info("Extract link graph")
+    wf = wiki.WikiWorkflow("link-graph")
+    wf.extract_links()
     workflow.run(wf.wf)
 
   # Fuse items.
@@ -220,8 +205,6 @@ def fuse_items():
     wf.fuse_items()
     workflow.run(wf.wf)
 
-
-def build_knowledge_base():
   # Build knowledge base repository.
   if flags.arg.build_kb:
     log.info("Build knowledge base repository")
@@ -229,6 +212,7 @@ def build_knowledge_base():
     wf.build_knowledge_base()
     workflow.run(wf.wf)
 
+def build_alias_tables():
   # Extract item names from wikidata and wikipedia.
   if flags.arg.extract_names:
     for language in flags.arg.languages:
@@ -299,42 +283,21 @@ def train_embeddings():
     workflow.run(wf.wf)
 
 
-def extract_named_entities():
-  # Extract Wikipedia link graph.
-  if flags.arg.extract_wikilinks:
-    log.info("Extract Wikipedia link graph")
-    wf = entity.EntityWorkflow("wiki-links")
-    wf.extract_wikilinks()
-    workflow.run(wf.wf)
-
+def silver_annotation():
   # Extract IDF table.
   if flags.arg.build_idf:
-    wf = entity.EntityWorkflow("idf-table")
+    wf = silver.SilverWorkflow("idf-table")
     for language in flags.arg.languages:
       log.info("Build " + language + " IDF table")
       wf.build_idf(language=language)
     workflow.run(wf.wf)
 
-  # Fuse NER items.
-  if flags.arg.fuse_ner_items:
-    log.info("Fuse NER items")
-    wf = entity.EntityWorkflow("fuse-ner-items")
-    wf.fuse_items()
-    workflow.run(wf.wf)
-
-  # Build NER knowledge base.
-  if flags.arg.build_ner_kb:
-    log.info("Build NER knowledge base")
-    wf = entity.EntityWorkflow("ner-knowledge-base")
-    wf.build_knowledge_base()
-    workflow.run(wf.wf)
-
-  # Run NER labeling of Wikipedia documents.
-  if flags.arg.label_wiki:
+  # Run silver-labeling of Wikipedia documents.
+  if flags.arg.silver_annotation:
     for language in flags.arg.languages:
-      log.info("Label " + language + " wikipedia")
-      wf = entity.EntityWorkflow(language + "-wiki-label")
-      wf.label_documents(language=language)
+      log.info("Silver-label " + language + " wikipedia")
+      wf = silver.SilverWorkflow(language + "-silver")
+      wf.silver_annotation(language=language)
       workflow.run(wf.wf)
 
 
@@ -348,6 +311,7 @@ if __name__ == '__main__':
     flags.arg.parse_wikipedia = True
     flags.arg.merge_categories = True
     flags.arg.invert_categories = True
+    flags.arg.extract_wikilinks = True
     flags.arg.fuse_items = True
     flags.arg.build_kb = True
     flags.arg.extract_names = True
@@ -359,10 +323,10 @@ if __name__ == '__main__':
   download_corpora()
   import_wiki()
   parse_wikipedia()
-  fuse_items()
   build_knowledge_base()
+  build_alias_tables()
   train_embeddings()
-  extract_named_entities()
+  silver_annotation()
   workflow.shutdown()
 
   # Done.

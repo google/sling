@@ -143,7 +143,6 @@ cc_library(
     "//sling/nlp/document",
     "//sling/nlp/document:document-tokenizer",
     "//sling/task",
-    "//sling/task:accumulator",
     "//sling/task:frames",
     "//sling/task:reducer",
     "//sling/string:strcat",

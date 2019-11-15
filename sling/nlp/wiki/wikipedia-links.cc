@@ -24,6 +24,7 @@
 namespace sling {
 namespace nlp {
 
+// Extract outgoing links from mentions and themes in documents.
 class WikipediaLinkExtractor : public task::DocumentProcessor {
  public:
   void Startup(task::Task *task) override {
@@ -157,6 +158,45 @@ class WikipediaLinkExtractor : public task::DocumentProcessor {
 
 REGISTER_TASK_PROCESSOR("wikipedia-link-extractor", WikipediaLinkExtractor);
 
+// Collect fact targets from items and output aggregate target counts.
+class FactTargetExtractor : public task::FrameProcessor {
+ public:
+  void Startup(task::Task *task) override {
+    accumulator_.Init(output());
+  }
+
+  void Process(Slice key, const Frame &frame) override {
+    // Accumulate fact targets for the item.
+    Store *store = frame.store();
+    for (const Slot &slot : frame) {
+      if (slot.name == Handle::isa()) continue;
+      if (slot.name == n_lang_) continue;
+
+      Handle target = store->Resolve(slot.value);
+      if (!store->IsFrame(target)) continue;
+
+      Text id = store->FrameId(target);
+      if (id.empty()) continue;
+
+      accumulator_.Increment(id);
+    }
+  }
+
+  void Flush(task::Task *task) override {
+    accumulator_.Flush();
+  }
+
+ private:
+  // Accumulator for fanin counts.
+  task::Accumulator accumulator_;
+
+  // Symbols.
+  Name n_lang_{names_, "lang"};
+};
+
+REGISTER_TASK_PROCESSOR("fact-target-extractor", FactTargetExtractor);
+
+// Merge links and output link frames for each item.
 class WikipediaLinkMerger : public task::Reducer {
  public:
   void Start(task::Task *task) override {
@@ -201,6 +241,21 @@ class WikipediaLinkMerger : public task::Reducer {
 };
 
 REGISTER_TASK_PROCESSOR("wikipedia-link-merger", WikipediaLinkMerger);
+
+// Sum item popularity and output popularity frame for each item.
+class ItemPopularityReducer : public task::SumReducer {
+ public:
+  void Aggregate(int shard, const Slice &key, uint64 sum) override {
+    // Output popularity frame for item.
+    Store store;
+    Builder b(&store);
+    int popularity = sum;
+    b.Add("/w/item/popularity", popularity);
+    Output(shard, task::CreateMessage(key, b.Create()));
+  }
+};
+
+REGISTER_TASK_PROCESSOR("item-popularity-reducer", ItemPopularityReducer);
 
 }  // namespace nlp
 }  // namespace sling

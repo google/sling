@@ -23,7 +23,6 @@
 #include "sling/nlp/wiki/wiki-annotator.h"
 #include "sling/nlp/wiki/wiki-extractor.h"
 #include "sling/nlp/wiki/wiki-parser.h"
-#include "sling/task/accumulator.h"
 #include "sling/task/frames.h"
 #include "sling/task/reducer.h"
 #include "sling/task/task.h"
@@ -572,59 +571,6 @@ class CategoryMemberMerger : public task::Reducer {
 };
 
 REGISTER_TASK_PROCESSOR("category-member-merger", CategoryMemberMerger);
-
-// Count item aliases for computing item popularity.
-class ItemPopularityMapper : public task::FrameProcessor {
- public:
-  void Startup(task::Task *task) override {
-    accumulator_.Init(output());
-  }
-
-  void Process(Slice key, const Frame &frame) override {
-    // Sum the alias counts for the item.
-    int sum = 0;
-    for (const Slot &slot : frame) {
-      if (slot.name == n_alias_) {
-        Frame alias(frame.store(), slot.value);
-        sum += alias.GetInt(n_count_);
-      }
-    }
-    if (sum > 0) {
-      accumulator_.Increment(key, sum);
-    }
-  }
-
-  void Flush(task::Task *task) override {
-    accumulator_.Flush();
-  }
-
- private:
-  // Accumulator for alias counts.
-  task::Accumulator accumulator_;
-
-  // Symbols.
-  Name n_alias_{names_, "alias"};
-  Name n_count_{names_, "count"};
-};
-
-REGISTER_TASK_PROCESSOR("item-popularity-mapper", ItemPopularityMapper);
-
-// Sum item popularity and output popularity frame for each item.
-class ItemPopularityReducer : public task::SumReducer {
- public:
-  void Aggregate(int shard, const Slice &key, uint64 sum) override {
-    // Output popularity frame for item.
-    Store store;
-    Builder b(&store);
-    int popularity = sum;
-    b.Add("/w/item/popularity", popularity);
-
-    // Output members for category.
-    Output(shard, task::CreateMessage(key, b.Create()));
-  }
-};
-
-REGISTER_TASK_PROCESSOR("item-popularity-reducer", ItemPopularityReducer);
 
 }  // namespace nlp
 }  // namespace sling

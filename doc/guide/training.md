@@ -290,6 +290,11 @@ to avoid supplying them again and again on the commandline.
 
 ### Run the training script
 
+The parser trainer uses PyTorch for training, so it needs to be installed:
+```shell
+sudo pip3 install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl
+```
+
 To test your training setup, you can kick off a small training run:
 ```shell
 ./sling/nlp/parser/tools/train.sh [--commons=<path to commons>] \

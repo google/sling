@@ -1,15 +1,26 @@
 # SLING Installation and Building
 
-## Trying out the parser
+Operating system: Linux<br>
+Languages: C++ (gcc or clang), Python 3.5+, assembler<br>
+CPU: Intel x64 or compatible<br>
+Build system: Bazel<br>
 
-If you just want to try out the parser on a pre-trained model, you can install
-the wheel with pip and download a pre-trained parser model. On a Linux machine
+## Python
+
+If you just want to use SLING from Python, e.g. want to try out the parser on a 
+pre-trained model, you can install the SLING wheel with pip. On a Linux machine
 with Python 3 you can install a pre-built wheel:
 
 ```
 sudo -H pip3 install http://www.jbox.dk/sling/sling-2.0.0-py3-none-linux_x86_64.whl
 ```
-and download the pre-trained model:
+
+You can test the installation by trying to import the `sling` package:
+```
+python3 -c "import sling; print(sling)"
+```
+
+If you want to try out the SLING parser you can download a pre-trained model:
 ```
 wget http://www.jbox.dk/sling/caspar.flow
 ```
@@ -26,10 +37,10 @@ for m in doc.mentions:
   print("mention", doc.phrase(m.begin, m.end))
 ```
 
-## Installation
+## C++
 
-If you want to train a parser or use SLING for C++ development, you need to
-download the source code and build it.
+If you want to use SLING for C++ development, you need to download the source 
+code and build it.
 
 First, clone the GitHub repository.
 
@@ -38,7 +49,7 @@ git clone https://github.com/google/sling.git
 cd sling
 ```
 
-Next, run the `seup.sh` script to set up the SLING development environment
+Next, run the `setup.sh` script to set up the SLING development environment
 and build the code:
 ```shell
 ./setup.sh
@@ -49,21 +60,10 @@ This will perform the following steps:
 * Install [Bazel](https://bazel.build/) which is used as the build system for
   SLING.
 * Build SLING from source.
-* Remove the Python 2.7 SLING pip package if it is installed.
 * Set up link to the SLING development enviroment for SLING Python 3 API.
-
-The parser trainer uses PyTorch for training, so it also needs to be installed:
-
-```shell
-sudo pip3 install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl
-```
 
 ## Building
 
-Operating system: Linux<br>
-Languages: C++ (gcc or clang), Python 3.5+, assembler<br>
-CPU: Intel x64 or compatible<br>
-Build system: Bazel<br>
 
 You can use the `buildall.sh` script to build all the source code:
 
@@ -80,8 +80,6 @@ sudo ln -s $(realpath python) /usr/lib/python3/dist-packages/sling
 ```
 
 **NOTE:**
-* In case you are using an older version of GCC (< v5), you may want to comment
-  out [this cxxopt](https://github.com/google/sling/blob/f8f0fbd1a18596ccfe6dbfba262a17afd36e2b5f/.bazelrc#L8) in .bazelrc.
 * We currently do not support OSX, but you can check out
   [issue #189](https://github.com/google/sling/issues/189) for help on building
   on OSX.

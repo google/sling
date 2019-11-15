@@ -2,7 +2,7 @@
 
 ## Introduction <a name="intro">
 
-SLING is a framework for storing, inspecting, manipulating, and transporting
+SLING has a framework for storing, inspecting, manipulating, and transporting
 semantic frames compactly and efficiently. The frames can be used both for
 linguistic annotations as well as knowledge representations. SLING is not tied
 to any particular frame semantic theory or knowledge ontology, but allows you

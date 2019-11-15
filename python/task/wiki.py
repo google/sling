@@ -447,25 +447,53 @@ class WikiWorkflow:
                                format="message/string",
                                params={"threshold": 100000})
 
-  def item_popularity(self):
-    """Resource for item popularity."""
-    return self.wf.resource("item-popularity.rec",
+  #---------------------------------------------------------------------------
+  # Wikipedia link graph
+  #---------------------------------------------------------------------------
+
+  def wikilinks(self):
+    """Resource for link graph."""
+    return self.wf.resource("links@10.rec",
                             dir=corpora.wikidir(),
                             format="records/frame")
 
-  def compute_item_popularity(self, languages=None):
-    """Compute item popularity using alias counts across languages."""
-    if languages == None: languages = flags.arg.languages
+  def fanin(self):
+    """Resource for link fan-in."""
+    return self.wf.resource("fanin.rec",
+                            dir=corpora.wikidir(),
+                            format="records/frame")
 
-    with self.wf.namespace("item-popularity"):
-      aliases = []
-      for language in languages:
-        aliases.extend(self.wikipedia_aliases(language))
-      return self.wf.mapreduce(input=aliases,
-                               output=self.item_popularity(),
-                               mapper="item-popularity-mapper",
-                               reducer="item-popularity-reducer",
-                               format="message/int")
+  def extract_links(self):
+    # Build link graph over all Wikipedias and compute item popularity.
+    documents = []
+    for l in flags.arg.languages:
+      documents.extend(self.wikipedia_documents(l))
+
+    # Extract links from documents.
+    mapper = self.wf.task("wikipedia-link-extractor")
+    self.wf.connect(self.wf.read(documents), mapper)
+    wiki_links = self.wf.channel(mapper, format="message/frame", name="output")
+    wiki_counts = self.wf.channel(mapper, format="message/int", name="fanin")
+
+    # Extract fact targets from items.
+    target_extractor = self.wf.task("fact-target-extractor")
+    self.wf.connect(self.wf.read(self.wikidata_items()), target_extractor)
+    item_counts = self.wf.channel(target_extractor, format="message/int")
+
+    # Reduce links.
+    with self.wf.namespace("links"):
+      wikilinks = self.wikilinks()
+      self.wf.reduce(self.wf.shuffle(wiki_links, shards=length_of(wikilinks)),
+                     wikilinks, "wikipedia-link-merger")
+
+    # Reduce fan-in.
+    with self.wf.namespace("popularity"):
+      counts = self.wf.collect(wiki_counts, item_counts)
+      fanin = self.fanin()
+      self.wf.reduce(self.wf.shuffle(counts, shards=length_of(fanin)),
+                     fanin, "item-popularity-reducer")
+
+    return wikilinks, fanin
 
   #---------------------------------------------------------------------------
   # Fused items
@@ -481,8 +509,12 @@ class WikiWorkflow:
 
   def fuse_items(self, items=None, extras=None, output=None):
     if items == None:
-      items = self.wikidata_items() + [self.wikipedia_items(),
-                                       self.wikipedia_members()]
+      items = self.wikidata_items() + self.wikilinks() + [
+                self.fanin(),
+                self.wikipedia_items(),
+                self.wikipedia_members()
+              ]
+
     if flags.arg.extra_items:
       extra = self.wf.resource(flags.arg.extra_items, format="records/frame")
       if isinstance(extra, list):

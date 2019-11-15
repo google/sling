@@ -8,6 +8,3 @@ build --cxxopt=-Wno-undefined-var-template
 build --cxxopt=-Wno-attributes
 build --spawn_strategy=standalone
 
-# You may want to comment out the following line on older versions of GCC (< v5).
-build --cxxopt=-D_GLIBCXX_USE_CXX11_ABI=0
-

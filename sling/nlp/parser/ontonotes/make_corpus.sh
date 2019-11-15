@@ -62,6 +62,7 @@ popd
 echo "Convert CoNLL files to SLING"
 
 CONVERTER=sling/nlp/parser/ontonotes/ontonotesv5_to_sling.py
+SHUFFLE=sling/nlp/parser/ontonotes/shuffle.py
 IN=$ONTONOTES/conll-formatted-ontonotes-5.0/data
 OUT=local/data/corpora/caspar
 
@@ -81,5 +82,9 @@ python3 $CONVERTER \
   --input=$IN/test/data/english/annotations/ \
   --allowed_ids=$ONTONOTES/test.ids \
   --output=$OUT/test.rec
+
+echo "Shuffle training corpus"
+
+python3 $SHUFFLE --input $OUT/train.rec --output $OUT/train_shuffled.rec
 
 echo "Done."

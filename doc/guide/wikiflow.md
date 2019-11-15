@@ -14,17 +14,18 @@ into SLING frame format.
 The Wiki processing pipeline performs the following tasks:
 
   * Download Wikidata and Wikpedia dumps
-  * Import Wikipedia dump (`wikipedia-import`)
   * Import Wikidata dump (`wikidata-import`)
+  * Import Wikipedia dump(s) (`wikipedia-import`)
   * Construct mapping from Wikipedia to Wikidata (`wikipedia-mapping`)
   * Wikipedia parsing (`wikipedia-parsing`)
-  * Extract and select aliases for entities from Wikidata and Wikipedia (`name-extraction`)
-  * Build name table for searching for entities (`name-table`)
-  * Build phrase table for matching phrases in text to entities (`phrase-table`)
+  * Extract link graph from Wikipedia and Wikidata (`wiki-link`)
   * Merging of Wikipedia categories across languages (`category-merging`)
   * Inversion of category membership graph (`category-inversion`)
   * Fusing information about items to produce final item frame (`item-fusing`)
   * Build frame store with knowledge base (`knowledge-base`)
+  * Extract and select aliases for entities from Wikidata and Wikipedia (`name-extraction`)
+  * Build name table for searching for entities (`name-table`)
+  * Build phrase table for matching phrases in text to entities (`phrase-table`)
 
 After [installing and building SLING](install.md), the `./run.sh` script can be
 used for running the pipeline:
@@ -69,6 +70,7 @@ This is equivalent to running each of the step separately:
 ./run.sh --import_wikidata
          --import_wikipedia
          --parse_wikipedia
+         --extract_wikilinks
          --merge_categories
          --invert_categories
          --fuse_items
@@ -78,9 +80,18 @@ This is equivalent to running each of the step separately:
          --build_phrasetab
 ```
 
-Note: The `build_wiki` pipeline needs a lot of temporary disk space to store intermediate outputs.
-By default it uses the `TMPDIR` environment variable, defaulting to `/tmp`. So please ensure that
-this folder is on a partition with enough space.
+The `--language LANG` flag can be used for selecting the language for Wikipedia,
+and the `--languages LANG,...` flag can be used for processing multiple
+Wikipedias in parallel.
+
+If you have the `lbzip2` utility installed, you can speed up the import of
+Wikidata by using the `--lbzip2` flag. This will use `lbzip2` to do
+decompression of the Wikidata dump in parallel.
+
+The `build_wiki` pipeline needs a lot of temporary disk space to store
+intermediate outputs. By default it uses the `TMPDIR` environment variable,
+defaulting to `/tmp`. So please ensure that this folder is on a partition with
+enough space.
 ```
 export TMPDIR=<folder on partition with lots of space>
 ./run.sh --build_wiki
@@ -94,7 +105,7 @@ The `wikidata-import` task reads these and convert them into SLING frame format
 and stores these in a record file set. This also outputs the [schema](https://www.mediawiki.org/wiki/Wikibase/DataModel)
 for the Wikidata properties in SLING frame schema format. After this, the
 `wikipedia-mapping` task produces a frame store that maps from Wikipedia article
-ids to Wikidata ids.
+ids to Wikidata QIDs.
 
 This is an example of the SLING frame for Wikidata item [Q2534120](https://www.wikidata.org/wiki/Q2534120):
 ```
@@ -226,7 +237,7 @@ in [XML format](https://en.wikipedia.org/wiki/Help:Export) with the text of
 each page encoded in [Wiki Markup Language](https://en.wikipedia.org/wiki/Wikipedia:Wiki_Markup_Language).
 The `wikipedia-parsing` task takes these plus the Wikidata mapping and parses
 the documents into SLING document format. All the links in the Wikipedia
-articles are converted to Wikidata ids, and redirects are resolved to the target
+articles are converted to Wikidata QIDs, and redirects are resolved to the target
 entity. The Wikipedia parser also outputs aliases from anchor text in the
 articles.
 
@@ -289,24 +300,18 @@ Q2534120: {
 }
 ```
 
-# Name and phrase tables
-
-The aliases extracted from the parsed Wikipedia documents and Wikidata are
-consolidated to a set of aliases for each entity in the knowledge base in the
-`name-extraction` task. This alias table is used for producing a name table
-repository (`name-table` task) which contains all the (normalized) alias phrases
-in alphabetical order. This is useful for incremental entity name search used by
-the knowledge base browser.
-
-The `phrase-table` task creates a phrase table repository which can be used for
-[fast retrieval of all entities](pyapi.md#phrase-tables) having a (normalized)
-alias matching a phrase.
-
 # Item fusing and knowledge base
 
 Once the Wikipedia documents have been parsed for all the languages you need,
 the information from these documents are collected into a Wikipedia item for
 each entity.
+
+All the links in the Wikipedia documents are collected and turned into a link
+graph that is stored in the `/w/item/links` property for each item. The link
+graph is built over all the Wikipedias being processed. The fan-in,
+i.e. the number of links to the item, is also computed and stored in the
+`/w/item/popularity` property. The popularity count also includes the number of
+times the item is a fact target in other items.
 
 Wikipedia categories are collected from Wikipedia documents in the
 `category-merging` task and the category membership graph is inverted in the
@@ -320,6 +325,19 @@ The Wikipedia items are consolidated with the Wikidata items in the
 `item-fusing` task into the final items. These are then used in the
 `knowledge-base`task for building a knowledge base repository, which can be
 loaded into memory.
+
+# Name and phrase tables
+
+The aliases extracted from the parsed Wikipedia documents and Wikidata are
+consolidated to a set of aliases for each entity in the knowledge base in the
+`name-extraction` task. This alias table is used for producing a name table
+repository (`name-table` task) which contains all the (normalized) alias phrases
+in alphabetical order. This is useful for incremental entity name search used by
+the knowledge base browser.
+
+The `phrase-table` task creates a phrase table repository which can be used for
+[fast retrieval of all entities](pyapi.md#phrase-tables) having a (normalized)
+alias matching a phrase.
 
 # Browsing the knowledge base
 
@@ -343,6 +361,8 @@ The Wiki processing pipeline produces the following data sets in
   * `properties.rec` (produced by `wikidata-import` task)
   * `wikipedia-items.rec` (produced by `category-merging` task)
   * `wikipedia-members.rec` (produced by `category-inversion` task)
+  * `links-?????-of-?????.rec` (produced by `link-graph` task)
+  * `fanin.rec` (produced by `link-graph` task)
   * `items-?????-of-?????.rec` (produced by `item-fusing` task)
   * `kb.sling` (produced by `knowledge-base` task)
 
