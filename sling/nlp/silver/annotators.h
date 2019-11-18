@@ -26,9 +26,9 @@
 #include "sling/nlp/document/phrase-tokenizer.h"
 #include "sling/nlp/kb/facts.h"
 #include "sling/nlp/kb/phrase-table.h"
-#include "sling/nlp/ner/chart.h"
-#include "sling/nlp/ner/idf.h"
-#include "sling/nlp/ner/resolver.h"
+#include "sling/nlp/kb/resolver.h"
+#include "sling/nlp/silver/chart.h"
+#include "sling/nlp/silver/idf.h"
 
 namespace sling {
 namespace nlp {

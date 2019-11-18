@@ -27,9 +27,9 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/document/lex.h"
-#include "sling/nlp/ner/annotators.h"
-#include "sling/nlp/ner/chart.h"
-#include "sling/nlp/ner/idf.h"
+#include "sling/nlp/silver/annotators.h"
+#include "sling/nlp/silver/chart.h"
+#include "sling/nlp/silver/idf.h"
 
 DEFINE_string(text, "", "Text to parse");
 DEFINE_string(input, "", "File with text to parse");

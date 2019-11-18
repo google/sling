@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sling/nlp/ner/annotators.h"
+#include "sling/nlp/silver/annotators.h"
 
 #include "sling/base/flags.h"
 #include "sling/frame/object.h"

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "sling/nlp/document/annotator.h"
-#include "sling/nlp/ner/annotators.h"
+#include "sling/nlp/silver/annotators.h"
 
 namespace sling {
 namespace nlp {

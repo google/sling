@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SLING_NLP_NER_RESOLVER_H_
-#define SLING_NLP_NER_RESOLVER_H_
+#ifndef SLING_NLP_KB_RESOLVER_H_
+#define SLING_NLP_KB_RESOLVER_H_
 
 #include <utility>
 
@@ -149,4 +149,4 @@ class ResolverContext {
 }  // namespace nlp
 }  // namespace sling
 
-#endif  // SLING_NLP_NER_RESOLVER_H_
+#endif  // SLING_NLP_KB_RESOLVER_H_

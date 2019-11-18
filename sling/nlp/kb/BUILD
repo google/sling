@@ -102,6 +102,20 @@ cc_library(
   alwayslink = 1,
 )
 
+cc_library(
+  name = "resolver",
+  srcs = ["resolver.cc"],
+  hdrs = ["resolver.h"],
+  deps = [
+    ":phrase-table",
+    "//sling/base",
+    "//sling/frame:object",
+    "//sling/frame:store",
+    "//sling/util:top",
+    "//sling/util:unicode",
+  ],
+)
+
 embed_data(
   name = "app",
   srcs = [

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sling/nlp/ner/resolver.h"
+#include "sling/nlp/kb/resolver.h"
 
 namespace sling {
 namespace nlp {

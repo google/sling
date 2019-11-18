@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sling/nlp/ner/chart.h"
+#include "sling/nlp/silver/chart.h"
 
 #include <vector>
 #include <utility>

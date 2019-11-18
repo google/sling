@@ -21,7 +21,7 @@
 #include "sling/nlp/document/lex.h"
 #include "sling/nlp/kb/facts.h"
 #include "sling/nlp/kb/phrase-table.h"
-#include "sling/nlp/ner/chart.h"
+#include "sling/nlp/silver/chart.h"
 #include "sling/stream/file-input.h"
 #include "sling/util/fingerprint.h"
 #include "sling/util/mutex.h"
