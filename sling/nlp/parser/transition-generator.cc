@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "sling/nlp/parser/transition-generator.h"
+
 #include <algorithm>
 #include <deque>
 #include <vector>
 
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"
-#include "sling/nlp/parser/trainer/transition-generator.h"
 
 namespace sling {
 namespace nlp {

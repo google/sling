@@ -15,7 +15,7 @@ cc_binary(
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",
     "//sling/nlp/parser",
-    "//sling/nlp/parser/trainer:frame-evaluation",
+    "//sling/nlp/parser:frame-evaluation",
     "//sling/string:printf",
   ],
 )

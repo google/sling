@@ -27,10 +27,10 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-corpus.h"
 #include "sling/nlp/document/lexical-encoder.h"
+#include "sling/nlp/parser/frame-evaluation.h"
 #include "sling/nlp/parser/parser-action.h"
 #include "sling/nlp/parser/parser-features.h"
 #include "sling/nlp/parser/roles.h"
-#include "sling/nlp/parser/trainer/frame-evaluation.h"
 #include "sling/task/learner.h"
 #include "sling/util/mutex.h"
 

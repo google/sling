@@ -44,8 +44,8 @@
 #include "sling/nlp/document/document-corpus.h"
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/document/lex.h"
+#include "sling/nlp/parser/frame-evaluation.h"
 #include "sling/nlp/parser/parser.h"
-#include "sling/nlp/parser/trainer/frame-evaluation.h"
 #include "sling/string/printf.h"
 
 DEFINE_string(parser, "", "Input file with flow model");

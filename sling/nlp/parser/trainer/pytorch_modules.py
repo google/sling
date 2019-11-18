@@ -22,10 +22,10 @@ import torch.nn as nn
 
 from cascade import Delegate
 from cascade import SoftmaxDelegate
+from lexical_encoder import LexicalEncoder
 from parser_state import ParserState
 from trace import Trace
 
-from sling.myelin.lexical_encoder import LexicalEncoder
 import sling
 import sling.myelin.nn as flownn
 import sling.myelin.flow as flow

@@ -14,8 +14,8 @@
 
 // Frame evaluation.
 
-#ifndef SLING_NLP_PARSER_TRAINER_FRAME_EVALUATION_H_
-#define SLING_NLP_PARSER_TRAINER_FRAME_EVALUATION_H_
+#ifndef SLING_NLP_PARSER_FRAME_EVALUATION_H_
+#define SLING_NLP_PARSER_FRAME_EVALUATION_H_
 
 #include <string>
 #include <unordered_map>
@@ -225,4 +225,4 @@ class FrameEvaluation {
 }  // namespace nlp
 }  // namespace sling
 
-#endif // SLING_NLP_PARSER_TRAINER_FRAME_EVALUATION_H_
+#endif // SLING_NLP_PARSER_FRAME_EVALUATION_H_

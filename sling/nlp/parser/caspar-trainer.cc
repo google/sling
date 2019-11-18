@@ -19,7 +19,7 @@
 #include "sling/myelin/learning.h"
 #include "sling/nlp/parser/action-table.h"
 #include "sling/nlp/parser/parser-trainer.h"
-#include "sling/nlp/parser/trainer/transition-generator.h"
+#include "sling/nlp/parser/transition-generator.h"
 
 namespace sling {
 namespace nlp {

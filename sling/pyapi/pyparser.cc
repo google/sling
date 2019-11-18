@@ -17,8 +17,8 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/document/lex.h"
+#include "sling/nlp/parser/frame-evaluation.h"
 #include "sling/nlp/parser/parser.h"
-#include "sling/nlp/parser/trainer/frame-evaluation.h"
 #include "sling/pyapi/pyframe.h"
 #include "sling/pyapi/pystore.h"
 
