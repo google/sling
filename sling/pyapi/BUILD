@@ -93,8 +93,9 @@ cc_library(
     "//sling/nlp/parser:caspar-trainer",
 
     "//sling/nlp/silver:idf",
-    "//sling/nlp/silver:labeler",
+    "//sling/nlp/silver:annotators",
 
+    "//sling/task:documents",
     "//sling/task:frame-store-reader",
     "//sling/task:frame-store-writer",
     "//sling/task:sharder",

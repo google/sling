@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sling/nlp/silver/annotators.h"
+#include "sling/nlp/silver/mentions.h"
 
 #include "sling/base/flags.h"
 #include "sling/frame/object.h"
 #include "sling/frame/serialization.h"
+#include "sling/nlp/document/annotator.h"
 #include "sling/nlp/document/fingerprinter.h"
 #include "sling/nlp/kb/calendar.h"
 #include "sling/util/unicode.h"
@@ -1304,7 +1305,7 @@ void SpanAnnotator::Annotate(const Document &document, Document *output) {
         span = output->AddSpan(begin, end);
         if (!item.aux.IsNumber()) {
           // Span has already been resolved.
-          span->Evoke(item.aux);
+          span->Evoke(Builder(store).AddIs(item.aux).Create());
 
           // Add annotated entity to resolver context model.
           resolve_span = false;
@@ -1379,7 +1380,7 @@ void SpanAnnotator::Annotate(const Document &document, Document *output) {
       // Mark unresolved person name spans.
       if (!resolved && item.aux == kPersonMarker) {
         Builder b(output->store());
-        b.Add(n_instance_of_, n_person_);
+        b.Add(n_instance_of_, n_human_);
         b.Add(n_name_, document.PhraseText(begin, end));
         Frame person = b.Create();
         span->Evoke(person);
@@ -1428,6 +1429,36 @@ void SpanAnnotator::AddNameParts(const Document &document, int begin, int end,
     context->AddMention(fp, form, entity, count);
   }
 }
+
+// Add span annotations to documents and resolve entity mentions.
+class MentionAnnotator : public Annotator {
+ public:
+  void Init(task::Task *task, Store *commons) override {
+    // Initialize span annotator.
+    SpanAnnotator::Resources resources;
+    resources.aliases = task->GetInputFile("aliases");
+    resources.dictionary = task->GetInputFile("dictionary");
+    resources.resolve = task->Get("resolve", false);
+    resources.language = task->Get("language", "en");
+
+    annotator_.Init(commons, resources);
+  }
+
+  void Annotate(Document *document) override {
+    // Make a copy of the input document and clear annotations for output.
+    Document original(*document);
+    document->ClearAnnotations();
+
+    // Annotate document.
+    annotator_.Annotate(original, document);
+  }
+
+ private:
+  // Span annotator for labeling documents.
+  SpanAnnotator annotator_;
+};
+
+REGISTER_ANNOTATOR("mentions", MentionAnnotator);
 
 }  // namespace nlp
 }  // namespace sling

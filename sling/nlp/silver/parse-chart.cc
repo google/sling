@@ -27,7 +27,7 @@
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/document-tokenizer.h"
 #include "sling/nlp/document/lex.h"
-#include "sling/nlp/silver/annotators.h"
+#include "sling/nlp/silver/mentions.h"
 #include "sling/nlp/silver/chart.h"
 #include "sling/nlp/silver/idf.h"
 

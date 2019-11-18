@@ -83,7 +83,7 @@ class SilverWorkflow:
     with self.wf.namespace(language + "-silver"):
       mapper = self.wf.task("document-processor", "labeler")
 
-      mapper.add_annotator("ner")
+      mapper.add_annotator("mentions")
       mapper.add_annotator("anaphora")
       mapper.add_annotator("phrase-structure")
       mapper.add_annotator("relations")

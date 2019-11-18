@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SLING_NLP_NER_ANNOTATORS_H_
-#define SLING_NLP_NER_ANNOTATORS_H_
+#ifndef SLING_NLP_SILVER_MENTIONS_H_
+#define SLING_NLP_SILVER_MENTIONS_H_
 
 #include <string>
 #include <vector>
@@ -391,9 +391,10 @@ class AbbreviationAnnotator {
   std::unordered_set<uint64> skipwords_;
 };
 
-// Span annotator for annotating a (pre-annotated) document with annotations
-// based on a knowledge base and an alias table. This runs the annotators above
-// on each sentence to create a fully annotated output document.
+// Span annotator for annotating a (pre-annotated) document with mention
+// annotations based on a knowledge base and an alias table. This runs the
+// annotators above on each sentence to create an annotated output document
+// with mention spans.
 class SpanAnnotator {
  public:
   // Resources for initializing span annotator.
@@ -456,7 +457,6 @@ class SpanAnnotator {
   Name n_quantity_{names_, "/w/quantity"};
   Name n_amount_{names_, "/w/amount"};
   Name n_instance_of_{names_, "P31"};
-  Name n_person_{names_, "Q215627"};
   Name n_human_{names_, "Q5"};
   Name n_fictional_human_{names_, "Q15632617"};
   Name n_page_item_{names_, "/wp/page/item"};
@@ -469,4 +469,4 @@ class SpanAnnotator {
 }  // namespace nlp
 }  // namespace sling
 
-#endif  // SLING_NLP_NER_ANNOTATORS_H_
+#endif  // SLING_NLP_SILVER_MENTIONS_H_
