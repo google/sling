@@ -45,7 +45,8 @@ class EntityResolver {
   Name n_links_{names_, "/w/item/links"};
 
   // Hyperparameters.
-  float mention_weight_ = 100.0;
+  float topic_weight_ = 100.0;
+  float mention_weight_ = 500.0;
   float base_context_score = 1e-3;
   float case_form_penalty = 0.1;
   int mention_boost_ = 30;

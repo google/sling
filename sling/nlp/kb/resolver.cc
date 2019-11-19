@@ -29,7 +29,7 @@ ResolverContext::ResolverContext(Store *store, const EntityResolver *resolver)
 
 void ResolverContext::AddTopic(Handle entity) {
   // Add entity to context model.
-  context_[entity] += 1.0;
+  context_[entity] += resolver_->topic_weight_;
   Track(entity);
 }
 
