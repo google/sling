@@ -113,16 +113,16 @@ instance data and selects kernels for implementing the operations and the
 order of computation:
 ```
 cell f {  // size 2336
-  input var f/x: float32[1x64]     // offset 0 size 256 alignment 32 row-major
-  var f/Relu:0: float32[1x256]     // offset 256 size 1024 alignment 32 row-major
-  var f/Max:0: float32             // offset 1280 size 4 alignment 4 row-major linked to f/Sum:0
-    union f/Sum:0: float32         // offset 1280 size 4 alignment 4 row-major linked to f/Reciprocal:0
-    union f/Reciprocal:0: float32  // offset 1280 size 4 alignment 4 row-major linked to f/Max:0
-  var f/Exp:0: float32[1x256]      // offset 1312 size 1024 alignment 32 row-major linked to f/y:0
-    union f/y:0: float32[1x256]    // offset 1312 size 1024 alignment 32 row-major linked to f/Exp:0
+  input var f/x: float32[1x64]    // offset 0 size 256 alignment 32 row-major
+  var f/Relu:0: float32[1x256]    // offset 256 size 1024 alignment 32 row-major
+  var f/Max:0: float32            // offset 1280 size 4 alignment 4 row-major linked to f/Sum:0
+    union f/Sum:0: float32        // offset 1280 size 4 alignment 4 row-major linked to f/Reciprocal:0
+    union f/Reciprocal:0: float32 // offset 1280 size 4 alignment 4 row-major linked to f/Max:0
+  var f/Exp:0: float32[1x256]     // offset 1312 size 1024 alignment 32 row-major linked to f/y:0
+    union f/y:0: float32[1x256]   // offset 1312 size 1024 alignment 32 row-major linked to f/Exp:0
 
-  const f/W: float32[64x256]       // size 65536 alignment 32 row-major
-  const f/b: float32[256]          // size 1024 alignment 32 row-major
+  const f/W: float32[64x256]      // size 65536 alignment 32 row-major
+  const f/b: float32[256]         // size 1024 alignment 32 row-major
 
   f/Relu:0 = AVXFltVecMatMulAddRelu[U8V](f/x, f/W, f/b)
   f/Max:0 = MaxExpr[VFltAVX256](f/Relu:0)
@@ -135,7 +135,7 @@ cell f {  // size 2336
 Finally, the Myelin JIT compiler converts the optimized operations into
 [assembler code](flowasm.txt) using the selected kernel generators. The code
 generated for each function depends on the negotiated layout and alignment of
-the input and output tensors as well as the features support by the CPU (SSE,
+the input and output tensors as well as the features supported by the CPU (SSE,
 AVX, AVX2, FMA3, AVX512, etc.).
 
 ### Computing using network cell instances
@@ -181,7 +181,7 @@ so you can create a NumPy array sharing the underlying data, e.g.
 
 The `compute()` method is used for running the cell instance computation, i.e.
 compute the output tensor variables from the inputs tensor variables.
-A cell instances can be reused for multiple computations. The `clear()` method
+A cell instance can be reused for multiple computations. The `clear()` method
 can be used for clearing all the tensors in the instance.
 
 ### Putting it all together
@@ -276,7 +276,7 @@ This will extract the parts of the TF graph needed for computing `y` from `x`.
 It will add a _function_ (`classifier`) to the flow and then add the `MatMul`
 and `Add` _operations_ to this function. It will also add `W` and `b` as
 constant _variables_ to the flow with the trained weights. The resulting flow
-is then saved to the file _/tmp/model.flow_.
+is then saved to the file _/tmp/mnist.flow_.
 
 ## Using Myelin in C++
 
