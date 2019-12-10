@@ -6,7 +6,7 @@ import sling.task.workflow as workflow
 flags.parse()
 workflow.startup()
 
-# Create worflow.
+# Create workflow.
 wf = workflow.Workflow("parser-training")
 
 # Parser trainer inputs and outputs.
