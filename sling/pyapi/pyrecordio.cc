@@ -67,7 +67,7 @@ int PyRecordReader::Init(PyObject *args, PyObject *kwds) {
   if (!CheckIO(File::Open(filename, "r", &f))) return -1;
 
   // Create record reader.
-  reader = new RecordReader(filename, options);
+  reader = new RecordReader(f, options);
   return 0;
 }
 
@@ -276,7 +276,7 @@ int PyRecordWriter::Init(PyObject *args, PyObject *kwds) {
   if (!CheckIO(File::Open(filename, "w", &f))) return -1;
 
   // Create record writer.
-  writer = new RecordWriter(filename, options);
+  writer = new RecordWriter(f, options);
 
   return 0;
 }
