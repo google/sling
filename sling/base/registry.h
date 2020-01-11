@@ -192,7 +192,7 @@ template <class T> struct ComponentRegistry {
     Registrar *r = components;
     while (r != nullptr && strcmp(type, r->type()) != 0) r = r->next();
     if (r == nullptr) {
-      LOG(FATAL) << "Unknown " << name << " component: '" << type << "'.";
+      LOG(FATAL) << "Unknown " << name << " component: " << type;
     }
     return r;
   }

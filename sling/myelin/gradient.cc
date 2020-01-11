@@ -39,7 +39,7 @@ Gradients::Gradients(Flow *flow,
   // Create adjoints.
   for (Flow::Variable *v : vars) {
     // Constants have trivial derivatives.
-    if (v->constant()) continue;
+    if (v->constant() || v->is(Flow::Variable::NOGRADIENT)) continue;
 
     // Only floats are differentiable.
     if (v->type != DT_FLOAT && v->type != DT_DOUBLE) continue;
@@ -49,6 +49,7 @@ Gradients::Gradients(Flow *flow,
     if (v->in()) dv->set_out();
     if (v->out()) dv->set_in();
     dv->set_ref(v->ref());
+    dv->set_dynamic(v->dynamic());
 
     // Connect adjoint to primal variable to ensure common layout.
     if (v->learnable()) flow->Connect({dv, v});

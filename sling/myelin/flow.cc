@@ -291,7 +291,7 @@ class Parser {
   Parser(const char *ptr, const char *end) : ptr_(ptr), end_(end) {}
 
   // Get data buffer from input and advance the current input pointer.
-  const char *Get(int len) {
+  const char *Get(size_t len) {
     CHECK_LE(len, end_ - ptr_) << "Unexpected end of input";
     const char *p = ptr_;
     ptr_ += len;
@@ -490,6 +490,7 @@ string Flow::Variable::TypeString() const {
   string str;
   if (ref()) str.append("&");
   str.append(TypeTraits::of(type).name());
+  if (dynamic()) str.append("<>");
   if (!shape.scalar()) {
     str.append("[");
     str.append(shape.ToString());
@@ -502,7 +503,12 @@ string Flow::Variable::DataString() const {
   // Locate data.
   const char *p = data;
   if (p == nullptr) return "∅";
-  if (ref()) {
+  if (dynamic()) {
+    p = *reinterpret_cast<const char * const *>(p);
+    if (p == nullptr) return "null";
+    p = *reinterpret_cast<const char * const *>(p);
+    if (p == nullptr) return "null";
+  } else if (ref()) {
     p = *reinterpret_cast<const char * const *>(p);
     if (p == nullptr) return "null";
   }
@@ -804,9 +810,9 @@ void Flow::Read(const char *data, size_t size) {
   // Read header.
   Parser parser(data, data + size);
   int magic = parser.GetInt();
-  CHECK_EQ(magic, kMagic) << "not a flow file";
+  CHECK_EQ(magic, MAGIC) << "not a flow file";
   int version = parser.GetInt();
-  CHECK(version >= 3 && version <= 5)
+  CHECK(version >= 3 && version <= 6)
       << "unsupported flow file version " << version;
   if (version >= 5) parser.GetInt();  // unused flags
 
@@ -848,6 +854,16 @@ void Flow::Read(const char *data, size_t size) {
     for (int d = 0; d < rank; ++d) {
       int size = parser.GetInt();
       var->shape.add(size == -1 ? batch_size_ : size);
+    }
+
+    // Get attributes.
+    if (version >= 6) {
+      int num_attrs = parser.GetInt();
+      for (int j = 0; j < num_attrs; ++j) {
+        string name = parser.GetString();
+        string value = parser.GetString();
+        var->SetAttr(name, value);
+      }
     }
 
     // Get optional variable constant.
@@ -975,8 +991,8 @@ void Flow::Save(const string &filename, int version) const {
 
   // Write header (magic and version).
   CHECK_GE(version, 3);
-  CHECK_LE(version, kVersion);
-  file.WriteInt(kMagic);
+  CHECK_LE(version, VERSION);
+  file.WriteInt(MAGIC);
   file.WriteInt(version);
   if (version >= 5) file.WriteInt(0);  // unused flags
 
@@ -1006,6 +1022,15 @@ void Flow::Save(const string &filename, int version) const {
     file.WriteInt(var->shape.rank());
     for (int d = 0; d < var->shape.rank(); ++d) {
       file.WriteInt(var->shape.dim(d));
+    }
+
+    // Write attributes.
+    if (version >= 6) {
+      file.WriteInt(var->attrs().size());
+      for (const auto &attr : var->attrs()) {
+        file.WriteString(attr.name);
+        file.WriteString(attr.value);
+      }
     }
 
     // Write size.
@@ -2001,6 +2026,18 @@ bool Flow::IsConsistent() const {
     }
   }
 
+  // Check connectors.
+  for (const Connector *cnx : cnxs_) {
+    for (const Variable *link : cnx->links) {
+      // Check that link variable is in flow.
+      if (std::find(vars_.begin(), vars_.end(), link) == vars_.end()) {
+        LOG(WARNING) << "Link variable " << link->name << " is not in flow "
+                     << "for connector " << cnx->name;
+        return false;
+      }
+    }
+  }
+
   return true;
 }
 
@@ -2014,6 +2051,7 @@ string Flow::ToString() const {
     if (var->in()) StringAppendF(&str, " in");
     if (var->out()) StringAppendF(&str, " out");
     if (var->unique()) StringAppendF(&str, " unique");
+    if (var->is(Flow::Variable::NOGRADIENT)) StringAppendF(&str, " nograd");
     if (var->constant()) {
       StringAppendF(&str, ", %" PRIu64 " bytes", var->size);
     }

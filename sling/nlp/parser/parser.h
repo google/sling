@@ -15,9 +15,10 @@
 #ifndef SLING_NLP_PARSER_PARSER_H_
 #define SLING_NLP_PARSER_PARSER_H_
 
-#include <string>
+#include <vector>
 
 #include "sling/base/logging.h"
+#include "sling/base/registry.h"
 #include "sling/base/types.h"
 #include "sling/frame/store.h"
 #include "sling/myelin/compiler.h"
@@ -25,18 +26,45 @@
 #include "sling/myelin/flow.h"
 #include "sling/nlp/document/document.h"
 #include "sling/nlp/document/lexical-encoder.h"
-#include "sling/nlp/parser/cascade.h"
 #include "sling/nlp/parser/parser-features.h"
 #include "sling/nlp/parser/parser-state.h"
 #include "sling/nlp/parser/roles.h"
-#include "sling/nlp/parser/trace.h"
 
 namespace sling {
 namespace nlp {
 
-// Frame semantics parser model.
+class DelegateInstance;
+
+// Interface for delegate component at prediction time.
+class Delegate : public Component<Delegate> {
+ public:
+  virtual ~Delegate() = default;
+
+  // Initialize delegate from specification.
+  virtual void Initialize(const myelin::Network &network,
+                          const Frame &spec) = 0;
+
+  // Create new delegate instance for action prediction.
+  virtual DelegateInstance *CreateInstance() = 0;
+};
+
+#define REGISTER_DELEGATE(type, component) \
+    REGISTER_COMPONENT_TYPE(sling::nlp::Delegate, type, component)
+
+// Interface for delegate instance at prediction time.
+class DelegateInstance {
+ public:
+  virtual ~DelegateInstance() = default;
+
+  // Predict action for delegate.
+  virtual void Predict(float *activations, ParserAction *action) = 0;
+};
+
+// Frame semantics parser.
 class Parser {
  public:
+  ~Parser();
+
   // Load and initialize parser model.
   void Load(Store *store, const string &filename);
 
@@ -45,15 +73,6 @@ class Parser {
 
   // Neural network for parser.
   const myelin::Network &network() const { return network_; }
-
-  // Return the lexical encoder.
-  const LexicalEncoder &encoder() const { return encoder_; }
-
-  // Returns whether tracing is enabled.
-  bool trace() const { return trace_; }
-
-  // Enable/disable tracing.
-  void set_trace(bool trace) { trace_ = trace; }
 
  private:
   // JIT compiler.
@@ -71,17 +90,11 @@ class Parser {
   // Parser feature model for feature extraction in the decoder.
   ParserFeatureModel feature_model_;
 
-  // Cascade.
-  Cascade cascade_;
-
-  // Global store for parser.
-  Store *store_ = nullptr;
+  // Cascade with parser action prediction delegates.
+  std::vector<Delegate *> delegates_;
 
   // Set of roles considered.
   RoleSet roles_;
-
-  // Whether tracing is enabled.
-  bool trace_;
 };
 
 }  // namespace nlp

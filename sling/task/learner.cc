@@ -107,7 +107,7 @@ Optimizer *GetOptimizer(Task *task) {
     sgd->set_learning_rate(lr);
     sgd->set_decay(decay);
     sgd->set_clipping_threshold(clip);
-    sgd->set_lambda(task->Get("regularization", 0.0));
+    sgd->set_lambda(task->Get("l2reg", 0.0));
     return sgd;
   } else if (type == "momentum") {
     MomentumOptimizer *momentum = new MomentumOptimizer();

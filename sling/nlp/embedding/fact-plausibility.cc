@@ -37,7 +37,7 @@ struct FactPlausibilityFlow : public Flow {
     scorer = AddFunction("scorer");
     FlowBuilder f(this, scorer);
     auto *embeddings =
-        f.Random(f.Parameter("embeddings", DT_FLOAT, {facts, dims}));
+        f.RandomNormal(f.Parameter("embeddings", DT_FLOAT, {facts, dims}));
 
     premise = f.Placeholder("premise", DT_INT32, {1, max_features});
     auto *pencoding = f.GatherSum(embeddings, premise);
@@ -134,7 +134,7 @@ class FactPlausibilityTrainer : public LearnerTask {
     loss_.Initialize(model);
 
     // Initialize weights.
-    model.InitLearnableWeights(seed_, 0.0, 0.01);
+    model.InitModelParameters(seed_);
 
     // Read training instances from input.
     LOG(INFO) << "Reading training data";
@@ -476,7 +476,7 @@ class FactPlausibilityTrainer : public LearnerTask {
     Build(&flow, false);
 
     // Copy weights from trained model.
-    model.SaveLearnedWeights(&flow);
+    model.SaveParameters(&flow);
 
     // Add fact lexicon.
     string encoded = Encode(fact_lexicon_);

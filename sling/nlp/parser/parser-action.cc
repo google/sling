@@ -25,12 +25,9 @@ string ParserAction::TypeName(Type type) {
     case ParserAction::REFER: return "REFER";
     case ParserAction::CONNECT: return "CONNECT";
     case ParserAction::ASSIGN: return "ASSIGN";
-    case ParserAction::EMBED: return "EMBED";
-    case ParserAction::ELABORATE: return "ELABORATE";
     case ParserAction::CASCADE: return "CASCADE";
     case ParserAction::MARK: return "MARK";
     case ParserAction::SHIFT: return "SHIFT";
-    case ParserAction::STOP: return "STOP";
   }
 
   return "<ERROR>";
@@ -46,10 +43,10 @@ Frame ParserAction::AsFrame(Store *store, const string &prefix) const {
   if (length != 0) builder.Add(prefix + "length", length);
   if (!label.IsNil()) builder.Add(prefix + "label", label);
   if (!role.IsNil()) builder.Add(prefix + "role", role);
-  if (type == REFER || type == CONNECT || type == EMBED) {
+  if (type == REFER || type == CONNECT) {
     builder.Add(prefix + "target", target);
   }
-  if (type == ASSIGN || type == CONNECT || type == ELABORATE) {
+  if (type == ASSIGN || type == CONNECT) {
     builder.Add(prefix + "source", source);
   }
   if (type == CASCADE) {
@@ -75,22 +72,11 @@ string ParserAction::ToString(Store *store) const {
       StrAppend(&s, source, " -> ", store->DebugString(role), " -> ",
                 store->DebugString(label));
       break;
-    case ParserAction::EMBED:
-      StrAppend(&s, "TYPE(", store->DebugString(label), ")",
-                " -> ", store->DebugString(role), " -> ",
-                target);
-      break;
-    case ParserAction::ELABORATE:
-      StrAppend(&s, "TYPE(", store->DebugString(label), ")",
-                " <- ", store->DebugString(role), " <- ",
-                source);
-      break;
     case ParserAction::CASCADE:
       StrAppend(&s, "(delegate=", delegate, ")");
       break;
     case ParserAction::SHIFT:
     case ParserAction::MARK:
-    case ParserAction::STOP:
     default:
       s.pop_back();
       break;

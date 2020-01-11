@@ -121,12 +121,8 @@ class LexicalFeatures {
   friend class LexicalFeatureLearner;
 };
 
-// Callback for tracing extracted features.
-typedef std::function<
-  void(int token, const string &feature, int value)> LexicalFeatureTrace;
-
 // Lexical feature extractor for extracting features from document tokens and
-// mapping these though feature embeddings.
+// mapping these through feature embeddings.
 class LexicalFeatureExtractor {
  public:
   LexicalFeatureExtractor(const LexicalFeatures &lex)
@@ -143,17 +139,9 @@ class LexicalFeatureExtractor {
   // Data instance for feature extraction.
   myelin::Instance *data() { return &data_; }
 
-  // Set trace callback.
-  void set_trace(LexicalFeatureTrace trace) { trace_ = trace; }
-
  private:
-   // Call trace function for extracted feature values for current token.
-  void OutputTrace(int token);
-  void OutputTrace(int token, myelin::Tensor *feature);
-
   const LexicalFeatures &lex_;
   myelin::Instance data_;
-  LexicalFeatureTrace trace_;
 };
 
 // Lexical feature learner for training feature embeddings.
@@ -185,20 +173,22 @@ class LexicalFeatureLearner {
   myelin::Instance gradient_;
 };
 
-// A lexical encoder is a lexical feature extractor with a bi-directional LSTM
-// on top.
+// A lexical encoder is a lexical feature extractor with an RNN on top.
 class LexicalEncoder {
  public:
   LexicalEncoder(const string &lexname = "features",
-                 const string &lstmname = "lstm")
-      : lex_(lexname), bilstm_(lstmname) {}
+                 const string &rnnname = "encoder")
+      : lex_(lexname), rnn_(rnnname) {}
 
-  // Build flow for lexical encoder. Returns the output variables from the
-  // LSTMs.
-  myelin::BiLSTM::Outputs Build(myelin::Flow *flow,
-                                const LexicalFeatures::Spec &spec,
-                                Vocabulary::Iterator *words,
-                                int dim, bool learn);
+  // Add RNN layers to encoder.
+  void AddLayers(int layers, const myelin::RNN::Spec spec, bool bidir) {
+    rnn_.AddLayers(layers, spec, bidir);
+  }
+
+  // Build flow for lexical encoder. Returns the output variables from the RNN.
+  myelin::RNN::Variables Build(myelin::Flow *flow,
+                               const LexicalFeatures::Spec &spec,
+                               Vocabulary::Iterator *words, bool learn);
 
   // Initialize feature extractor from existing model.
   void Initialize(const myelin::Network &net);
@@ -216,8 +206,8 @@ class LexicalEncoder {
   // Lexical feature extractor with embeddings.
   LexicalFeatures lex_;
 
-  // Bi-directional LSTM.
-  myelin::BiLSTM bilstm_;
+  // RNN encoder.
+  myelin::RNNStack rnn_;
 
   friend class LexicalEncoderInstance;
   friend class LexicalEncoderLearner;
@@ -229,22 +219,18 @@ class LexicalEncoderInstance {
   LexicalEncoderInstance(const LexicalEncoder &encoder)
     : encoder_(encoder),
       features_(encoder_.lex_),
-      bilstm_(encoder_.bilstm_),
+      rnn_(encoder_.rnn_),
       fv_(encoder.lex().feature_vector()) {}
 
   // Extract lexical features from a range of tokens in a document, map the
-  // features through the feature embeddings, and run the bi-directional LSTM
-  // encoder. Returns the left-to-right and right-to-left channels for the
-  // hidden state of the LSTMs.
-  myelin::BiChannel Compute(const Document &document, int begin, int end);
-
-  // Sets feature extraction tracing callback.
-  void set_trace(LexicalFeatureTrace trace) { features_.set_trace(trace); }
+  // features through the feature embeddings, and run the RNN encoder. Returns
+  // the channel for the hidden state of the RNN.
+  myelin::Channel *Compute(const Document &document, int begin, int end);
 
  private:
   const LexicalEncoder &encoder_;
   LexicalFeatureExtractor features_;
-  myelin::BiLSTMInstance bilstm_;
+  myelin::RNNStackInstance rnn_;
   myelin::Channel fv_;
 };
 
@@ -254,35 +240,30 @@ class LexicalEncoderLearner {
   LexicalEncoderLearner(const LexicalEncoder &encoder)
       : encoder_(encoder),
         features_(encoder.lex_),
-        bilstm_(encoder_.bilstm_) {}
+        rnn_(encoder_.rnn_) {}
 
-  // Compute hidden states for the LSTMs from input document.
-  myelin::BiChannel Compute(const Document &document, int begin, int end);
-
-  // Prepare gradient channels.
-  myelin::BiChannel PrepareGradientChannels(int length) {
-    return bilstm_.PrepareGradientChannels(length);
-  }
+  // Compute hidden state for the RNN from input document.
+  myelin::Channel *Compute(const Document &document, int begin, int end);
 
   // Backpropagate hidden state gradients.
-  void Backpropagate();
+  void Backpropagate(myelin::Channel *doutput);
 
   // Collect gradients.
   void CollectGradients(std::vector<myelin::Instance *> *gradients) {
     features_.CollectGradients(gradients);
-    bilstm_.CollectGradients(gradients);
+    rnn_.CollectGradients(gradients);
   }
 
   // Clear gradients.
   void Clear() {
     features_.Clear();
-    bilstm_.Clear();
+    rnn_.Clear();
   }
 
  private:
   const LexicalEncoder &encoder_;
   LexicalFeatureLearner features_;
-  myelin::BiLSTMLearner bilstm_;
+  myelin::RNNStackLearner rnn_;
 };
 
 }  // namespace nlp

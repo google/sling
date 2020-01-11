@@ -105,6 +105,7 @@ class ElementwiseIndexGenerator : public IndexGenerator {
     jit::Register base = jit::no_reg;    // base address register
     Iterator *iterator = nullptr;        // iterator for iterating over elements
     bool shared = false;                 // shared base register
+    bool ondemand = false;               // load base on demand
 
     size_t broadcast = 0;                // broadcast iterations
     jit::Register repeat = jit::no_reg;  // broadcast counter

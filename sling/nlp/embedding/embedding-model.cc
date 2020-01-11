@@ -16,7 +16,6 @@
 
 #include "sling/myelin/builder.h"
 #include "sling/myelin/gradient.h"
-#include "sling/util/random.h"
 
 namespace sling {
 namespace nlp {
@@ -33,7 +32,7 @@ void MikolovFlow::Build() {
 void MikolovFlow::BuildModel() {
   W0 = AddWeights("W0", DT_FLOAT, {inputs, dims});
   W1 = AddWeights("W1", DT_FLOAT, {outputs, dims});
-  W0->set_random();
+  W0->init = Variable::INIT_UNIFORM;
 }
 
 void MikolovFlow::BuildLayer0() {
@@ -116,7 +115,8 @@ void DualEncoderFlow::BuildEncoder(Encoder *encoder) {
   encoder->forward = AddFunction(encoder->name);
   FlowBuilder tf(this, encoder->forward);
   encoder->embeddings =
-      tf.Random(tf.Parameter("embeddings", DT_FLOAT, {encoder->dims, dims}));
+      tf.Parameter("embeddings", DT_FLOAT, {encoder->dims, dims});
+  tf.RandomNormal(encoder->embeddings);
   encoder->features =
       tf.Placeholder("features", DT_INT32, {1, encoder->max_features});
   auto *sum = tf.GatherSum(encoder->embeddings, encoder->features);

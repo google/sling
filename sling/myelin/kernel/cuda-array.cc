@@ -27,7 +27,7 @@ class CUDABasicConcat : public CUDAKernel {
   static const int WORD_SIZE = 4;
 
   string Name() override { return "CUDABasicConcat"; }
-  string Operation() override { return "ConcatV2"; }
+  string Operation() override { return "Concat"; }
 
   bool Supports(Step *step) override {
     // Requires CUDA support.

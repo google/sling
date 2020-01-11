@@ -40,8 +40,8 @@ class AVXFltArgMax : public Kernel {
     if (!CPU::Enabled(AVX2)) return false;
 
     // Check inputs and outputs.
-    if (step->inputs().size() != 1) return false;
-    if (step->outputs().size() != 1) return false;
+    if (step->indegree() != 1) return false;
+    if (step->outdegree() != 1) return false;
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
 

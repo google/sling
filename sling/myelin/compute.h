@@ -131,12 +131,6 @@ class Library : public Transformations {
   // Find kernels implementing operation.
   const Kernels &Lookup(const string &op) const;
 
-  // Find kernel and add to singleton library. The singleton library does not
-  // own the kernel.
-  bool Singleton(const string &op,
-                 const string &name,
-                 Library *singleton) const;
-
  private:
   // Register custom kernel.
   CustomKernel &RegisterCustomKernel(const string &op, const string &name,
@@ -144,9 +138,6 @@ class Library : public Transformations {
 
   // Map from op name to kernels implementing the op.
   std::unordered_map<string, Kernels> kernels_;
-
-  // Whether kernels are owned by library.
-  bool owns_kernels_ = true;
 
   // Empty kernel list.
   Kernels no_kernels_;
@@ -397,6 +388,10 @@ class Tensor {
   bool ref() const { return ref_; }
   void set_ref(bool ref) { ref_ = ref; }
 
+  // Reference to dynamically sized tensor channel.
+  bool dynamic() const { return dynamic_; }
+  void set_dynamic(bool dynamic) { dynamic_ = dynamic; }
+
   // Tensor shape.
   const Shape &shape() const { return shape_; }
   int rank() const { return shape_.rank(); }
@@ -611,6 +606,9 @@ class Tensor {
   // Size of of channel elements based on this tensor.
   int ChannelElementSize() const;
 
+  // Size of elements along an axis.
+  int AxisSize(int axis) const;
+
   // Return corresponding gradient tensor.
   Tensor *Gradient() const;
 
@@ -636,6 +634,9 @@ class Tensor {
 
   // Tensor reference.
   bool ref_ = false;
+
+  // Reference to dynamically sized tensor channel.
+  bool dynamic_ = false;
 
   // Tensor shape.
   Shape shape_;
@@ -681,8 +682,8 @@ class Tensor {
   // Constant tensors are global and cannot be modified.
   bool constant_ = false;
 
-  // Initialize tensor with random values from normal distribution.
-  bool random_init_ = false;
+  // Initialization for tensor.
+  Flow::Variable::Initialization init_ = Flow::Variable::INIT_ZERO;
 
   // Local tensors are allocated in the instance data block.
   bool local_ = true;
@@ -845,19 +846,19 @@ class Channel {
   void clear() { resize(0); }
 
   // Change size of channel.
-  void resize(int n);
+  void resize(size_t n);
 
   // Change size of channel and clear all elements.
-  void reset(int n);
+  void reset(size_t n);
 
   // Reserve space for channel elements.
-  void reserve(int n);
+  void reserve(size_t n);
 
   // Zero-fill element in channel.
-  void zero(int n);
+  void zero(size_t n);
 
   // Return pointer to channel element.
-  char *at(int index) const {
+  char *at(size_t index) const {
     return data_ + (index * element_size_);
   }
 
@@ -868,7 +869,7 @@ class Channel {
   void pop() { resize(size_ - 1); }
 
   // Return the number of elements in the channel.
-  int size() const { return size_; }
+  size_t size() const { return size_; }
 
   // Return placement of channel.
   Placement placement() const {
@@ -889,10 +890,10 @@ class Channel {
   char *data_ = nullptr;
 
   // Number of elements in channel.
-  int size_ = 0;
+  size_t size_ = 0;
 
   // Number of allocated elements.
-  int capacity_ = 0;
+  size_t capacity_ = 0;
 
   // A tensor describing the element type of the channel.
   const Tensor *format_;
@@ -1012,6 +1013,7 @@ class ProfileSummary {
 class Instance {
  public:
   // Create data instance.
+  Instance() : data_(nullptr), cell_(nullptr) {}
   Instance(const Cell *cell);
   Instance(const Flow::Function *func) : Instance(func->cell) {}
 
@@ -1106,6 +1108,19 @@ class Instance {
     return SetReference(var->tensor, address);
   }
 
+  // Sets a dynamic tensor to channel.
+  void SetChannel(const Tensor *param, Channel *channel) {
+    DCHECK(param != nullptr);
+    DCHECK(param->IsLocal()) << param->name();
+    DCHECK(param->dynamic()) << param->name();
+    DCHECK(param->cell() == cell_) << param->name();
+    *reinterpret_cast<Channel **>(data_ + param->offset()) = channel;
+  }
+  void SetChannel(const Flow::Variable *var, Channel *channel) {
+    DCHECK(var->tensor != nullptr) << var->name;
+    return SetChannel(var->tensor, channel);
+  }
+
   // Clear instance tensor.
   void Clear(const Tensor *param) {
     memset(GetAddress(param), 0, param->space());
@@ -1162,6 +1177,36 @@ class Instance {
 
   // Cell for instance.
   const Cell *cell_;
+};
+
+// Resizable array of cell instances.
+class InstanceArray {
+ public:
+  // Create empty array of cell instances.
+  InstanceArray(Cell *cell);
+
+  // Deallocate instance array.
+  ~InstanceArray();
+
+  // Index operator.
+  Instance &operator[](size_t index) { return *(begin_ + index); }
+  const Instance &operator[](size_t index) const { return *(begin_ + index); }
+
+  // Size and capacity.
+  size_t size() const { return end_ - begin_; }
+  size_t capacity() const { return limit_ - begin_; }
+
+  // Resize array. This will never shrink the capacity of the array.
+  void Resize(size_t size);
+
+  // Deallocate all the instances and reset the capacity to zero.
+  void Clear();
+
+ private:
+  Cell *cell_;        // cell type for instances
+  Instance *begin_;   // begining of instance array
+  Instance *end_;     // end of used instances
+  Instance *limit_;   // end of allocated instances
 };
 
 // A cell contains generated code for executing computation of a function.
@@ -1364,15 +1409,16 @@ class Network {
   // Add resource to network. This is deleted together with the network.
   void AddResource(Resource *resource) { resources_.push_back(resource); }
 
-  // Initialize learnable weights with random values from a normal distribution.
-  void InitLearnableWeights(int64 seed = 0,
-                            float mean = 0.0,
-                            float stddev = 1e-4);
+  // Initialize model parameters.
+  void InitModelParameters(int64 seed = 0);
 
   // Save weights after training. This copies the value of each learnable tensor
   // in the network to the corresponding variable in the flow. This clears the
   // learning flag for the variable and turns it into a constant.
-  void SaveLearnedWeights(Flow *flow) const;
+  void SaveParameters(Flow *flow) const;
+
+  // Copy weight from flow for learnable tensors.
+  void LoadParameters(const Flow &flow);
 
   // Runtime support functions.
   Runtime *runtime() const { return runtime_; }

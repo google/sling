@@ -54,7 +54,6 @@ DEFINE_string(output, "", "Output filename");
 DEFINE_int32(indent, 2, "Indentation for SLING output");
 DEFINE_string(corpus, "", "Input corpus");
 DEFINE_bool(parse, false, "Parse input corpus");
-DEFINE_bool(trace, false, "Trace or not");
 DEFINE_bool(benchmark, false, "Benchmark parser");
 DEFINE_bool(lex, false, "Output documents in LEX format");
 DEFINE_bool(evaluate, false, "Evaluate parser");
@@ -134,7 +133,6 @@ int main(int argc, char *argv[]) {
   Store commons;
   Parser parser;
   parser.Load(&commons, FLAGS_parser);
-  parser.set_trace(FLAGS_trace);
   commons.Freeze();
   clock.stop();
   LOG(INFO) << clock.ms() << " ms loading parser";
@@ -167,7 +165,6 @@ int main(int argc, char *argv[]) {
   if (FLAGS_parse) {
     CHECK(!FLAGS_corpus.empty());
     LOG(INFO) << "Parse " << FLAGS_corpus;
-    if (FLAGS_trace) LOG(INFO) << "Tracing on";
     DocumentCorpus corpus(&commons, FLAGS_corpus);
     int num_documents = 0;
     RecordWriter *writer = nullptr;

@@ -350,6 +350,8 @@ struct Expression {
     if (type == DT_FLOAT || type == DT_DOUBLE) {
       // Perform dry-run to estimate the number of SIMD registers needed.
       MacroAssembler masm(nullptr, 0, options);
+      masm.AllocateFunctionRegisters();
+      masm.rr().reserve_all();
       Expression expr(step, &masm, 0);
       CHECK(expr.AllocateRegisters()) << "Register overflow";
 
@@ -358,6 +360,18 @@ struct Expression {
       while (masm.mm().try_alloc(extended) != -1) spare_regs++;
     }
     return spare_regs;
+  }
+
+  // Return the number of registers used by expression.
+  static int RegisterUsage(const Step *step, const Options &options) {
+    MacroAssembler masm(nullptr, 0, options);
+    masm.AllocateFunctionRegisters();
+    masm.rr().reserve_all();
+    Expression expr(step, &masm, 0);
+    int before = masm.rr().num_free();
+    CHECK(expr.AllocateRegisters()) << "Register overflow in " << step->name();
+    int after = masm.rr().num_free();
+    return before - after;
   }
 
   // Representative output (or input) from expression.
@@ -826,9 +840,11 @@ class ExpressionTransformer : public Transformer {
       Express expr;
       expr.Parse(fused_recipe);
       auto *vt = expr.Variable(Express::INPUT, target_index);
-      auto *v0 = expr.Variable(Express::INPUT, 0);
+      auto *v0 = expr.Variable(InputType(fused->inputs[0]), 0);
       vt->id = 0;
+      vt->type = Express::INPUT;
       v0->id = target_index;
+      v0->type = InputType(fused->inputs[0]);
       fused_recipe = expr.AsRecipe();
       fused->SwapInputs(0, target_index);
     }
@@ -1026,7 +1042,7 @@ class Calculate : public Kernel {
     return true;
   }
 
-  void Adjust(Step *step) override {
+  void Adjust(Step *step, const Options &options) override {
     Expression expression(step, nullptr);
     step->set_variant(expression.generator->Name());
 
@@ -1071,6 +1087,10 @@ class Calculate : public Kernel {
         }
       }
     }
+
+    // Reserve extra registers.
+    int regs = Expression::RegisterUsage(step, options);
+    step->SetRegisterUsage(regs);
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {

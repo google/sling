@@ -15,6 +15,8 @@
 #ifndef SLING_MYELIN_MACRO_ASSEMBLER_H_
 #define SLING_MYELIN_MACRO_ASSEMBLER_H_
 
+#include <limits>
+
 #include "sling/myelin/compute.h"
 #include "third_party/jit/assembler.h"
 
@@ -37,11 +39,11 @@ class Registers {
   typedef jit::Register Register;
 
   // An x64 CPU has 16 general 64-bit registers.
-  static const int kNumRegisters = 16;
+  static const int NUM_REGISTERS = 16;
 
   // Initialize registers.
   Registers()
-      : used_regs_(kPreservedRegisters), saved_regs_(0) {}
+      : used_regs_(PRESERVED_REGISTERS), saved_regs_(0) {}
   Registers(const Registers &rr)
       : used_regs_(rr.used_regs_), saved_regs_(rr.saved_regs_) {}
   Registers &operator=(const Registers &rr) {
@@ -87,11 +89,12 @@ class Registers {
   bool used(Register r) { return used(r.code()); }
 
   // Reset allocated registers.
-  void reset() { used_regs_ = kPreservedRegisters & ~saved_regs_; }
+  void reset() { used_regs_ = PRESERVED_REGISTERS & ~saved_regs_; }
 
   // Reserve callee-saved register for use.
   void reserve(int r);
   void reserve(Register r) { reserve(r.code()); }
+  void reserve_all();
 
   // Free callee-saved register after it has been restored.
   void free(int r);
@@ -106,11 +109,11 @@ class Registers {
   bool saved(Register r) { return saved(r.code()); }
 
   // Check if register is a callee-saved register.
-  static bool preserved(int r) { return ((1 << r) & kPreservedRegisters) != 0; }
+  static bool preserved(int r) { return ((1 << r) & PRESERVED_REGISTERS) != 0; }
   static bool preserved(Register r) { return preserved(r.code()); }
 
   // Check if register is an extra callee-saved register.
-  static bool extra(int r) { return ((1 << r) & kExtraRegisters) != 0; }
+  static bool extra(int r) { return ((1 << r) & EXTRA_REGISTERS) != 0; }
   static bool extra(Register r) { return extra(r.code()); }
 
   // Return the number of free registers.
@@ -118,7 +121,7 @@ class Registers {
 
  private:
   // Preserved registers.
-  static const int kPreservedRegisters =
+  static const int PRESERVED_REGISTERS =
     1 << Register::kCode_rbx |
     1 << Register::kCode_rsp |
     1 << Register::kCode_rbp |
@@ -128,7 +131,7 @@ class Registers {
     1 << Register::kCode_r15;
 
   // Extra callee-saved registers.
-  static const int kExtraRegisters =
+  static const int EXTRA_REGISTERS =
     1 << Register::kCode_rbx |
     1 << Register::kCode_r12 |
     1 << Register::kCode_r13 |
@@ -150,8 +153,8 @@ class SIMDRegisters {
   typedef jit::ZMMRegister ZMMRegister;
 
   // An x64 CPU has up to 16 SIMD registers (or 32 in AVX512 mode).
-  static const int kNumXRegisters = 16;
-  static const int kNumZRegisters = 32;
+  static const int NUM_X_REGISTERS = 16;
+  static const int NUM_Z_REGISTERS = 32;
 
   // Initialize SIMD registers.
   SIMDRegisters() : used_regs_(0) {}
@@ -217,7 +220,7 @@ class OpmaskRegisters {
   typedef jit::OpmaskRegister OpmaskRegister;
 
   // There are 8 opmask registers (k0 to k7) where k0 is a constant register.
-  static const int kNumRegisters = 8;
+  static const int NUM_REGISTERS = 8;
 
   // Initialize opmask registers.
   OpmaskRegisters() : used_regs_(kSpecialRegisters) {}
@@ -307,6 +310,9 @@ class MacroAssembler : public jit::Assembler {
   MacroAssembler(void *buffer, int buffer_size, const Options &options);
   ~MacroAssembler();
 
+  // Allocate registers for function prologue/epilogue.
+  void AllocateFunctionRegisters();
+
   // Generate function prologue.
   void Prologue();
 
@@ -359,6 +365,16 @@ class MacroAssembler : public jit::Assembler {
     return data;
   }
 
+  // Get data block for minimum value for type.
+  template<typename T> StaticData *MinVal(int repeat = 1) {
+    return GetConstant<T>(std::numeric_limits<T>::lowest(), repeat);
+  }
+
+  // Get data block for maximum value for type.
+  template<typename T> StaticData *MaxVal(int repeat = 1) {
+    return GetConstant<T>(std::numeric_limits<T>::max(), repeat);
+  }
+
   // Generate static data blocks in the code buffer.
   void GenerateDataBlocks();
 
@@ -370,6 +386,9 @@ class MacroAssembler : public jit::Assembler {
 
   // Load address of tensor on device.
   void LoadTensorDeviceAddress(Register dst, Tensor *tensor);
+
+  // Load size of dynamic tensor (e.g. channel) and multiply with scalar.
+  void LoadDynamicSize(Register dst, Tensor *tensor, int scalar = 1);
 
   // Emit breakpoint.
   void Breakpoint() { int3(); }

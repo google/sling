@@ -54,6 +54,7 @@ cc_library(
     "//sling/nlp/kb:facts",
     "//sling/nlp/kb:phrase-table",
     "//sling/nlp/parser",
+    "//sling/nlp/parser:multiclass-delegate",
     "//sling/nlp/parser:frame-evaluation",
     "//sling/nlp/wiki:wikidata-converter",
     "//sling/task:dashboard",

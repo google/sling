@@ -42,7 +42,7 @@ class Reshape : public Kernel {
   }
 
   void Adjust(Step *step) override {
-    CHECK(step->AllowInPlace(0, 0, true));
+    CHECK(step->AllowInPlace(0, 0, true)) << step->name();
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -127,7 +127,7 @@ class Resize : public Kernel {
  public:
   bool Supports(Step *step) override {
     // Check inputs and outputs.
-    if (step->indegree() != 3 || step->outdegree() != 1) return false;
+    if (step->indegree() != 1 || step->outdegree() != 1) return false;
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
     if (x->type() != y->type()) return false;
@@ -362,9 +362,6 @@ class Slice : public Kernel {
     return true;
   }
 
-  void Adjust(Step *step) override {
-  }
-
   void Generate(Step *step, MacroAssembler *masm) override {
     // Get inputs and output.
     Tensor *source = step->input(0);
@@ -401,7 +398,7 @@ class Slice : public Kernel {
 class BasicConcat : public Kernel {
  public:
   string Name() override { return "BasicConcat"; }
-  string Operation() override { return "ConcatV2"; }
+  string Operation() override { return "Concat"; }
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
@@ -414,11 +411,9 @@ class BasicConcat : public Kernel {
     if (!axis->constant()) return false;
     int a = axis->value<int32>();
     if (step->output(0)->shape().outer(a) != 1) return false;
+    if (step->output(0)->dynamic()) return false;
 
     return true;
-  }
-
-  void Adjust(Step *step) override {
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -454,7 +449,7 @@ class BasicConcat : public Kernel {
 class GeneralConcat : public Kernel {
  public:
   string Name() override { return "GeneralConcat"; }
-  string Operation() override { return "ConcatV2"; }
+  string Operation() override { return "Concat"; }
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
@@ -475,22 +470,21 @@ class GeneralConcat : public Kernel {
       if (input->rank() < axis) return false;
       if (input->shape().outer(axis) != prefix) return false;
       if (input->type() != output->type()) return false;
+      if (input->dynamic() != output->dynamic()) return false;
     }
 
     return true;
   }
 
-  void Adjust(Step *step) override {
-  }
-
   void Generate(Step *step, MacroAssembler *masm) override {
     // Get the number of tensors to concatenate.
     int n = step->GetAttr("N", step->indegree() - 1);
+    Tensor *output = step->output(0);
 
     // Allocate registers.
     Register src = masm->rr().alloc_preferred(rsi);
     Register dst = masm->rr().alloc_preferred(rdi);
-    Register out = masm->rr().alloc();
+    Register cnt = masm->rr().alloc_preferred(rcx);
     Register idx = masm->rr().alloc();
     std::vector<Register> in(n);
     for (int i = 0; i < n; ++i) in[i] = masm->rr().alloc();
@@ -501,32 +495,39 @@ class GeneralConcat : public Kernel {
     }
 
     // Load output tensor.
-    __ LoadTensorAddress(out, step->output(0));
-    __ xorq(idx, idx);
+    __ LoadTensorAddress(dst, output);
 
     // Loop over outer prefix.
     Label l;
     int axis = step->input(n)->value<int32>();
-    int prefix = step->output(0)->shape().outer(axis);
+    int repeat = output->shape().outer(axis);
+    if (output->dynamic()) {
+      __ LoadDynamicSize(idx, output, repeat);
+      step->set_variant("DYN");
+    } else {
+      __ movq(idx, Immediate(repeat));
+    }
     __ bind(&l);
 
     // Copy input tensors to output.
-    Tensor *output = step->output(0);
+    int copied = 0;
     for (int i = 0; i < n; ++i) {
       Tensor *input = step->input(i);
-      int size = axis > 0 ? input->stride(axis - 1) : input->size();
+      int size = input->AxisSize(axis);
       __ movq(src, in[i]);
-      __ movq(dst, out);
-      __ Copy(dst, 0, src, 0, size);
+      __ movq(cnt, Immediate(size));
+      __ repmovsb();
       __ addq(in[i], Immediate(size));
+      copied += size;
     }
 
     // Next chunk.
-    int size = axis > 0 ? output->stride(axis - 1) : output->size();
-    __ addq(out, Immediate(size));
-    __ incq(idx);
-    __ cmpq(idx, Immediate(prefix));
-    __ j(less, &l);
+    int size = output->AxisSize(axis);
+    if (copied != size) {
+      __ addq(dst, Immediate(size - copied));
+    }
+    __ decq(idx);
+    __ j(not_zero, &l);
   }
 
   int64 Complexity(const Step *step) override {
@@ -558,7 +559,6 @@ class Split : public Kernel {
     if (axis->type() != DT_INT32 || !axis->constant()) return false;
     int a = axis->value<int32>();
     if (a > input->rank() - 1) return false;
-    if (input->shape().outer(a) != 1) return false;
 
     // Check that outputs match the input.
     Type dt = input->type();
@@ -568,13 +568,10 @@ class Split : public Kernel {
       Tensor *output = step->output(i);
       if (output->type() != dt) return false;
       if (output->rank() != input->rank()) return false;
-      if (output->shape().outer(a) != 1) return false;
       if (output->shape().inner(a) != size / n) return false;
+      if (output->dynamic() != input->dynamic()) return false;
     }
     return true;
-  }
-
-  void Adjust(Step *step) override {
   }
 
   void Generate(Step *step, MacroAssembler *masm) override {
@@ -582,24 +579,63 @@ class Split : public Kernel {
     Tensor *input = step->input(0);
     int n = step->input(1)->value<int32>();
     int axis = step->input(2)->value<int32>();
-    int chunk_size = input->shape().inner(axis) / n;
-    int stride = input->stride(axis) * chunk_size;
+    int repeat = input->shape().outer(axis);
 
     // Allocate registers.
     Register src = masm->rr().alloc_preferred(rsi);
     Register dst = masm->rr().alloc_preferred(rdi);
-    Register in = masm->rr().alloc();
+    Register cnt = masm->rr().alloc_preferred(rcx);
+    Register idx = masm->rr().alloc_preferred(rcx);
 
     // Load input tensor.
-    __ LoadTensorAddress(in, input);
+    __ LoadTensorAddress(src, input);
 
-    // Copy input tensors to output.
-    int offset = 0;
-    for (int i = 0; i < n; ++i) {
-      __ leaq(src, Operand(in, offset));
-      __ LoadTensorAddress(dst, step->output(i));
-      __ Copy(dst, 0, src, 0, stride);
-      offset += stride;
+    if (input->dynamic() || repeat > 1) {
+      // Load output tensors.
+      step->set_variant("REP");
+      std::vector<Register> out(n);
+      for (int i = 0; i < n; ++i) {
+        out[i] = masm->rr().alloc();
+        __ LoadTensorAddress(out[i], step->output(i));
+      }
+
+      // Loop over outer prefix.
+      Label l;
+      if (input->dynamic()) {
+        __ LoadDynamicSize(idx, input, repeat);
+        step->set_variant("DYN");
+      } else {
+        __ movq(idx, Immediate(repeat));
+      }
+      __ bind(&l);
+
+      // Split input to output.
+      int copied = 0;
+      for (int i = 0; i < n; ++i) {
+        Tensor *output = step->output(i);
+        int size = output->AxisSize(axis);
+        __ movq(dst, out[i]);
+        __ movq(cnt, Immediate(size));
+        __ repmovsb();
+        __ addq(out[i], Immediate(size));
+        copied += size;
+      }
+
+      // Next chunk.
+      int size = input->AxisSize(axis);
+      if (copied != size) {
+        __ addq(src, Immediate(size - copied));
+      }
+      __ decq(idx);
+      __ j(not_zero, &l);
+    } else {
+      // Simple non-repeated split.
+      for (int i = 0; i < n; ++i) {
+        int size = step->output(i)->AxisSize(axis);
+        __ LoadTensorAddress(dst, step->output(i));
+        __ movq(cnt, Immediate(size));
+        __ repmovsb();
+      }
     }
   }
 
@@ -864,7 +900,7 @@ class PoolingGather : public Kernel {
     M->RequireOrder(ROW_MAJOR);
 
     // Reserve registers.
-    int regs = SIMDAssembler::RegisterUsage(type) + 8;
+    int regs = SIMDAssembler::RegisterUsage(type) + 9;
     step->SetRegisterUsage(regs);
   }
 
@@ -1145,6 +1181,7 @@ class AssignAddScatter : public Kernel {
 
     // Reserve registers.
     int regs = SIMDAssembler::RegisterUsage(type) + 8;
+    if (args.scaler) regs++;
     step->SetRegisterUsage(regs);
   }
 

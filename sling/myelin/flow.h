@@ -326,8 +326,8 @@ class Flow {
   struct Function;
 
   // Flow file version
-  static const int kVersion = 5;
-  static const int kMagic = 0x776f6c66;
+  static const int VERSION = 6;
+  static const int MAGIC = 0x776f6c66;
 
   // Flow artifact.
   template<typename T> struct Artifact {
@@ -343,27 +343,33 @@ class Flow {
       }
       return static_cast<T *>(this);
     }
-    T *clear(uint32 flag, bool disable = true) {
-      return set(flag, !disable);
-    }
 
     string name;         // artifact name
     uint32 flags = 0;    // artifact flags (meaning depends on artifact type)
   };
 
   // Flow variable.
-  struct Variable : public Artifact<Variable> {
+  struct Variable : public Artifact<Variable>, public Attributes {
     // Variable flags.
     enum Flag {
-      NONE = 0,       // no flags
-      IN = 1,         // input variable
-      OUT = 2,        // output variable
-      REF = 4,        // reference variable
-      LEARNABLE = 8,  // learnable global variable
-      UNIQUE = 16,    // input with single gradient
-      RANDOM = 32,    // initialize with random values
-      ROW = 64,       // request row-major order
-      COL = 128,      // request column-major order
+      NONE       = 0,    // no flags
+      IN         = 1,    // input variable
+      OUT        = 2,    // output variable
+      REF        = 4,    // reference variable
+      LEARNABLE  = 8,    // learnable global variable
+      UNIQUE     = 16,   // input with single gradient
+      DYNAMIC    = 32,   // dynamically sized tensor channel
+      ROW        = 64,   // request row-major order
+      COL        = 128,  // request column-major order
+      NOGRADIENT = 256,  // do not compute gradient for variable
+    };
+
+    // Initialization for learnable parameters.
+    enum Initialization {
+      INIT_ZERO    = 0,  // initialize to zero
+      INIT_UNIFORM = 1,  // uniform random initialization
+      INIT_NORMAL  = 2,  // normal-distributed initialization
+      INIT_ORTHO   = 3,  // normal-distributed orthogonal initialization
     };
 
     // Add alias for variable.
@@ -384,43 +390,31 @@ class Flow {
     // Input variable flag.
     bool in() const { return is(IN); }
     Variable *set_in(bool enable = true) { return set(IN, enable); }
-    Variable *clear_in(bool disable = true) { return clear(IN, disable); }
 
     // Output variable flag.
     bool out() const { return is(OUT); }
     Variable *set_out(bool enable = true) { return set(OUT, enable); }
-    Variable *clear_out(bool disable = true) { return clear(OUT, disable); }
 
     // Reference variable flag.
     bool ref() const { return is(REF); }
     Variable *set_ref(bool enable = true) { return set(REF, enable); }
-    Variable *clear_ref(bool disable = true) { return clear(REF, disable); }
 
     // Learnable variable flag.
     bool learnable() const { return is(LEARNABLE); }
     Variable *set_learnable(bool enable = true) {
       return set(LEARNABLE, enable);
     }
-    Variable *clear_learnable(bool disable = true) {
-      return clear(LEARNABLE, disable);
+
+    // Dynamic size flag.
+    bool dynamic() const { return is(DYNAMIC); }
+    Variable *set_dynamic(bool enable = true) {
+      return set(DYNAMIC, enable);
     }
 
     // Unique gradient flag.
     bool unique() const { return is(UNIQUE); }
     Variable *set_unique(bool enable = true) {
       return set(UNIQUE, enable);
-    }
-    Variable *clear_unique(bool disable = true) {
-      return clear(UNIQUE, disable);
-    }
-
-    // Random intialize flag.
-    bool random() const { return is(RANDOM); }
-    Variable *set_random(bool enable = true) {
-      return set(RANDOM, enable);
-    }
-    Variable *clear_random(bool disable = true) {
-      return clear(RANDOM, disable);
     }
 
     // Check if variable is a constant.
@@ -490,6 +484,7 @@ class Flow {
     Shape shape;                         // variable shape
     char *data = nullptr;                // data for constants (owned by flow)
     uint64_t size = 0;                   // size of data in bytes
+    Initialization init = INIT_ZERO;     // initialization
 
     Operation *producer = nullptr;       // operation producing variable
     std::vector<Operation *> consumers;  // list of consumers of variable
@@ -500,7 +495,7 @@ class Flow {
   struct Operation : public Artifact<Operation>, public Attributes {
     // Variable flags.
     enum Flag {
-      NONE = 0,         // no flags
+      NONE       = 0,   // no flags
       NOGRADIENT = 1,   // do not compute gradient for op
     };
 
@@ -568,7 +563,7 @@ class Flow {
   struct Function : public Artifact<Function> {
     // Variable flags.
     enum Flag {
-      NONE = 0,       // no flags
+      NONE     = 0,   // no flags
       TRAINING = 1,   // function only needed for training
       BACKPROP = 2,   // build gradient for function
     };
@@ -581,21 +576,15 @@ class Flow {
     Function *set_training(bool enable = true) {
       return set(TRAINING, enable);
     }
-    Function *clear_training(bool disable = true) {
-      return clear(TRAINING, disable);
-    }
 
     // Back-propagation flag.
     bool backprop() const { return is(BACKPROP); }
     Function *set_backkprop(bool enable = true) {
       return set(BACKPROP, enable);
     }
-    Function *clear_backprop(bool disable = true) {
-      return clear(BACKPROP, disable);
-    }
 
     std::vector<Operation *> ops;     // ops for function in compute order
-    std::vector<Variable *> unused;   // unused input variables
+    std::vector<Variable *> unused;   // unused input/output variables
     Cell *cell = nullptr;             // cell for function
   };
 
@@ -650,7 +639,7 @@ class Flow {
   void Read(const char *data, size_t size);
 
   // Save flow to file.
-  void Save(const string &filename, int version = kVersion) const;
+  void Save(const string &filename, int version = VERSION) const;
 
   // Analyze flow.
   void Analyze(const Transformations &transformations);

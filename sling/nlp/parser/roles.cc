@@ -17,12 +17,21 @@
 namespace sling {
 namespace nlp {
 
-void RoleSet::Init(const std::vector<ParserAction> &actions) {
-  for (const ParserAction &action : actions) {
-    if (!action.role.IsNil() && roles_.find(action.role) == roles_.end()) {
-      int index = roles_.size();
-      roles_[action.role] = index;
-    }
+void RoleSet::Add(Handle role) {
+  if (!role.IsNil() && roles_.find(role) == roles_.end()) {
+    int index = roles_.size();
+    roles_[role] = index;
+  }
+}
+
+void RoleSet::Add(const std::vector<ParserAction> &actions) {
+  for (const ParserAction &action : actions) Add(action.role);
+}
+
+void RoleSet::GetList(std::vector<Handle> *list) const {
+  list->resize(roles_.size());
+  for (auto &it : roles_) {
+    (*list)[it.second] = it.first;
   }
 }
 

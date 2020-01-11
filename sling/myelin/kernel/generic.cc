@@ -141,6 +141,14 @@ class RenameTransformer : public Transformer {
         op->type = "Add";
         renames++;
       }
+      if (op->type == "ConcatV2") {
+        op->type = "Concat";
+        renames++;
+      }
+      if (op->type == "GatherV2") {
+        op->type = "Gather";
+        renames++;
+      }
     }
 
     return renames > 0;
@@ -192,7 +200,7 @@ class IdentityTransformer : public Transformer {
             noops.push_back(op);
           }
         }
-      } else if (op->type == "Concat" || op->type == "ConcatV2") {
+      } else if (op->type == "Concat") {
         // Eliminate concatenations with only one input.
         int n = op->GetAttr("N", 0);
         if (n == 1) {
@@ -227,7 +235,7 @@ class FlattenConcatTransformer : public Transformer {
  private:
   // Returns true if the operation is a concatenation.
   static bool IsConcat(const Flow::Operation &operation) {
-    if (operation.type != "ConcatV2") return false;
+    if (operation.type != "Concat") return false;
     if (!operation.HasAttr("N")) return false;
     const int num_to_concat = operation.GetAttr("N", -1);
     if (num_to_concat <= 0) return false;
@@ -310,24 +318,14 @@ class FlattenConcatTransformer : public Transformer {
   }
 };
 
-// Normalizes "Gather" operations:
-// 1. Replaces "GatherV2" with "Gather".
-// 2. Removes the "axis" input when it is zero.
+// Normalizes "Gather" operations. Removes the "axis" input when it is zero.
 class GatherTransformer : public Transformer {
  public:
   string Name() override { return "GatherTransformer"; }
 
   bool Transform(Flow *flow) override {
+    // Remove the "axis" input when it is zero.
     bool transformed = false;
-
-    // First, normalize the operation type.
-    for (Flow::Operation *op : flow->ops()) {
-      if (op->type != "GatherV2") continue;
-      op->type = "Gather";
-      transformed = true;
-    }
-
-    // Next, remove the "axis" input when it is zero.
     for (Flow::Operation *op : flow->ops()) {
       if (op->type != "Gather") continue;  // types were normalized above
 
@@ -433,7 +431,7 @@ class StandardTyper : public Typer {
     }
 
     // Infer shape for concat operation.
-    if (op->type == "ConcatV2") {
+    if (op->type == "Concat") {
       int n = op->GetAttr("N", 0);
       if (n > op->indegree()) return false;
       int axis;

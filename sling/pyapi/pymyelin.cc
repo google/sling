@@ -249,6 +249,8 @@ bool PyCompiler::ImportFlow(PyObject *pyflow, Flow *flow, PyBuffers *buffers) {
     var->flags = PyIntAttr(pyvar, "flags");
     varmap[pyvar] = var;
 
+    if (!ImportAttributes(pyvar, var)) return false;
+
     PyObject *pydata = PyAttr(pyvar, "data");
     if (pydata != Py_None) {
       var->data = buffers->GetData(pydata, var->type, &var->size);

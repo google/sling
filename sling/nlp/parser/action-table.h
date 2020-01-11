@@ -22,7 +22,6 @@
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"
 #include "sling/nlp/parser/parser-action.h"
-#include "sling/nlp/parser/parser-state.h"
 
 namespace sling {
 namespace nlp {
@@ -48,27 +47,11 @@ class ActionTable {
   // Return list of actions.
   const std::vector<ParserAction> &list() const { return actions_; }
 
-  // Saves the action table.
-  void Save(const Store *global, const string &file) const;
+  // Read action table from frame.
+  void Read(const Frame &frame);
 
-  // Returns the serialization of the table.
-  string Serialize(const Store *global) const;
-
-  // Write action table in frame.
+  // Write action table to frame.
   void Write(Builder *frame) const;
-
-  // Initialize the action table from store.
-  void Init(Store *store);
-
-  // Maximum number of actions per token.
-  int max_actions_per_token() const { return max_actions_per_token_; }
-  void set_max_actions_per_token(int m) {
-    if (max_actions_per_token_ < m) max_actions_per_token_ = m;
-  }
-
-  // Frame limit for source and target in parser actions.
-  int frame_limit() const { return frame_limit_; }
-  void set_frame_limit(int limit) { frame_limit_ = limit; }
 
  private:
   // List of actions.
@@ -76,12 +59,6 @@ class ActionTable {
 
   // Mapping from parser action to index.
   std::unordered_map<ParserAction, int, ParserActionHash> mapping_;
-
-  // Maximum index of source and target for actions.
-  int frame_limit_ = 5;
-
-  // Maximum number of actions taken per token.
-  int max_actions_per_token_ = -1;
 };
 
 }  // namespace nlp

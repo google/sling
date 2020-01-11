@@ -15,6 +15,7 @@ cc_binary(
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",
     "//sling/nlp/parser",
+    "//sling/nlp/parser:multiclass-delegate",
     "//sling/nlp/parser:frame-evaluation",
     "//sling/string:printf",
   ],

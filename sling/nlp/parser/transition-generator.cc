@@ -148,14 +148,6 @@ ParserAction Translate(const Handles &attention, const Action &action) {
     case ParserAction::REFER:
       output.target = Index(attention, action.frame->handle);
       break;
-    case ParserAction::EMBED:
-      output.label = action.frame->type;
-      output.target = Index(attention, action.neighbor->handle);
-      break;
-    case ParserAction::ELABORATE:
-      output.label = action.frame->type;
-      output.source = Index(attention, action.neighbor->handle);
-      break;
     case ParserAction::CONNECT:
       output.source = Index(attention, action.frame->handle);
       output.target = Index(attention, action.neighbor->handle);
@@ -174,10 +166,10 @@ ParserAction Translate(const Handles &attention, const Action &action) {
 // Updates 'attention' as a result of execution 'action'.
 void Update(const Action &action, Handles *attention) {
   auto type = action.core.type;
-  if (type == ParserAction::EVOKE || type == ParserAction::EMBED ||
-      type == ParserAction::ELABORATE) {
+  if (type == ParserAction::EVOKE) {
     attention->emplace_back(action.frame->handle);
-  } else if (type == ParserAction::REFER || type == ParserAction::ASSIGN ||
+  } else if (type == ParserAction::REFER ||
+             type == ParserAction::ASSIGN ||
              type == ParserAction::CONNECT) {
     QCHECK_GT(attention->size(), 0);
     auto handle = action.frame->handle;
@@ -339,7 +331,6 @@ void CollectSpanActions(Store *store,
 
     actions->emplace_back(ParserAction::SHIFT, nullptr);
   }
-  actions->emplace_back(ParserAction::STOP, nullptr);
 }
 
 void OutputActions(Store *store,
@@ -355,8 +346,7 @@ void OutputActions(Store *store,
     actions->pop_front();
 
     ParserAction::Type type = output.type;
-    if (type == ParserAction::EVOKE || type == ParserAction::EMBED ||
-        type == ParserAction::ELABORATE) {
+    if (type == ParserAction::EVOKE) {
       action.frame->accounted = true;
 
       // CONNECT.
@@ -373,39 +363,6 @@ void OutputActions(Store *store,
         edge->accounted = true;
         edge->inverse->accounted = true;
         actions->push_front(connect);
-      }
-
-      // EMBED.
-      for (auto *edge : action.frame->edges) {
-        if (edge->accounted || !edge->incoming) continue;
-
-        FrameGraph::Node *neighbor = frame_graph.node(edge->neighbor);
-        if (neighbor == nullptr || neighbor->accounted ||
-            neighbor->evoked) {
-          continue;
-        }
-        Action embed(ParserAction::EMBED, neighbor);
-        embed.core.role = edge->role;
-        embed.neighbor = action.frame;
-        edge->accounted = true;
-        edge->inverse->accounted = true;
-        actions->push_front(embed);
-      }
-
-      // ELABORATE.
-      for (auto *edge : action.frame->edges) {
-        if (edge->accounted || edge->incoming) continue;
-
-        FrameGraph::Node *neighbor = frame_graph.node(edge->neighbor);
-        if (neighbor == nullptr || neighbor->accounted || neighbor->evoked) {
-          continue;
-        }
-        Action elaborate(ParserAction::EMBED, neighbor);
-        elaborate.core.role = edge->role;
-        elaborate.neighbor = action.frame;
-        edge->accounted = true;
-        edge->inverse->accounted = true;
-        actions->push_front(elaborate);
       }
 
       // ASSIGN.

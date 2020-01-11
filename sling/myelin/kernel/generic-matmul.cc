@@ -639,7 +639,7 @@ class TransposeTransformer : public Transformer {
             var_refs++;
           }
         }
-        if (var_refs == 0) var->clear_out();
+        if (var_refs == 0) var->set_out(false);
       }
 
       updates++;

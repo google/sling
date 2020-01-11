@@ -218,7 +218,7 @@ def compute(flow, f, data):
       v[o[0]] = np.array(len(v[i[0]].shape))
     elif op.type == "Identity":
       v[o[0]] = v[i[0]]
-    elif op.type == "ConcatV2":
+    elif op.type == "Concat":
       n = int(op.attr("N"))
       axis = v[i[n]]
       seq = []

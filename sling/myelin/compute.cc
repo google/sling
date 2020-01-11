@@ -434,10 +434,8 @@ class InstanceAllocator {
 };
 
 Library::~Library() {
-  if (owns_kernels_) {
-    for (auto o : kernels_) {
-      for (auto k : o.second) delete k;
-    }
+  for (auto o : kernels_) {
+    for (auto k : o.second) delete k;
   }
 }
 
@@ -490,25 +488,6 @@ const Library::Kernels &Library::Lookup(const string &op) const {
   auto f = kernels_.find(op);
   if (f == kernels_.end()) return no_kernels_;
   return f->second;
-}
-
-bool Library::Singleton(const string &op,
-                        const string &name,
-                        Library *singleton) const {
-  // Singleton library must be empty or already non-owning.
-  CHECK(!singleton->owns_kernels_ || singleton->kernels_.empty());
-  singleton->owns_kernels_ = false;
-
-  // Find kernel.
-  auto f = kernels_.find(op);
-  if (f == kernels_.end()) return false;
-  for (Kernel *kernel : f->second) {
-    if (kernel->Name() == name) {
-      singleton->kernels_[kernel->Operation()].push_back(kernel);
-      return true;
-    }
-  }
-  return false;
 }
 
 void Tensor::Link(Tensor *link) {
@@ -572,6 +551,12 @@ bool Tensor::SupportsAlignment(const Shape &align) const {
 
 int Tensor::ChannelElementSize() const {
   return Align(size(), byte_alignment());
+}
+
+int Tensor::AxisSize(int axis) const {
+  if (axis > 0) return stride(axis - 1);
+  if (dynamic_) return ChannelElementSize();
+  return size_;
 }
 
 bool Tensor::SupportsOrder(Order order) {
@@ -649,6 +634,7 @@ string Tensor::TypeString() const {
   string str;
   if (ref_) str.append("&");
   str.append(TypeTraits::of(type_).name());
+  if (dynamic_) str.append("<>");
   if (!shape_.scalar()) {
     str.append("[");
     str.append(shape_.ToString());
@@ -659,7 +645,15 @@ string Tensor::TypeString() const {
 
 string Tensor::ToString(const char *data, bool deref) const {
   // Resolve references.
-  if (deref && ref()) data = *reinterpret_cast<const char * const *>(data);
+  if (deref) {
+    if (dynamic()) {
+      data = *reinterpret_cast<const char * const *>(data);
+      if (data == nullptr) return "null";
+      data = *reinterpret_cast<const char * const *>(data);
+    } else if (ref()) {
+      data = *reinterpret_cast<const char * const *>(data);
+    }
+  }
 
   // Check for shape and null.
   if (!shape().defined()) return "*";
@@ -702,26 +696,30 @@ string Tensor::ToString(const char *data, bool deref) const {
 }
 
 Channel::Channel(const Tensor *format) : format_(format) {
-  // Align the element size to the byte alignment of the format tensor to ensure
-  // proper alignment of the elements in the channel array.
-  DCHECK(format->order() == ROW_MAJOR) << format->name();
-  DCHECK_GE(format->rank(), 1) << format->name();
-  DCHECK_EQ(format->dim(0), 1) << format->name();
-  element_size_ = format->ChannelElementSize();
+  if (format != nullptr) {
+    // Align the element size to the byte alignment of the format tensor to
+    // ensure proper alignment of the elements in the channel array.
+    DCHECK(format->order() == ROW_MAJOR) << format->name();
+    DCHECK_GE(format->rank(), 1) << format->name();
+    DCHECK_EQ(format->dim(0), 1) << format->name();
+    element_size_ = format->ChannelElementSize();
 
-  // Channel are aligned to the element alignment and cache lines.
-  EnsureAlignment(&alignment_, format->byte_alignment());
-  EnsureAlignment(&alignment_, jit::CPU::CacheLineSize());
+    // Channel are aligned to the element alignment and cache lines.
+    EnsureAlignment(&alignment_, format->byte_alignment());
+    EnsureAlignment(&alignment_, jit::CPU::CacheLineSize());
+  }
 }
 
 Channel::~Channel() {
-  runtime()->FreeChannel(data_, placement());
+  if (data_ != nullptr) {
+    runtime()->FreeChannel(data_, placement());
+  }
 }
 
-void Channel::resize(int n) {
+void Channel::resize(size_t n) {
   // Allocate more space if needed.
   if (n > capacity_) {
-    int cap = capacity_ * 2;
+    size_t cap = capacity_ * 2;
     if (cap < n) cap = n;
     if (cap < 8) cap = 8;
     reserve(cap);
@@ -738,10 +736,10 @@ void Channel::resize(int n) {
   size_ = n;
 }
 
-void Channel::reset(int n) {
+void Channel::reset(size_t n) {
   // Allocate more space if needed.
   if (n > capacity_) {
-    int cap = capacity_ * 2;
+    size_t cap = capacity_ * 2;
     if (cap < n) cap = n;
     if (cap < 8) cap = 8;
     reserve(cap);
@@ -754,7 +752,7 @@ void Channel::reset(int n) {
   size_ = n;
 }
 
-void Channel::reserve(int n) {
+void Channel::reserve(size_t n) {
   // Never remove any existing elements.
   if (n < size_) return;
   if (n == capacity_) return;
@@ -770,7 +768,7 @@ void Channel::reserve(int n) {
   capacity_ = n;
 }
 
-void Channel::zero(int n) {
+void Channel::zero(size_t n) {
   runtime()->ClearChannel(data_, n * element_size_, element_size_, placement());
 }
 
@@ -805,11 +803,17 @@ ProfileSummary::~ProfileSummary() {
 }
 
 Instance::Instance(const Cell *cell) : cell_(cell) {
-  cell_->runtime()->AllocateInstance(this);
+  if (cell_ != nullptr) {
+    cell_->runtime()->AllocateInstance(this);
+  } else {
+    data_ = nullptr;
+  }
 }
 
 Instance::~Instance() {
-  cell_->runtime()->FreeInstance(this);
+  if (cell_ != nullptr) {
+    cell_->runtime()->FreeInstance(this);
+  }
 }
 
 void Instance::Clear() {
@@ -859,6 +863,39 @@ string Instance::ToString() const {
   return str;
 }
 
+InstanceArray::InstanceArray(Cell *cell)
+  : cell_(cell), begin_(nullptr), end_(nullptr), limit_(nullptr) {}
+
+InstanceArray::~InstanceArray() {
+  // Destruct all elements.
+  for (Instance *d = begin_; d < limit_; ++d) d->~Instance();
+
+  // Free array.
+  free(begin_);
+}
+
+void InstanceArray::Resize(size_t size) {
+  int cap = capacity();
+  if (size < cap) {
+    end_ = begin_ + size;
+  } else if (size > cap) {
+    // This awkward way of assigning the new data buffer to begin_ is needed to
+    // avoid getting a GCC 8+ class-memaccess warning.
+    size_t bytes = size * sizeof(Instance);
+    void **data = reinterpret_cast<void **>(&begin_);
+    *data = realloc(*data, bytes);
+    end_ = begin_ + cap;
+    limit_ = begin_ + size;
+    while (end_ < limit_) new (end_++) Instance(cell_);
+  }
+}
+
+void InstanceArray::Clear() {
+  for (Instance *d = begin_; d < limit_; ++d) d->~Instance();
+  free(begin_);
+  begin_ = end_ = limit_ = nullptr;
+}
+
 void Step::SetRegisterUsage(int regs) {
   if (cell_ != nullptr && cell_->register_usage_ < regs) {
     cell_->register_usage_ = regs;
@@ -866,8 +903,8 @@ void Step::SetRegisterUsage(int regs) {
 }
 
 void Step::SetPreservedRegisterUsage(int regs) {
-  // There are eight caller-saved registers.
-  SetRegisterUsage(8 + regs);
+  // There are nine caller-saved registers.
+  SetRegisterUsage(9 + regs);
 }
 
 bool Step::AllowInPlace(int input, int output, bool preserved) {
@@ -888,12 +925,20 @@ bool Step::AllowInPlace(int input, int output, bool preserved) {
       if (t->out()) return false;
     }
     if (t->ref() != out->ref()) return false;
+    if (t->dynamic() != out->dynamic()) return false;
     in = t;
     t = t->shared();
   }
 
   // Check if output can be shared.
   if (out->shared()) return false;
+  if (out->ref()) {
+    if (preserved) {
+      if (out->out() && in->in()) return false;
+    } else {
+      if (out->out() || in->in()) return false;
+    }
+  }
 
   // Share input and output.
   out->set_shared(in);
@@ -988,33 +1033,157 @@ Network::~Network() {
   for (auto *s : steps_) delete s;
 }
 
-void Network::InitLearnableWeights(int64 seed, float mean, float stddev) {
+// Orthogonalize a set of vectors stored as the columns of matrix A (m x n)
+// using the Gram-Schmidt process.
+static void OrthogonalizeColumns(float *A, int m, int n) {
+  // Orthogonalize one column vector at a time.
+  float *aj, *ak;
+  for (int j = 0; j < n; ++j) {
+    // To orthogonalize the vector in column j with respect to the previous
+    // vectors, subtract from it its projection onto each of the previous
+    // vectors.
+    for (int k = 0; k < j; ++k) {
+      // Compute dot product r = A_k * A_j.
+      float r = 0.0;
+      ak = A + k;
+      aj = A + j;
+      for (int i = 0; i < m; ++i, ak += n, aj += n) r += *ak * *aj;
+
+      // Update A_j -= r * A_k.
+      ak = A + k;
+      aj = A + j;
+      for (int i = 0; i < m; ++i, ak += n, aj += n) *aj -= r * *ak;
+    }
+
+    // Normalize A_j.
+    aj = A + j;
+    float sum = 0.0;
+    for (int i = 0; i < m; ++i, aj += n) sum += *aj * *aj;
+    float scaler = 1.0/ sqrt(sum);
+    aj = A + j;
+    for (int i = 0; i < m; ++i, aj += n) *aj *= scaler;
+  }
+}
+
+// Orthogonalize a set of vectors stored as the rows of matrix A (m x n)
+// using the Gram-Schmidt process.
+static void OrthogonalizeRows(float *A, int m, int n) {
+  // Orthogonalize one row vector at a time.
+  float *aj, *ak;
+  for (int j = 0; j < m; ++j) {
+    // To orthogonalize the vector in row j with respect to the previous
+    // vectors, subtract from it its projection onto each of the previous
+    // vectors.
+    aj = A + j * n;
+    for (int k = 0; k < j; ++k) {
+      // Compute dot product r = A_k * A_j.
+      float r = 0.0;
+      ak = A + k * n;
+      for (int i = 0; i < n; ++i) r += ak[i] * aj[i];
+
+      // Update A_j -= r * A_k.
+      for (int i = 0; i < n; ++i) aj[i] -= r * ak[i];
+    }
+
+    // Normalize A_j.
+    float sum = 0.0;
+    for (int i = 0; i < n; ++i) sum += aj[i] * aj[i];
+    float scaler = 1.0/ sqrt(sum);
+    for (int i = 0; i < n; ++i) aj[i] *= scaler;
+  }
+}
+
+void Network::InitModelParameters(int64 seed) {
   // Initialize random generator.
   std::mt19937_64 prng;
   prng.seed(seed);
-  std::uniform_real_distribution<float> dist(mean, stddev);
+  std::normal_distribution<float> normal(0, 1.0);
+  std::uniform_real_distribution<float> uniform(-1.0, 1.0);
 
-  // Initialize learnable variable with Gaussian noise.
+  // Initialize model parameters.
   for (auto *tensor : globals_) {
-    if (!tensor->random_init_) continue;
     if (tensor->type() != DT_FLOAT) continue;
     if (tensor->data() == nullptr) continue;
 
+    float dim = tensor->elements();
+    float scale = 1.0 / sqrt(dim);
+
     if (tensor->HasStandardLayout()) {
       float *data = reinterpret_cast<float *>(tensor->data());
-      for (int i = 0; i < tensor->elements(); ++i) {
-        data[i] = dist(prng);
+      switch (tensor->init_) {
+        case Flow::Variable::INIT_ZERO:
+          // Variables are already zero-initialized.
+          break;
+        case Flow::Variable::INIT_UNIFORM: {
+          for (int i = 0; i < tensor->elements(); ++i) {
+            data[i] = uniform(prng) * scale;
+          }
+          break;
+        }
+        case Flow::Variable::INIT_NORMAL: {
+          for (int i = 0; i < tensor->elements(); ++i) {
+            data[i] = normal(prng) * scale;
+          }
+          break;
+        }
+        case Flow::Variable::INIT_ORTHO: {
+          for (int i = 0; i < tensor->elements(); ++i) {
+            data[i] = normal(prng);
+          }
+
+          if (tensor->rank() >= 2) {
+            int m = tensor->dim(0);
+            int n = tensor->elements() / m;
+            if (n > m) {
+              OrthogonalizeRows(data, m, n);
+            } else {
+              OrthogonalizeColumns(data, m, n);
+            }
+          }
+          break;
+        }
+        default:
+          LOG(WARNING) << "Unknown initialization for " << tensor->name();
       }
     } else {
-      for (int i = 0; i < tensor->elements(); ++i) {
-        size_t offset = tensor->LinearOffset(i);
-        *reinterpret_cast<float *>(tensor->data() + offset) = dist(prng);
+      switch (tensor->init_) {
+        case Flow::Variable::INIT_ZERO:
+          // Variables are already zero-initialized.
+          break;
+        case Flow::Variable::INIT_UNIFORM: {
+          for (int i = 0; i < tensor->elements(); ++i) {
+            size_t offset = tensor->LinearOffset(i);
+            float *p = reinterpret_cast<float *>(tensor->data() + offset);
+            *p = uniform(prng) * scale;
+          }
+          break;
+        }
+        case Flow::Variable::INIT_NORMAL: {
+          for (int i = 0; i < tensor->elements(); ++i) {
+            size_t offset = tensor->LinearOffset(i);
+            float *p = reinterpret_cast<float *>(tensor->data() + offset);
+            *p = normal(prng) * scale;
+          }
+          break;
+        }
+        case Flow::Variable::INIT_ORTHO: {
+          LOG(WARNING) << "Cannot initialize tensor with non-standard layout "
+                       << "with orthogonal vectors: " << tensor->name();
+          for (int i = 0; i < tensor->elements(); ++i) {
+            size_t offset = tensor->LinearOffset(i);
+            float *p = reinterpret_cast<float *>(tensor->data() + offset);
+            *p = normal(prng) * scale;
+          }
+          break;
+        }
+        default:
+          LOG(WARNING) << "Unknown initialization for " << tensor->name();
       }
     }
   }
 }
 
-void Network::SaveLearnedWeights(Flow *flow) const {
+void Network::SaveParameters(Flow *flow) const {
   // Find all learnable variables in flow.
   for (Flow::Variable *var : flow->vars()) {
     if (!var->learnable()) continue;
@@ -1046,7 +1215,44 @@ void Network::SaveLearnedWeights(Flow *flow) const {
         dst += element_size;
       }
     }
-    var->clear_learnable();
+    var->set_learnable(false);
+  }
+}
+
+void Network::LoadParameters(const Flow &flow) {
+  // Find all learnable variables in flow.
+  for (const Flow::Variable *var : flow.vars()) {
+    // Find tensor for variable.
+    Tensor *tensor = LookupParameter(var->name);
+    if (tensor == nullptr) continue;
+    if (!tensor->learnable()) continue;
+
+    // Check that type and shape match.
+    if (tensor->type() != var->type || tensor->shape() != var->shape) {
+      LOG(WARNING) << "Tensor " << tensor->name() << " type mismatch: "
+                   << tensor->TypeString() << " vs " << var->TypeString();
+      continue;
+    }
+
+    // If tensor data has standard layout we can copy the data directly.
+    // Otherwise, tensor data is copied element-by-element.
+    if (tensor->HasStandardLayout()) {
+      // Copy directly.
+      memcpy(tensor->data(), var->data, var->size);
+    } else {
+      // Allocate data.
+      int elements = tensor->shape().elements();
+      int element_size = tensor->element_size();
+      char *dst = tensor->data();
+      char *src = var->data;
+
+      // Copy elements one at a time.
+      for (int i = 0; i < elements; ++i) {
+        size_t offset = tensor->LinearOffset(i);
+        memcpy(dst + offset, src, element_size);
+        src += element_size;
+      }
+    }
   }
 }
 
@@ -1102,13 +1308,14 @@ bool Network::Compile(const Flow &flow, const Library &library) {
     varmap[var] = tensor;
     tensor->constant_ = var->constant();
     tensor->local_ = !var->global();
-    tensor->random_init_ = var->global() && var->random() && var->learnable();
+    tensor->init_ = var->init;
     tensor->name_ = var->name;
     for (const string &alias : var->aliases) {
       names_[alias] = tensor;
     }
     tensor->type_ = var->type;
     tensor->ref_ = var->ref();
+    tensor->dynamic_ = var->dynamic();
     tensor->shape_ = var->shape;
     tensor->aligned_ = var->shape;
     tensor->minalign_.fill(var->rank(), 1);
@@ -1462,7 +1669,7 @@ bool Network::Compile(const Flow &flow, const Library &library) {
 
     // Set tensor size.
     tensor->size_ = size;
-    tensor->space_ = tensor->ref() ? sizeof(void *) : size;
+    tensor->space_ = tensor->ref() || tensor->dynamic() ? sizeof(void *) : size;
 
     // Determine placement for tensor based on producer and consumer locations.
     if (tensor->producer_ != nullptr) {

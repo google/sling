@@ -57,11 +57,23 @@ import sling
 import sling.flags as flags
 import sling.task.workflow as workflow
 
-# Start up workflow system.
+flags.define("--accurate", default=False,action='store_true')
+
 flags.parse()
+
+if flags.arg.accurate:
+  modelfn = "local/data/e/caspar/caspar-accurate.flow"
+  rnn_layers = 3
+  rnn_dim = 192
+else:
+  modelfn = "local/data/e/caspar/caspar.flow"
+  rnn_layers = 1
+  rnn_dim = 128
+
+# Start up workflow system.
 workflow.startup()
 
-# Create worflow.
+# Create workflow.
 wf = workflow.Workflow("parser-training")
 
 # Parser trainer inputs and outputs.
@@ -80,23 +92,28 @@ word_embeddings = wf.resource(
   format="embeddings"
 )
 
-parser_model = wf.resource(
-  "local/data/e/caspar/caspar.flow",
-  format="flow"
-)
+parser_model = wf.resource(modelfn, format="flow")
 
 # Parser trainer task.
 trainer = wf.task("caspar-trainer")
 
 trainer.add_params({
+  "rnn_type": 1,
+  "rnn_dim": rnn_dim,
+  "rnn_highways": True,
+  "rnn_layers": rnn_layers,
+  "dropout": 0.2,
+  "ff_l2reg": 0.0001,
+
   "learning_rate": 1.0,
   "learning_rate_decay": 0.8,
   "clipping": 1,
   "optimizer": "sgd",
-  "epochs": 50000,
   "batch_size": 32,
   "rampup": 120,
-  "report_interval": 500
+  "report_interval": 1000,
+  "learning_rate_cliff": 40000,
+  "epochs": 50000,
 })
 
 trainer.attach_input("training_corpus", training_corpus)
@@ -111,9 +128,10 @@ workflow.run(wf)
 workflow.shutdown()
 ```
 
-This model takes ~90 minutes to train. It will output evaluation metrics
-each 500 epochs, and when it is done, the final parser model will be written
-to `local/data/e/caspar/caspar.flow`.
+This model takes ~30 minutes to train. It will output evaluation metrics
+each 1000 epochs, and when it is done, the final parser model will be written
+to `local/data/e/caspar/caspar.flow`. You can train a slightly more accurate,
+but much slower parser by using the `--accurate` flag.
 
 If you don't have access to OntoNotes 5, you can download a pre-trained model
 from [here](http://www.jbox.dk/sling/caspar.flow).
@@ -203,34 +221,48 @@ This tool takes the following commandline arguments:
    [... I sling/nlp/parser/tools/parse.cc:131] Load parser from local/data/e/caspar/caspar.flow
    [... I sling/nlp/parser/tools/parse.cc:140] 34.7368 ms loading parser
    [... I sling/nlp/parser/tools/parse.cc:235] Evaluating parser on local/data/corpora/caspar/dev.rec
-   SPAN_P+=76898
-   SPAN_P-=6800
-   SPAN_R+=76898
-   SPAN_R-=6192
-   SPAN_Precision=91.8755
-   SPAN_Recall=92.5478
-   SPAN_F1=92.2105
-   FRAME_P+=77866
-   FRAME_P-=5859
-   FRAME_R+=77859
-   FRAME_R-=5233
-   FRAME_Precision=93.0021
-   FRAME_Recall=93.7022
-   FRAME_F1=93.3508
-   TYPE_P+=74277
-   TYPE_P-=9448
-   TYPE_R+=74275
-   TYPE_R-=8817
-   TYPE_Precision=88.7154
-   TYPE_Recall=89.3889
-   TYPE_F1=89.0509
-   ROLE_P+=37762
-   ROLE_P-=16848
-   ROLE_R+=37755
-   ROLE_R-=16397
-   ROLE_Precision=69.1485
-   ROLE_Recall=69.7204
-   ROLE_F1=69.4333
+   SPAN_P+=77757
+   SPAN_P-=6185
+   SPAN_R+=77757
+   SPAN_R-=5333
+   SPAN_Precision=92.6318
+   SPAN_Recall=93.5817
+   SPAN_F1=93.1043
+   FRAME_P+=78724
+   FRAME_P-=5225
+   FRAME_R+=78715
+   FRAME_R-=4377
+   FRAME_Precision=93.776
+   FRAME_Recall=94.7323
+   FRAME_F1=94.2517
+   PAIR_P+=52597
+   PAIR_P-=2339
+   PAIR_R+=51988
+   PAIR_R-=2164
+   PAIR_Precision=95.7423
+   PAIR_Recall=96.0038
+   PAIR_F1=95.8729
+   EDGE_P+=44432
+   EDGE_P-=10504
+   EDGE_R+=44400
+   EDGE_R-=9752
+   EDGE_Precision=80.8796
+   EDGE_Recall=81.9914
+   EDGE_F1=81.4317
+   ROLE_P+=39836
+   ROLE_P-=15100
+   ROLE_R+=39826
+   ROLE_R-=14326
+   ROLE_Precision=72.5135
+   ROLE_Recall=73.5448
+   ROLE_F1=73.0255
+   TYPE_P+=75604
+   TYPE_P-=8345
+   TYPE_R+=75595
+   TYPE_R-=7497
+   TYPE_Precision=90.0594
+   TYPE_Recall=90.9775
+   TYPE_F1=90.5161
    LABEL_P+=0
    LABEL_P-=0
    LABEL_R+=0
@@ -238,24 +270,24 @@ This tool takes the following commandline arguments:
    LABEL_Precision=0
    LABEL_Recall=0
    LABEL_F1=0
-   SLOT_P+=112039
-   SLOT_P-=26296
-   SLOT_R+=112030
-   SLOT_R-=25214
-   SLOT_Precision=80.9911
-   SLOT_Recall=81.6283
-   SLOT_F1=81.3085
-   COMBINED_P+=266803
-   COMBINED_P-=38955
-   COMBINED_R+=266787
-   COMBINED_R-=36639
-   COMBINED_Precision=87.2595
-   COMBINED_Recall=87.9249
-   COMBINED_F1=87.591
+   SLOT_P+=115440
+   SLOT_P-=23445
+   SLOT_R+=115421
+   SLOT_R-=21823
+   SLOT_Precision=83.1191
+   SLOT_Recall=84.0991
+   SLOT_F1=83.6063
+   COMBINED_P+=271921
+   COMBINED_P-=34855
+   COMBINED_R+=271893
+   COMBINED_R-=31533
+   COMBINED_Precision=88.6383
+   COMBINED_Recall=89.6077
+   COMBINED_F1=89.1203
    #GOLDEN_SPANS=83090
-   #PREDICTED_SPANS=83698
+   #PREDICTED_SPANS=83942
    #GOLDEN_FRAMES=83092
-   #PREDICTED_FRAMES=83725
+   #PREDICTED_FRAMES=83949
    ```
 
 ## Using the CASPAR parser in Python

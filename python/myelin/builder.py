@@ -226,7 +226,7 @@ class Builder:
       index += 1
 
   def concat(self, args, name=None):
-    op = self.rawop("ConcatV2", name)
+    op = self.rawop("Concat", name)
     shape = [args[0].shape[0], 0]
     for arg in args:
       op.add_input(arg)

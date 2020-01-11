@@ -148,7 +148,11 @@ static void AppendOp(string *str,
   if (options.op_type_as_label) {
     if (op->HasAttr("expr")) {
       if (op->type == "Assign") str->append("&#8612; ");
-      str->append(op->GetAttr("expr"));
+      string expr = op->GetAttr("expr");
+      for (char c : expr) {
+        str->push_back(c);
+        if (c == ';') str->append("&#10;");
+      }
     } else if (op->HasAttr("var")) {
       str->append("&#10132; ");
       str->append(op->GetAttr("var"));
@@ -242,6 +246,7 @@ static void AppendVar(string *str,
   if (var->in()) str->append("in ");
   if (var->out()) str->append("out ");
   if (var->unique()) str->append("unique ");
+  if (var->is(Flow::Variable::NOGRADIENT)) str->append("nograd ");
   str->append("var ");
   str->append(var->name);
   if (!var->aliases.empty()) {

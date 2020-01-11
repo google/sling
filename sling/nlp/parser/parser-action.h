@@ -31,45 +31,29 @@ struct ParserAction {
   enum Type : uint8 {
     // Skips the next input token. Only valid when not at the end of the input
     // buffer.
-    SHIFT,
-
-    // Signals that we have reach the end of the parse. This is only valid when
-    // at the end of the input buffer. Multiple STOP actions can be added to
-    // the transition sequence to make all sequences in a beam have the same
-    // length.
-    STOP,
+    SHIFT = 0,
 
     // Evokes frame of with type 'type' from the next 'length' tokens in the
     // input. The new frame will become the center of attention.
-    EVOKE,
+    EVOKE = 2,
 
     // Makes a new mention of an existing frame. This frame will become the new
     // center of attention.
-    REFER,
+    REFER = 3,
 
     // Adds slot to frame 'source' with name 'role' and value 'target'. The
     // source frame become the new center of attention.
-    CONNECT,
+    CONNECT = 4,
 
     // Adds slot to frame 'source' with name 'role' and value 'type' and moves
     // frame to the center of attention.
-    ASSIGN,
-
-    // Create new frame with type 'type' and add a slot to it with name 'role'
-    // and value 'target', where target is a frame in the attention buffer.
-    // The new frame become the new center of attention.
-    EMBED,
-
-    // Create new frame with type 'type' and add a slot to an existing frame
-    // 'source' in the attention buffer with 'role' set to the new frame.
-    // The new frame become the new center of attention.
-    ELABORATE,
+    ASSIGN = 5,
 
     // Delegate to another member (specified by 'delegate') of the cascade.
-    CASCADE,
+    CASCADE = 8,
 
     // Mark the current token as the beginning of a span.
-    MARK,
+    MARK = 9,
   };
 
   // Number of action types.
@@ -82,16 +66,16 @@ struct ParserAction {
   // Length of the evoked frame for EVOKE and REFER.
   uint8 length;
 
-  // Source frame index for CONNECT, ASSIGN, ELABORATE.
+  // Source frame index for CONNECT and ASSIGN.
   uint8 source;
 
-  // Target frame index for CONNECT, EMBED, REFER.
+  // Target frame index for CONNECT and REFER.
   uint8 target;
 
-  // Role argument for CONNECT, ASSIGN, EMBED, ELABORATE.
+  // Role argument for CONNECT and ASSIGN.
   Handle role;
 
-  // Frame type for EVOKE, EMBED, ELABORATE, and value for ASSIGN.
+  // Frame type for EVOKE and value for ASSIGN.
   Handle label;
 
   // Index of the delegate for CASCADE actions.
@@ -143,11 +127,6 @@ struct ParserAction {
   // Returns a SHIFT action.
   static ParserAction Shift() {
     return ParserAction(ParserAction::SHIFT);
-  }
-
-  // Returns a STOP action.
-  static ParserAction Stop() {
-    return ParserAction(ParserAction::STOP);
   }
 
   // Returns an EVOKE action.

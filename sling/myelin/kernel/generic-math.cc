@@ -15,6 +15,7 @@
 #include "sling/myelin/kernel/generic.h"
 
 #include <math.h>
+#include <limits>
 #include <string>
 
 #include "sling/myelin/compute.h"
@@ -224,13 +225,17 @@ class GenericFltArgMax : public Kernel {
 
   bool Supports(Step *step) override {
     // Check inputs and outputs.
-    if (step->inputs().size() != 1) return false;
-    if (step->outputs().size() != 1) return false;
+    if (step->indegree() != 1) return false;
+    if (step->outdegree() != 1) return false;
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
 
     // Check type.
-    if (x->type() != DT_FLOAT) return false;
+    if (x->type() != DT_FLOAT && x->type() != DT_DOUBLE &&
+        x->type() != DT_INT8 && x->type() != DT_INT16 &&
+        x->type() != DT_INT32 && x->type() != DT_INT64) {
+      return false;
+    }
     if (y->type() != DT_INT32 && y->type() != DT_INT64) return false;
     if (y->elements() != 1) return false;
 
@@ -241,37 +246,90 @@ class GenericFltArgMax : public Kernel {
     // Get input and output.
     Tensor *x = step->input(0);
     Tensor *y = step->output(0);
+    Type dt = x->type();
 
     // Assign registers.
     Register input = masm->rr().alloc();
     Register output = masm->rr().alloc();
     Register idx = masm->rr().alloc();
     Register best = masm->rr().alloc();
-    XMMRegister value = masm->mm().allocx();
-    XMMRegister maxval = masm->mm().allocx();
+    Register ivalue = masm->rr().alloc();
+    Register iextremum = masm->rr().alloc();
+    XMMRegister fvalue = masm->mm().allocx();
+    XMMRegister fextremum = masm->mm().allocx();
 
     // Load tensor locations.
     __ LoadTensorAddress(input, x);
     __ LoadTensorAddress(output, y);
 
-    // Initialize max value.
+    // Initialize min/max value.
     __ movq(best, Immediate(-1));
-    float inf = minimum_ ? INFINITY : -INFINITY;
-    __ movss(maxval, Operand(masm->GetConstant<float>(inf)->address()));
+    if (minimum_) {
+      switch (dt) {
+        case DT_INT8:
+        case DT_INT16:
+        case DT_INT32:
+        case DT_INT64:
+          __ movq(iextremum, masm->MaxVal<int64>()->address());
+          break;
+        case DT_FLOAT:
+          __ movss(fextremum, masm->MaxVal<float>()->address());
+          break;
+        case DT_DOUBLE:
+          __ movsd(fextremum, masm->MaxVal<double>()->address());
+          break;
+        default: ;
+      }
+    } else {
+      switch (dt) {
+        case DT_INT8:
+        case DT_INT16:
+        case DT_INT32:
+        case DT_INT64:
+          __ movq(iextremum, masm->MinVal<int64>()->address());
+          break;
+        case DT_FLOAT:
+          __ movss(fextremum, masm->MinVal<float>()->address());
+          break;
+        case DT_DOUBLE:
+          __ movsd(fextremum, masm->MinVal<double>()->address());
+          break;
+        default: ;
+      }
+    }
 
     // Loop over elements in tensor.
     __ xorq(idx, idx);
     Label loop;
     __ LoopStart(&loop);
 
-    // Get next input value.
-    __ movss(value, Operand(input, idx, times_4));
 
-    // Check if value is greater/less than current max value.
+    // Check if next value is greater/less than current extremum.
     Label l1;
-    __ ucomiss(value, maxval);
-    __ j(minimum_ ? above_equal : below_equal, &l1);
-    __ movss(maxval, value);
+    switch (dt) {
+      case DT_INT8:
+      case DT_INT16:
+      case DT_INT32:
+      case DT_INT64:
+        __ LoadInteger(ivalue, input, idx, dt);
+        __ cmpq(ivalue, iextremum);
+        __ j(minimum_ ? greater_equal : less_equal, &l1);
+        __ movq(iextremum, ivalue);
+        break;
+      case DT_FLOAT:
+        __ movss(fvalue, Operand(input, idx, times_4));
+        __ ucomiss(fvalue, fextremum);
+        __ j(minimum_ ? above_equal : below_equal, &l1);
+        __ movss(fextremum, fvalue);
+        break;
+      case DT_DOUBLE:
+        __ movsd(fvalue, Operand(input, idx, times_8));
+        __ ucomisd(fvalue, fextremum);
+        __ j(minimum_ ? above_equal : below_equal, &l1);
+        __ movsd(fextremum, fvalue);
+        break;
+      default: ;
+    }
     __ movq(best, idx);
     __ bind(&l1);
 

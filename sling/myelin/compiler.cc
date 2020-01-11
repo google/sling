@@ -47,6 +47,7 @@ DEFINE_bool(dump_input_flow, false, "Dump raw input flow to log");
 DEFINE_bool(dump_final_flow, false, "Dump final analyzed flow to log");
 DEFINE_bool(dump_cells, false, "Dump cells after compilation");
 DEFINE_bool(dump_code, false, "Dump generated assembly code");
+DEFINE_bool(param_stats, false, "Dump model parameter statistics");
 DEFINE_bool(check_flow_consistency, false, "Check that flow is consistent");
 DEFINE_bool(dynamic_instance_allocation, false, "Dynamic instance allocation");
 DEFINE_bool(mkl, false, "Use Intel Math Kernel Library");
@@ -60,6 +61,7 @@ DEFINE_bool(jit_debug, false, "Debug break in jit code");
 DEFINE_int32(cuda_device, -1, "CUDA device number");
 DEFINE_int32(cuda_context_flags, 0, "CUDA context flags");
 DEFINE_int32(sparse_threshold, 64, "Minimum dimension size for sparse update");
+DEFINE_bool(compile_only, false, "Stop after compilation");
 
 namespace sling {
 namespace myelin {
@@ -186,6 +188,18 @@ void Compiler::Compile(Flow *flow, Network *net) {
     }
   }
 
+  // Optionally output parameter statictics.
+  if (FLAGS_param_stats) {
+    int total = 0;
+    for (Tensor *t : net->globals()) {
+      if (t->IsScalar()) continue;
+      if (t->type() != DT_FLOAT) continue;
+      printf("%8d %s\n", t->elements(), t->name().c_str());
+      total += t->elements();
+    }
+    printf("%8d TOTAL\n", total);
+  }
+
   // Optionally output generated code to ELF file.
   if (!FLAGS_jit_code.empty() || FLAGS_dump_code) {
     // Link code.
@@ -218,6 +232,12 @@ void Compiler::Compile(Flow *flow, Network *net) {
       close(fd);
       unlink(tmpname);
     }
+  }
+
+  // Stop after compilation if requested.
+  if (FLAGS_compile_only) {
+    LOG(INFO) << "Stop after compilation";
+    exit(1);
   }
 }
 

@@ -2,8 +2,20 @@ import sling
 import sling.flags as flags
 import sling.task.workflow as workflow
 
-# Start up workflow system.
+flags.define("--accurate", default=False,action='store_true')
+
 flags.parse()
+
+if flags.arg.accurate:
+  modelfn = "local/data/e/caspar/caspar-accurate.flow"
+  rnn_layers = 3
+  rnn_dim = 192
+else:
+  modelfn = "local/data/e/caspar/caspar.flow"
+  rnn_layers = 1
+  rnn_dim = 128
+
+# Start up workflow system.
 workflow.startup()
 
 # Create workflow.
@@ -25,23 +37,28 @@ word_embeddings = wf.resource(
   format="embeddings"
 )
 
-parser_model = wf.resource(
-  "local/data/e/caspar/caspar.flow",
-  format="flow"
-)
+parser_model = wf.resource(modelfn, format="flow")
 
 # Parser trainer task.
 trainer = wf.task("caspar-trainer")
 
 trainer.add_params({
+  "rnn_type": 1,
+  "rnn_dim": rnn_dim,
+  "rnn_highways": True,
+  "rnn_layers": rnn_layers,
+  "dropout": 0.2,
+  "ff_l2reg": 0.0001,
+
   "learning_rate": 1.0,
   "learning_rate_decay": 0.8,
   "clipping": 1,
   "optimizer": "sgd",
-  "epochs": 50000,
   "batch_size": 32,
   "rampup": 120,
-  "report_interval": 500
+  "report_interval": 1000,
+  "learning_rate_cliff": 40000,
+  "epochs": 50000,
 })
 
 trainer.attach_input("training_corpus", training_corpus)

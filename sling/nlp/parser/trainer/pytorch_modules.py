@@ -691,7 +691,7 @@ class Caspar(nn.Module):
     flow_ff.set_layer_data(0, self.ff_layer.weight.data.numpy(), \
                            self.ff_layer.bias.data.numpy())
 
-    ff_concat_op = ff.rawop(optype="ConcatV2", name="concat")
+    ff_concat_op = ff.rawop(optype="Concat", name="concat")
     ff_concat_op.add_output(ff_input)
 
     # Add link variable to the given connector.

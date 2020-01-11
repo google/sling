@@ -10,7 +10,6 @@ cc_library(
     "//sling/myelin:flow",
     "//sling/myelin:gradient",
     "//sling/myelin:learning",
-    "//sling/util:random",
   ],
 )
 

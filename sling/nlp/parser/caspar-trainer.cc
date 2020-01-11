@@ -35,21 +35,23 @@ class MultiClassDelegateLearner : public DelegateLearner {
       : name_(name), loss_(name + "_loss") {}
 
   void Build(Flow *flow,
-             Flow::Variable *activations,
-             Flow::Variable *dactivations,
+             Flow::Variable *activation,
+             Flow::Variable *dactivation,
              bool learn) override {
     FlowBuilder f(flow, name_);
-    int dim = activations->elements();
+    int dim = activation->elements();
     int size = actions_.size();
-    auto *W = f.Random(f.Parameter("W", DT_FLOAT, {dim, size}));
-    auto *b = f.Random(f.Parameter("b", DT_FLOAT, {1, size}));
+    auto *W = f.Parameter("W", DT_FLOAT, {dim, size});
+    auto *b = f.Parameter("b", DT_FLOAT, {1, size});
+    f.RandomNormal(W);
 
     auto *input = f.Placeholder("input", DT_FLOAT, {1, dim}, true);
     auto *logits = f.Name(f.Add(f.MatMul(input, W), b), "logits");
-    logits->set_out();
-    f.Name(f.ArgMax(logits), "output");
+    if (learn) logits->set_out();
+    auto *output = f.Name(f.ArgMax(logits), "output");
+    if (!learn) output->set_out();
 
-    flow->Connect({activations, input});
+    flow->Connect({activation, input});
     if (learn) {
       Gradient(flow, f.func());
       auto *dlogits = flow->GradientVar(logits);
@@ -74,56 +76,11 @@ class MultiClassDelegateLearner : public DelegateLearner {
     return new DelegateInstance(this);
   }
 
-  void Save(Flow *flow, Builder *data) override {
-    // Save delegate type.
-    data->Add("name", name_);
-    data->Add("runtime", "SoftmaxDelegate");
-    data->Add("cell", cell_->name());
-
-    // Save the action table.
-    Store *store = data->store();
-    Handle n_type = store->Lookup("/table/action/type");
-    Handle n_length = store->Lookup("/table/action/length");
-    Handle n_source = store->Lookup("/table/action/source");
-    Handle n_target = store->Lookup("/table/action/target");
-    Handle n_role = store->Lookup("/table/action/role");
-    Handle n_label = store->Lookup("/table/action/label");
-    Handle n_delegate = store->Lookup("/table/action/delegate");
-
-    Array actions(store, actions_.size());
-    int index = 0;
-    for (const ParserAction &action : actions_.list()) {
-      auto type = action.type;
-      Builder b(store);
-      b.Add(n_type, static_cast<int>(type));
-
-      if (type == ParserAction::REFER || type == ParserAction::EVOKE) {
-        if (action.length > 0) {
-          b.Add(n_length, static_cast<int>(action.length));
-        }
-      }
-      if (type == ParserAction::ASSIGN ||
-          type == ParserAction::ELABORATE ||
-          type == ParserAction::CONNECT) {
-        if (action.source != 0) {
-          b.Add(n_source, static_cast<int>(action.source));
-        }
-      }
-      if (type == ParserAction::EMBED ||
-          type == ParserAction::REFER ||
-          type == ParserAction::CONNECT) {
-        if (action.target != 0) {
-          b.Add(n_target, static_cast<int>(action.target));
-        }
-      }
-      if (type == ParserAction::CASCADE) {
-        b.Add(n_delegate, static_cast<int>(action.delegate));
-      }
-      if (!action.role.IsNil()) b.Add(n_role, action.role);
-      if (!action.label.IsNil()) b.Add(n_label, action.label);
-      actions.set(index++, b.Create().handle());
-    }
-    data->Add("actions", actions);
+  void Save(Flow *flow, Builder *spec) override {
+    spec->Add("name", name_);
+    spec->Add("type", "multiclass");
+    spec->Add("cell", cell_->name());
+    actions_.Write(spec);
   }
 
   // Multi-class delegate instance.
@@ -132,8 +89,7 @@ class MultiClassDelegateLearner : public DelegateLearner {
     DelegateInstance(MultiClassDelegateLearner *learner)
         : learner_(learner),
           forward_(learner->cell_),
-          backward_(learner->dcell_) {
-    }
+          backward_(learner->dcell_) {}
 
     void CollectGradients(std::vector<myelin::Instance *> *gradients) override {
       gradients->push_back(&backward_);
@@ -143,15 +99,15 @@ class MultiClassDelegateLearner : public DelegateLearner {
       backward_.Clear();
     }
 
-    float Compute(float *activations,
-                  float *dactivations,
+    float Compute(float *activation,
+                  float *dactivation,
                   const ParserAction &action) override {
       // Look up index for action. Skip backpropagation if action is unknown.
       int target = learner_->actions_.Index(action);
       if (target == -1) return 0.0;
 
-      // Compute logits from activations.
-      forward_.SetReference(learner_->input_, activations);
+      // Compute logits from activation.
+      forward_.SetReference(learner_->input_, activation);
       forward_.Compute();
 
       // Compute loss.
@@ -161,15 +117,15 @@ class MultiClassDelegateLearner : public DelegateLearner {
 
       // Backpropagate loss.
       backward_.Set(learner_->primal_, &forward_);
-      backward_.SetReference(learner_->dinput_, dactivations);
+      backward_.SetReference(learner_->dinput_, dactivation);
       backward_.Compute();
 
       return loss;
     }
 
-    void Predict(float *activations, ParserAction *action) override {
+    void Predict(float *activation, ParserAction *action) override {
       // Predict action from activations.
-      forward_.SetReference(learner_->input_, activations);
+      forward_.SetReference(learner_->input_, activation);
       forward_.Compute();
       int argmax = *forward_.Get<int>(learner_->output_);
       *action = learner_->actions_.Action(argmax);
@@ -226,7 +182,15 @@ class CasparTrainer : public ParserTrainer {
  public:
    // Set up caspar parser model.
    void Setup(task::Task *task) override {
+    // Get training parameters.
+    task->Fetch("max_source", &max_source_);
+    task->Fetch("max_target", &max_target_);
+
+    // Reset parser state between sentences.
+    sentence_reset_ = true;
+
     // Collect word and action vocabularies from training corpus.
+    ActionTable actions;
     training_corpus_->Rewind();
     for (;;) {
       // Get next document.
@@ -249,23 +213,21 @@ class CasparTrainer : public ParserTrainer {
             if (action.target > max_target_) skip = true;
             break;
           case ParserAction::ASSIGN:
-          case ParserAction::EMBED:
-          case ParserAction::ELABORATE:
             if (action.source > max_source_) skip = true;
             break;
           default:
             break;
         }
-        if (!skip) actions_.Add(action);
+        if (!skip) actions.Add(action);
       });
 
       delete document;
     }
-    roles_.Init(actions_.list());
+    roles_.Add(actions.list());
 
     // Set up delegates.
     delegates_.push_back(new ShiftMarkOtherDelegateLearner(1));
-    delegates_.push_back(new ClassificationDelegateLearner(actions_));
+    delegates_.push_back(new ClassificationDelegateLearner(actions));
   }
 
   // Transition generator.
@@ -281,18 +243,10 @@ class CasparTrainer : public ParserTrainer {
     });
   }
 
-  // Save action table in model.
-  void SaveModel(Flow *flow, Store *store) override {
-    // Save action table in store.
-    Builder table(store);
-    table.AddId("/table");
-    actions_.Write(&table);
-    table.Create();
-  }
-
  private:
-  // Parser actions.
-  ActionTable actions_;
+  // Hyperparameters.
+  int max_source_ = 5;
+  int max_target_ = 10;
 };
 
 REGISTER_TASK_PROCESSOR("caspar-trainer", CasparTrainer);

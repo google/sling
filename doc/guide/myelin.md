@@ -380,6 +380,7 @@ var = <#flags> (IN=1, OUT=2, REF=4, LEARNABLE=8 UNIQUE=16, from version 5)
       <#aliases> <alias$>*
       <dtype$>
       <shape>
+      <#attrs> attr* (from version 6)
       <#bytes> value
 
 op = <#flags> (unused, from version 5)
@@ -411,7 +412,7 @@ dtype = "float16" | "float32" | "float64" | "int8" | "uint8" |
         "int16" | "uint16" | "int32" | "uint64"
 
 "flow" = 0x776f6c66
-version = 3 | 4 | 5
+version = 3 | 4 | 5 | 6
 ```
 
 A flow file begins with the _magic_ string "flow" followed by a version number.

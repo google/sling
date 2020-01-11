@@ -192,8 +192,9 @@ void GradientDescentOptimizer::BuildOptimizer(const GradientMap &gradmap,
     auto *dv = it.second;
 
     // Add scaled gradient to parameters.
-    if (lambda_ != 0.0) {
-      tf.Assign(v, tf.Add(tf.Mul(tf.Sub(tf.One(), tf.Const(lambda_)), v),
+    float lambda = v->GetAttr("l2reg", lambda_);
+    if (lambda != 0.0) {
+      tf.Assign(v, tf.Add(tf.Mul(tf.Sub(tf.One(), tf.Const(lambda)), v),
                           tf.Mul(dv, multiplier)));
     } else {
       tf.AssignAdd(v, tf.Mul(dv, multiplier));

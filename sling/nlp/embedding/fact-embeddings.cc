@@ -93,7 +93,7 @@ class FactEmbeddingsTrainer : public LearnerTask {
     loss_.Initialize(model);
 
     // Initialize weights.
-    model.InitLearnableWeights(task->Get("seed", 0), 0.0, 0.01);
+    model.InitModelParameters(task->Get("seed", 0));
 
     // Read training instances from input.
     LOG(INFO) << "Reading training data";

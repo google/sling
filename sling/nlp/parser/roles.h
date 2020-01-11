@@ -28,8 +28,11 @@ namespace nlp {
 // A mapping of roles to role ids extracted from the action set.
 class RoleSet {
  public:
-  // Initialize role mapping for action set.
-  void Init(const std::vector<ParserAction> &actions);
+  // Add role to role set.
+  void Add(Handle role);
+
+  // Add roles from action list.
+  void Add(const std::vector<ParserAction> &actions);
 
   // Look up role id for role. Return -1 if role is unknown.
   int Lookup(Handle role) const {
@@ -40,6 +43,9 @@ class RoleSet {
 
   // Return the number of roles in the role set.
   int size() const { return roles_.size(); }
+
+  // Get list of roles.
+  void GetList(std::vector<Handle> *list) const;
 
  private:
   // Mapping from role handle to role id.

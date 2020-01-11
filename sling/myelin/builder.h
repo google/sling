@@ -80,7 +80,9 @@ class FlowBuilder : public Scope {
   Variable *Parameter(const string &name, Type type, const Shape &shape);
 
   // Initialize variable with random values. Returns the variable itself.
-  Variable *Random(Variable *var);
+  Variable *RandomUniform(Variable *var);
+  Variable *RandomNormal(Variable *var);
+  Variable *RandomOrtho(Variable *var);
 
   // Add input variable to function.
   Variable *Placeholder(const string &name, Type type, const Shape &shape,
@@ -382,6 +384,9 @@ class FlowBuilder : public Scope {
   // Concatenation.
   Variable *Concat(const std::vector<Variable *> &parts, int axis = 1);
 
+  // Splitting.
+  std::vector<Variable *> Split(Variable *v, int splits, int axis = 1);
+
   // Slicing.
   Variable *Slice(Variable *v, Variable *begin, const Shape &size) {
     return Op("Slice", {v, begin, Const(size)}, v->type, size);
@@ -403,9 +408,6 @@ class FlowBuilder : public Scope {
   Variable *FFLayer(Variable *input, int size, bool bias = false) {
     return FFLayers(input, {size}, -1, bias);
   }
-
-  // Long short-term memory (LSTM) layer.
-  Variable *LSTMLayer(Variable *input, int size);
 
   // Return function for builder.
   Function *func() const { return func_; }

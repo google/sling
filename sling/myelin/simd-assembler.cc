@@ -12,22 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <limits>
-
 #include "sling/myelin/simd-assembler.h"
 
 namespace sling {
 namespace myelin {
 
 using namespace jit;
-
-template<typename T> StaticData *MinVal(MacroAssembler *masm, int repeat) {
-  return masm->GetConstant<T>(std::numeric_limits<T>::min(), repeat);
-}
-
-template<typename T> StaticData *MaxVal(MacroAssembler *masm, int repeat) {
-  return masm->GetConstant<T>(std::numeric_limits<T>::max(), repeat);
-}
 
 StaticData *SIMDGenerator::NeutralElement(Reduction op, Type type, int repeat) {
   switch (op) {
@@ -45,22 +35,22 @@ StaticData *SIMDGenerator::NeutralElement(Reduction op, Type type, int repeat) {
       }
     case REDUCE_MIN:
       switch (type) {
-        case DT_FLOAT: return MaxVal<float>(masm_, repeat);
-        case DT_DOUBLE: return MaxVal<double>(masm_, repeat);
-        case DT_INT8: return MaxVal<int8>(masm_, repeat);
-        case DT_INT16: return MaxVal<int16>(masm_, repeat);
-        case DT_INT32: return MaxVal<int32>(masm_, repeat);
-        case DT_INT64: return MaxVal<int64>(masm_, repeat);
+        case DT_FLOAT: return masm_->MaxVal<float>(repeat);
+        case DT_DOUBLE: return masm_->MaxVal<double>(repeat);
+        case DT_INT8: return masm_->MaxVal<int8>(repeat);
+        case DT_INT16: return masm_->MaxVal<int16>(repeat);
+        case DT_INT32: return masm_->MaxVal<int32>(repeat);
+        case DT_INT64: return masm_->MaxVal<int64>(repeat);
         default: return nullptr;
       }
     case REDUCE_MAX:
       switch (type) {
-        case DT_FLOAT: return MinVal<float>(masm_, repeat);
-        case DT_DOUBLE: return MinVal<double>(masm_, repeat);
-        case DT_INT8: return MinVal<int8>(masm_, repeat);
-        case DT_INT16: return MinVal<int16>(masm_, repeat);
-        case DT_INT32: return MinVal<int32>(masm_, repeat);
-        case DT_INT64: return MinVal<int64>(masm_, repeat);
+        case DT_FLOAT: return masm_->MinVal<float>(repeat);
+        case DT_DOUBLE: return masm_->MinVal<double>(repeat);
+        case DT_INT8: return masm_->MinVal<int8>(repeat);
+        case DT_INT16: return masm_->MinVal<int16>(repeat);
+        case DT_INT32: return masm_->MinVal<int32>(repeat);
+        case DT_INT64: return masm_->MinVal<int64>(repeat);
         default: return nullptr;
       }
     case REDUCE_AND:
@@ -2815,15 +2805,15 @@ int SIMDAssembler::RegisterUsage(Type type) {
   switch (type) {
     case DT_INT8:
     case DT_INT16:
-      return 1;
+      return 2;
     case DT_INT32:
       if (CPU::Enabled(AVX512F)) return 0;
       if (CPU::Enabled(AVX2)) return 0;
       if (CPU::Enabled(SSE4_1) && CPU::Enabled(SSSE3)) return 0;
-      return 1;
+      return 2;
     case DT_INT64:
       if (CPU::Enabled(AVX512F)) return 0;
-      return 1;
+      return 2;
     default:
       return 0;
   }

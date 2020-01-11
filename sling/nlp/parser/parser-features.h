@@ -18,10 +18,8 @@
 #include <vector>
 
 #include "sling/myelin/compute.h"
-#include "sling/myelin/rnn.h"
 #include "sling/nlp/parser/parser-state.h"
 #include "sling/nlp/parser/roles.h"
-#include "sling/nlp/parser/trace.h"
 
 namespace sling {
 namespace nlp {
@@ -33,12 +31,11 @@ class ParserFeatureModel {
  public:
   // Initialize feature model.
   void Init(myelin::Cell *cell,
-            myelin::Flow::Blob *spec,
             const RoleSet *roles,
             int frame_limit);
 
-  // Return tensor for hidden layer activations.
-  const myelin::Tensor *hidden() const { return hidden_; }
+  // Return output with activation for current step.
+  const myelin::Tensor *activation() const { return activation_; }
 
  private:
   // Get parameter tensor in decoder cell.
@@ -50,46 +47,40 @@ class ParserFeatureModel {
   // Set of roles considered.
   const RoleSet *roles_;
 
-  // Maximum attention index considered (exclusive).
+  // Maximum frame attention index considered (exclusive).
   int frame_limit_;
 
   // Features.
-  myelin::Tensor *lr_focus_feature_;         // LR LSTM input focus feature
-  myelin::Tensor *rl_focus_feature_;         // RL LSTM input focus feature
+  myelin::Tensor *token_feature_;             // current token feature
 
-  myelin::Tensor *lr_attention_feature_;     // LR LSTM frame attention feature
-  myelin::Tensor *rl_attention_feature_;     // LR LSTM frame attention feature
+  myelin::Tensor *attention_tokens_feature_;  // token attention feature
+  myelin::Tensor *attention_steps_feature_;   // step attention feature
 
-  myelin::Tensor *frame_create_feature_;     // FF frame create feature
-  myelin::Tensor *frame_focus_feature_;      // FF frame focus feature
+  myelin::Tensor *history_feature_;           // history feature
 
-  myelin::Tensor *history_feature_;          // history feature
+  myelin::Tensor *mark_tokens_feature_;       // mark tokens feature
+  myelin::Tensor *mark_steps_feature_;        // mark steps feature
 
-  myelin::Tensor *mark_lr_feature_;          // LR LSTM mark-token feature
-  myelin::Tensor *mark_rl_feature_;          // RL LSTM mark-token feature
-  myelin::Tensor *mark_step_feature_;        // mark token step feature
-  myelin::Tensor *mark_distance_feature_;    // mark token distance feature
-
-  myelin::Tensor *out_roles_feature_;        // out roles feature
-  myelin::Tensor *in_roles_feature_;         // in roles feature
-  myelin::Tensor *unlabeled_roles_feature_;  // unlabeled roles feature
-  myelin::Tensor *labeled_roles_feature_;    // labeled roles feature
+  myelin::Tensor *out_roles_feature_;         // out roles feature
+  myelin::Tensor *in_roles_feature_;          // in roles feature
+  myelin::Tensor *unlabeled_roles_feature_;   // unlabeled roles feature
+  myelin::Tensor *labeled_roles_feature_;     // labeled roles feature
 
   // Feature dimensions.
-  int mark_depth_ = 0;                       // mark stack depth to use
-  int attention_depth_ = 0;                  // number of attention features
-  int history_size_ = 0;                     // number of history features
-  int out_roles_size_ = 0;                   // max number of out roles
-  int in_roles_size_ = 0;                    // max number of in roles
-  int labeled_roles_size_ = 0;               // max number of unlabeled roles
-  int unlabeled_roles_size_ = 0;             // max number of labeled roles
-  std::vector<int> mark_distance_bins_;      // distance bins for mark tokens
+  int mark_depth_ = 0;                        // mark stack depth to use
+  int history_size_ = 0;                      // number of history features
+  int out_roles_size_ = 0;                    // max number of out roles
+  int in_roles_size_ = 0;                     // max number of in roles
+  int labeled_roles_size_ = 0;                // max number of unlabeled roles
+  int unlabeled_roles_size_ = 0;              // max number of labeled roles
 
-  // Links.
-  myelin::Tensor *lr_lstm_;                  // link to LR LSTM hidden layer
-  myelin::Tensor *rl_lstm_;                  // link to RL LSTM hidden layer
-  myelin::Tensor *steps_;                    // link to FF step hidden layer
-  myelin::Tensor *hidden_;                   // link to FF hidden layer output
+  // Channel links.
+  myelin::Tensor *tokens_;                    // link to token encodings
+  myelin::Tensor *steps_;                     // link to step activations
+
+
+  // Output with activation for current step.
+  myelin::Tensor *activation_;
 
   friend class ParserFeatureExtractor;
 };
@@ -103,15 +94,12 @@ class ParserFeatureExtractor {
       : features_(features), state_(state) {}
 
   // Attach instance to input and output channels.
-  void Attach(const myelin::BiChannel &bilstm,
+  void Attach(myelin::Channel *encodings,
               myelin::Channel *activations,
               myelin::Instance *instance);
 
   // Extract features from current state and add these to the data instance.
   void Extract(myelin::Instance *data);
-
-  // Add extracted features to trace.
-  void TraceFeatures(myelin::Instance *instance, Trace *trace) const;
 
  private:
   // Wrapper for data instance for looking up feature input tensors.

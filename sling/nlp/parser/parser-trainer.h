@@ -46,8 +46,8 @@ class DelegateLearner {
 
   // Build flow for delegate learner.
   virtual void Build(myelin::Flow *flow,
-                     myelin::Flow::Variable *activations,
-                     myelin::Flow::Variable *dactivations,
+                     myelin::Flow::Variable *activation,
+                     myelin::Flow::Variable *dactivation,
                      bool learn) = 0;
 
   // Initialize network for delegate.
@@ -57,7 +57,7 @@ class DelegateLearner {
   virtual DelegateLearnerInstance *CreateInstance() = 0;
 
   // Save model data to flow.
-  virtual void Save(myelin::Flow *flow, Builder *data) = 0;
+  virtual void Save(myelin::Flow *flow, Builder *spec) = 0;
 };
 
 // Interface for delegate learner instance.
@@ -72,8 +72,8 @@ class DelegateLearnerInstance {
   virtual void ClearGradients() = 0;
 
   // Compute loss and gradient for delegate with respect to golden action.
-  virtual float Compute(float *activations,
-                        float *dactivations,
+  virtual float Compute(float *activation,
+                        float *dactivation,
                         const ParserAction &action) = 0;
 
   // Predict action for delegate.
@@ -97,9 +97,6 @@ class ParserTrainer : public task::LearnerTask {
   // Abstract method for converting document to transition sequence.
   virtual void GenerateTransitions(const Document &document,
                                    std::vector<ParserAction> *transitions) = 0;
-
-  // Abstract method for saving extra data in final model.
-  virtual void SaveModel(myelin::Flow *flow, Store *store) = 0;
 
  private:
   // Build flow graph for parser model.
@@ -153,6 +150,9 @@ class ParserTrainer : public task::LearnerTask {
   // Role set.
   RoleSet roles_;
 
+  // Reset parser state between sentences in a document.
+  bool sentence_reset_ = false;
+
   // Lexical feature specification for encoder.
   LexicalFeatures::Spec spec_;
 
@@ -170,13 +170,15 @@ class ParserTrainer : public task::LearnerTask {
 
   // Decoder model.
   myelin::Cell *decoder_ = nullptr;
+  myelin::Tensor *encodings_ = nullptr;
   myelin::Tensor *activations_ = nullptr;
+  myelin::Tensor *activation_ = nullptr;
+
   myelin::Cell *gdecoder_ = nullptr;
-  myelin::Tensor *dactivations_ = nullptr;
   myelin::Tensor *primal_ = nullptr;
+  myelin::Tensor *dencodings_ = nullptr;
+  myelin::Tensor *dactivations_ = nullptr;
   myelin::Tensor *dactivation_ = nullptr;
-  myelin::Tensor *dlr_ = nullptr;
-  myelin::Tensor *drl_ = nullptr;
 
   // Delegates.
   std::vector<DelegateLearner *> delegates_;
@@ -186,12 +188,13 @@ class ParserTrainer : public task::LearnerTask {
   Mutex update_mu_;
 
   // Model hyperparameters.
-  int lstm_dim_ = 256;
-  int max_source_ = 5;
-  int max_target_ = 10;
+  int rnn_type_ = myelin::RNN::LSTM;
+  int rnn_dim_ = 256;
+  int rnn_layers_ = 1;
+  bool rnn_bidir_ = true;
+  bool rnn_highways_ = false;
   int mark_depth_ = 1;
   int frame_limit_ = 5;
-  int attention_depth_ = 5;
   int history_size_ = 5;
   int out_roles_size_ = 32;
   int in_roles_size_ = 32;
@@ -199,14 +202,16 @@ class ParserTrainer : public task::LearnerTask {
   int unlabeled_roles_size_ = 32;
   int roles_dim_ = 16;
   int activations_dim_ = 128;
-  int link_dim_lstm_ = 32;
-  int link_dim_ff_ = 64;
+  int link_dim_token_ = 32;
+  int link_dim_step_ = 64;
   int mark_dim_ = 32;
-  std::vector<int> mark_distance_bins_{0, 1, 2, 3, 6, 10, 15, 20};
   int seed_ = 0;
   int batch_size_ = 32;
+  int learning_rate_cliff_ = 0;
   float learning_rate_ = 1.0;
   float min_learning_rate_ = 0.001;
+  float dropout_ = 0.0;
+  float ff_l2reg_ = 0.0;
 
   // Evaluation statistics.
   float prev_loss_ = 0.0;

@@ -271,7 +271,7 @@ class PosixFileSystem : public FileSystem {
     return Status::OK;
   }
 
-  Status FlushMappedMemory(void *data, size_t size) {
+  Status FlushMappedMemory(void *data, size_t size) override {
     if (msync(data, size, MS_SYNC) != 0) return IOError("msync", errno);
     return Status::OK;
   }

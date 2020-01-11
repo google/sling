@@ -18,7 +18,6 @@
 #include "sling/frame/object.h"
 #include "sling/frame/store.h"
 #include "sling/nlp/document/document.h"
-#include "sling/string/strcat.h"
 
 namespace sling {
 namespace nlp {
@@ -28,35 +27,12 @@ ParserState::ParserState(Document *document, int begin, int end)
       begin_(begin),
       end_(end),
       current_(begin),
-      step_(0),
-      done_(false) {}
-
-string ParserState::DebugString() const {
-  static const int MAX_ATTENTION = 10;
-  string s =
-      StrCat("Begin:", begin_, " End:", end_, " Current:", current_,
-             " Done: ", (done_ ? "Y" : "N"), " AttentionSize: ",
-             attention_.size(), "\n");
-  for (int i = 0; i < attention_.size(); ++i) {
-    if (i == MAX_ATTENTION) {
-      StrAppend(&s, "..and ", (attention_.size() - MAX_ATTENTION), " more.\n");
-      break;
-    }
-    StrAppend(&s, "AttentionIndex: ", i,
-              " FrameType:", store()->DebugString(Type(i)), "\n");
-  }
-
-  return s;
-}
+      step_(0) {}
 
 void ParserState::Apply(const ParserAction &action) {
   switch (action.type) {
     case ParserAction::SHIFT:
       Shift();
-      break;
-
-    case ParserAction::STOP:
-      Stop();
       break;
 
     case ParserAction::MARK:
@@ -79,14 +55,6 @@ void ParserState::Apply(const ParserAction &action) {
       Assign(action.source, action.role, action.label);
       break;
 
-    case ParserAction::EMBED:
-      Embed(action.target, action.role, action.label);
-      break;
-
-    case ParserAction::ELABORATE:
-      Elaborate(action.source, action.role, action.label);
-      break;
-
     case ParserAction::CASCADE:
       LOG(FATAL) << "Cannot apply CASCADE action";
       break;
@@ -95,7 +63,6 @@ void ParserState::Apply(const ParserAction &action) {
 }
 
 bool ParserState::CanApply(const ParserAction &action) const {
-  if (done_) return false;
   switch (action.type) {
     case ParserAction::CASCADE:
       // Do not allow cascading back to the main cascade.
@@ -104,10 +71,6 @@ bool ParserState::CanApply(const ParserAction &action) const {
     case ParserAction::SHIFT:
       // Do not allow shifting past the end of the input buffer.
       return current_ < end_;
-
-    case ParserAction::STOP:
-      // Only allow stop if we are at the end of the input buffer.
-      return current_ == end_;
 
     case ParserAction::MARK:
       return current_ < end_ && marks_.size() < MAX_MARK_DEPTH;
@@ -199,32 +162,6 @@ bool ParserState::CanApply(const ParserAction &action) const {
       Frame frame(store(), Attention(source).frame);
       return !frame.Has(action.role, Attention(target).frame);
     }
-
-    case ParserAction::EMBED: {
-      // Check that target is a valid index into the attention buffer.
-      if (action.target >= attention_.size()) return false;
-
-      // Check that we haven't embedded the same frame the same way.
-      Handle target = Attention(action.target).frame;
-      for (const auto &e : embed_) {
-        if (e.first == target && e.second == action.label) return false;
-      }
-
-      return true;
-    }
-
-    case ParserAction::ELABORATE: {
-      // Check that source is a valid index into the attention buffer.
-      if (action.source >= attention_.size()) return false;
-
-      // Check that we haven't elaborated the same frame the same way.
-      Handle source = Attention(action.source).frame;
-      for (const auto &e : elaborate_) {
-        if (e.first == source && e.second == action.label) return false;
-      }
-
-      return true;
-    }
   }
 
   return false;
@@ -233,14 +170,6 @@ bool ParserState::CanApply(const ParserAction &action) const {
 void ParserState::Shift() {
   // Move to the next token in the input buffer.
   current_++;
-
-  // Clear the states for EMBED and ELABORATE.
-  embed_.clear();
-  elaborate_.clear();
-}
-
-void ParserState::Stop() {
-  done_ = true;
 }
 
 void ParserState::Evoke(int length, Handle type) {
@@ -315,41 +244,6 @@ void ParserState::Assign(int frame, Handle role, Handle value) {
   Center(frame, nullptr);
 }
 
-void ParserState::Embed(int frame, Handle role, Handle type) {
-  // Create new frame with the specified type and add link to target frame.
-  Handle target = Attention(frame).frame;
-  Slot slots[2];
-  slots[0].name = Handle::isa();
-  slots[0].value = type;
-  slots[1].name = role;
-  slots[1].value = target;
-  Handle h = store()->AllocateFrame(slots, slots + 2);
-  embed_.emplace_back(target, type);
-
-  // Add new frame to the attention buffer.
-  Add(h, nullptr);
-
-  // Add new frame as a thematic frame to the document.
-  document_->AddTheme(h);
-}
-
-void ParserState::Elaborate(int frame, Handle role, Handle type) {
-  // Create new frame with the specified type.
-  Handle source = Attention(frame).frame;
-  Slot slot(Handle::isa(), type);
-  Handle target = store()->AllocateFrame(&slot, &slot + 1);
-
-  // Add new frame as a thematic frame to the document.
-  document_->AddTheme(target);
-
-  // Add link to new frame from source frame.
-  store()->Add(source, role, target);
-  elaborate_.emplace_back(Attention(frame).frame, type);
-
-  // Add new frame to the attention buffer.
-  Add(target, nullptr);
-}
-
 void ParserState::Add(Handle frame, Span *span) {
   attention_.emplace_back(frame, step_, span);
 }
@@ -383,10 +277,6 @@ int ParserState::AttentionIndex(Handle frame, int k) const {
     if (Attention(i).frame == frame) return i;
   }
   return -1;
-}
-
-Handle ParserState::Type(int index) const {
-  return store()->GetFrame(Attention(index).frame)->get(Handle::isa());
 }
 
 }  // namespace nlp

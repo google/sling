@@ -849,6 +849,8 @@ for i in sizes:
   div_test(i)
   minimum_test(i)
   maximum_test(i)
+  argmax_test(i)
+  argmin_test(i)
   neg_test(i)
   abs_test(i)
   square_test(i)
@@ -920,11 +922,6 @@ for i in sizes:
     logic_test(i)
     cond_test(i)
     select_test(i)
-
-    if dt != myelin.DT_DOUBLE:
-      # No support yet for argmax and argmin for doubles.
-      argmax_test(i)
-      argmin_test(i)
 
 for i in sizes:
   for j in sizes:

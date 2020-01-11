@@ -76,10 +76,6 @@ class ParserState {
   // ensure that 'action' is applicable using CanApply().
   void Apply(const ParserAction &action);
 
-  // Returns the first type for a frame in the attention buffer. This will be
-  // the type specified when the frame was created with EVOKE/EMBED/ELABORATE.
-  Handle Type(int index) const;
-
   // Gets the handles of the k frames that are closest to the center of
   // attention in the order of attention. There might be less than k frames if
   // there are fewer elements in the attention buffer.
@@ -90,8 +86,8 @@ class ParserState {
   // limited to the top-k frames that are closest to the center of attention.
   int AttentionIndex(Handle frame, int k = -1) const;
 
-  // The parse is done when we have performed the first STOP action.
-  bool done() const { return done_; }
+  // The parse is done when we have reached the end of the sentence.
+  bool done() const { return current_ == end_; }
 
   // Returns slot in attention buffer. The center of attention has index 0.
   const AttentionSlot &Attention(int index) const {
@@ -104,11 +100,8 @@ class ParserState {
   // Returns the size of the attention buffer.
   int AttentionSize() const { return attention_.size(); }
 
-  // Returns whether 'action' can be applied to the state.
+  // Returns whether action can be applied to the state.
   bool CanApply(const ParserAction &action) const;
-
-  // Returns a human-readable representation of the state.
-  string DebugString() const;
 
   // Returns the underlying store.
   Store *store() const { return document_->store(); }
@@ -116,14 +109,11 @@ class ParserState {
  private:
   // Applies individual actions, which are assumed to be applicable.
   void Shift();
-  void Stop();
   void Mark();
   void Evoke(int length, Handle type);
   void Refer(int length, int frame);
   void Connect(int source, Handle role, int target);
   void Assign(int frame, Handle role, Handle value);
-  void Embed(int frame, Handle role, Handle type);
-  void Elaborate(int frame, Handle role, Handle type);
 
   // Adds frame to attention buffer, making it the new center of attention.
   void Add(Handle frame, Span *span);
@@ -145,9 +135,6 @@ class ParserState {
   // Current parse step.
   int step_;
 
-  // When we have performed the first STOP action, the parse is done.
-  bool done_;
-
   // Attention buffer. This contains evoked frames in order of attention. The
   // last element is the center of attention.
   std::vector<AttentionSlot> attention_;
@@ -155,11 +142,6 @@ class ParserState {
   // Stack with positions for marked tokens. The mark stack tracks the start of
   // each mention.
   std::vector<Marker> marks_;
-
-  // (Source/Target frame handle, Frame type) for frames embedded or elaborated
-  // at the current position. This is cleared once the position advances.
-  std::vector<std::pair<Handle, Handle>> embed_;
-  std::vector<std::pair<Handle, Handle>> elaborate_;
 
   // Maximum mark depth.
   static const int MAX_MARK_DEPTH = 5;
