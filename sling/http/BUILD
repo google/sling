@@ -1,13 +1,23 @@
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+  name = "http-utils",
+  srcs = ["http-utils.cc"],
+  hdrs = ["http-utils.h"],
+  deps = [
+    "//sling/base",
+    "//sling/string:ctype",
+  ],
+)
+
+cc_library(
   name = "http-server",
   srcs = ["http-server.cc"],
   hdrs = ["http-server.h"],
   deps = [
+    ":http-utils",
     "//sling/base",
     "//sling/file",
-    "//sling/string:ctype",
     "//sling/string:numbers",
     "//sling/util:mutex",
     "//sling/util:thread",

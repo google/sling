@@ -78,7 +78,7 @@ extern Handle kAbbreviationMarker;
 // cannot start or end on a stop word.
 class SpanPopulator {
  public:
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
   // Add stop word.
   void AddStopWord(Text word);
@@ -107,12 +107,15 @@ class SpanPopulator {
 class SpanImporter {
  public:
   // Initialize span importer.
-  void Init(Store *store);
+  void Init(Store *store, bool detailed);
 
   // Import spans from document.
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
  private:
+  // Detailed annotations.
+  bool detailed_ = true;
+
   // Symbols.
   Names names_;
   Name n_time_{names_, "/w/time"};
@@ -178,7 +181,7 @@ class SpanTaxonomy {
   void Init(Store *store);
 
   // Annotate spans in the chart with type-based flags.
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
  private:
   // Classify item according to taxonomy and return flags for item.
@@ -272,7 +275,7 @@ class SpelledNumberAnnotator {
   void Init(Store *store);
 
   // Annotate chart with spelled number spans.
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
  private:
   // Symbols.
@@ -288,7 +291,7 @@ class NumberScaleAnnotator {
   void Init(Store *store);
 
   // Annotate scaled numbers.
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
  private:
   // Mapping from item for scale to scalar.
@@ -304,10 +307,10 @@ class NumberScaleAnnotator {
 class MeasureAnnotator {
  public:
   // Initialize measure annotator.
-  void Init(Store *store);
+  void Init(Store *store, bool detailed);
 
   // Annotate measure spans.
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
  private:
   // Check if item is a unit.
@@ -319,6 +322,9 @@ class MeasureAnnotator {
 
   // Set of types for units.
   HandleSet units_;
+
+  // Detailed annotations.
+  bool detailed_ = true;
 
   // Symbols.
   Names names_;
@@ -334,19 +340,19 @@ class MeasureAnnotator {
 class DateAnnotator {
  public:
   // Initialize date annotator.
-  void Init(Store *store);
+  void Init(Store *store, bool detailed);
 
   // Annotate date spans.
-  void Annotate(const PhraseTable &aliases, SpanChart *chart);
+  void Annotate(const PhraseTable *aliases, SpanChart *chart);
 
  private:
   // Try to find year at position in chart. Returns the year if found (and
   // set the end) or 0 if no year was found.
-  int GetYear(const PhraseTable &aliases, Store *store, SpanChart *chart,
+  int GetYear(const PhraseTable *aliases, Store *store, SpanChart *chart,
               int pos, int *end);
 
   // Find item for phrase with a certain type.
-  Handle FindMatch(const PhraseTable &aliases,
+  Handle FindMatch(const PhraseTable *aliases,
                    const SpanChart::Item &span,
                    const Name &type,
                    Store *store);
@@ -356,6 +362,9 @@ class DateAnnotator {
 
   // Calendar for date computations.
   Calendar calendar_;
+
+  // Detailed annotations.
+  bool detailed_ = true;
 
   // Symbols.
   Names names_;
@@ -400,10 +409,14 @@ class SpanAnnotator {
   // Resources for initializing span annotator.
   struct Resources {
     string kb;             // knowledge base with entities and metadata
-    string aliases;        // phrase table with phrase to entity mapping
     string dictionary;     // dictionary table with IDF scores for words
     string language;       // language for documents
+
+    // Phrase table with phrase to entity mapping
+    const PhraseTable *aliases = nullptr;
+
     bool resolve = false;  // resolve spans to entities in knowledge base
+    bool detailed = true;  // annotate frames attributes
   };
 
   // Initialize annotator.
@@ -416,8 +429,8 @@ class SpanAnnotator {
   void Annotate(const Document &document, Document *output);
 
  private:
-  // Check if item is a human.
-  bool IsHuman(const Frame &item) const;
+  // Check if item is a person.
+  bool IsPerson(const Frame &item) const;
 
   // Add person name parts as local mentions to context.
   void AddNameParts(const Document &document, int begin, int end,
@@ -425,13 +438,16 @@ class SpanAnnotator {
                     Handle entity, int count);
 
   // Phrase table with aliases.
-  PhraseTable aliases_;
+  const PhraseTable *aliases_;
 
   // Dictionary with IDF scores.
   IDFTable dictionary_;
 
   // Resolve spans to entities in the knowledge base.
   bool resolve_ = false;
+
+  // Detailed annotations.
+  bool detailed_ = true;
 
   // Entity resolver.
   EntityResolver resolver_;
@@ -458,6 +474,7 @@ class SpanAnnotator {
   Name n_amount_{names_, "/w/amount"};
   Name n_instance_of_{names_, "P31"};
   Name n_human_{names_, "Q5"};
+  Name n_person_{names_, "Q215627"};
   Name n_fictional_human_{names_, "Q15632617"};
   Name n_page_item_{names_, "/wp/page/item"};
   Name n_name_{names_, "name"};

@@ -107,10 +107,12 @@ Handle Span::evoked() const {
 
 void Span::AllEvoked(Handles *evoked) const {
   evoked->clear();
-  Handle n_evokes = document_->names_->n_evokes.handle();
-  for (const Slot &slot : mention_) {
-    if (slot.name == n_evokes) {
-      evoked->push_back(slot.value);
+  if (mention_.valid()) {
+    Handle n_evokes = document_->names_->n_evokes.handle();
+    for (const Slot &slot : mention_) {
+      if (slot.name == n_evokes) {
+        evoked->push_back(slot.value);
+      }
     }
   }
 }
@@ -129,7 +131,11 @@ bool Span::EvokesType(Handle type) const {
   for (const Slot &slot : mention_) {
     if (slot.name != n_evokes) continue;
     Frame frame(document_->store(), slot.value);
-    if (frame.IsA(type)) return true;
+    if (type.IsNil()) {
+      if (frame.GetHandle(Handle::isa()).IsNil()) return true;
+    } else {
+      if (frame.IsA(type)) return true;
+    }
   }
 
   return false;

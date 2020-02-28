@@ -38,9 +38,7 @@ void WordShape::Extract(const string &word) {
     int cat = Unicode::Category(code);
 
     // Hyphenation.
-    if (cat == CHARCAT_DASH_PUNCTUATION) {
-      hyphen = HAS_HYPHEN;
-    }
+    if (cat == CHARCAT_DASH_PUNCTUATION) hyphen = HAS_HYPHEN;
 
     // Capitalization.
     if (Unicode::IsUpper(code)) has_upper = true;

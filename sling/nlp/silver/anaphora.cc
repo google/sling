@@ -37,24 +37,33 @@ class AnaphoraAnnotator : public Annotator {
 
     // Set up pronoun descriptors for language.
     string language = task->Get("language", "en");
+    bool personal = task->Get("personal_reference", true);
+    bool initial = task->Get("initial_reference", true);
+    bool definite = task->Get("definite_reference", true);
     if (language == "en") {
       // English.
-      AddPersonalPronoun("he", MASCULINE);
-      AddPersonalPronoun("his", MASCULINE);
-      AddPersonalPronoun("him", MASCULINE);
-      AddPersonalPronoun("she", FEMININE);
-      AddPersonalPronoun("her", FEMININE);
-      AddPersonalPronoun("hers", FEMININE);
-      AddDefiniteArticle("the");
-      AddInitialPronoun("It", UNKNOWN);
+      if (personal) {
+        AddPersonalPronoun("he", MASCULINE);
+        AddPersonalPronoun("his", MASCULINE);
+        AddPersonalPronoun("him", MASCULINE);
+        AddPersonalPronoun("she", FEMININE);
+        AddPersonalPronoun("her", FEMININE);
+        AddPersonalPronoun("hers", FEMININE);
+      }
+      if (definite) AddDefiniteArticle("the");
+      if (initial) AddInitialPronoun("It", UNKNOWN);
     } else if (language == "da") {
       // Danish.
-      AddPersonalPronoun("han", MASCULINE);
-      AddPersonalPronoun("hans", MASCULINE);
-      AddPersonalPronoun("hun", FEMININE);
-      AddPersonalPronoun("hendes", FEMININE);
-      AddInitialPronoun("Det", UNKNOWN);
-      AddInitialPronoun("Den", UNKNOWN);
+      if (personal) {
+        AddPersonalPronoun("han", MASCULINE);
+        AddPersonalPronoun("hans", MASCULINE);
+        AddPersonalPronoun("hun", FEMININE);
+        AddPersonalPronoun("hendes", FEMININE);
+      }
+      if (initial) {
+        AddInitialPronoun("Det", UNKNOWN);
+        AddInitialPronoun("Den", UNKNOWN);
+      }
     } else {
       disabled_ = true;
     }

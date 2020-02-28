@@ -260,21 +260,21 @@ int Frame::GetInt(Text name, int defval) const {
   return GetInt(store()->Lookup(name), defval);
 }
 
-bool Frame::GetBool(Handle name) const {
+bool Frame::GetBool(Handle name, bool defval) const {
   Handle value = frame()->get(name);
-  return value.IsInt() ? value.IsTrue() : false;
+  return value.IsInt() ? value.IsTrue() : defval;
 }
 
-bool Frame::GetBool(const Object &name) const {
-  return GetBool(name.handle());
+bool Frame::GetBool(const Object &name, bool defval) const {
+  return GetBool(name.handle(), defval);
 }
 
-bool Frame::GetBool(const Name &name) const {
-  return GetBool(name.Lookup(store_));
+bool Frame::GetBool(const Name &name, bool defval) const {
+  return GetBool(name.Lookup(store_), defval);
 }
 
-bool Frame::GetBool(Text name) const {
-  return GetBool(store()->Lookup(name));
+bool Frame::GetBool(Text name, bool defval) const {
+  return GetBool(store()->Lookup(name), defval);
 }
 
 float Frame::GetFloat(Handle name) const {

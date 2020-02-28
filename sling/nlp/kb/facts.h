@@ -38,6 +38,9 @@ class FactCatalog {
   // Initialize and return a default taxonomy. Caller takes ownership.
   Taxonomy *CreateDefaultTaxonomy();
 
+  // Initialize and return an entity taxonomy. Caller takes ownership.
+  Taxonomy *CreateEntityTaxonomy();
+
   // Returns true if 'coarse' is in the closure of 'fine'. Closure is performed
   // by following 'property' roles.
   bool ItemInClosure(Handle property, Handle coarse, Handle fine);
@@ -276,6 +279,9 @@ class Taxonomy {
 
   // Classify item according to taxonomy.
   Handle Classify(const Frame &item);
+
+  // Type mapping for taxonomy.
+  const HandleMap<int> &typemap() const { return typemap_; }
 
  private:
   // Fact catalog.

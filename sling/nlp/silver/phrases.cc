@@ -38,7 +38,8 @@ class PhraseStructureAnnotator : public Annotator {
  public:
   void Init(Task *task, Store *commons) override {
     // Load phrase table.
-    aliases_.Load(commons, task->GetInputFile("aliases"));
+    string alias_file = task->GetInputFile("aliases");
+    aliases_ = PhraseTable::Acquire(task, commons, alias_file);
 
     // Initialize fact extractor.
     catalog_.Init(commons);
@@ -91,7 +92,7 @@ class PhraseStructureAnnotator : public Annotator {
 
       // Look up phrase in cache.
       string annotations;
-      if (LookupPhrase(id, span->GetText(), &annotations)) {
+      if (LookupPhrase(id, span->GetText(), span->length(), &annotations)) {
         // Add cached phrase annotations.
         if (!annotations.empty()) {
           // Decode cached phrase annotations.
@@ -143,11 +144,11 @@ class PhraseStructureAnnotator : public Annotator {
         // Look up subphrase in phrase table.
         uint64 fp = phrase->PhraseFingerprint(b, e);
         SpanChart::Item &span = chart.item(b, e);
-        span.matches = aliases_.Find(fp);
+        span.matches = aliases_->Find(fp);
         if (span.matches == nullptr) continue;
 
         // Check if any target can match the subphrase.
-        aliases_.GetMatches(span.matches, &matches);
+        aliases_->GetMatches(span.matches, &matches);
         for (Handle h : matches) {
           if (targets.count(h) > 0) {
             // Match found.
@@ -169,7 +170,7 @@ class PhraseStructureAnnotator : public Annotator {
     // Check if any matching subphrases were found.
     if (!matches_found) {
       // Update cache with negative result.
-      CachePhrase(id, phrase->text(), "");
+      CachePhrase(id, phrase->text(), phrase->length(), "");
       return Handle::nil();
     }
 
@@ -205,7 +206,8 @@ class PhraseStructureAnnotator : public Annotator {
       CHECK(!subid.empty());
       string annotations;
       Handle subevoke = Handle::nil();
-      if (LookupPhrase(subid, phrase->PhraseText(begin, end), &annotations)) {
+      string subphrase = phrase->PhraseText(begin, end);
+      if (LookupPhrase(subid, subphrase, end - begin, &annotations)) {
         if (!annotations.empty()) {
           // Add cached phrase annotations.
           Frame top = Decode(store, annotations).AsFrame();
@@ -242,26 +244,29 @@ class PhraseStructureAnnotator : public Annotator {
 
     // Add phrase annotations to cache.
     phrase->Update();
-    CachePhrase(id, phrase->text(), Encode(phrase->top()));
+    CachePhrase(id, phrase->text(), phrase->length(), Encode(phrase->top()));
 
     return frame.handle();
   }
 
   // Look up phrase in phrase annotation cache. Return true if the phrase is
   // found.
-  bool LookupPhrase(const string &id, const string &text, string *annotations) {
+  bool LookupPhrase(const string &id, const string &text, int len,
+                    string *annotations) {
     MutexLock lock(&mu_);
-    Phrase &phrase = cache_[Hash(id, text) % cache_size_];
-    if (id != phrase.id || text != phrase.text) return false;
+    Phrase &phrase = cache_[Hash(id, text, len) % cache_size_];
+    if (id != phrase.id) return false;
+    if (text != phrase.text) return false;
+    if (len != phrase.len) return false;
     *annotations = phrase.annotations;
     return true;
   }
 
   // Add phrase annotations for entity alias to cache.
-  bool CachePhrase(const string &id, const string &text,
+  bool CachePhrase(const string &id, const string &text, int len,
                    const string &annotations, bool sticky = false) {
     MutexLock lock(&mu_);
-    Phrase &phrase = cache_[Hash(id, text) % cache_size_];
+    Phrase &phrase = cache_[Hash(id, text, len) % cache_size_];
     if (phrase.sticky) {
       // Never overwrite stick annotations.
       if (sticky) {
@@ -272,6 +277,7 @@ class PhraseStructureAnnotator : public Annotator {
     }
     phrase.id = id;
     phrase.text = text;
+    phrase.len = len;
     phrase.annotations = annotations;
     phrase.sticky = sticky;
     return true;
@@ -308,16 +314,17 @@ class PhraseStructureAnnotator : public Annotator {
       CHECK(!id.empty()) << line;
 
       // Add sticky phrase annotations to cache.
-      CachePhrase(id.str(), phrase.text(), Encode(phrase.top()), true);
+      CachePhrase(id.str(), phrase.text(), phrase.length(),
+                  Encode(phrase.top()), true);
     }
     names->Release();
   }
 
   // Compute hash for id and phrase text.
-  static uint32 Hash(const string &id, const string &text) {
+  static uint32 Hash(const string &id, const string &text, int len) {
     uint32 fp1 = Fingerprint32(id.data(), id.size());
     uint32 fp2 = Fingerprint32(text.data(), text.size());
-    return fp1 ^ fp2;
+    return fp1 ^ fp2 ^ len;
   }
 
   // Merge annotations for phrase into document at position.
@@ -360,12 +367,13 @@ class PhraseStructureAnnotator : public Annotator {
   struct Phrase {
     string id;             // entity id for phrase name
     string text;           // phrase text
+    int len;               // number of tokens in phrase
     string annotations;    // phrase annotations as encoded SLING frames
     bool sticky;           // custom annotations are sticky
   };
 
   // Phrase table with aliases.
-  PhraseTable aliases_;
+  const PhraseTable *aliases_ = nullptr;
 
   // Fact catalog for fact extraction.
   FactCatalog catalog_;

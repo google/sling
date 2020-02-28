@@ -40,7 +40,7 @@ class Monitor;
 // A stage is a set of tasks that can be run concurrently. A stage can have
 // dependencies on other stages, which must have completed before this stage
 // can run.
-class Stage {
+class Stage : public AssetManager {
  public:
   // Stage states.
   enum State {WAITING, READY, RUNNING, DONE};

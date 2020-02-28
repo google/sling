@@ -71,7 +71,10 @@ void Stage::Start() {
 void Stage::TaskCompleted(Task *task) {
   CHECK_EQ(state_, RUNNING);
   num_completed_++;
-  if (num_completed_ == tasks_.size()) state_ = DONE;
+  if (num_completed_ == tasks_.size()) {
+    state_ = DONE;
+    DisposeAssets();
+  }
 }
 
 Job::Job() {

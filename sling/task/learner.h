@@ -54,6 +54,9 @@ class LearnerTask : public Process {
   // Number of seconds between starting up workers.
   int64 rampup_ = 0;
 
+  // Number of seconds between starting the first and the rest of the workers.
+  int64 warmup_ = 0;
+
   // Current number of completed epochs.
   std::atomic<int64> epoch_{0};
 
@@ -70,8 +73,7 @@ class LearnerTask : public Process {
 
   // Staticstics.
   Counter *num_workers_ = nullptr;
-  Counter *num_epochs_total_ = nullptr;
-  Counter *num_epochs_completed_ = nullptr;
+  Counter *num_epochs_ = nullptr;
 };
 
 // Initialize optimizer from task parameters.

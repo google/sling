@@ -60,6 +60,7 @@ class Sorter : public Processor {
     // Get output port.
     output_ = task->GetSink("output");
     CHECK(output_ != nullptr) << "Output channel missing";
+    task->Fetch("sort_buffer_size", &max_buffer_size_);
   }
 
   void Receive(Channel *channel, Message *message) override {
@@ -220,7 +221,7 @@ class Sorter : public Processor {
   std::vector<Message *> messages_;
 
   // Maximum size of messages in the sort buffer.
-  uint64 max_buffer_size_ = 64 * 1024 * 1024;
+  int64 max_buffer_size_ = 64 * 1024 * 1024;
 
   // Size of messages in the sort buffer.
   uint64 buffer_bytes_ = 0;

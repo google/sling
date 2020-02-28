@@ -309,7 +309,7 @@ string Task::Get(const string &name, const char *defval) {
 }
 
 int32 Task::Get(const string &name, int32 defval) {
-  static const string empty = string("");
+  static const string empty("");
   const string &value = Get(name, empty);
   if (value.empty()) return defval;
   int32 v;
@@ -318,7 +318,7 @@ int32 Task::Get(const string &name, int32 defval) {
 }
 
 int64 Task::Get(const string &name, int64 defval) {
-  static const string empty = string("");
+  static const string empty("");
   const string &value = Get(name, empty);
   if (value.empty()) return defval;
   int64 v;
@@ -351,6 +351,45 @@ bool Task::Get(const string &name, bool defval) {
   return value == "true" || value == "1";
 }
 
+std::vector<string> Task::Get(const string &name,
+                              const std::vector<string> &defval) {
+  static const string empty = string("");
+  const string &str = Get(name, empty);
+  if (str.empty()) return defval;
+
+  const char *p = str.c_str();
+  if (*p == 0) return defval;
+  std::vector<string> values;
+  if (*p == '[') p++;
+  while (*p == ' ') p++;
+  while (*p != 0 && *p != ']') {
+    while (*p == ' ') p++;
+    if (!values.empty() && *p++ != ',') return defval;
+    while (*p == ' ') p++;
+    string value;
+    while (*p != 0 && *p != ',' && *p != ']') value.push_back(*p++);
+    values.push_back(value);
+  }
+  if (*p == ']') p++;
+  if (*p != 0) return defval;
+  return values;
+}
+
+
+std::vector<int> Task::Get(const string &name, const std::vector<int> &defval) {
+  static const std::vector<string> empty;
+  const std::vector<string> values = Get(name, empty);
+  if (values.empty()) return defval;
+
+  std::vector<int> list;
+  for (const string &value : values) {
+    int v;
+    CHECK(safe_strto32(value.c_str(), &v)) << value;
+    list.push_back(v);
+  }
+  return list;
+}
+
 void Task::Fetch(const string &name, string *value) {
   *value = Get(name, *value);
 }
@@ -372,6 +411,14 @@ void Task::Fetch(const string &name, double *value) {
 }
 
 void Task::Fetch(const string &name, bool *value) {
+  *value = Get(name, *value);
+}
+
+void Task::Fetch(const string &name, std::vector<string> *value) {
+  *value = Get(name, *value);
+}
+
+void Task::Fetch(const string &name, std::vector<int> *value) {
   *value = Get(name, *value);
 }
 
@@ -480,6 +527,9 @@ void Task::Done() {
     for (Channel *channel : sinks_) {
       if (!channel->closed()) channel->Close();
     }
+
+    // Dispose of shared assets managed by task.
+    DisposeAssets();
   }
 }
 

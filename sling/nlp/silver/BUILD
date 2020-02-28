@@ -91,12 +91,45 @@ cc_library(
 )
 
 cc_library(
+  name = "types",
+  srcs = ["types.cc"],
+  deps = [
+    "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
+    "//sling/nlp/kb:facts",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "nominal-pruning",
+  srcs = ["nominal-pruning.cc"],
+  deps = [
+    "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
+  name = "corpus-split",
+  srcs = ["corpus-split.cc"],
+  deps = [
+    "//sling/task:documents",
+    "//sling/util:fingerprint",
+  ],
+  alwayslink = 1,
+)
+
+cc_library(
   name = "annotators",
   deps = [
     ":mentions",
     ":anaphora",
     ":phrases",
     ":relations",
+    ":types",
+    ":nominal-pruning",
   ],
 )
 

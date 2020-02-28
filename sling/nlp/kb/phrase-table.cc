@@ -103,5 +103,15 @@ void PhraseTable::Lookup(uint64 fp, MatchList *matches) const {
   GetMatches(Find(fp), matches);
 }
 
+const PhraseTable *PhraseTable::Acquire(AssetManager *assets,
+                                        Store *store,
+                                        const string &filename) {
+  return assets->Acquire<PhraseTable>(filename, [&]() {
+    PhraseTable *aliases = new PhraseTable();
+    aliases->Load(store, filename);
+    return aliases;
+  });
+}
+
 }  // namespace nlp
 }  // namespace sling

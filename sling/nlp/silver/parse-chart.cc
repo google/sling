@@ -49,10 +49,14 @@ int main(int argc, char *argv[]) {
 
   SpanAnnotator::Resources resources;
   resources.kb = "local/data/e/ner/kb.sling";
-  resources.aliases = "local/data/e/wiki/" + FLAGS_lang + "/phrase-table.repo";
   resources.dictionary = "local/data/e/ner/" + FLAGS_lang + "/idf.repo";
   resources.language = FLAGS_lang;
   resources.resolve = FLAGS_resolve;
+
+  string alias_file = "local/data/e/wiki/" + FLAGS_lang + "/phrase-table.repo";
+  PhraseTable aliases;
+  aliases.Load(&commons, alias_file);
+  resources.aliases = &aliases;
 
   SpanAnnotator annotator;
   annotator.Init(&commons, resources);

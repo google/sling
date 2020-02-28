@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
   kb.Register(&http);
   http.Register("/", [](HTTPRequest *req, HTTPResponse *rsp) {
-    rsp->RedirectTo("/kb");
+    rsp->TempRedirectTo("/kb");
   });
 
   CHECK(http.Start());

@@ -44,7 +44,6 @@ struct DocumentNames : public SharedNames {
   Name n_mention{*this, "mention"};
   Name n_theme{*this, "theme"};
 
-  Name n_token{*this, "token"};
   Name n_index{*this, "index"};
   Name n_start{*this, "start"};
   Name n_size{*this, "size"};
@@ -52,7 +51,6 @@ struct DocumentNames : public SharedNames {
   Name n_break{*this, "break"};
   Name n_style{*this, "style"};
 
-  Name n_phrase{*this, "phrase"};
   Name n_begin{*this, "begin"};
   Name n_length{*this, "length"};
   Name n_evokes{*this, "evokes"};
@@ -217,6 +215,13 @@ class Span {
 
   // Returns case form for span phrase.
   CaseForm Form() const;
+
+  // Returns first/last token in span.
+  inline const Token &first() const;
+  inline const Token &last() const;
+
+  // Check for initial span in a sentence.
+  bool initial() const { return first().initial(); }
 
  private:
   // Document that span belongs to.
@@ -422,23 +427,26 @@ class Document {
 class DocumentIterator {
  public:
   // Initialize iterator for iterating over document based on break level.
-  DocumentIterator(const Document *document, BreakType brk)
-      : document_(document), brk_(brk) {
+  DocumentIterator(const Document *document, BreakType brk, int skip = 0)
+      : document_(document), brk_(brk), skip_(skip) {
     next();
   }
 
   // Check if there are more parts in the document
-  bool more() const { return begin_ < document_->num_tokens(); }
+  bool more() const { return begin_ < document_->length(); }
 
   // Go to next document part.
   void next() {
-    // Check if we are already done.
-    int n = document_->num_tokens();
-    if (begin_ >= n) return;
+    int n = document_->length();
+    while (begin_ < n) {
+      // Find start of next part.
+      begin_ = end_++;
+      if (begin_ >= n) break;
+      while (end_ < n && document_->token(end_).brk() < brk_) end_++;
 
-    // Find start of next part.
-    begin_ = end_++;
-    while (end_ < n && document_->token(end_).brk() < brk_) end_++;
+      // Stop unless document part should be skipped.
+      if ((document_->token(begin_).style() & skip_) == 0) break;
+    }
   }
 
   // Return the span for the current document part.
@@ -455,6 +463,9 @@ class DocumentIterator {
   // Break level for document parts.
   BreakType brk_;
 
+  // Token style mask for skipping parts.
+  int skip_;
+
   // Current document part.
   int begin_ = 0;
   int end_ = 0;
@@ -468,9 +479,12 @@ class DocumentIterator {
 //
 class SentenceIterator : public DocumentIterator {
  public:
-  SentenceIterator(const Document *document)
-      : DocumentIterator(document, SENTENCE_BREAK) {}
+  SentenceIterator(const Document *document, int skip = 0)
+      : DocumentIterator(document, SENTENCE_BREAK, skip) {}
 };
+
+inline const Token &Span::first() const { return document_->token(begin_); }
+inline const Token &Span::last() const { return document_->token(end_ - 1); }
 
 }  // namespace nlp
 }  // namespace sling

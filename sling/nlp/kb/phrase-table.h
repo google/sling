@@ -24,12 +24,13 @@
 #include "sling/frame/store.h"
 #include "sling/frame/object.h"
 #include "sling/string/text.h"
+#include "sling/util/asset.h"
 
 namespace sling {
 namespace nlp {
 
 // Phrase table for looking up entities based on name fingerprints.
-class PhraseTable {
+class PhraseTable : public Asset {
  public:
   struct Match {
     Text id;        // entity id of matching item
@@ -41,7 +42,7 @@ class PhraseTable {
 
   typedef std::vector<Match> MatchList;
 
-  ~PhraseTable() { delete entity_table_; }
+  ~PhraseTable() override { delete entity_table_; }
 
   // Load phrase repository from file.
   void Load(Store *store, const string &filename);
@@ -54,6 +55,11 @@ class PhraseTable {
 
   // Text normalization flags.
   const string &normalization() const { return normalization_; }
+
+  // Acquire shared phrase table.
+  static const PhraseTable *Acquire(AssetManager *assets,
+                                    Store *store,
+                                    const string &filename);
 
  private:
   // Get handle for entity.

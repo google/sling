@@ -142,6 +142,27 @@ Taxonomy *FactCatalog::CreateDefaultTaxonomy() {
   return new Taxonomy(this, default_taxonomy);
 }
 
+Taxonomy *FactCatalog::CreateEntityTaxonomy() {
+  // Taxonomy used for entity types.
+  static const char *entity_types[] = {
+    "Q215627",      // person
+    "Q13226383",    // facility
+    "Q17334923",    // location
+    "Q43229",       // organization
+    "Q12737077",    // occupation
+    "Q216353",      // title
+    "Q4164871",     // position
+    "Q1047113",     // specialty
+    "Q205892",      // calendar date
+    "Q1656682",     // event
+    "/w/quantity",  // quantity
+    "/w/time",      // time
+    "/w/geo",       // geopoint
+    nullptr,
+  };
+  return new Taxonomy(this, entity_types);
+}
+
 bool FactCatalog::ItemInClosure(Handle property, Handle coarse, Handle fine) {
   if (coarse == fine) return true;
 

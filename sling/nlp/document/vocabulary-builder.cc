@@ -37,11 +37,18 @@ class WordVocabularyMapper : public DocumentProcessor {
     // Get parameters.
     normalization_ = ParseNormalization(task->Get("normalization", ""));
     task->Fetch("only_lowercase", &only_lowercase_);
+    task->Fetch("skip_section_titles", &skip_section_titles_);
   }
 
   void Process(Slice key, const Document &document) override {
     // Output normalize token words.
+    bool in_header = false;
     for (const Token &token : document.tokens()) {
+      // Track section headings.
+      if (token.style() & HEADING_BEGIN) in_header = true;
+      if (token.style() & HEADING_END) in_header = false;
+      if (in_header && skip_section_titles_) continue;
+
       // Check for lowercase words.
       if (only_lowercase_ && token.Form() != CASE_LOWER) continue;
 
@@ -70,6 +77,9 @@ class WordVocabularyMapper : public DocumentProcessor {
 
   // Only extract lowercase words.
   bool only_lowercase_ = false;
+
+  // Skip section titles.
+  bool skip_section_titles_ = false;
 };
 
 REGISTER_TASK_PROCESSOR("word-vocabulary-mapper", WordVocabularyMapper);
@@ -82,7 +92,7 @@ class WordVocabularyReducer : public SumReducer {
     SumReducer::Start(task);
 
     // Get max vocabulary size and threshold for discarding words.
-    threshold_ = task->Get("threshold", 30);
+    min_freq_ = task->Get("min_freq", 30);
     max_words_ = task->Get("max_words", 1000000);
 
     // Add OOV item to vocabulary as the first entry.
@@ -91,11 +101,11 @@ class WordVocabularyReducer : public SumReducer {
     // Statistics.
     num_words_ = task->GetCounter("words");
     word_count_ = task->GetCounter("word_count");
-    num_words_discarded_ = task->GetCounter("words_discarded");
+    num_words_discarded_ = task->GetCounter("num_words_discarded");
   }
 
   void Aggregate(int shard, const Slice &key, uint64 sum) override {
-    if (sum < threshold_) {
+    if (sum < min_freq_) {
       // Add counts for discarded words to OOV entry.
       vocabulary_[0].count += sum;
       num_words_discarded_->Increment();
@@ -137,7 +147,7 @@ class WordVocabularyReducer : public SumReducer {
   };
 
   // Threshold for discarding words.
-  int threshold_;
+  int min_freq_;
 
   // Maximum number of words in vocabulary.
   int max_words_;

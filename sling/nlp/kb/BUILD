@@ -81,6 +81,7 @@ cc_library(
     "//sling/frame:store",
     "//sling/frame:object",
     "//sling/string:text",
+    "//sling/util:asset",
   ],
 )
 

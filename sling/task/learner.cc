@@ -28,23 +28,23 @@ void LearnerTask::Train(Task *task, myelin::Network *model) {
   // Get training parameters.
   task->Fetch("epochs", &epochs_);
   task->Fetch("report_interval", &report_interval_);
-  task->Fetch("rampup", &rampup_);
   task->Fetch("checkpoint_interval", &checkpoint_interval_);
+  task->Fetch("rampup", &rampup_);
+  warmup_ = task->Get("warmup", rampup_);
 
   // Initialize statistics counters.
   num_workers_ = task->GetCounter("workers");
-  num_epochs_total_ = task->GetCounter("epochs_total");
-  num_epochs_completed_ = task->GetCounter("epochs_completed");
+  num_epochs_ = task->GetCounter("epochs");
 
   epoch_ = 0;
-  num_epochs_total_->Increment(epochs_);
 
   // Start training threads.
   LOG(INFO) << "Starting training";
   int threads = task->Get("workers", jit::CPU::Processors());
   WorkerPool pool;
   pool.Start(threads, [this, model](int index) {
-    for (int i = 0; i < index * rampup_ && !done_; ++i) sleep(1);
+    int delay = index == 0 ? 0 : (index - 1) * rampup_ + warmup_;
+    for (int i = 0; i < delay && !done_; ++i) sleep(1);
     num_workers_->Increment();
     if (!done_) Worker(index, model);
   });
@@ -86,7 +86,7 @@ void LearnerTask::Train(Task *task, myelin::Network *model) {
 }
 
 bool LearnerTask::EpochCompleted() {
-  num_epochs_completed_->Increment();
+  num_epochs_->Increment();
   int64 current_epoch = ++epoch_;
   if (current_epoch >= epochs_) done_ = true;
   bool eval = current_epoch % report_interval_ == 0;

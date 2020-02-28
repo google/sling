@@ -25,6 +25,7 @@
 #include "sling/base/types.h"
 #include "sling/task/environment.h"
 #include "sling/task/message.h"
+#include "sling/util/asset.h"
 
 namespace sling {
 namespace task {
@@ -138,6 +139,7 @@ class Binding {
 
   const string &name() const { return name_; }
   Resource *resource() const { return resource_; }
+  const string &filename() const { return resource_->name(); }
 
  private:
   // Input or output name.
@@ -276,7 +278,7 @@ class Processor : public Component<Processor> {
 
 // A task is a node in the job computation graph. A processor is used for
 // processing the input data and producing the output data.
-class Task {
+class Task : public AssetManager {
  public:
   // Parameter with name and value.
   struct Parameter {
@@ -353,6 +355,9 @@ class Task {
   // Get sink channels.
   const std::vector<Channel *> &sinks() const { return sinks_; }
 
+  // Get task parameters.
+  const std::vector<Parameter> &parameters() const { return parameters_; }
+
   // Get task parameter value.
   const string &Get(const string &name, const string &defval);
   string Get(const string &name, const char *defval);
@@ -362,6 +367,10 @@ class Task {
   float Get(const string &name, float defval);
   bool Get(const string &name, bool defval);
 
+  std::vector<string> Get(const string &name,
+                          const std::vector<string> &defval);
+  std::vector<int> Get(const string &name, const std::vector<int> &defval);
+
   // Fetch task parameter value.
   void Fetch(const string &name, string *value);
   void Fetch(const string &name, int32 *value);
@@ -369,6 +378,9 @@ class Task {
   void Fetch(const string &name, double *value);
   void Fetch(const string &name, float *value);
   void Fetch(const string &name, bool *value);
+
+  void Fetch(const string &name, std::vector<string> *value);
+  void Fetch(const string &name, std::vector<int> *value);
 
   // Add task parameter.
   void AddParameter(const string &name, const string &value);

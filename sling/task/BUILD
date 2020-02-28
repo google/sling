@@ -30,6 +30,7 @@ cc_library(
     "//sling/base:registry",
     "//sling/string:numbers",
     "//sling/string:printf",
+    "//sling/util:asset",
   ],
 )
 

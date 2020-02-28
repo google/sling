@@ -25,7 +25,6 @@
 #include <time.h>
 
 #include "sling/base/logging.h"
-#include "sling/string/ctype.h"
 #include "sling/string/numbers.h"
 
 namespace sling {
@@ -35,11 +34,6 @@ namespace {
 // Return system error.
 Status Error(const char *context) {
   return Status(errno, context, strerror(errno));
-}
-
-// Returns value for ASCII hex digit.
-int HexDigit(int c) {
-  return (c <= '9') ? c - '0' : (c & 7) + 9;
 }
 
 // Convert time to RFC date format.
@@ -58,6 +52,7 @@ const char *StatusText(int status) {
     case 301: return "Moved Permanently";
     case 302: return "Moved";
     case 304: return "Not Modified";
+    case 307: return "Temporary Redirect";
     case 400: return "Bad Request";
     case 401: return "Not Authorized";
     case 403: return "Forbidden";
@@ -87,145 +82,6 @@ void Handle404(HTTPRequest *request, HTTPResponse *response) {
 }
 
 }  // namespace
-
-// Decode URL component.
-bool DecodeURLComponent(const char *url, int length, string *output) {
-  const char *end = url + length;
-  while (url < end) {
-    char c = *url++;
-    if (c == '%') {
-      if (url + 2 >= end) return false;
-      char x1 = *url++;
-      if (!ascii_isxdigit(x1)) return false;
-      char x2 = *url++;
-      if (!ascii_isxdigit(x2)) return false;
-      output->push_back((HexDigit(x1) << 4) + HexDigit(x2));
-    } else {
-      output->push_back(c);
-    }
-  }
-
-  return true;
-}
-
-bool DecodeURLComponent(const char *url, string *output) {
-  if (url == nullptr) return true;
-  return DecodeURLComponent(url, strlen(url), output);
-}
-
-string HTMLEscape(const char *text, int size) {
-  string escaped;
-  const char *p = text;
-  const char *end = text + size;
-  while (p < end) {
-    char ch = *p++;
-    switch (ch) {
-      case '&':  escaped.append("&amp;"); break;
-      case '<':  escaped.append("&lt;"); break;
-      case '>':  escaped.append("&gt;"); break;
-      case '"':  escaped.append("&quot;"); break;
-      case '\'': escaped.append("&#39;");  break;
-      default: escaped.push_back(ch);
-    }
-  }
-  return escaped;
-}
-
-void HTTPBuffer::reset(int size) {
-  if (size != capacity()) {
-    if (size == 0) {
-      free(floor);
-      floor = ceil = start = end = nullptr;
-    } else {
-      floor = static_cast<char *>(realloc(floor, size));
-      CHECK(floor != nullptr) << "Out of memory, " << size << " bytes";
-      ceil = floor + size;
-    }
-  }
-  start = end = floor;
-}
-
-void HTTPBuffer::flush() {
-  if (start > floor) {
-    int size = end - start;
-    memcpy(floor, start, size);
-    start = floor;
-    end = start + size;
-  }
-}
-
-void HTTPBuffer::ensure(int minfree) {
-  // Check if there is enough free space in buffer.
-  if (ceil - end >= minfree) return;
-
-  // Compute new size of buffer.
-  int size = ceil - floor;
-  int minsize = end + minfree - floor;
-  while (size < minsize) {
-    if (size == 0) {
-      size = 1024;
-    } else {
-      size *= 2;
-    }
-  }
-
-  // Expand buffer.
-  char *p = static_cast<char *>(realloc(floor, size));
-  CHECK(p != nullptr) << "Out of memory, " << size << " bytes";
-
-  // Adjust pointers.
-  start += p - floor;
-  end += p - floor;
-  floor = p;
-  ceil = p + size;
-}
-
-void HTTPBuffer::clear() {
-  free(floor);
-  floor = ceil = start = end = nullptr;
-}
-
-char *HTTPBuffer::gets() {
-  char *line = start;
-  char *s = line;
-  while (s < end) {
-    switch (*s) {
-      case '\n':
-        if (s + 1 < end && (s[1] == ' ' || s[1] == '\t')) {
-          // Replace HTTP header continuation with space.
-          *s++ = ' ';
-        } else {
-          //  End of line found. Strip trailing whitespace.
-          *s = 0;
-          start = s + 1;
-          while (s > line) {
-            s--;
-            if (*s != ' ' && *s != '\t') break;
-            *s = 0;
-          }
-          return line;
-        }
-        break;
-
-      case '\r':
-      case '\t':
-        // Replace whitespace with space.
-        *s++ = ' ';
-        break;
-
-      default:
-        s++;
-    }
-  }
-
-  return nullptr;
-}
-
-void HTTPBuffer::append(const char *data, int size) {
-  ensure(size);
-  memcpy(end, data, size);
-  end += size;
-}
 
 HTTPServer::HTTPServer(const HTTPServerOptions &options, int port)
     : options_(options), port_(port) {
@@ -1262,6 +1118,20 @@ void HTTPResponse::RedirectTo(const char *uri) {
 
   Set("Location", uri);
   SendError(301, "Moved Permanently", msg.c_str());
+}
+
+void HTTPResponse::TempRedirectTo(const char *uri) {
+  string msg;
+  string escaped_uri = HTMLEscape(uri);
+  msg.append("<h1>Moved</h1>\n");
+  msg.append("<p>This page has moved to <a href=\"");
+  msg.append(escaped_uri);
+  msg.append("\">");
+  msg.append(escaped_uri);
+  msg.append("</a>.</p>\n");
+
+  Set("Location", uri);
+  SendError(307, "Moved Temporary", msg.c_str());
 }
 
 void HTTPResponse::WriteHeader(HTTPBuffer *hdr) {

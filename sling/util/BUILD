@@ -46,6 +46,16 @@ cc_library(
 )
 
 cc_library(
+  name = "arena",
+  hdrs = ["arena.h"],
+)
+
+cc_library(
+  name = "asset",
+  hdrs = ["asset.h"],
+)
+
+cc_library(
   name = "unicode",
   hdrs = [
     "unicode.h",

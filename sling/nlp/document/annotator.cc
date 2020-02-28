@@ -66,10 +66,10 @@ void DocumentAnnotation::Init(Store *commons, const string &spec) {
 }
 
 void DocumentAnnotation::Annotate(Document *document) {
- if (!pipeline_.empty()) {
-   pipeline_.Annotate(document);
-   document->Update();
- }
+  if (!pipeline_.empty()) {
+    pipeline_.Annotate(document);
+    document->Update();
+  }
 }
 
 Counter *DocumentAnnotation::GetCounter(const string &name) { return &dummy_; }

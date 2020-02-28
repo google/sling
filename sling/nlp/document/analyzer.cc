@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
 
   http.Register("/", [](HTTPRequest *req, HTTPResponse *rsp) {
     if (strcmp(req->path(), "/") == 0) {
-      rsp->RedirectTo("/doc/analyzer.html");
+      rsp->TempRedirectTo("/doc/analyzer.html");
     } else {
       rsp->SendError(404, "Not found", "file not found");
     }

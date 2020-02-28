@@ -480,10 +480,10 @@ class Frame : public Object {
   int GetInt(Text name) const { return GetInt(name, 0); }
 
   // Get slot value as boolean.
-  bool GetBool(Handle name) const;
-  bool GetBool(const Object &name) const;
-  bool GetBool(const Name &name) const;
-  bool GetBool(Text name) const;
+  bool GetBool(Handle name, bool defval = false) const;
+  bool GetBool(const Object &name, bool defval = false) const;
+  bool GetBool(const Name &name, bool defval = false) const;
+  bool GetBool(Text name, bool defval = false) const;
 
   // Get slot value as float.
   float GetFloat(Handle name) const;
