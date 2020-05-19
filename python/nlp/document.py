@@ -97,7 +97,7 @@ class Token(object):
   @property
   def brk(self):
     b = self.frame[self.schema.token_break]
-    if b == None: b = SPACE_BREAK
+    if b == None: b = SPACE_BREAK if self.index > 0 else NO_BREAK
     return b
 
   @brk.setter

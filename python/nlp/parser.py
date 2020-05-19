@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Wrapper classes for tokenizer and parser"""
+"""Wrapper classes for tokenizer, parser, and analyzer"""
 
 import sling
 
@@ -88,6 +88,39 @@ class Parser:
 
       # Parse document.
       self.parser.parse(doc.frame)
+      doc.refresh_annotations()
+      return doc
+
+
+class Analyzer:
+  def __init__(self, commons, spec):
+    # Initialize document schema in commons.
+    self.commons = commons
+    self.schema = sling.DocumentSchema(self.commons)
+
+    # Load analyzer.
+    self.analyzer = sling.api.Analyzer(commons, spec)
+
+  def annotate(self, obj):
+    if type(obj) is sling.Document:
+      # Analyze document.
+      obj.update()
+      self.analyzer.annotate(obj.frame)
+      obj.refresh_annotations()
+      return obj
+    elif type(obj) is sling.Frame:
+      # Analyze document frame and return annotated document.
+      self.analyzer.annotate(obj)
+      return sling.Document(obj, schema=self.schema)
+    else:
+      # Create local store for new document.
+      store = sling.Store(self.commons)
+
+      # Tokenize text.
+      doc = tokenize(str(obj), store=store, schema=self.schema)
+
+      # Analyze document.
+      self.analyzer.annotate(doc.frame)
       doc.refresh_annotations()
       return doc
 

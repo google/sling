@@ -29,6 +29,8 @@ PyTypeObject PyTokenizer::type;
 PyMethodTable PyTokenizer::methods;
 PyTypeObject PyParser::type;
 PyMethodTable PyParser::methods;
+PyTypeObject PyAnalyzer::type;
+PyMethodTable PyAnalyzer::methods;
 
 void PyTokenizer::Define(PyObject *module) {
   InitType(&type, "sling.api.Tokenizer", sizeof(PyTokenizer), true);
@@ -155,6 +157,80 @@ PyObject *PyParser::Parse(PyObject *args) {
 
   // Parse document.
   parser->Parse(&document);
+  document.Update();
+
+  Py_RETURN_NONE;
+}
+
+void PyAnalyzer::Define(PyObject *module) {
+  InitType(&type, "sling.api.Analyzer", sizeof(PyAnalyzer), true);
+
+  type.tp_init = method_cast<initproc>(&PyAnalyzer::Init);
+  type.tp_dealloc = method_cast<destructor>(&PyAnalyzer::Dealloc);
+
+  methods.AddO("annotate", &PyAnalyzer::Annotate);
+  type.tp_methods = methods.table();
+
+  RegisterType(&type, module, "Analyzer");
+}
+
+int PyAnalyzer::Init(PyObject *args, PyObject *kwds) {
+  // Get arguments.
+  PyStore *pystore;
+  PyObject *pyspec;
+  if (!PyArg_ParseTuple(args, "OO", &pystore, &pyspec)) return -1;
+  if (!PyStore::TypeCheck(pystore)) return -1;
+  if (!pystore->Writable()) return -1;
+
+  // Save reference to store to keep it alive.
+  this->pystore = pystore;
+  Py_INCREF(pystore);
+
+  // Initialize document schema.
+  docschema = new nlp::DocumentNames(pystore->store);
+
+  // Initialize analyzer.
+  analyzer = new nlp::DocumentAnnotation();
+  if (PyUnicode_Check(pyspec)) {
+    const char *spec = PyUnicode_AsUTF8(pyspec);
+    analyzer->Init(pystore->store, spec);
+  } else if (PyObject_TypeCheck(pyspec, &PyFrame::type)) {
+    PyFrame *pyconfig = reinterpret_cast<PyFrame *>(pyspec);
+    analyzer->Init(pystore->store, pyconfig->AsFrame());
+  }
+
+  return 0;
+}
+
+void PyAnalyzer::Dealloc() {
+  // Release document schema.
+  if (docschema) docschema->Release();
+
+  // Delete analyzer.
+  delete analyzer;
+
+  // Release reference to store.
+  if (pystore) Py_DECREF(pystore);
+
+  // Free object.
+  Free();
+}
+
+PyObject *PyAnalyzer::Annotate(PyObject *obj) {
+  // Check that argument is a frame in a local store.
+  if (!PyFrame::TypeCheck(obj)) return nullptr;
+  PyFrame *pyframe = reinterpret_cast<PyFrame *>(obj);
+  if (pyframe->pystore->store->globals() != pystore->store) {
+    PyErr_SetString(PyExc_ValueError, "Document must be in a local store");
+    return nullptr;
+  }
+
+  // Create document.
+  Frame top(pyframe->pystore->store, pyframe->handle());
+  nlp::Document document(top, docschema);
+
+  // Annotate documents.
+  analyzer->Annotate(&document);
   document.Update();
 
   Py_RETURN_NONE;

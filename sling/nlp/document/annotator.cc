@@ -52,9 +52,9 @@ DocumentAnnotation::~DocumentAnnotation() {
   for (auto *r : resources_) delete r;
 }
 
-void DocumentAnnotation::Init(Store *commons, const string &spec) {
-  // Initialize pipeline annotation task from specification.
-  InitTaskFromSpec(spec);
+void DocumentAnnotation::Init(Store *commons, const Frame &config) {
+  // Initialize pipeline annotation task from configuration frame.
+  InitTaskFromConfig(config);
 
   // Load commons store from file.
   for (Binding *binding : task_.GetInputs("commons")) {
@@ -63,6 +63,20 @@ void DocumentAnnotation::Init(Store *commons, const string &spec) {
 
   // Initialize annotators.
   pipeline_.Init(&task_, commons);
+}
+
+void DocumentAnnotation::Init(Store *commons, const string &spec) {
+  // Parse specification.
+  Store store;
+  Frame config = Frame::nil();
+  if (!spec.empty()) {
+    Object obj = FromText(&store, spec);
+    CHECK(obj.IsFrame());
+    config = obj.AsFrame();
+  }
+
+  // Initialize pipeline annotation task from specification.
+  Init(commons, config);
 }
 
 void DocumentAnnotation::Annotate(Document *document) {
@@ -76,34 +90,30 @@ Counter *DocumentAnnotation::GetCounter(const string &name) { return &dummy_; }
 void DocumentAnnotation::ChannelCompleted(Channel *channel) {}
 void DocumentAnnotation::TaskCompleted(Task *task) {}
 
-void DocumentAnnotation::InitTaskFromSpec(const string &spec) {
-  // Ignore empty specification.
-  if (spec.empty()) return;
+void DocumentAnnotation::InitTaskFromConfig(const Frame &config) {
+  // Ignore empty configuration.
+  if (!config.valid()) return;
 
-  // Parse specification.
-  Store store;
-  Handle n_annotator = store.Lookup("annotator");
-  Handle n_inputs = store.Lookup("inputs");
-  Handle n_file = store.Lookup("file");
-  Handle n_format = store.Lookup("format");
-  Handle n_parameters = store.Lookup("parameters");
-  Object obj = FromText(&store, spec);
+  // Set up task specification from configuration frame.
+  Store *store = config.store();
+  Handle n_annotator = store->Lookup("annotator");
+  Handle n_inputs = store->Lookup("inputs");
+  Handle n_file = store->Lookup("file");
+  Handle n_format = store->Lookup("format");
+  Handle n_parameters = store->Lookup("parameters");
 
-  // Get task specification from frame.
-  CHECK(obj.IsFrame());
-  Frame config = obj.AsFrame();
   int rid = 0;
   for (const Slot &s : config) {
     if (s.name == n_annotator) {
       // Add annotator.
-      String annotator(&store, s.value);
+      String annotator(store, s.value);
       task_.AddAnnotator(annotator.value());
     } else if (s.name == n_inputs) {
       // Add inputs.
-      Frame inputs(&store, s.value);
+      Frame inputs(store, s.value);
       for (const Slot &si : inputs) {
-        string name = Frame(&store, si.name).Id().str();
-        Frame input(&store, si.value);
+        string name = Frame(store, si.name).Id().str();
+        Frame input(store, si.value);
         string pattern = input.GetString(n_file);
         std::vector<string> files;
         File::Match(pattern, &files);
@@ -124,10 +134,10 @@ void DocumentAnnotation::InitTaskFromSpec(const string &spec) {
       }
     } else if (s.name == n_parameters) {
       // Add parameters.
-      Frame parameters(&store, s.value);
+      Frame parameters(store, s.value);
       for (const Slot &sp : parameters) {
-        string name = Frame(&store, sp.name).Id().str();
-        Object value(&store, sp.value);
+        string name = Frame(store, sp.name).Id().str();
+        Object value(store, sp.value);
         if (value.IsString()) {
           task_.AddParameter(name, value.AsString().value());
         } else if (value.IsInt()) {

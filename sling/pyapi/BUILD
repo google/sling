@@ -46,6 +46,7 @@ cc_library(
     "//sling/myelin:gradient",
     "//sling/myelin:profile",
     "//sling/nlp/document",
+    "//sling/nlp/document:annotator",
     "//sling/nlp/document:document-tokenizer",
     "//sling/nlp/document:lex",
     "//sling/nlp/document:phrase-tokenizer",
@@ -92,6 +93,7 @@ cc_library(
     "//sling/nlp/embedding:fact-plausibility",
 
     "//sling/nlp/parser:caspar-trainer",
+    "//sling/nlp/parser:parser-annotator",
 
     "//sling/nlp/silver:idf",
     "//sling/nlp/silver:annotators",

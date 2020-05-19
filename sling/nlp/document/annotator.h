@@ -66,6 +66,7 @@ class DocumentAnnotation : public task::Environment {
   ~DocumentAnnotation();
 
   // Initialize document annotation pipeline from task specification.
+  void Init(Store *commons, const Frame &config);
   void Init(Store *commons, const string &spec);
 
   // Annotate document.
@@ -77,8 +78,8 @@ class DocumentAnnotation : public task::Environment {
   void TaskCompleted(task::Task *task) override;
 
  private:
-  // Initialize task from specification.
-  void InitTaskFromSpec(const string &spec);
+  // Initialize task from configuration frame.
+  void InitTaskFromConfig(const Frame &config);
 
   // Pipeline for annotating documents.
   Pipeline pipeline_;
