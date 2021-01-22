@@ -289,7 +289,7 @@ class AliasReducer : public task::Reducer {
     std::unordered_map<uint64, Alias *> aliases;
 
     // Get alias corrections for item.
-    std::set<uint64> blacklist;
+    std::set<uint64> forbidden;
     auto f = item_corrections_.find(store.Lookup(qid));
     if (f != item_corrections_.end()) {
       Frame correction_list(&store, f->second);
@@ -304,9 +304,9 @@ class AliasReducer : public task::Reducer {
         tokenizer_.FingerprintAndForm(name, &fp, &form);
         if (form == CASE_INVALID) continue;
 
-        if (source == n_blacklist_) {
-          // Blacklist alias for item.
-          blacklist.insert(fp);
+        if (source == n_forbid_) {
+          // Forbid alias for item.
+          forbidden.insert(fp);
         } else {
           // Add new alias for item.
           Alias *a = aliases[fp];
@@ -347,8 +347,8 @@ class AliasReducer : public task::Reducer {
         tokenizer_.FingerprintAndForm(name, &fp, &form);
         if (form == CASE_INVALID) continue;
 
-        // Check if alias has been blacklisted.
-        if (blacklist.count(fp) > 0) continue;
+        // Check if alias has been forbidden.
+        if (forbidden.count(fp) > 0) continue;
 
         // Update alias table.
         Alias *a = aliases[fp];
@@ -524,7 +524,7 @@ class AliasReducer : public task::Reducer {
   Name n_count_{names_, "count"};
   Name n_sources_{names_, "sources"};
   Name n_form_{names_, "form"};
-  Name n_blacklist_{names_, "blacklist"};
+  Name n_forbid_{names_, "forbid"};
 
   // Language.
   Handle language_;

@@ -83,8 +83,8 @@ class SpanPopulator {
   // Add stop word.
   void AddStopWord(Text word);
 
-  // Add black-listed phrase.
-  void Blacklist(Text phrase);
+  // Add forbidden phrase.
+  void Forbid(Text phrase);
 
  private:
   // Check if token is a stop word.
@@ -93,10 +93,10 @@ class SpanPopulator {
   // Fingerprints for stop words.
   std::unordered_set<uint64> stop_words_;
 
-  // Fingerprints for black-listed phrases.
-  std::unordered_set<uint64> blacklist_;
+  // Fingerprints for forbidden phrases.
+  std::unordered_set<uint64> forbidden_;
 
-  // Phrase tokenizer for black-listed phrases.
+  // Phrase tokenizer for forbidden phrases.
   PhraseTokenizer tokenizer_;
 };
 

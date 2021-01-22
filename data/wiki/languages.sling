@@ -116,7 +116,7 @@
     ".", ",", "-", ":", ";", "(", ")", "``", "''", "'", "--", "/", "&",
   ]
 
-  /lang/wikilang/blacklisted_phrases: [
+  /lang/wikilang/forbidden_phrases: [
     "alle", "alt", "anden",
     "bad", "bag", "blok", "bor",
     "d.", "Da", "de mere", "denne", "det", "dog",
@@ -181,7 +181,7 @@
     "in", "of", "by", "to", "at", "as"
   ]
 
-  /lang/wikilang/blacklisted_phrases: [
+  /lang/wikilang/forbidden_phrases: [
     "A", "after", "After the war", "ask", "attend",
     "based on", "beat",
     "I", "I'm", "it",

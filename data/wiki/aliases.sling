@@ -1,4 +1,4 @@
-; Additional aliases and black-listed aliases.
+; Additional aliases and forbidden aliases.
 
 {=/w/aliases
   /lang/en: /w/aliases/en
@@ -7,63 +7,63 @@
 {=/w/aliases/en
   ; Race and ethnicity in the United States Census
   Q2035701: {
-    "White": blacklist
-    "Latino": blacklist
-    "Latinos": blacklist
-    "Hispanic": blacklist
-    "Black": blacklist
-    "Pacific Islander": blacklist
-    "White American": blacklist
-    "Black or African American": blacklist
-    "African American": blacklist
-    "Asian American": blacklist
-    "Asian": blacklist
-    "American Indian": blacklist
-    "American Indians": blacklist
-    "Native American": blacklist
-    "Caucasian": blacklist
-    "Not Hispanic or Latino": blacklist
-    "other races": blacklist
-    "some other race": blacklist
+    "White": forbid
+    "Latino": forbid
+    "Latinos": forbid
+    "Hispanic": forbid
+    "Black": forbid
+    "Pacific Islander": forbid
+    "White American": forbid
+    "Black or African American": forbid
+    "African American": forbid
+    "Asian American": forbid
+    "Asian": forbid
+    "American Indian": forbid
+    "American Indians": forbid
+    "Native American": forbid
+    "Caucasian": forbid
+    "Not Hispanic or Latino": forbid
+    "other races": forbid
+    "some other race": forbid
   }
 
   ; American football positions
   Q694589: {
-    "OL": blacklist
+    "OL": forbid
   }
 
   ; Types of inhabited localities in Russia
   Q2578772: {
-    "town": blacklist
-    "city": blacklist
-    "village": blacklist
-    "settlement": blacklist
-    "inhabited localities": blacklist
-    "rural locality": blacklist
-    "rural localities": blacklist
-    "urban locality": blacklist
-    "mestechko": blacklist
-    "posyolok": blacklist
+    "town": forbid
+    "city": forbid
+    "village": forbid
+    "settlement": forbid
+    "inhabited localities": forbid
+    "rural locality": forbid
+    "rural localities": forbid
+    "urban locality": forbid
+    "mestechko": forbid
+    "posyolok": forbid
   }
 
   ; States and union territories of India
   Q131541: {
-    "state": blacklist
+    "state": forbid
   }
 
   ; Regions of France
   Q36784: {
-    "region": blacklist
+    "region": forbid
   }
 
   ; Win–loss record (pitching)
   Q1202506: {
-    "record": blacklist
+    "record": forbid
   }
 
   ; Has Been exhibition
   Q55353092: {
-    "Has Been": blacklist
+    "Has Been": forbid
   }
 
   ; female
@@ -73,27 +73,27 @@
 
   ; Luis Félix López
   Q6700604: {
-    "Political Career": blacklist  ; extra infobox
+    "Political Career": forbid  ; extra infobox
   }
 
   ; googol
   Q507: {
-    "Google": blacklist
+    "Google": forbid
   }
 
   ; Goodison Park
   Q968420: {
-    "A": blacklist
+    "A": forbid
   }
 
   ; Hwasa
   Q19603912: {
-    "Don't": blacklist
+    "Don't": forbid
   }
 
   ; Pakho Chau (Q6130604)
   Q6130604: {
-    "Beginning": blacklist
+    "Beginning": forbid
   }
 
   ; party leader
@@ -113,49 +113,49 @@
 
   ; person (Q215627)
   Q215627: {
-    "personal": blacklist
+    "personal": forbid
   }
 
   ; Radio X (Q2072562)
   Q2072562: {
-    "Born in England": blacklist
+    "Born in England": forbid
   }
 
   ; Kenny Wheeler (Q578219)
   Q578219: {
-    "One of Many": blacklist
+    "One of Many": forbid
   }
 
   ; actor (Q33999)
   Q33999: {
-    "American actor": blacklist
-    "American actress": blacklist
+    "American actor": forbid
+    "American actress": forbid
   }
 
   ; art of sculpture (Q11634)
   Q11634: {
-    "American sculptor": blacklist
+    "American sculptor": forbid
   }
 
   ; politics of the United States (Q330963)
   Q330963: {
-    "American politician": blacklist
+    "American politician": forbid
   }
 
   ; The Presbyterian College, Montreal (Q7758054)
   Q7758054: {
-    "affiliated with": blacklist
+    "affiliated with": forbid
   }
 
   ; American literature (Q233762)
   Q233762: {
-    "American writer": blacklist
-    "American author": blacklist
+    "American writer": forbid
+    "American author": forbid
   }
 
   ; French Battalion in the Korean War (Q488964)
   Q488964: {
-    "during the Korean War": blacklist
+    "during the Korean War": forbid
   }
 }
 

@@ -63,9 +63,9 @@ void SpanPopulator::Annotate(const PhraseTable *aliases,
         if (form != CASE_TITLE && form != CASE_UPPER) continue;
       }
 
-      // Check if phrase has been black-listed.
+      // Check if phrase has been forbidden.
       uint64 fp = chart->document()->PhraseFingerprint(b, e);
-      if (blacklist_.count(fp) > 0) continue;
+      if (forbidden_.count(fp) > 0) continue;
 
       // Find matches in phrase table.
       SpanChart::Item &span = chart->item(b - begin, e - begin);
@@ -84,9 +84,9 @@ void SpanPopulator::AddStopWord(Text word) {
   stop_words_.insert(fp);
 }
 
-void SpanPopulator::Blacklist(Text phrase) {
+void SpanPopulator::Forbid(Text phrase) {
   uint64 fp = tokenizer_.Fingerprint(phrase);
-  blacklist_.insert(fp);
+  forbidden_.insert(fp);
 }
 
 bool SpanPopulator::Discard(const Token &token) const {
@@ -1209,7 +1209,7 @@ void SpanAnnotator::Init(Store *commons, const Resources &resources) {
     dictionary_.Load(resources.dictionary);
   }
 
-  // Get stop words and black-listed phrases for language.
+  // Get stop words and forbidden phrases for language.
   if (!resources.language.empty()) {
     Frame lang(commons, "/lang/" + resources.language);
 
@@ -1222,12 +1222,12 @@ void SpanAnnotator::Init(Store *commons, const Resources &resources) {
       }
     }
 
-    Handle bl = lang.GetHandle("/lang/wikilang/blacklisted_phrases");
+    Handle bl = lang.GetHandle("/lang/wikilang/forbidden_phrases");
     if (!bl.IsNil()) {
-      Array blacklist(commons, bl);
-      for (int i = 0; i < blacklist.length(); ++i) {
-        String word(commons, blacklist.get(i));
-        populator_.Blacklist(word.value());
+      Array forbidden(commons, bl);
+      for (int i = 0; i < forbidden.length(); ++i) {
+        String word(commons, forbidden.get(i));
+        populator_.Forbid(word.value());
       }
     }
   }
