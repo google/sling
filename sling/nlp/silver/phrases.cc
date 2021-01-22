@@ -51,8 +51,8 @@ class PhraseStructureAnnotator : public Annotator {
       LoadCache(filename);
     }
 
-    // Black-list some properties that are rarely expressed in phrases.
-    static const char *blacklist[] = {
+    // Forbid some properties that are rarely expressed in phrases.
+    static const char *forbidden[] = {
       "P22",    // father
       "P25",    // mother
       "P40",    // child
@@ -66,13 +66,13 @@ class PhraseStructureAnnotator : public Annotator {
       "P460",   // said to be the same as
       nullptr
     };
-    for (const char **ptr = blacklist; *ptr; ++ptr) {
+    for (const char **ptr = forbidden; *ptr; ++ptr) {
       Handle property = commons->LookupExisting(*ptr);
       if (property.IsNil()) {
         LOG(WARNING) << "Unknown property" << *ptr;
         continue;
       }
-      blacklist_.insert(property);
+      forbidden_.insert(property);
     }
   }
 
@@ -127,7 +127,7 @@ class PhraseStructureAnnotator : public Annotator {
     HandleSet targets;
     for (int i = 0; i < facts.size(); ++i) {
       if (!facts.simple(i)) continue;
-      if (blacklist_.count(facts.first(i)) > 0) continue;
+      if (forbidden_.count(facts.first(i)) > 0) continue;
       targets.insert(facts.last(i));
     }
 
@@ -190,7 +190,7 @@ class PhraseStructureAnnotator : public Annotator {
       for (int i = 0; i < facts.size(); ++i) {
         if (facts.last(i) == target && facts.simple(i)) {
           Handle property = facts.first(i);
-          if (blacklist_.count(property) == 0) {
+          if (forbidden_.count(property) == 0) {
             relation = facts.first(i);
             break;
           }
@@ -382,8 +382,8 @@ class PhraseStructureAnnotator : public Annotator {
   std::vector<Phrase> cache_;
   uint32 cache_size_;
 
-  // Black-listed relation types.
-  HandleSet blacklist_;
+  // Forbidden relation types.
+  HandleSet forbidden_;
 
   // Mutex for accessing cache.
   Mutex mu_;
